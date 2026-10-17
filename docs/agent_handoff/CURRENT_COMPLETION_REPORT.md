@@ -1,103 +1,116 @@
-Task-ID: ACTION-02-MOVEMENT-FOUNDATION
+Task-ID: ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 572990944674f82f31964f8c27b369eaf26faefc
-Agent-Start-Head: 1f8de847db8a2981e67eef964265f1400ab05f5a
+Source-Baseline: 8b9acf7444c13648ea36b603b9c642d7c07ca046
+Agent-Start-Head: d282a51eae4f88e465a6125f596c64d416aa17d3
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-Technical Gateはすべて PASS。Movement Foundationを実装した。Movement feel / control feelのUser Play Testは**未実施（REQUIRED / NOT RUN）**で、Known Untested / pending acceptanceとしてResultに反映した。
+Technical Gateはすべて PASS。Movement modelをgrounded方式へ修正した。**Movement FeelのAcceptはUser Play Testのみ**で、未実施（REQUIRED / NOT RUN）。Agentは「Feel改善」を判定していない。
 
 # Preflight
 
-- working tree clean、branch develop、fetch後 `HEAD...origin/develop` = 0 2
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Handoff-Mode GITHUB、Source-Baseline 5729909（Taskの期待値）
-- Source-Baselineは origin/develop のancestor。Coordination Diff（5729909..origin/develop）は `docs/agent_handoff/` の `CURRENT_COMPLETION_REPORT.md` / `CURRENT_TASK.md` のみ
-- `git merge --ff-only origin/develop` 成功 → Agent-Start-Head 1f8de84
+- working tree clean、branch develop、fetch後 `HEAD...origin/develop` = 0 3
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Handoff-Mode GITHUB、Source-Baseline 8b9acf7（期待値）
+- Source-Baselineは origin/develop のancestor。Coordination Diffは `docs/agent_handoff/CURRENT_TASK.md` のみ
+- `git merge --ff-only origin/develop` 成功 → Agent-Start-Head d282a51
 
 # Changed Files
 
-- 新規: `src/game/sumo/FixedStepAccumulator.ts`（+ `.test.ts`）, `src/game/input/movementVector.ts`（+ `.test.ts`）
-- 変更: `src/game/sumo/BoutTypes.ts`, `src/game/sumo/BoutSimulation.ts`（+ `.test.ts`）, `src/game/scenes/BoutScene.ts`, `docs/ARCHITECTURE.md`, `AGENTS.md`（Directory / fixed-step記述の最小同期）, 本Report
-- package.json / pnpm-lock.yaml: 未変更。新Dependencyなし
+- `src/game/sumo/BoutSimulation.ts`（velocity更新を差し替え）
+- `src/game/sumo/BoutSimulation.test.ts`（定数名追従 + T12〜T17追加）
+- `docs/ARCHITECTURE.md`（Movement model記述の最小同期）
+- `AGENTS.md`（stale wordingの修正のみ）
+- 本Report
+- Scene / Input / Accumulator / package / lockfile: 未変更
 
-# Implemented Movement Architecture
+# Root Cause / Previous Feel
 
-- `ParticipantIntent { move: Vec2 }`: world-frame、semantic。`BoutSimulation.step(intents: ReadonlyMap<id, intent>)`が1 tickだけ進める。intentが無いparticipantはzero move。非有限値はzero扱い、長さ>1はSimulation側でclamp
-- 速度モデル: intent → target velocity → 加速（intentあり）/減速（intentなし）で、1 tickあたりの最大変化量（rate×tick）以内でtargetへ近づく（overshootなし）→ position積分
-- Auto-facing: 毎tick末に相手方向へ即時。座標系は +x右、+y下、facing 0 = +x、radian（`BoutTypes.ts`先頭にcomment）。同一点では直前のfacingを維持（NaNなし）。初期facingもconstructorで相手方向に設定
-- Snapshotの`ParticipantState`に`velocity`と`facing`を追加（copy隔離は継続）
+旧modelは、velocity vector全体を「intent × MAX_SPEED」というtarget velocityへ、単一のrate（加速12 / 減速15 m/s²）で等方的に近づけていた。方向転換時に旧方向のvelocityが加速rateでしか減らず、横方向の成分が残って円弧を描いて滑る、いわば氷上の挙動になっていた。
 
-# Fixed-Step / Accumulator
+# Implemented Grounded Movement Model
 
-- `FixedStepAccumulator.advance(deltaMs) → ticks`。Phaser非依存、`1e-6ms`のepsilonで浮動小数誤差を吸収
-- 上限: 1 frame delta ≤ 250ms、1 frame ≤ 8 tick。tick上限に達したら残りの蓄積を破棄（spiral of death防止、slow motion化）
-- Scene: `update(_, deltaMs)`で`advance`、得たtick数だけ`simulation.step(intents)`。Intentはframe冒頭で1回sampleし、そのframeの全tickで再利用。render interpolationなし
+`applyGroundedVelocity`（module内の小さなPure関数、1tickの更新）。desired direction d（=intent方向）でvelocityを分解する：
 
-# Keyboard Adapter
+- 入力なし: speedを`STOP_DECELERATION`で0まで減らす（方向は保つ、overshootなし、有限tickでexact 0）
+- 垂直成分（d直交）: `LATERAL_DECELERATION`で強く減衰 → 方向転換時の横滑りを抑える
+- 平行成分:
+  - 逆向き（<0）: `REVERSE_BRAKING`で0へ制動（その1tickは0で止める。その後に新方向へ加速するので、1tickでの反転はしない）
+  - 同方向で目標未満: `FORWARD_ACCELERATION`で段階的に加速
+  - 目標超過（入力magnitudeが下がった時）: `STOP_DECELERATION`で目標まで制動
+- 最後に全体speedを`MAX_SPEED`へclamp
 
-- `movementVectorFromKeys({up,down,left,right})`: W=-y, S=+y, A=-x, D=+x（画面基準）、逆方向は相殺、斜めは`SQRT1_2`で正規化
-- Phaserの`keyboard.addKey(KeyCodes.W/A/S/D)`をScene内で読み、上記Pure関数へ渡す。Simulationはkey codeを知らない。Touch / Gamepadなし
+**実装中の発見**: 平行成分と垂直成分の合成が、方向転換中にMAX_SPEEDを僅かに超えることがT16で判明（約3.009 m/s）。最終clampを追加して解消した（速度上限のinvariantを保持）。
 
-# State Ownership / Identity-Control Separation
+velocityはcanonical stateのまま。position補正・Tween・Physicsは不使用。
 
-- position / velocity / facingの正本は`BoutSimulation`のみ。SceneのGameObjectは毎frame Snapshotから一方向同期され、書き戻しはない。GameObjectは`create()`で1回だけ生成し、以後は更新のみ
-- C-1解消: participant id（`wrestler-a`/`wrestler-b`、Simulation内では単なる識別子）と、controller（keyboard / stationary）・色・ラベルの対応は、Scene側の`PARTICIPANT_PRESENTATION`に分離。idが`player`/`cpu`である必要はない。小さな定数配列のみで、`BoutControlAssignment`等のFrameworkは作っていない
+# Provisional constants: before → after（暫定。Final balanceではない）
 
-# Provisional constants and fixture values（暫定。Final balanceではない。User Play Testで調整）
+| 定数 | before | after |
+|---|---|---|
+| MAX_SPEED | 3 m/s | 3 m/s（変更なし） |
+| 加速 | ACCELERATION 12 | FORWARD_ACCELERATION 10（発進をやや重く。約0.3秒で最高速） |
+| 停止 | DECELERATION 15 | STOP_DECELERATION 24（約0.125秒で停止） |
+| 横方向 | （なし） | LATERAL_DECELERATION 36（約0.083秒で横成分が消える） |
+| 逆向き | （なし） | REVERSE_BRAKING 30（最高速からの制動は約0.1秒） |
 
-- `SIMULATION_HZ` = 60
-- `MAX_SPEED` = 3 m/s
-- `ACCELERATION` = 12 m/s²（約0.25秒で最高速）
-- `DECELERATION` = 15 m/s²（約0.2秒で停止）
-- Fixture: ring半径 2.275 m、spawn x = ±0.7 m（y=0）、body半径 0.35 m（presentationのみ）、canvasに対するring比率 0.9
-- Accumulator: `MAX_FRAME_MS` = 250、`MAX_STEPS_PER_FRAME` = 8
-- 参加者間の能力差なし。Rikishi attributesなし
+SIMULATION_HZ = 60は変更なし。
 
-# T1〜T11
+# Direction-change behavior
 
-`pnpm test`: 3 files / 24 tests PASS。
+- 90°転換: 旧方向成分が36 m/s²で減衰し、新方向成分が10 m/s²で増える（約0.1秒以内に横滑りは0）
+- 逆向き: 最高速から約6 tickで0を通過し、その後に新方向へ加速する
+- 斜め: 正規化済みintentで同様に動作し、速度上限を超えない
 
-- T1 決定性 / T2 zero intent（静止・既存velocityの減速） / T3 4方向の軸 / T4 斜め・過大入力のclamp（定常速度がMAX_SPEED） / T5 段階的加速（1 tick目 = ACCELERATION×tick、MAX_SPEEDへ到達しそれ以上にならない） / T6 減速（単調減少、方向反転・NaNなし、exactに0で停止し以後移動しない） / T7 accumulator（60/144/30fps・jitter分割で同tick数、16+17 = 33、巨大delta clamp、tick上限と超過破棄、非正・非有限delta無視） / T8 auto-facing（初期、移動後の更新、同一点でNaNなし） / T9 setup alias・snapshot隔離（velocity/facing含む） / T10 Simulation・Types・Accumulator・movementVectorにPhaser依存なし（`?raw`で検査） / T11 W/S/A/D、相殺、斜め正規化
+# Tests
+
+`pnpm test`: 31 tests PASS（既存24 + 7追加）。
+
+- T12 grounded stop: 単調減少、反転・NaNなし、`ceil(MAX/(STOP×tick))` tickでexact 0（瞬間停止でもない）
+- T13 90°転換: 旧成分が毎tick減衰、新成分が増加、減衰量 = 3 tick × LATERAL×tick、有限tickで横成分0
+- T14 逆向き: 1 tick目は`MAX − REVERSE×tick`（フル反転しない）、0を経由してから負へ、最終的に−MAX_SPEED、再実行で同一
+- T15 同方向加速: 単調、1 tick目 = FORWARD×tick、MAX_SPEEDで停止
+- T16 任意方向・過大・斜めintent: 有限、MAX_SPEED以下
+- T17 同じtick intent列で同一結果（fixed-step構造は未変更。accumulatorのframe partition Testは既存のまま）
+- 追加: 部分入力magnitudeで目標速度が比例
+- 既存T1〜T11相当（決定性、zero intent、cardinal、clamp、facing、alias、Phaser非依存、keyboard vector）はexpected値の更新のみでPASS（T2/T5/T6は新しい定数名に追従）
+- 挙動のinvariant（単調、非反転、有限、上限）と、暫定定数に紐づくassertion（1 tick目の値、tick数）を分けて記述した
 
 # Verification
 
-- `pnpm test`: PASS（24/24）
-- `pnpm build`（tsc含む）: PASS
+- `pnpm test`: PASS（31/31）
+- `pnpm build`: PASS
 - `git diff --check`: PASS
-- 新Dependencyなし、Phaser Physics / Matter未使用、collision/push/ring-out/tachiai等なし
-- Agent Task Diff（1f8de84..Implementation-Commit）は上記Changed Filesのみ
+- 新Dependencyなし、Phaser依存なし
 
 # Browser Smoke
 
-Chrome headless + DevToolsプロトコルで実キーイベント（W、D+S）を送り、Screenshotで確認した。Dependency追加なし。
+Chrome headless（専用profile）+ DevToolsで実キーイベントを送り、Screenshotで確認した。
 
-- Phaser Canvas起動、console errorとuncaught exception: 0件
-- Vite starter UIなし
-- 初期: PLAYERとCPUのfacing markerが互いを向いている
-- W押下: PLAYERが画面上方向へ移動し、移動中もCPU方向にmarkerが向く。離すと停止する（以後の位置は変化しない）
-- D+S同時押下: 画面右下へ移動。斜め移動が極端に速いようには見えない（定量はT4）
-- CPUは静止、Sceneの描画はSnapshotに追従
-- 注意: collisionもring境界もないため、PLAYERはring外へ出られ、CPUを通り抜けられる（Taskのexpected）
-- 実時間での体感（応答性、加減速の重さ）はAgentでは判断できない → User Play Test
+- Canvas起動、runtime errorは0件
+- S: 画面下へ移動、離すと停止
+- D → W: 右移動から上への90°転換が機能した
+- D → A: 逆向き入力が機能した
+- auto-facing維持（markerが相手方向を向く）、CPUは静止、collision / ring boundaryなし
+- 上記はTechnical確認のみで、「人間らしくなった」等のFeel判定はしていない
 
 # Acceptance Criteria
 
-AC-01〜AC-18: PASS。AC-19: User Play Testは REQUIRED / NOT RUN として報告。
+AC-01〜AC-16, AC-18: PASS。AC-17: User Play Testは REQUIRED / NOT RUN として報告。
 
 # Implementation Evidence
 
-1. semantic Input boundary: `ParticipantIntent`、`movementVector.ts`。Simulationにkey codeなし
-2. canonical movement ownership: `BoutSimulation`が position/velocity/facing を保持
-3. fixed timestep: `step()`は1 tick、dt引数なし
-4. accumulator: T7のpartition独立性
-5. auto-facing: Simulation内、T8
-6. Scene一方向同期: `syncViews()`はSnapshot読取のみ
-7. identity/control分離: `PARTICIPANT_PRESENTATION`
-8. scope creepなし: collision/push/ring-out/tachiai/grapple/CPU/attributes未実装
+1. fixed-step architecture preserved: accumulator / Scene / `step()`のsignatureは未変更
+2. grounded stop: T12
+3. lateral/turn grip: T13
+4. reverse braking: T14
+5. max speed / diagonal invariants: T4、T15、T16（最終clamp）
+6. Simulation ownership preserved: velocity / position / facingは引き続きSimulationのみ
+7. Collision/Push scope creepなし
+8. docs Current State: ARCHITECTUREのmovement記述、AGENTSのstale wording
 
 # Design Deviations
 
@@ -105,19 +118,19 @@ NONE
 
 # Unexpected Scope
 
-なし。
+なし。T16で見つかった速度上限超過は、同じ関数内の最終clamp1つで対応した（Task Scope内）。
 
 # Known Untested Items
 
-- **User Play Test（movement feel / control feel）: REQUIRED / NOT RUN**（Agentは受理扱いにしない）
-- `pnpm dev`（HMR）、実機の60Hz以外のdisplay（144Hz等）での体感、Mobile / touch
-- tab切替・background復帰時の実ブラウザ挙動（accumulatorのclampはUnit Test済みだが実ブラウザでは未確認）
-- 実フレームレートでのkeyDown/keyUpのsampleタイミング（短いタップがtick間に失われないか。現実装は「frame冒頭のisDown」をsampleする。1 frame未満の押下は拾えない可能性あり）
+- **User Play Test（上記8項目）: REQUIRED / NOT RUN**
+- 実時間での体感（重さ、切り返しの responsiveness）
+- 144Hz表示等、tab復帰、`pnpm dev`、Mobile / touch
+- 短いキータップがframe間で取りこぼされる可能性（Task指示によりScope外）
 
 # User Play Test
 
-REQUIRED / NOT RUN。確認項目: 画面基準WASDの直感性、auto-facingしながらの横移動・後退、加速・減速の感覚、斜め移動、反応速度、60Hz fixed-stepでの違和感。
+REQUIRED / NOT RUN。確認項目: スケートリンク感の減少、発進の重さ、踏ん張って止まる感じ、90°転換の不自然な横滑り、切り返しの重さと responsiveness、auto-facing中の横移動と後退、重すぎないか、「足で動いている」感。調整が必要な場合は上記5定数を動かす。
 
 # Git delivery
 
-`feat: add bout movement foundation` を1 commitで`origin/develop`へpush。mainは未変更。
+`fix: ground bout movement feel` を1 commitで`origin/develop`へpush。mainは未変更。

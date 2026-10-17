@@ -13,8 +13,11 @@ import type {
 export const SIMULATION_HZ = 60
 export const TICK_SECONDS = 1 / SIMULATION_HZ
 export const MAX_SPEED = 3 // m/s
-export const ACCELERATION = 12 // m/s^2, while the move intent is non-zero
-export const DECELERATION = 15 // m/s^2, while the move intent is zero
+// Grounded movement model (ACTION-02B). Before: ACCELERATION 12, DECELERATION 15, isotropic.
+export const FORWARD_ACCELERATION = 10 // m/s^2, speeding up along the desired direction
+export const STOP_DECELERATION = 24 // m/s^2, braking with no input (and when over the target speed)
+export const LATERAL_DECELERATION = 36 // m/s^2, damping of velocity perpendicular to the desired direction
+export const REVERSE_BRAKING = 30 // m/s^2, killing velocity that opposes the desired direction
 
 interface MutableParticipant {
   id: string
@@ -35,6 +38,65 @@ function sanitizeMove(move: Vec2): { x: number; y: number } {
   const length = Math.hypot(move.x, move.y)
   if (length > 1) return { x: move.x / length, y: move.y / length }
   return { x: move.x, y: move.y }
+}
+
+// Updates velocity in place for one tick. Velocity is split along the desired direction d:
+//  - perpendicular part: damped strongly (feet re-plant instead of sliding in an arc)
+//  - parallel part: opposing -> braked to zero first; same direction -> accelerates up to the
+//    target speed; above target -> braked
+// With no input the whole velocity brakes to exact zero.
+function applyGroundedVelocity(v: { x: number; y: number }, move: Vec2): void {
+  const inputLength = Math.hypot(move.x, move.y)
+  if (inputLength === 0) {
+    const speed = Math.hypot(v.x, v.y)
+    const drop = STOP_DECELERATION * TICK_SECONDS
+    if (speed <= drop) {
+      v.x = 0
+      v.y = 0
+    } else {
+      const scale = (speed - drop) / speed
+      v.x *= scale
+      v.y *= scale
+    }
+    return
+  }
+
+  const dirX = move.x / inputLength
+  const dirY = move.y / inputLength
+  const targetSpeed = inputLength * MAX_SPEED
+
+  let parallel = v.x * dirX + v.y * dirY
+  let perpX = v.x - parallel * dirX
+  let perpY = v.y - parallel * dirY
+
+  const perpSpeed = Math.hypot(perpX, perpY)
+  const perpDrop = LATERAL_DECELERATION * TICK_SECONDS
+  if (perpSpeed <= perpDrop) {
+    perpX = 0
+    perpY = 0
+  } else {
+    const scale = (perpSpeed - perpDrop) / perpSpeed
+    perpX *= scale
+    perpY *= scale
+  }
+
+  if (parallel < 0) {
+    parallel = Math.min(0, parallel + REVERSE_BRAKING * TICK_SECONDS)
+  } else if (parallel < targetSpeed) {
+    parallel = Math.min(targetSpeed, parallel + FORWARD_ACCELERATION * TICK_SECONDS)
+  } else {
+    parallel = Math.max(targetSpeed, parallel - STOP_DECELERATION * TICK_SECONDS)
+  }
+
+  v.x = parallel * dirX + perpX
+  v.y = parallel * dirY + perpY
+
+  // Parallel and perpendicular parts can add up to slightly more than MAX_SPEED while turning.
+  const speed = Math.hypot(v.x, v.y)
+  if (speed > MAX_SPEED) {
+    v.x *= MAX_SPEED / speed
+    v.y *= MAX_SPEED / speed
+  }
 }
 
 // Direction from `from` toward `to`, or `fallback` when the points coincide.
@@ -79,22 +141,7 @@ export class BoutSimulation {
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     for (const p of this.participants) {
       const move = sanitizeMove(intents.get(p.id)?.move ?? { x: 0, y: 0 })
-      const hasInput = move.x !== 0 || move.y !== 0
-      const targetX = move.x * MAX_SPEED
-      const targetY = move.y * MAX_SPEED
-
-      // Velocity follows the target velocity at a bounded rate (never overshoots).
-      const maxDelta = (hasInput ? ACCELERATION : DECELERATION) * TICK_SECONDS
-      const dx = targetX - p.velocity.x
-      const dy = targetY - p.velocity.y
-      const distance = Math.hypot(dx, dy)
-      if (distance <= maxDelta) {
-        p.velocity.x = targetX
-        p.velocity.y = targetY
-      } else {
-        p.velocity.x += (dx / distance) * maxDelta
-        p.velocity.y += (dy / distance) * maxDelta
-      }
+      applyGroundedVelocity(p.velocity, move)
 
       p.position.x += p.velocity.x * TICK_SECONDS
       p.position.y += p.velocity.y * TICK_SECONDS

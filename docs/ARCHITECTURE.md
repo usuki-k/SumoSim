@@ -45,7 +45,7 @@ Small explicit designを優先し、過剰なFramework、ECS、DI Framework、Gl
   - `BoutSnapshot`: `getSnapshot()`が毎回返すcopy。consumerが変更してもcanonical stateへ影響しない。
   - `BoutSimulation.step(intents)`: 1 logical tick（60Hz、暫定）だけ進める。render deltaは受け取らない。participantごとのposition / velocity / facingがcanonical state。
   - `ParticipantIntent { move }`: source非依存のsemantic入力（world-frame vector、Simulation側で長さ1にclamp）。raw keyはSimulationに入らない。
-  - Movement model: intent → target velocity → 加速/減速でvelocityが追従 → position積分。facingは毎tick末に相手方向へ即時（座標系: +x右、+y下、facing 0 = +x、radian）。同一点では直前のfacingを維持。
+  - Movement model（grounded）: velocityをintent方向の平行成分と垂直成分に分解する。垂直成分は強く減衰（方向転換で滑らない）、逆向きの平行成分はまず制動で0へ、同方向は段階的に加速、入力なしは0まで制動、全体はMAX_SPEEDでclamp。velocityは引き続きcanonical state。係数は暫定（User Play Test対象）。→ position積分。facingは毎tick末に相手方向へ即時（座標系: +x右、+y下、facing 0 = +x、radian）。同一点では直前のfacingを維持。
   - `FixedStepAccumulator`: frame deltaを整数tick数へ変換（Phaser非依存）。1 frameのdelta上限とtick数上限を持ち、超過分は破棄。
 - `src/game/input/movementVector.ts`: キー状態 → world-frame vector（画面基準: W=-y, S=+y, A=-x, D=+x。逆方向は相殺、斜めは正規化）。
 - `BoutScene`: Phaser keyboardを読んでIntentを作り、accumulatorで0..N tick進め、Snapshotを永続GameObjectへ一方向同期する。canonical stateは持たない。participant identityとcontroller / 見た目の対応（`PARTICIPANT_PRESENTATION`）はSimulation外のScene側にある。OpponentはACTION-02では静止。

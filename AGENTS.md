@@ -30,7 +30,7 @@ Stable → Training → Bout → Result / Reward → Stable
 - pnpm 12系
 - Vite 8
 - TypeScript 6
-- Phaser 4.2.1（`src/main.ts`からGame起動。表示のみのFoundation）
+- Phaser 4.2.1（`src/main.ts`からGame起動。`BoutScene`がInput読取・fixed step駆動・Snapshot描画を担う）
 - Vitest（`pnpm test` = `vitest run`）
 - VSCode / Codex / Claude Code
 - Git / GitHub

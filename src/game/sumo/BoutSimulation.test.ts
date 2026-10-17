@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACCELERATION,
+  FORWARD_ACCELERATION,
+  LATERAL_DECELERATION,
+  REVERSE_BRAKING,
   BoutSimulation,
-  DECELERATION,
+  STOP_DECELERATION,
   MAX_SPEED,
   TICK_SECONDS,
 } from './BoutSimulation.ts'
@@ -143,7 +145,7 @@ describe('BoutSimulation movement', () => {
     stepN(moving, 60, intent(1, 0))
     const v0 = a(moving).velocity.x
     moving.step(NO_INTENT)
-    expect(a(moving).velocity.x).toBeCloseTo(v0 - DECELERATION * TICK_SECONDS, 10)
+    expect(a(moving).velocity.x).toBeCloseTo(v0 - STOP_DECELERATION * TICK_SECONDS, 10)
   })
 
   it('T3: cardinal intents move along the correct world axis', () => {
@@ -187,10 +189,10 @@ describe('BoutSimulation movement', () => {
   it('T5: velocity accelerates gradually toward the target speed', () => {
     const sim = new BoutSimulation(makeSetup())
     sim.step(intent(1, 0))
-    expect(a(sim).velocity.x).toBeCloseTo(ACCELERATION * TICK_SECONDS, 10)
+    expect(a(sim).velocity.x).toBeCloseTo(FORWARD_ACCELERATION * TICK_SECONDS, 10)
     expect(a(sim).velocity.x).toBeLessThan(MAX_SPEED)
 
-    const ticksToMax = Math.ceil(MAX_SPEED / ACCELERATION / TICK_SECONDS)
+    const ticksToMax = Math.ceil(MAX_SPEED / FORWARD_ACCELERATION / TICK_SECONDS)
     stepN(sim, ticksToMax, intent(1, 0))
     expect(a(sim).velocity.x).toBe(MAX_SPEED)
     stepN(sim, 30, intent(1, 0))
@@ -201,7 +203,7 @@ describe('BoutSimulation movement', () => {
     const sim = new BoutSimulation(makeSetup())
     stepN(sim, 60, intent(1, -1))
     let prevSpeed = Math.hypot(a(sim).velocity.x, a(sim).velocity.y)
-    const ticksToStop = Math.ceil(MAX_SPEED / DECELERATION / TICK_SECONDS) + 1
+    const ticksToStop = Math.ceil(MAX_SPEED / STOP_DECELERATION / TICK_SECONDS) + 1
     for (let i = 0; i < ticksToStop; i++) {
       sim.step(NO_INTENT)
       const v = a(sim).velocity
@@ -255,6 +257,136 @@ describe('BoutSimulation movement', () => {
       expect(Number.isFinite(p.facing)).toBe(true)
       expect(Number.isFinite(p.position.x)).toBe(true)
     }
+  })
+})
+
+describe('grounded movement model (ACTION-02B)', () => {
+  const speedOf = (v: { x: number; y: number }) => Math.hypot(v.x, v.y)
+
+  function atMaxSpeedRight(): BoutSimulation {
+    const sim = new BoutSimulation(makeSetup())
+    stepN(sim, 120, intent(1, 0))
+    return sim
+  }
+
+  it('T12: grounded stop is monotonic, never reverses, and reaches exact zero in finite ticks', () => {
+    const sim = atMaxSpeedRight()
+    let prev = speedOf(a(sim).velocity)
+    expect(prev).toBeCloseTo(MAX_SPEED, 9)
+    let ticks = 0
+    while (speedOf(a(sim).velocity) > 0) {
+      sim.step(NO_INTENT)
+      const v = a(sim).velocity
+      expect(Number.isFinite(v.x) && Number.isFinite(v.y)).toBe(true)
+      expect(speedOf(v)).toBeLessThan(prev)
+      expect(v.x).toBeGreaterThanOrEqual(0)
+      prev = speedOf(v)
+      expect(++ticks).toBeLessThan(1000)
+    }
+    expect(a(sim).velocity).toEqual({ x: 0, y: 0 })
+    // stops within the provisional braking distance/time (not instant: more than 1 tick)
+    expect(ticks).toBeGreaterThan(1)
+    expect(ticks).toBe(Math.ceil(MAX_SPEED / (STOP_DECELERATION * TICK_SECONDS)))
+  })
+
+  it('T13: 90-degree turn damps the old perpendicular velocity and builds the new direction', () => {
+    const sim = atMaxSpeedRight()
+    const up = intent(0, -1)
+    let prevX = a(sim).velocity.x
+    let prevY = a(sim).velocity.y
+    for (let i = 0; i < 3; i++) {
+      sim.step(up)
+      const v = a(sim).velocity
+      expect(v.x).toBeLessThan(prevX) // old sideways component decays
+      expect(v.y).toBeLessThan(prevY) // new direction (up = -y) grows
+      prevX = v.x
+      prevY = v.y
+    }
+    // old component decays at the dedicated lateral rate, faster than ordinary acceleration
+    const drop = MAX_SPEED - a(sim).velocity.x
+    expect(drop).toBeCloseTo(3 * LATERAL_DECELERATION * TICK_SECONDS, 9)
+    expect(LATERAL_DECELERATION).toBeGreaterThan(FORWARD_ACCELERATION)
+    // sideways slip is gone in finite time
+    stepN(sim, Math.ceil(MAX_SPEED / (LATERAL_DECELERATION * TICK_SECONDS)), up)
+    expect(a(sim).velocity.x).toBe(0)
+    expect(a(sim).velocity.y).toBeLessThan(0)
+  })
+
+  it('T14: reverse brakes the old momentum before moving the new way, deterministically', () => {
+    const run = () => {
+      const sim = atMaxSpeedRight()
+      const xs: number[] = []
+      for (let i = 0; i < 60; i++) {
+        sim.step(intent(-1, 0))
+        xs.push(a(sim).velocity.x)
+      }
+      return xs
+    }
+    const xs = run()
+    expect(xs[0]).toBeGreaterThan(-MAX_SPEED) // no instant full-speed flip
+    expect(xs[0]).toBeCloseTo(MAX_SPEED - REVERSE_BRAKING * TICK_SECONDS, 9)
+    // velocity strictly decreases from +MAX_SPEED through 0, and only then goes negative
+    const firstNonPositive = xs.findIndex((x) => x <= 0)
+    expect(firstNonPositive).toBeGreaterThan(0)
+    for (let i = 1; i <= firstNonPositive; i++) expect(xs[i]).toBeLessThan(xs[i - 1])
+    expect(xs[firstNonPositive]).toBe(0)
+    expect(xs[firstNonPositive + 1]).toBeLessThan(0)
+    expect(xs[xs.length - 1]).toBe(-MAX_SPEED)
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-MAX_SPEED)
+    expect(run()).toEqual(xs)
+  })
+
+  it('T15: same-direction acceleration is gradual and capped at max speed', () => {
+    const sim = new BoutSimulation(makeSetup())
+    let prev = 0
+    for (let i = 0; i < 200; i++) {
+      sim.step(intent(0, 1))
+      const s = speedOf(a(sim).velocity)
+      expect(s).toBeGreaterThanOrEqual(prev)
+      expect(s).toBeLessThanOrEqual(MAX_SPEED)
+      if (i === 0) expect(s).toBeCloseTo(FORWARD_ACCELERATION * TICK_SECONDS, 10)
+      prev = s
+    }
+    expect(prev).toBe(MAX_SPEED)
+  })
+
+  it('T16: arbitrary and diagonal intents stay finite and never exceed max speed', () => {
+    const sim = new BoutSimulation(makeSetup())
+    const angles = [0.3, 1.1, 2.7, -2.0, 4.0, 0.0, 3.14159]
+    for (const ang of angles) {
+      for (let i = 0; i < 25; i++) {
+        sim.step(intent(Math.cos(ang) * 1.5, Math.sin(ang) * 1.5))
+        const v = a(sim).velocity
+        expect(Number.isFinite(v.x) && Number.isFinite(v.y)).toBe(true)
+        expect(speedOf(v)).toBeLessThanOrEqual(MAX_SPEED + 1e-9)
+      }
+    }
+    const diag = new BoutSimulation(makeSetup())
+    stepN(diag, 200, intent(1, 1))
+    expect(speedOf(a(diag).velocity)).toBeCloseTo(MAX_SPEED, 9)
+  })
+
+  it('T17: the same tick-level intent sequence gives the same result (fixed-step unchanged)', () => {
+    const script: [number, number, number][] = [
+      [40, 1, 0],
+      [25, 0, -1],
+      [30, -1, 0],
+      [20, 0, 0],
+    ]
+    const run = () => {
+      const sim = new BoutSimulation(makeSetup())
+      for (const [n, x, y] of script) stepN(sim, n, intent(x, y))
+      return sim.getSnapshot()
+    }
+    expect(run()).toEqual(run())
+  })
+
+  it('partial input magnitude targets a proportionally lower speed', () => {
+    const sim = new BoutSimulation(makeSetup())
+    stepN(sim, 200, intent(0.5, 0))
+    expect(speedOf(a(sim).velocity)).toBeCloseTo(MAX_SPEED * 0.5, 9)
+    stepN(sim, 200, intent(0.25, 0)) // above target: brakes down to it
+    expect(speedOf(a(sim).velocity)).toBeCloseTo(MAX_SPEED * 0.25, 9)
   })
 })
 
