@@ -1,425 +1,399 @@
-Task-ID: FOUNDATION-01-PHASER-BOOTSTRAP
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / PHASER FOUNDATION
+Task-ID: FOUNDATION-02-BOUT-SIMULATION-FOUNDATION
+Status: READY
+Task-Type: IMPLEMENTATION / PURE TYPESCRIPT SIMULATION FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 594786bdbca81a30c33d6f3f963510f209dc7711
+Source-Baseline: d0b81c29bb10af0ba05863f38643d73ca234f170
 Handoff-Mode: GITHUB
 
-# FOUNDATION-01 — Phaser Game Foundation
+# FOUNDATION-02 — BoutSimulation Foundation
 
 ## 1. Purpose
 
-SumoSimの最初のProduction Source Taskとして、現在のVite初期サンプルを最小のPhaser 4 Game Foundationへ置き換える。
+SumoSimの相撲Actionを将来作り込んでも、Phaser SceneとGameplay Ruleが密結合して破綻しないよう、最小のPure TypeScript BoutSimulation境界を実装する。
 
-このTaskはGameplay実装ではない。
+同時に、将来のManagement / Training側から育成済み力士をBoutへ渡す場合も、Management StateそのものをBout Runtimeの正本にしない構造を作る。
 
-成立させる技術経路：
+このTaskはGameplay Rule実装ではない。
 
-Node.js / pnpm
-→ Vite
-→ TypeScript
-→ Phaser 4
-→ Browser Canvas
+今回成立させる境界：
 
-Browser上では、見下ろし型の円形土俵、Player placeholder、CPU placeholderまでを表示する。
+Management / future game state
+→ BoutSetup（明示的な入力境界）
+→ BoutSimulation（canonical bout runtime ownership）
+→ read-only Snapshot / State
+→ Phaser BoutScene rendering
 
-移動、入力、Physics、押し合い、CPU、ring-out、勝敗等は実装しない。
+初期版は小さく保つが、将来stamina / balance / push / movement / ring-out / CPU等を追加するときに同じ境界を拡張できる構造にする。
 
-## 2. Current Baseline
+過剰なFrameworkや将来機能の空実装は作らない。
 
-- Source-Baseline: `594786bdbca81a30c33d6f3f963510f209dc7711`
-- Node.js 24.22.0
-- pnpm 12系
-- Vite 8
-- TypeScript 6
-- Phaser 4.2.1 dependency導入済み
-- `src/` はVite initial sample
-- Phaser Game bootstrap未実装
-- Vitest / Playwright / CrazyGames SDK未導入
+## 2. Current Baseline / Review Handoff
 
-新しいDependencyを追加しないこと。
+Accepted Source Baseline:
+
+`d0b81c29bb10af0ba05863f38643d73ca234f170`
+
+Previous FOUNDATION-01 Review:
+
+- Phaser bootstrap / independent `BoutScene` はAccepted
+- 現在の640x640、色、位置、寸法は暫定値でありFinal Designではない
+- Gameplay Simulation / Input / Movement / Physics / CPU / stamina / balance / ring-out / victoryは未実装
+- Pure TypeScript Simulation → State / Results → Phaser Presentationを維持
+- Physicsを先回り導入しない
+- Correction: `public/` は現在存在しないのにAGENTS.mdのCurrent directory listに残っている。空Directoryを作らず、今回AGENTS Current Stateを同期する際に修正してよい
+
+Current developにはChatGPT Review coordination commitが上にあるため、AGENTS.mdのGitHub Handoff Workflowに従い、Source-BaselineからのCoordination Diffが`docs/agent_handoff/`のみであることを確認してからFF-onlyすること。
 
 ## 3. Required Reading
-
-作業開始前に必ず読む：
 
 - `AGENTS.md`
 - `CLAUDE.md`
 - `docs/GAME_CONCEPT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/agent_handoff/CURRENT_TASK.md`
-- 直前の `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- FOUNDATION-01 Final Review Handoff
+- Current `src/main.ts`
+- Current `src/game/scenes/BoutScene.ts`
+- Current `package.json`
 
-GitHub Handoff Preflightは `AGENTS.md` をSource of Truthとする。
+## 4. Architecture Contract
 
-## 4. Architecture Constraints
+### 4.1 Canonical ownership
 
-最重要原則：
+BoutのRuntime Stateの正本はPure TypeScript側に置く。
 
-Pure TypeScript Game / Simulation
-→ State / Results
-→ Phaser Rendering / Input / Animation
+`BoutScene` がcanonical position等を別に所有しない。
 
-ただし、このTaskではGameplay Simulation自体を作らない。
+Phaser Objectの `x/y` 等はPresentationであり、Gameplay Stateの正本ではない。
 
-Phaser SceneはPresentation Foundationだけとする。
+### 4.2 Setup と Runtime Stateを分ける
 
-このTaskでSceneへ入れない：
+将来のManagement Stateを直接BoutSimulationへ持ち込まない。
 
-- stamina計算
-- balance計算
-- push計算
-- movement rule
-- ring-out rule
-- 勝敗rule
-- CPU decision
-- gameplay state machine
-- Physics
+明示的な `BoutSetup` / participant setup boundaryを設ける。
 
-`update()` に将来のGameplay Logicを先回り実装しない。
+今回は未決の能力値を追加しない。
+
+BoutSetupに必要な最小情報のみ：
+
+- participant identity
+- initial logical position
+- arena/ring geometryとして必要な最小情報
+
+将来Power / stamina / technique等を追加できるが、今回勝手に定義しない。
+
+### 4.3 Simulation coordinate と Presentationを分ける
+
+Simulationのposition / ring geometryはPhaser GameObjectやCanvas DOM値そのものに依存しないPure number dataとする。
+
+Phaser SceneがSnapshotをCanvasへ描画する責務を持つ。
+
+現在の座標単位・ring radius・spawn位置等はPrototype fixtureでありFinal Gameplay値ではない。
+
+### 4.4 No time-step decision yet
+
+fixed-step / variable delta / tick rateは未決。
+
+このTaskでは `step(delta)`、simulation loop、time accumulator等を実装しない。
+
+Movement Taskで設計判断する。
+
+### 4.5 No speculative systems
+
+導入しない：
+
+- ECS
+- DI
+- Event Bus
+- generic reducer framework
+- command bus
+- rule engine
+- physics abstraction
+- plugin architecture
+- generic entity/component hierarchy
+
+2人の力士に必要なsmall explicit designを優先する。
 
 ## 5. Implementation Direction
 
-### 5.1 Vite starter removal
-
-Current Sourceを確認し、Vite starter専用のUI、counter、logo / hero assets、starter用public assetsを削除する。
-
-Taskと無関係なFileは削除しない。
-
-### 5.2 Minimal source structure
-
-基本構造：
+基本構造は以下を推奨する。Current Sourceを確認し、同じ責務をより小さく明確に実装できる場合は最小限の調整可。MaterialなDeviationはReportする。
 
 ```
 src/
 ├─ game/
+│  ├─ sumo/
+│  │  ├─ BoutTypes.ts
+│  │  ├─ BoutSimulation.ts
+│  │  └─ BoutSimulation.test.ts
 │  └─ scenes/
 │     └─ BoutScene.ts
 ├─ main.ts
 └─ style.css
 ```
 
-Gameplay Logicがまだ無いため、空のSimulation / Domain / Service / Manager / Interface等を先回り作成しない。
+### 5.1 BoutTypes
 
-### 5.3 main.ts
+Pure TypeScriptのみ。
 
-Phaser Game bootstrapの入口とする。
+最小限の概念：
 
-最低限：
+- logical 2D vector
+- participant identity
+- participant setup
+- arena/ring setup
+- bout setup
+- participant runtime state
+- bout snapshot/state
 
-- Phaser import
-- `BoutScene` import
-- GameConfig
-- `new Phaser.Game(...)`
+Phaser import禁止。
 
-Gameplay Logicを書かない。
+名前はTypeScriptとして自然な範囲で調整可。
 
-### 5.4 BoutScene.ts
+### 5.2 BoutSimulation
 
-Phaser Presentation Foundationとして、最低限以下を表示：
+Pure TypeScript classまたは同等に明確なsmall API。
 
-- 円形土俵
-- Player placeholder
-- CPU placeholder
+最低限の責務：
 
-Player / CPUは単純なGraphics図形でよい。
-必要なら短いText Labelを置いてよい。
+- BoutSetupを受けてruntime stateを初期化
+- canonical bout runtime stateを所有
+- Phaser非依存のread-only snapshot / state viewを提供
+- caller supplied setup objectをcanonical mutable stateとしてそのまま保持しない
+- participant identityの重複など、Foundationとして明らかに不正なSetupを安全に拒否
 
-画像Assetは不要。
+現在はGameplay advancementを行わない。
 
-色、位置、寸法はPrototype用の仮値であり、Game Design上のAccepted値にしない。
+No `update`, No `step`, No movement。
 
-### 5.5 Canvas / Scale
+### 5.3 State isolation
 
-Browser viewportへ収まりやすい最小のScale設定を行う。
+Scene等のconsumerがSnapshotを変更しても、Simulation内部のcanonical stateが書き換わらない設計にする。
 
-`Phaser.Scale.FIT`、`Phaser.Scale.CENTER_BOTH` 等を使ってよい。
+Readonly Typeだけでなく、runtime aliasingを避ける小さな実装とFocused Testを用意する。
 
-logical sizeはFoundation用の暫定値として扱う。
-最終Resolutionを確定しない。
-Docへ最終Resolutionとして記録しない。
+ただしdeep-clone Framework等は導入しない。
 
-### 5.6 CSS / index.html
+### 5.4 BoutScene integration
 
-Vite starter CSSを最小のgame canvas用CSSへ置き換える。
+現在の土俵とPlayer / CPU placeholderを、BoutSimulationのSetup / Snapshotを通して描画するよう変更する。
 
-最低限：
+Scene内にcanonical participant positionを別途持たない。
 
-- body margin除去
-- canvasが正常表示される
-- 不要なscrollを避ける
-- 単純な背景
+Sceneは：
 
-`index.html` は必要に応じてstarter favicon参照等を削除し、titleを `SumoSim` にしてよい。
+- Prototype BoutSetupを組み立てる
+- BoutSimulationを生成
+- Snapshotを読む
+- Simulation logical coordinatesをPhaser canvasへpresentation mapping
+- ring / participantsを描画
 
-Localization / final product metadataには踏み込まない。
+まで。
 
-## 6. Scope
+Prototype Setup値は仮値とコメント等で明示する。
 
-変更を許可する主な対象：
+Simulation logical coordinateを直接Canvas sizeの正本として設計しない。
+Scene側に小さく明示的なpresentation transformを置いてよい。
 
-- `src/main.ts`
-- `src/style.css`
-- `src/game/scenes/BoutScene.ts`（新規）
-- Vite starter専用の `src/` sample files / assetsの削除
-- Vite starter専用の `public/` assetsの削除
-- `index.html`
-- `docs/ARCHITECTURE.md` のCurrent State同期
-- `AGENTS.md` のCurrent Stateに関する時間依存記述のみ、必要なら最小同期
+### 5.5 Vitest
+
+Pure TypeScript Simulationを継続的に検証できるよう、このTaskでVitestをdevDependencyとして導入する。
+
+必要最小限：
+
+- `vitest`
+- package.jsonにnon-watch CI/focused実行用のtest script（例 `vitest run`）
+
+Playwrightや他Test Frameworkは導入しない。
+
+## 6. Required Focused Tests
+
+最低限、以下を自動Testする。
+
+T1. valid BoutSetupから2 participantのruntime snapshotを生成できる。
+
+T2. initial logical positions / arena geometryがSetupから正しく反映される。
+
+T3. participant ID重複など明らかにinvalidなSetupを拒否する。
+
+T4. Simulationが入力Setupを直接canonical mutable stateとしてaliasしない。
+作成後にcaller側Setup objectを変更してもSimulation snapshotが変わらない。
+
+T5. 取得したSnapshot / nested position等をconsumer側で変更しようとしても、次のSnapshotのcanonical stateに影響しないこと。
+TypeScript readonlyだけでなくruntime ownershipを確認する。
+
+T6. Simulation module / TypesがPhaserに依存しないことをSource inspectionで確認。
+
+TestのためだけにGameplay Ruleを作らない。
+
+## 7. Scope
+
+変更可：
+
+- `src/game/sumo/` の必要最小File
+- `src/game/scenes/BoutScene.ts`
+- `package.json`
+- `pnpm-lock.yaml`
+- `docs/ARCHITECTURE.md` のCurrent State / accepted architecture synchronization
+- `AGENTS.md` のCurrent Technology / Source Directory等の時間依存記述の最小同期
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-`AGENTS.md` を変更する場合、Workflow / Verification / Architecture Rule自体は再設計しない。
+前回Correctionとして、AGENTS.md Current listに存在しない `public/` が残っている問題も、Current State同期の一部として修正する。
+空の`public/`を再作成しない。
 
-## 7. Scope Out
+## 8. Scope Out
 
 実装しない：
 
-- Player movement / Keyboard input / Touch input
-- CPU movement / AI
-- Collision / Arcade Physics / Matter.js
-- push / stamina / balance
+- movement
+- keyboard / touch input
+- simulation step / delta / fixed timestep
+- velocity / acceleration（Movement Design前に勝手に決めない）
+- collision / separation
+- Arcade Physics / Matter.js
+- push formula
+- stamina / balance
+- power / technique等の能力値
+- CPU AI
 - ring-out / victory
 - tachiai / clinch / throw / kimarite
-- Training / Stable management / Reward / Money
+- Stable / Training / Management State
+- actual Management→Bout conversion service
+- Reward / Money
 - Save / Load
 - CrazyGames SDK
+- Playwright
 - React / Zustand
-- Vitest / Playwright
-- Aseprite / Tiled
-- Audio / Camera effects / Animation system
-- Asset pipeline
-- final responsive design
-- final resolution decision
+- audio / animation / camera effects
+- generic framework / plugin system
 
-空の将来用Class / Interface / Frameworkを作らない。
+Managementとの将来接続のために、未実装Management ClassやStoreを作らない。
 
-## 8. Stop Conditions
+## 9. Stop Conditions
 
-以下ではScopeを広げずSTOP：
+以下ではSTOP：
 
-- Handoff Preflight失敗
-- Current SourceとTask BaselineがMaterialに異なる
-- Phaser 4.2.1がCurrent dependencyに存在しない
-- Current Source / AGENTS / ARCHITECTUREにMaterial Conflict
-- 新しいDependencyが必須
-- Gameplay Ruleを決めないとFoundationが成立しない
-- Task対象外の既存User変更
-- Remote divergence
-- Handoff metadata不一致
+- GitHub Handoff Preflight失敗
+- Source / Review / SPECのMaterial Conflict
+- Source-Baseline mismatch
+- Vitest以外の新Dependencyが必須
+- Foundationを作るために未決Gameplay Stat / Control / time-step semanticsの決定が必須
+- SceneとSimulationのState ownershipを二重化しないと成立しない
+- Task外User変更 / remote divergence
+- Current Phaser API / TypeScriptで想定構造が成立しないMaterialな問題
 
-既存変更をrestore / reset / deleteして進めない。
+Agent独断でGameplay設計を確定しない。
 
-## 9. Verification Level
+## 10. Verification Level
 
-Standard（Foundation / Phaser Presentation接続）
+Standard。
 
-Vitest / Playwrightは未導入のため、このTaskでは導入しない。
+Required：
 
-Required Verification：
-
-1. `pnpm build` PASS
-2. `git diff --check` PASS
-3. 変更FileがTask Scope内のみ
-4. 新Dependency追加なし
-5. `pnpm-lock.yaml` を不要に変更していない
-6. Gameplay formula / Physics / Gameplay State Machine /先回りFrameworkがSceneへ入っていない
+1. `pnpm test`（またはTaskで追加したnon-watch test script）PASS
+2. T1〜T6 PASS / evidence
+3. `pnpm build` PASS
+4. `git diff --check` PASS
+5. `package.json` / lockfile変更がVitest導入に必要な範囲のみ
+6. Simulation sourceにPhaser importなし
+7. BoutSceneにGameplay advancement / Physics / Inputなし
+8. Scope外変更なし
 
 ### Browser Smoke
 
-可能なら `pnpm dev` で確認：
+Foundation integrationのRegression確認としてBrowser Smokeを行う。
 
-- page表示
-- Phaser Canvas生成
+最低限：
+
+- Phaser Canvas起動
 - runtime errorなし
-- 円形土俵表示
-- Player placeholder表示
-- CPU placeholder表示
-- Vite starter UI非表示
-- Canvasが通常のBrowser viewport内へ収まる
+- ring表示
+- Player / opponent placeholders表示
+- Vite starter UIが戻っていない
+- current basic viewportでCanvas表示
 
-AgentにBrowser実行環境が無い場合：
+既存Chrome等を使える場合は使用可。
+Playwright等のDependencyをこのために追加しない。
 
-- Browser automation dependencyを追加しない
-- Known Untested Itemsに明記
-- Technical GateがPASSしていれば `PASS WITH KNOWN UNTESTED ITEMS` 可
-- 未実施なのにRUNTIME PASSと報告しない
+## 11. Acceptance Criteria
 
-## 10. Acceptance Criteria
+AC-01: Pure TypeScriptのBoutSimulation boundaryが存在する。
+AC-02: Simulation / TypesにPhaser依存が無い。
+AC-03: BoutSetupとruntime state/snapshotが分離されている。
+AC-04: 未決Management Stateを直接Bout runtimeの正本にしていない。
+AC-05: Simulationがcanonical Bout runtime state ownerである。
+AC-06: SceneはSimulation snapshotからring / participantsを描画し、canonical gameplay positionを二重所有しない。
+AC-07: Simulation logical coordinatesとPhaser presentation mappingの境界がある。
+AC-08: caller Setup mutation / snapshot mutationからcanonical stateが保護される。
+AC-09: T1〜T6がPASS。
+AC-10: Vitest以外の新Dependencyなし。
+AC-11: Movement / Input / Physics / time step / gameplay formulaを実装していない。
+AC-12: `pnpm build` PASS。
+AC-13: Browser Smoke PASS。
+AC-14: AGENTS / ARCHITECTURE Current Stateが実SourceとMaterialに一致する。
+AC-15: 前Reviewの`public/` Current-state mismatchが解消される。
+AC-16: Scope外変更なし。
 
-AC-01: Vite starter UIがProduction Sourceから除去されている。
-AC-02: Phaser 4 Gameが `main.ts` から起動する構造。
-AC-03: `BoutScene` が独立したScene Fileとして存在。
-AC-04: 見下ろし型の円形土俵を表示。
-AC-05: Player / CPUを区別できる2つのplaceholderを表示。
-AC-06: Gameplay Logic / Input / Physics / CPU AI / Movement / 勝敗判定を実装していない。
-AC-07: Phaser SceneがGameplay RuleのSource of Truthになっていない。
-AC-08: 新Dependencyを追加していない。
-AC-09: `pnpm build` PASS。
-AC-10: `git diff --check` PASS。
-AC-11: Task Scope外の意図しない変更なし。
-AC-12: Current State Docが実装後の状態と矛盾しない。
+## 12. User Play Test
 
-## 11. User Play Test
+NOT REQUIRED。
 
-Task Acceptanceとしては NOT REQUIRED。
+このTaskはState ownership / architectural boundary / test foundationであり、Game Feelを変更・評価しない。
 
-これはGame Feel Taskではなく、Phaser FoundationのTechnical Foundation Taskである。
+Browser SmokeはTechnical Verification。
 
-Browser表示確認はTechnical Smokeであり、Game Feel Acceptanceではない。
+## 13. Completion Report
 
-## 12. Completion Report
-
-`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` をこのTaskのReportとして上書きする。
+AGENTS.mdに従う。
 
 最低限：
 
 - Result
 - Preflight
-- Scope
 - Changed Files
-- Deleted Vite starter files
-- Implemented Foundation
-- Verification
+- Architecture / State Ownership
+- Vitest導入内容
+- T1〜T6結果
 - Browser Smoke
-- AC-01〜AC-12
+- AC-01〜AC-16
+- Implementation Evidence
 - Design Deviations
 - Unexpected Scope
-- Known Untested Items
+- Known Untested
 - User Play Test: NOT REQUIRED
 - Git delivery
 
-Implementation Evidenceを簡潔に含める：
+Implementation Evidenceでは最低限：
 
-1. Phaser bootstrap
-2. Scene分離
-3. Gameplay LogicをSceneへ入れていない
-4. Dependency追加なし
-5. Vite starter removal / Browser foundation
+1. Setup → Runtime ownership boundary
+2. Phaser-free Simulation
+3. State alias protection
+4. BoutScene integration
+5. Test foundation
+6. No speculative Gameplay implementation
 
-Design Deviationsなし：
+Design Deviationsがなければ：
 
 `Design Deviations: NONE`
 
-変更がある場合は Planned / Implemented / Reason / Semantics changed? を報告し、Semantic変更を独断でAccepted扱いしない。
+## 14. Git Delivery
 
-## 13. Git Delivery
+AGENTS.mdのGitHub Handoff Workflowに従う。
 
-`AGENTS.md` のGitHub Handoff Workflowに従う。
-
-成功時：
-
-- Task-owned Fileだけ明示Stage
-- diff / staged diff / diff --check確認
-- CURRENT_COMPLETION_REPORT.mdを同じTask Commitに含める
-- 1 Agent Task ≈ 1 Commit
-- `origin/develop` へpush
-- push後にlocal HEAD == origin/develop
-- working tree clean確認
+成功時はTask-owned Files + CURRENT_COMPLETION_REPORTを1 Agent Task Commitにまとめ、`origin/develop`へpush。
 
 Commit message例：
 
-`feat: bootstrap Phaser game foundation`
+`feat: add bout simulation foundation`
 
-mainへpushしない。
+mainは変更しない。
 
-FAIL / PARTIAL / BLOCKEDではAGENTS.mdの通常Ruleに従う。
+## 15. Final Instruction
 
-## 14. Final Instruction
+このTask完了後、Movement / Input / Push / Physics / CPU等へ自主的に進まない。
 
-このTaskではPhaser Foundationだけを実装する。
+Commit / Push / Report完了後停止し、
 
-完了後、Player Movement / Input / Simulation / CPU / Physics / 超小型Gameplay Loopへ自主的に進まない。
-
-Commit / Push / Completion Reportまで完了したら停止し、
-
-「FOUNDATION-01-PHASER-BOOTSTRAP が完了し、ChatGPT Review待ちです」
+「FOUNDATION-02-BOUT-SIMULATION-FOUNDATION が完了し、ChatGPT Review待ちです」
 
 と日本語で報告する。
-
-
-# Final ChatGPT Review
-
-Overall Result: PASS WITH CORRECTION
-
-## Accepted Baseline
-
-- Accepted implementation commit: `d0b81c29bb10af0ba05863f38643d73ca234f170`
-- Agent-Start-Head: `b91ff9f8f7e2b7afd0b25937f717442505132fec`
-- Agent Task Diff is one implementation commit.
-- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
-
-## Accepted Decisions
-
-- Vite starter presentation has been removed.
-- `src/main.ts` is the Phaser game bootstrap entry.
-- `src/game/scenes/BoutScene.ts` is the first independent Phaser Scene.
-- The current Bout foundation is presentation-only: ring + Player / CPU placeholders.
-- The current logical size, colors, positions and dimensions are provisional and are not accepted final gameplay / resolution values.
-- No Gameplay Simulation, input, movement, Physics, CPU AI, stamina, balance, ring-out or victory rules are present yet.
-- Pure TypeScript Simulation → State / Results → Phaser Presentation remains the architecture baseline.
-- No new dependency was introduced.
-
-## Corrections
-
-### C-1 — AGENTS.md Current directory description
-
-The implementation deleted all Vite starter files under `public/`, so the `public/` directory no longer exists in the committed tree.
-
-However, `AGENTS.md` §5 still lists:
-
-`public/ — static assets`
-
-under a section labeled `Current`.
-
-This is a minor Current-State documentation mismatch. It does not affect the implementation or architecture, but a later documentation/source-structure synchronization Task should either:
-
-- remove that Current entry while the directory is absent, or
-- reintroduce `public/` only when a real static asset is actually needed.
-
-Do not create an empty `public/` directory solely to satisfy the document.
-
-## Do Not Reopen
-
-- Do not reintroduce the Vite starter UI/assets.
-- Do not move gameplay formulas into `BoutScene`.
-- Do not introduce Physics merely because the bout is top-down.
-- Do not treat 640x640, current colors, ring radius, placeholder positions, or placeholder sizes as final accepted design values.
-- Do not add React / Zustand / ECS / DI / Event Bus / generic framework as part of the foundation.
-
-## Deferred
-
-- Pure TypeScript Bout Simulation
-- Player movement and input
-- CPU behavior
-- Collision / separation / Physics adoption decision
-- stamina / balance / push mechanics
-- ring-out / victory
-- tachiai / clinch / throws / kimarite
-- Training / Stable / Result / Reward loop
-- Vitest
-- Playwright
-- CrazyGames SDK
-- Aseprite / Tiled
-- final resolution / responsive / mobile controls
-
-## User Play Test
-
-NOT REQUIRED for this Task.
-
-The reported Browser Smoke is technical evidence only. It does not constitute Game Feel acceptance.
-
-## Regression Risks
-
-- Future work accidentally putting gameplay state/formulas directly into `BoutScene`.
-- Treating provisional presentation constants as final design.
-- Adding Physics before the gameplay movement/push model is designed.
-- Reintroducing unnecessary starter/framework assets.
-
-## Next Task Constraints
-
-The next Task should remain small and should not jump directly into full sumo gameplay.
-
-Before implementing high-risk movement / pushing / collision behavior, preserve the architecture boundary and decide the next smallest independently verifiable step.
-
-The minor `AGENTS.md` Current-state correction above may be included in a future documentation synchronization Task or in a later Task that already has an explicit documentation-current-state scope. It is not a reason to reopen FOUNDATION-01.
