@@ -38,5 +38,12 @@ Small explicit designを優先し、過剰なFramework、ECS、DI Framework、Gl
 
 ## 現状
 
-`src/main.ts`がPhaser Gameを起動し、`src/game/scenes/BoutScene.ts`が円形土俵とPlayer / CPU placeholderを表示するだけのPresentation Foundationがある（色・位置・寸法・logical sizeは暫定値）。
-Pure TypeScriptのsimulation、入力、Physics、gameplay logicは未実装。
+- `src/main.ts`がPhaser Gameを起動する（logical sizeは暫定値）。
+- `src/game/sumo/`にPure TypeScriptのBout境界がある（Phaser import無し）：
+  - `BoutSetup`: 明示的な入力境界（participant identity、初期logical position、ring半径）。将来のManagement Stateはこの形へ変換して渡し、Bout runtimeの正本にはしない。
+  - `BoutSimulation`: Bout runtime stateの正本。Setupをcopyして保持し、不正Setup（participant数・id重複/空・非有限値・ring半径）を拒否する。
+  - `BoutSnapshot`: `getSnapshot()`が毎回返すcopy。consumerが変更してもcanonical stateへ影響しない。
+- `BoutScene`はPrototype Setupを組み立て、Snapshotを読んで描画するのみ。canonical positionは持たない。simulation座標（原点=canvas中心、1unit=1px）からcanvasへのpresentation transformはScene側にある（暫定値）。
+- Vitest導入済み（`pnpm test`）。Simulationの境界Testがある。
+- 座標単位、ring半径、spawn位置、色、logical sizeはPrototype fixtureでありFinal値ではない。
+- 未実装: movement、input、time step（fixed/delta未決）、Physics、能力値、CPU、ring-out、勝敗。

@@ -31,12 +31,12 @@ Stable → Training → Bout → Result / Reward → Stable
 - Vite 8
 - TypeScript 6
 - Phaser 4.2.1（`src/main.ts`からGame起動。表示のみのFoundation）
+- Vitest（`pnpm test` = `vitest run`）
 - VSCode / Codex / Claude Code
 - Git / GitHub
 
 将来候補（**未導入**。導入済みとして扱わないこと）：
 
-- Vitest
 - Playwright
 - Aseprite
 - Tiled
@@ -76,8 +76,8 @@ Phaser Rendering / Input / Animation
 
 Current:
 
-- `src/` — Game source（`main.ts`、`game/scenes/BoutScene.ts`。表示Foundationのみ）
-- `public/` — static assets
+- `src/` — Game source（`main.ts`、`game/scenes/BoutScene.ts`はSnapshotを描画するのみ）
+- `src/game/sumo/` — Pure TypeScript simulation（`BoutTypes.ts`、`BoutSimulation.ts`。Phaser import禁止）
 - `docs/GAME_CONCEPT.md` — 確定したGame方針のみ
 - `docs/ARCHITECTURE.md` — 確定したArchitectureのみ
 - `docs/agent_handoff/` — Agent Handoff（§13）

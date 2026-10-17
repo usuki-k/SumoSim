@@ -1,83 +1,85 @@
-Task-ID: FOUNDATION-01-PHASER-BOOTSTRAP
+Task-ID: FOUNDATION-02-BOUT-SIMULATION-FOUNDATION
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 594786bdbca81a30c33d6f3f963510f209dc7711
-Agent-Start-Head: b91ff9f8f7e2b7afd0b25937f717442505132fec
+Source-Baseline: d0b81c29bb10af0ba05863f38643d73ca234f170
+Agent-Start-Head: e41f772974ea85591b943576ab88bc7d9942d507
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS。Vite initial sampleを最小のPhaser 4 Foundationへ置き換えた。Gameplay実装は無い。
+PASS WITH KNOWN UNTESTED ITEMS。Pure TypeScriptのBoutSimulation境界とVitestを導入し、BoutSceneをSnapshot描画へ切り替えた。Gameplay Ruleは実装していない。
 
 # Preflight
 
-- working tree clean、branch develop
-- fetch後、`HEAD...origin/develop` = 0 1（remote-only 1 commit）
+- working tree clean、branch develop、fetch後 `HEAD...origin/develop` = 0 2
 - Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Handoff-Mode GITHUB
-- Source-Baseline 594786b は origin/develop のancestor
-- Coordination Diff（594786b..origin/develop）は `docs/agent_handoff/CURRENT_TASK.md` のみ
-- `git merge --ff-only origin/develop` 成功 → HEAD b91ff9f（= Agent-Start-Head）
+- Source-Baseline d0b81c2 は origin/develop のancestor。Coordination Diffは `docs/agent_handoff/CURRENT_TASK.md` のみ
+- `git merge --ff-only origin/develop` 成功 → Agent-Start-Head e41f772
 
-# Scope / Changed Files
+# Changed Files
 
-- 変更: `src/main.ts`, `src/style.css`, `index.html`, `docs/ARCHITECTURE.md`（Current State同期）, `AGENTS.md`（Current Stateの時間依存記述2行のみ）, 本Report
-- 新規: `src/game/scenes/BoutScene.ts`
+- 新規: `src/game/sumo/BoutTypes.ts`, `src/game/sumo/BoutSimulation.ts`, `src/game/sumo/BoutSimulation.test.ts`
+- 変更: `src/game/scenes/BoutScene.ts`, `package.json`（`vitest` devDependency、`"test": "vitest run"`）, `pnpm-lock.yaml`（vitest追加分のみ）, `docs/ARCHITECTURE.md`, `AGENTS.md`（Current Technology / Directory記述。存在しない`public/`の記述を削除し`src/game/sumo/`を追加）, 本Report
 
-# Deleted Vite starter files
+# Architecture / State Ownership
 
-`src/counter.ts`, `src/assets/hero.png`, `src/assets/typescript.svg`, `src/assets/vite.svg`, `public/favicon.svg`, `public/icons.svg`
+- `BoutSetup`（入力境界）→ `BoutSimulation`（runtime stateの正本）→ `getSnapshot()`（毎回新規copy）→ `BoutScene`（描画）
+- Setupはconstructorでcopyし、callerのobjectをaliasしない。不正Setup（participant数≠2、id重複/空、非有限座標、ring半径≤0/非有限）は例外で拒否
+- Sceneはcanonical positionを持たない。simulation座標（原点=canvas中心、1unit=1px）→canvasのtransformはScene内のローカルclosure
+- Prototype Setup値（半径220、位置±70）はScene内にfixtureとして明記。Final値ではない
+- Management Stateの型・Class・Storeは作っていない
 
-# Implemented Foundation
+# Vitest導入内容
 
-- `main.ts`: `new Phaser.Game(...)`、BoutScene登録、Scale FIT + CENTER_BOTH、logical size 640x640（暫定値）
-- `BoutScene.ts`: Graphicsで円形土俵、円形のPlayer(青)/CPU(赤) placeholderとText Label。`update()`なし
-- `style.css`: margin除去、overflow hidden、単純な背景
-- `index.html`: title `SumoSim`、favicon参照削除
+`vitest` 5.0.5 を devDependency に追加、`pnpm test` = `vitest run`。他のDependency追加なし。
 
-# Verification (Standard)
+# T1〜T6
 
-- `pnpm build`: PASS（chunk size >500kB警告はPhaser本体によるもの。エラーではない）
+`pnpm test`: 1 file / 6 tests PASS。
+
+- T1 snapshot生成 / T2 位置・ring反映 / T3 invalid Setup拒否（重複id・半径0/NaN・participant数・非有限座標・空id）/ T4 Setup alias保護 / T5 Snapshot変更の隔離 / T6 Phaser非依存（`?raw`でsource文字列を検査。`@types/node`追加を避けるため）
+
+# Verification
+
+- `pnpm test`: PASS
+- `pnpm build`（tsc含む）: PASS
 - `git diff --check`: PASS
-- 変更FileはScope内のみ
-- `package.json` / `pnpm-lock.yaml` / `tsconfig.json` 未変更、新Dependencyなし
+- Simulation sourceにPhaser importなし（T6）
+- BoutSceneに`update`/step/input/Physicsなし
 
 # Browser Smoke
 
-`vite preview`をinstall済みChrome headlessで開き、screenshotを確認（Dependency追加なし）。
-
-- page表示、Phaser v4.2.1 (WebGL) 起動ログ: OK
-- runtime error: なし（consoleにはSwiftShader由来のGL Driver Performance messageのみ）
-- 円形土俵、Player/CPU placeholder表示: OK
-- Vite starter UI: 非表示
-- 1000x700 viewportでCanvasが収まる: OK
-- `pnpm dev`（HMR）での確認、他viewportサイズ、実機/touchは未実施
+`vite preview`をinstall済みChrome headlessで確認（Dependency追加なし）：Phaser 4.2.1起動、console errorなし、土俵とPlayer/CPU placeholder表示、Vite starter UIなし、1000x700 viewportで表示OK。Screenshotで目視確認。
 
 # Acceptance Criteria
 
-AC-01〜AC-12: すべてPASS（AC-12: ARCHITECTURE.md / AGENTS.mdの現状記述を実装後に同期）。
+AC-01〜AC-16: すべてPASS（AC-10: Vitestのみ追加、AC-15: `public/`記述を削除）。
 
 # Implementation Evidence
 
-1. Phaser bootstrap: `src/main.ts`
-2. Scene分離: `src/game/scenes/BoutScene.ts`が独立File
-3. SceneにGameplay Logic / Input / Physics / state machine無し
-4. Dependency追加なし
-5. Vite starter除去、Browserで土俵表示を確認
+1. Setup → Runtime: constructorでのcopyと検証
+2. Phaser-free: `BoutTypes.ts` / `BoutSimulation.ts`にPhaser importなし（T6）
+3. Alias保護: T4 / T5
+4. BoutScene統合: Snapshotから描画のみ
+5. Test foundation: Vitest + `pnpm test`
+6. 投機的実装なし: step/movement/能力値/Physics/Framework無し
 
 # Design Deviations
 
 NONE
 
+軽微な補足: participant数を「ちょうど2」とValidationした（Task記述の「2人の力士」に基づく）。`ParticipantId`は`string`。
+
 # Unexpected Scope
 
-なし。補足: `public/`は中身がすべてstarter assetsだったためDirectoryごと消えた。`PROJECT_HANDOFF.md`のCurrent Stateは本Task Scope外のため未更新（旧記述のまま。Userの明示依頼Taskで更新）。
+なし。
 
 # Known Untested Items
 
-- `pnpm dev`でのHMR確認
-- 複数viewport / Mobile / touch
+- `pnpm dev`（HMR）、複数viewport / Mobile / touch
+- Scene内`PARTICIPANT_STYLE`に未登録のidを渡した場合の挙動（現Prototypeでは起きない）
 
 # User Play Test
 
@@ -85,4 +87,4 @@ NOT REQUIRED
 
 # Git delivery
 
-`feat: bootstrap Phaser game foundation` を1 commitで`origin/develop`へpush。mainは未変更。
+`feat: add bout simulation foundation` を1 commitで`origin/develop`へpush。mainは未変更。
