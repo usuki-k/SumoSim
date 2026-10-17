@@ -1,447 +1,350 @@
-Task-ID: ACTION-03A-CONTACT-SEPARATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / CONTACT FOUNDATION
+Task-ID: ACTION-03A2-CONTACT-CREEP-CORRECTION
+Status: READY
+Task-Type: IMPLEMENTATION / FOCUSED CONTACT CORRECTION
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 29073732a123163bb11e81d7b4b82ac7ffeb5bbd
+Source-Baseline: 02a4047328e560a986d677ea13c890a43607b381
 Handoff-Mode: GITHUB
 
-# ACTION-03A — Contact & Separation
+# ACTION-03A2 — Contact Creep Correction
 
 ## 1. Purpose
 
-ACTION-03 Investigationで確定した最小Contact Foundationを実装する。
+ACTION-03AのContact Foundationは大部分Technical PASSだったが、User Play Test前にBlocking correctionが1点ある。
 
-今回の目標は：
+現状は、moving participantがstationary participantへ毎tick食い込むと、
+overlapを常に50/50で対称分離するため、
+Push未実装なのにstationary participantが約0.083 m/sでじわじわ移動する。
 
-- 2人の力士がFREE状態で互いをすり抜けない
-- 接触後に重なり続けない
-- contact中にガタつかない
-- 正面接触では互いに食い込まない
-- 斜め接触では回り込み / tangential movementが残る
-- ACTION-02BでAcceptされたgrounded Movement Feelを、非接触時に完全に維持する
+このTaskではこの **implicit positional Push / creep** だけを修正する。
 
-まで。
+目標：
 
-Push / impact transfer / external momentum / Ring-outはまだ実装しない。
+- stationary participantへ歩き込んでも、Contactだけではstationary participantを動かさない
+- 両者が互いに歩き込んだ場合は、双方のinward contributionに応じてpenetration correctionを分配する
+- pre-existing overlap / same-center等でinward contributionが無い場合のみ、50/50 fallbackで安全に分離する
+- existing Contact / Movement architectureを維持する
 
-Technical完了後、User Play TestでContact Feelを確認する。
+Push / external momentum / mass / Ring-outは実装しない。
 
 ## 2. Current Baseline / Review Handoff
 
-Accepted Production Baseline:
+Accepted Production Source Baseline:
 
-`29073732a123163bb11e81d7b4b82ac7ffeb5bbd`
+`02a4047328e560a986d677ea13c890a43607b381`
 
-Current developにはACTION-03 Investigation ReportとChatGPT Review等のcoordination-only commitsが存在する。
-
+Current developにはChatGPT Review coordination commitが上にある。
 AGENTS.mdのRemote-Task-First Preflightに従い、
-Source-Baseline..origin/develop の変更が `docs/agent_handoff/` のみであることを確認してFF-onlyすること。
+Source-Baseline..origin/developの変更が`docs/agent_handoff/`のみであることを確認してFF-onlyすること。
 
-Accepted current Movement baseline:
+ACTION-03Aで維持するAccepted parts：
 
-- screen/world-relative WASD
-- auto-facing opponent
-- Pure TypeScript `BoutSimulation` owns canonical position / velocity / facing
-- fixed timestep + accumulator
-- 60Hz provisional
-- semantic movement intent
-- logical units: meter / m/s / radian
-- grounded movement:
-  - forward acceleration
-  - grounded stop
-  - lateral damping
-  - reverse braking
-- one-way Snapshot rendering
-- Phaser Physics / Matter.js not used
-- participant identity separated from control/presentation role
-- Movement Feel accepted by User as current baseline
+- Simulation-owned `bodyRadius`
+- Snapshot exposes gameplay body geometry
+- `BODY_RADIUS = 0.35 m` provisional
+- `CONTACT_SLOP = 0.002 m` provisional
+- deterministic contact normal
+- same-center fallback
+- closing normal self-velocity removal
+- tangential velocity preservation
+- Pure TypeScript contact core
+- fixed timestep
+- grounded ACTION-02B Movement baseline
+- no Phaser Physics / Matter.js
 
-Accepted ACTION-03 Investigation direction relevant to this Task:
+Blocking finding：
 
-- FREE contact uses Simulation-owned circles
-- first Prototype uses equal body radius
-- simple deterministic two-circle math
-- small CONTACT_SLOP
-- same-center deterministic fallback normal
-- overlap separation is symmetric for equal participants
-- closing self-locomotion normal velocity is removed at solid contact
-- glancing/tangential movement should remain
-- CCD deferred while current fixed-step displacement is safely bounded
-- no Push / external momentum / mass attributes yet
+- unconditional 50/50 positional correction creates hidden Push before Push exists
 
-## 3. Architecture Constraints
+## 3. Required Correction Semantics
 
-Maintain:
+Keep the current step architecture.
 
-```
-Semantic Movement Intent
-        ↓
-Pure TypeScript BoutSimulation
-        ↓ canonical position / velocity / facing / contact geometry
-Snapshot
-        ↓
-Phaser Presentation
-```
-
-Rules:
-
-- Contact / separation is Gameplay Core and belongs in Pure TypeScript
-- Phaser Scene/GameObjects do not own contact state or gameplay collision geometry
-- no Phaser Arcade Physics / Matter.js
-- no generic collision framework
-- no ECS / DI / Event Bus
-- fixed timestep remains unchanged
-- ACTION-02B grounded self-locomotion behavior remains unchanged when participants are not in contact
-
-## 4. Gameplay Body Geometry
-
-Introduce Simulation-owned gameplay body radius.
-
-Initial Prototype:
-
-- both participants use the same provisional radius
-- initial value may use current presentation value: 0.35 m
-- this is not final Rikishi size/balance
-
-The radius must be available in Snapshot/state so Scene can render from gameplay geometry.
-
-Current Scene-side `BODY_RADIUS_METERS` must no longer be the gameplay source of truth.
-
-Preferred direction:
-
-- Simulation has participant `bodyRadius`
-- Snapshot exposes it
-- Scene uses Snapshot `bodyRadius` for placeholder body rendering
-
-Do not add Height / Weight attributes yet.
-
-Do not derive radius from sprite size.
-
-## 5. Contact Detection
-
-For the two participants:
-
-- let `delta = pB - pA`
-- `distance = |delta|`
-- `combinedRadius = rA + rB`
-
-Contact detection should support a small provisional `CONTACT_SLOP`:
-
-`distance <= combinedRadius + CONTACT_SLOP`
-
-Purpose:
-- stable resting contact
-- avoid contact toggling due to tiny floating-point movement
-
-CONTACT_SLOP is provisional tuning and must be reported.
-
-Do not use SLOP to create visible separation gaps.
-
-## 6. Contact Normal
+For overlap correction, use each participant's **inward contribution toward the contact normal for the current tick**.
 
 Normal is A → B.
 
-Normal case:
+Conceptually, before removing closing normal velocity:
 
-`n = delta / distance`
+- `inwardA = max(0, dot(vA, n))`
+- `inwardB = max(0, -dot(vB, n))`
 
-Same-center case:
+These are self-locomotion closing contributions only.
 
-If distance is effectively zero, use a deterministic fallback.
+When `overlap > 0`:
 
-Preferred fallback order:
+### Case A — Only A moved inward
 
-1. participant A's current facing direction, if finite/usable
-2. otherwise +x
+`inwardA > 0 && inwardB == 0`
 
-The result must be deterministic and never produce NaN/Infinity.
+- Apply the full penetration correction to A
+- B position does not move from separation
+- Contact still removes A's closing normal velocity
 
-Do not use randomness.
+### Case B — Only B moved inward
 
-## 7. Overlap Separation
+`inwardB > 0 && inwardA == 0`
 
-After normal movement integration for the tick, if:
+- Apply the full correction to B
+- A position does not move from separation
 
-`distance < combinedRadius`
+### Case C — Both moved inward
 
-resolve overlap by symmetric position correction:
+`inwardA > 0 && inwardB > 0`
 
-- A moves `-n * overlap/2`
-- B moves `+n * overlap/2`
+Split overlap proportionally:
 
-because participants are equal in this Prototype.
+- A correction share = `inwardA / (inwardA + inwardB)`
+- B correction share = `inwardB / (inwardA + inwardB)`
 
-No mass weighting yet.
+A moves backward along `-n`.
+B moves backward along `+n`.
 
-No iteration framework.
+For equal inward contributions this becomes 50/50.
 
-For exactly two circles, one explicit projection is sufficient.
+### Case D — No meaningful inward contribution
 
-After resolution, positions should be non-overlapping within a small numeric tolerance.
+Examples:
 
-## 8. Closing Self-Velocity Removal
+- invalid/pre-existing overlap in setup
+- same-center setup with no movement
+- numeric correction state where neither velocity explains the overlap
 
-When participants are in solid contact, self-locomotion velocity must not continue pointing through the opponent.
+Use deterministic 50/50 separation fallback.
 
-Remove only the closing normal component.
+Do not leave an invalid overlap unresolved.
 
-Important:
+## 4. Important Ordering
 
-- tangential velocity must remain
-- this allows circling / sliding around the opponent
-- no bounce / restitution
-- no external impulse transfer yet
-- no Push effect yet
+The correction weights must be captured **before** closing normal velocity components are removed.
 
-Conceptually, for A:
+Current `resolveContact()` may remain one small explicit function.
 
-- if A's self velocity has positive component toward B along n, remove that normal component
-- preserve tangential component
+Recommended internal order:
 
-For B, mirror the rule.
+1. compute contact normal
+2. compute inwardA / inwardB from current self velocity
+3. remove closing normal velocity components
+4. if overlap > 0:
+   - choose correction shares from inward contributions
+   - fallback 50/50 if contribution sum is effectively zero
+   - apply position correction
 
-Do not zero the entire velocity vector on contact.
+Do not add a general solver/framework.
 
-Do not modify accepted grounded movement behavior outside contact.
+## 5. Numerical Safety
 
-## 9. Step Resolution Order
+Use a small explicit epsilon only where necessary to decide whether inward contribution is effectively zero.
 
-Within `BoutSimulation.step()`, keep the order small and explicit.
+Requirements:
 
-Target order for ACTION-03A:
+- deterministic
+- finite
+- no division by zero
+- no NaN / Infinity
+- exact stationary body remains stationary in one-sided walk-in
+- same-center fallback still separates safely
+- CONTACT_SLOP behavior unchanged
+- resulting circles non-overlapping within numeric tolerance
 
-1. sanitize movement intent
-2. update grounded self velocity (existing ACTION-02B rule)
-3. integrate positions
-4. resolve participant contact:
-   - detect overlap/contact
-   - compute deterministic normal
-   - remove closing normal self velocity
-   - separate overlap symmetrically
-5. update facing
+Do not add mass weighting.
 
-No Push / external momentum / Ring-out stages yet.
+## 6. Do Not Change
 
-If implementation needs minor ordering adjustment to avoid a verified bug, report it as Design Deviation rather than silently changing semantics.
+Preserve:
 
-## 10. Contact Test Harness
+- screen-relative WASD
+- grounded Movement constants/behavior
+- fixed timestep / accumulator
+- auto-facing
+- Simulation ownership
+- body radius
+- CONTACT_SLOP
+- contact normal rule
+- tangential velocity preservation
+- Scene Snapshot rendering
+- no-contact movement behavior
 
-Keep the test harness minimal.
-
-Opponent behavior may support:
-
-- stationary opponent
-- simple walk-toward opponent
-
-Do not add CPU AI.
-
-A tiny Scene-local or small Pure dummy controller is allowed only if necessary for User Play Test.
-
-Avoid controller framework.
-
-If no additional dummy controller is needed to test contact manually, do not add one.
-
-## 11. Scope
+## 7. Scope
 
 Allowed:
 
-- `src/game/sumo/BoutTypes.ts`
 - `src/game/sumo/BoutSimulation.ts`
 - `src/game/sumo/BoutSimulation.test.ts`
-- small focused contact helper/module only if clearly simpler than keeping logic local
-- `src/game/scenes/BoutScene.ts` only for reading/rendering Simulation body radius and minimal contact test support
-- focused tests
-- `docs/ARCHITECTURE.md` Current State sync
-- `AGENTS.md` Current Source sync if necessary
+- `docs/ARCHITECTURE.md` only if Current contact description needs minimal clarification
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+
+Touch `BoutTypes.ts` / Scene / AGENTS only if strictly required by the correction; otherwise leave unchanged.
 
 New dependency prohibited.
 
-## 12. Scope Out
+## 8. Scope Out
 
 Do NOT implement:
 
 - Push / press action
-- impact transfer
 - externalVelocity
-- mass
-- pushForce
-- traction
-- Weight / Power / LowerBody attributes
-- Ring-out
-- BoutOutcome
+- impact transfer
+- mass / pushForce / traction
+- Weight / Power / LowerBody
+- Ring-out / BoutOutcome
 - Tachiai
-- thrust
-- pull/counter
-- FREE / GRAPPLED / LIFTED state machine
 - Grapple / Throw / Lift
 - Stamina / Balance
 - CPU AI
-- Touch / Gamepad
+- Physics engine
+- contact framework
+- CCD
 - animation / camera / VFX / audio
-- render interpolation
-- Phaser Physics / Matter.js
-- generic collision/contact framework
 
-Do not create unused placeholders for later Push architecture.
+This Task is only about removing implicit positional Push from penetration correction.
 
-## 13. Required Automated Verification
+## 9. Required Automated Verification
 
-Existing movement/fixed-step tests must remain PASS.
+All existing 45 tests must continue to pass unless the old creep-finding test is intentionally replaced by the corrected expectation.
 
-Add focused tests at minimum:
+Add / update focused tests:
 
-T19. Exact touch
-- `distance == rA + rB`
-- no overlap correction
-- contact remains numerically stable
+T29. One-sided walk-in against stationary participant
+- A moves directly into stationary B for a prolonged period
+- B's position remains unchanged within strict tolerance
+- A stops at contact
+- no overlap
+- no jitter
 
-T20. Slight overlap
-- after one tick resolution, participants are separated to non-overlap
-- equal participants move symmetrically
+T30. Mirrored one-sided walk-in
+- B moves into stationary A
+- A remains unchanged
+- symmetric behavior by participant role/order
 
-T21. Same center
-- deterministic fallback normal
-- separated safely
-- no NaN / Infinity
+T31. Equal head-on walk-in
+- A and B move toward each other equally
+- correction remains symmetric
+- settle without jitter
 
-T22. Head-on high-speed approach
-- current max self movement cannot tunnel through
-- participants do not swap sides
-- closing normal velocity is removed
+T32. Unequal inward contribution
+- both move inward with different movement magnitudes / velocities
+- penetration correction follows contribution ratio
+- higher inward contributor receives larger backward correction
+- deterministic and finite
 
-T23. Tangential / glancing contact
-- tangential velocity remains
-- participant can move around/circle rather than becoming a sticky wall
+T33. Pre-existing overlap with no movement
+- fallback 50/50 separation
+- same-center and ordinary overlap both safe
+- no NaN
 
-T24. Two participants moving directly toward each other
-- settle into stable contact
-- no visible/numerical jitter
-- after many ticks positions remain stable within tolerance
+T34. Glancing contact regression
+- tangential component preserved
+- stationary participant is not spuriously translated by a purely one-sided penetration correction beyond what geometry requires
+- circling remains possible
 
-T25. No-contact movement regression
-- ACTION-02B grounded movement behavior remains unchanged when circles do not contact
+T35. No-contact ACTION-02B regression
+- unchanged
 
-T26. Snapshot isolation
-- bodyRadius and existing state remain isolated copies as appropriate
+T36. Existing CONTACT_SLOP / exact-touch / high-speed / determinism / Phaser-free tests remain PASS.
 
-T27. Phaser independence
-- Simulation/contact code has no Phaser import
+Remove or rewrite the previous test that intentionally asserted positive stationary-body creep.
+The test suite must now assert creep is absent.
 
-T28. Determinism / finite values
-- same setup + same intents = same result
-- no NaN / Infinity in contact cases
+## 10. Verification Level
 
-If a contact-speed invariant is encoded, test it explicitly.
-
-## 14. Verification Level
-
-Heavy / Core Movement-Contact.
+Heavy / Focused Core Contact Correction.
 
 Required:
 
 - `pnpm test` PASS
 - `pnpm build` PASS
 - `git diff --check` PASS
-- T19〜T28 evidence
-- existing ACTION-02/02B movement tests PASS
+- T29〜T36 evidence
+- existing contact + movement tests PASS
 - no new dependency
-- Simulation/contact core Phaser-free
-- Push/Ring-out scope absent
+- no Push / externalVelocity / mass / Ring-out
+- Agent Task Diff limited to Scope
 
 ### Browser Smoke
 
-Verify:
+Verify at minimum:
 
-- Phaser Canvas starts
-- runtime error none
-- Player no longer passes through opponent
-- direct approach stops at contact
-- diagonal approach can slide/circle around opponent
-- no obvious resting jitter
-- accepted non-contact movement still feels unchanged
-- opponent behavior matches the minimal test setup
-- Player can still leave ring because Ring-out is not implemented
+- Canvas starts / no runtime errors
+- direct walk-in stops at opponent
+- stationary opponent does not drift during sustained walk-in
+- opposite-side/mirrored contact behaves consistently if practical
+- diagonal contact still allows circling
+- no resting jitter
+- non-contact Movement unchanged
+- Player can still leave ring
 
-Browser Smoke is technical only.
+Technical Smoke does not accept Contact Feel.
 
-## 15. User Play Test — REQUIRED
+## 11. User Play Test — REQUIRED
 
-User must test after Technical PASS.
+After Technical PASS, User Play Test becomes ready.
 
-Check:
+User should verify:
 
-1. The two bodies feel solid rather than ghosting through each other.
-2. Direct contact does not feel like an invisible wall with a large gap.
-3. Resting contact does not shake/jitter.
-4. Sliding/circling around the opponent remains possible.
-5. Contact does not make movement feel unexpectedly sticky.
-6. Non-contact grounded movement still feels like the accepted ACTION-02B baseline.
-7. It is acceptable that a stationary opponent does not get pushed yet.
-8. It feels like a good base for adding Push next.
+1. Player no longer passes through opponent.
+2. Stationary opponent does not visibly drift when merely walked into.
+3. Direct contact has no large visual gap.
+4. Resting contact has no jitter.
+5. Circling around opponent remains possible.
+6. Contact is not sticky.
+7. Non-contact Movement still feels like accepted ACTION-02B baseline.
+8. It is acceptable that no real Push exists yet.
 
-Agent must report:
+Agent report:
 
 `User Play Test: REQUIRED / NOT RUN`
 
-Do not call Contact Feel accepted automatically.
+Do not proceed to ACTION-03B.
 
-If User rejects contact feel, do not proceed to ACTION-03B Push.
+## 12. Acceptance Criteria
 
-## 16. Acceptance Criteria
+AC-01: implicit positional Push/creep is removed.
+AC-02: one-sided walk-in corrects only the inward-moving participant.
+AC-03: mirrored one-sided case is symmetric.
+AC-04: two-sided inward motion splits correction by inward contribution.
+AC-05: no-contribution overlap uses deterministic 50/50 fallback.
+AC-06: closing normal velocity removal remains.
+AC-07: tangential velocity remains.
+AC-08: CONTACT_SLOP semantics remain.
+AC-09: same-center remains finite/deterministic.
+AC-10: prolonged resting contact has no jitter.
+AC-11: no-contact grounded Movement regressionなし.
+AC-12: no Push / externalVelocity / mass / Ring-out.
+AC-13: T29〜T36 + existing tests PASS.
+AC-14: `pnpm build` PASS.
+AC-15: Browser Smoke PASS.
+AC-16: User Play Test REQUIRED / NOT RUN.
+AC-17: Scope外変更なし.
 
-AC-01: gameplay body radius is Simulation-owned, not Scene-owned.
-AC-02: Snapshot exposes body geometry needed for rendering.
-AC-03: exact contact / overlap detection is deterministic.
-AC-04: CONTACT_SLOP exists as provisional tuning for stable contact.
-AC-05: same-center case is deterministic and finite.
-AC-06: overlap separation is symmetric for equal participants.
-AC-07: closing normal self velocity is removed at contact.
-AC-08: tangential self velocity is preserved.
-AC-09: participants cannot pass through each other at current movement limits.
-AC-10: prolonged resting contact has no numeric jitter.
-AC-11: no-contact ACTION-02B Movement behavior regresses materially.
-AC-12: no externalVelocity / mass / Push / Ring-out implementation.
-AC-13: no Phaser Physics / Matter.js.
-AC-14: T19〜T28 + existing tests PASS.
-AC-15: `pnpm build` PASS.
-AC-16: Browser Smoke PASS.
-AC-17: Current State docs materially match Source.
-AC-18: User Play Test REQUIRED / NOT RUN is reported.
-AC-19: Scope outside Task is unchanged.
-
-## 17. Stop Conditions
+## 13. Stop Conditions
 
 STOP if:
 
-- GitHub Handoff Preflight fails
-- Current Source / Review Handoff materially conflicts
-- contact cannot be made stable without changing accepted Movement architecture
-- Push / external momentum is required to make basic non-penetration work
-- CCD is required at current movement limits
-- a Physics engine becomes necessary
-- new dependency required
+- Preflight failure
+- Current Source / Review conflict
+- creep cannot be removed without introducing Push/mass/externalVelocity
+- accepted Movement architecture must change
+- contact stability requires Physics/CCD at current speeds
+- new dependency is required
 - task-external User changes / divergence exist
-- solving contact requires Weight / mass semantics now
 
 Do not broaden Scope.
 
-## 18. Completion Report
+## 14. Completion Report
 
 Minimum:
 
 - Result
 - Preflight
 - Changed Files
-- Contact Geometry
-- CONTACT_SLOP provisional value
-- Contact normal / same-center fallback
-- Separation behavior
-- Closing velocity handling
-- T19〜T28 + regression tests
+- Root Cause
+- Corrected Penetration Ownership Rule
+- Inward Contribution Calculation
+- Fallback behavior
+- T29〜T36 + regression tests
 - Browser Smoke
-- AC-01〜AC-19
+- AC-01〜AC-17
 - Implementation Evidence
 - Design Deviations
 - Unexpected Scope
@@ -451,163 +354,40 @@ Minimum:
 
 Implementation Evidence minimum:
 
-1. Simulation-owned body radius
-2. deterministic contact normal
-3. symmetric separation
-4. closing-normal velocity removal
-5. tangential preservation
-6. no-contact Movement regression preservation
-7. no Push/externalVelocity scope creep
-8. Scene reads Snapshot geometry
+1. one-sided stationary-body no-creep
+2. mirrored case
+3. proportional two-sided correction
+4. 50/50 fallback
+5. closing velocity preserved semantics
+6. tangential preservation
+7. movement/contact regression
+8. no Push scope creep
 
-## 19. Git Delivery
+## 15. Git Delivery
 
 Follow AGENTS.md.
 
 Technical PASS:
 
-- stage only Task-owned files
+- Task-owned files only
 - tests / build / diff-check
-- include CURRENT_COMPLETION_REPORT in same Task commit
+- Completion Report in same Task commit
 - 1 Agent Task ≈ 1 commit
 - push `origin/develop`
 - verify remote SHA / clean working tree
 
 Commit message example:
 
-`feat: add bout contact separation`
+`fix: prevent contact separation creep`
 
 Do not change main.
 
-## 20. Final Instruction
+## 16. Final Instruction
 
-This Task ends at Contact & Separation.
+This Task ends after the Contact creep correction.
 
-Do not continue to Push / external momentum / Ring-out after completion.
+Do not continue to Push / external momentum / Ring-out.
 
 After commit / push / Completion Report, stop and report:
 
-「ACTION-03A-CONTACT-SEPARATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PARTIAL / CORRECTION REQUIRED BEFORE USER PLAY TEST
-
-## Accepted Parts
-
-- Implementation commit inspected: `02a4047328e560a986d677ea13c890a43607b381`
-- Agent-Start-Head: `c63505280c0aadec31d332c9af28431879914256`
-- Agent Task Diff is one implementation commit.
-- Simulation-owned `bodyRadius` is correct.
-- Snapshot exposes gameplay body geometry and Scene reads it for presentation.
-- `CONTACT_SLOP = 0.002 m` is a valid provisional contact-stability value.
-- Contact normal is deterministic; same-center fallback is finite and deterministic.
-- Closing self-locomotion normal velocity is removed while tangential velocity is preserved.
-- No Phaser Physics / Matter.js / generic collision framework was introduced.
-- No externalVelocity / mass / Push / Ring-out / Rikishi attributes were introduced.
-- No-contact ACTION-02B movement architecture remains preserved.
-- Automated verification coverage is strong and the reported 45/45 tests / build / diff-check are consistent with inspected Source.
-
-## Blocking Correction
-
-### C-1 — Symmetric penetration correction creates implicit Push before Push exists
-
-Current contact resolution performs symmetric positional separation after integration:
-
-- mover penetrates stationary opponent
-- overlap is split 50/50
-- stationary opponent is translated by half of the mover's penetration every tick
-
-Under sustained walk-in this produces approximately 0.083 m/s of opponent drift, as the Agent correctly reported and tested.
-
-This is not acceptable as the ACTION-03A baseline because:
-
-1. ACTION-03A explicitly excludes Push / external momentum.
-2. User Play Test is supposed to evaluate solid contact before Push.
-3. The visual result looks like weak pushing and therefore contaminates that test.
-4. If left in place, ACTION-03B explicit Push would be layered on top of an existing hidden positional Push.
-5. It would make future Push tuning harder to reason about.
-
-Therefore ACTION-03A is not yet accepted for User Play Test.
-
-## Required Correction Semantics
-
-Create a focused ACTION-03A correction before User Play Test.
-
-Keep all accepted Contact architecture, but change overlap positional correction so that penetration correction follows **who actually moved inward during the tick**, not an unconditional 50/50 split.
-
-Recommended minimal deterministic rule:
-
-- Compute each participant's inward closing contribution along the contact normal for the current tick.
-- If only A moved inward and B was stationary, apply the full overlap correction to A; B does not drift.
-- If only B moved inward, apply the full correction to B.
-- If both moved inward, split correction proportionally to their inward closing contributions.
-- If there is no meaningful inward contribution (for example pre-existing overlap / same-center setup), use symmetric 50/50 fallback only to restore a valid non-overlap state.
-
-The exact implementation may use current self velocity / per-tick inward displacement, but must remain:
-- deterministic
-- Pure TypeScript
-- mass-free
-- Push-free
-- externalVelocity-free
-- fixed-step
-- small and explicit
-
-Do not introduce mass weighting or Push semantics to solve this.
-
-## Required Regression Behavior After Correction
-
-- Walking into a stationary participant does not translate the stationary participant.
-- Two equal participants walking directly into each other settle symmetrically.
-- Glancing/tangential contact still permits circling.
-- Existing closing-normal velocity removal remains.
-- Same-center/pre-existing overlap remains deterministic and finite.
-- No-contact ACTION-02B behavior remains unchanged.
-- No Push / external momentum appears.
-
-## User Play Test
-
-NOT READY YET.
-
-Do not ask User to accept/reject Contact Feel using commit `02a4047`, because the implicit positional creep would conflate Contact with Push.
-
-After the focused correction passes review, User Play Test should check:
-
-- no pass-through
-- no visible gap
-- no jitter
-- natural circling
-- no sticky wall feel
-- stationary opponent remains stationary when merely walked into
-- accepted non-contact Movement Feel remains intact
-
-## Do Not Reopen
-
-- Simulation-owned circle contact geometry
-- CONTACT_SLOP concept
-- deterministic same-center fallback
-- closing-normal self velocity removal
-- tangential velocity preservation
-- fixed timestep
-- grounded Movement baseline
-- no Phaser Physics / Matter.js
-
-## Deferred
-
-- explicit Push / press
-- externalVelocity
-- mass / pushForce / traction
-- Weight / Power / LowerBody
-- Ring-out / Outcome
-- Tachiai / Grapple / Throw / Lift
-- CCD until higher-speed states require reevaluation
-
-## Next Task Constraint
-
-The next Task must be a narrow ACTION-03A Contact Correction only.
-
-Do not proceed to ACTION-03B Push until:
-1. implicit position-correction creep is removed,
-2. technical review passes,
-3. User Play Test accepts Contact Feel.
+「ACTION-03A2-CONTACT-CREEP-CORRECTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
