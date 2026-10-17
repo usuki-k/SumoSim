@@ -10,7 +10,7 @@
 - Pure TypeScript simulation と Phaser presentation の分離
 - Phaser Sceneをgameplay source of truthにしない
 - deterministic / testableなgame logicはできるだけPure TypeScriptへ置く
-- frame rate依存のgameplay calculationを避ける（fixed step / delta timeの設計は後続Action Designで決める）
+- frame rate依存のgameplay calculationを避ける（fixed timestep + accumulatorを採用。下記「現状」参照）
 - 長期management stateとbout runtime stateは分離する方向
 - Platform integrationはadapter境界を作る方向。CrazyGames SDKをgameplay coreへ直接散らさない
 
@@ -43,7 +43,13 @@ Small explicit designを優先し、過剰なFramework、ECS、DI Framework、Gl
   - `BoutSetup`: 明示的な入力境界（participant identity、初期logical position、ring半径）。将来のManagement Stateはこの形へ変換して渡し、Bout runtimeの正本にはしない。
   - `BoutSimulation`: Bout runtime stateの正本。Setupをcopyして保持し、不正Setup（participant数・id重複/空・非有限値・ring半径）を拒否する。
   - `BoutSnapshot`: `getSnapshot()`が毎回返すcopy。consumerが変更してもcanonical stateへ影響しない。
-- `BoutScene`はPrototype Setupを組み立て、Snapshotを読んで描画するのみ。canonical positionは持たない。simulation座標（原点=canvas中心、1unit=1px）からcanvasへのpresentation transformはScene側にある（暫定値）。
-- Vitest導入済み（`pnpm test`）。Simulationの境界Testがある。
-- 座標単位、ring半径、spawn位置、色、logical sizeはPrototype fixtureでありFinal値ではない。
-- 未実装: movement、input、time step（fixed/delta未決）、Physics、能力値、CPU、ring-out、勝敗。
+  - `BoutSimulation.step(intents)`: 1 logical tick（60Hz、暫定）だけ進める。render deltaは受け取らない。participantごとのposition / velocity / facingがcanonical state。
+  - `ParticipantIntent { move }`: source非依存のsemantic入力（world-frame vector、Simulation側で長さ1にclamp）。raw keyはSimulationに入らない。
+  - Movement model: intent → target velocity → 加速/減速でvelocityが追従 → position積分。facingは毎tick末に相手方向へ即時（座標系: +x右、+y下、facing 0 = +x、radian）。同一点では直前のfacingを維持。
+  - `FixedStepAccumulator`: frame deltaを整数tick数へ変換（Phaser非依存）。1 frameのdelta上限とtick数上限を持ち、超過分は破棄。
+- `src/game/input/movementVector.ts`: キー状態 → world-frame vector（画面基準: W=-y, S=+y, A=-x, D=+x。逆方向は相殺、斜めは正規化）。
+- `BoutScene`: Phaser keyboardを読んでIntentを作り、accumulatorで0..N tick進め、Snapshotを永続GameObjectへ一方向同期する。canonical stateは持たない。participant identityとcontroller / 見た目の対応（`PARTICIPANT_PRESENTATION`）はSimulation外のScene側にある。OpponentはACTION-02では静止。
+- 単位: simulationはmeter、m/s、radian。meter→pixelのscale + translateはScene側（presentation）。
+- Vitest導入済み（`pnpm test`）。
+- 速度・加速度・減速度・tick rate・ring半径・spawn位置・body半径・色・logical sizeはPrototype / 暫定値でありFinal値ではない（User Play Testで調整する）。
+- 未実装: collision / 押し / ring-out / 勝敗、立合い、組み・投げ・吊り、能力値、stamina / balance、CPU、Touch / Gamepad、render interpolation、Physics。

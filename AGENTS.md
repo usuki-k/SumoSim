@@ -76,8 +76,9 @@ Phaser Rendering / Input / Animation
 
 Current:
 
-- `src/` — Game source（`main.ts`、`game/scenes/BoutScene.ts`はSnapshotを描画するのみ）
-- `src/game/sumo/` — Pure TypeScript simulation（`BoutTypes.ts`、`BoutSimulation.ts`。Phaser import禁止）
+- `src/` — Game source（`main.ts`、`game/scenes/BoutScene.ts`はinput読取・fixed step駆動・Snapshot描画）
+- `src/game/sumo/` — Pure TypeScript simulation（`BoutTypes.ts`、`BoutSimulation.ts`、`FixedStepAccumulator.ts`。Phaser import禁止）
+- `src/game/input/` — raw入力からsemantic Intent（world-frame vector）への変換（Pure部分は`movementVector.ts`）
 - `docs/GAME_CONCEPT.md` — 確定したGame方針のみ
 - `docs/ARCHITECTURE.md` — 確定したArchitectureのみ
 - `docs/agent_handoff/` — Agent Handoff（§13）
@@ -105,7 +106,7 @@ Current:
 - TypeScript strictを前提とし、`any`を避ける。
 - 小さく明示的な関数・型で書く。過剰な抽象化をしない。
 - Gameplay logicはPure TypeScriptに置き、deterministic / testableにする。
-- frame rate依存のgameplay計算を避ける（fixed step / delta time方針は後続Action Designで決定）。
+- frame rate依存のgameplay計算を避ける（fixed timestep + accumulatorを採用。`BoutSimulation.step()`は1 tick進め、render deltaを受け取らない）。
 - Magic numberはGameplay tuning値として名前を付けて一箇所にまとめる。
 - 周辺Codeのnaming・comment密度・idiomに合わせる。
 
