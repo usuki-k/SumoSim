@@ -1,5 +1,5 @@
 Task-ID: ACTION-03B-DISCRETE-PUSH-EXTERNAL-MOMENTUM
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE PUSH PROTOTYPE
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -600,3 +600,171 @@ Do not continue to ↓ Counter, thrust, attributes, Ring-out, or Tachiai.
 After commit / push / Completion Report, stop and report:
 
 「ACTION-03B-DISCRETE-PUSH-EXTERNAL-MOMENTUM が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH NON-BLOCKING CORRECTION / USER PLAY TEST REQUIRED
+
+## Accepted Baseline
+
+- Accepted implementation commit: `3c79fc18491c10d58105436b9cc424a608568558`
+- Agent-Start-Head: `baa772e123b623e6e1f9edf675c984ef5991821d`
+- Agent Task Diff is exactly one implementation commit.
+- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
+- Production changes are limited to the Push/Input implementation, focused tests, Current-State docs, and Completion Report.
+- Reported 75/75 tests, build PASS, and diff-check PASS are consistent with direct Source/Diff review.
+- Push Feel is NOT accepted until User Play Test.
+
+## Accepted Decisions
+
+- D1 remains accepted: Push is edge-triggered and discrete, not hold-auto-repeat.
+- D2 remains accepted: ArrowUp is the temporary Prototype Push binding.
+- Push runtime state is Simulation-owned and intentionally small:
+  - idle
+  - startup
+  - active
+  - recovery
+- Initial provisional phase timings are accepted for User Play Test:
+  - startup 6 ticks (~100 ms)
+  - active 8 ticks (~133 ms)
+  - recovery 10 ticks (~167 ms)
+- Push direction is captured from facing at action start and remains locked for the current action.
+- WASD steering is suppressed throughout startup / active / recovery.
+- Startup and Recovery use zero effective movement input; Active uses the locked Push direction through the existing grounded movement rule.
+- Presses received while an action is already active are ignored and not queued.
+- A new Push requires a later new key-down after returning to idle.
+- The small Pure `PressLatch` is accepted:
+  - key-down latches one semantic edge
+  - a zero-tick render frame does not lose it
+  - first subsequent Simulation tick consumes it
+  - later ticks do not repeat it
+  - no generic Input Buffer framework was introduced
+- Model B is now concretely accepted as the current Push prototype architecture:
+  - `selfVelocity` = own grounded locomotion
+  - `externalVelocity` = Push/external pair-momentum component
+  - actual displacement and Snapshot `velocity` = self + external
+- Grounded locomotion damping applies only to selfVelocity.
+- External momentum has its own deterministic decay and speed clamp.
+- Current provisional external values are accepted for User Play Test only:
+  - `PUSH_EXTERNAL_ACCELERATION = 20 m/s²`
+  - `EXTERNAL_DECELERATION = 8 m/s²`
+  - `MAX_EXTERNAL_SPEED = 3 m/s`
+- Contact-only ACTION-03A2 behavior remains preserved when Push is absent.
+- Push is applied as explicit external momentum, not hidden penetration correction.
+- Equal simultaneous active Pushes cancel in this equal-stat Prototype.
+- Separate one-time collision impact / Tachiai impulse remains Deferred.
+- Minimal STARTUP / PUSH / RECOVERY presentation and R restart are acceptable Prototype aids.
+
+## Non-Blocking Correction
+
+### C-1 — externalVelocity wording is narrower than current semantics
+
+Some code/type comments describe `externalVelocity` as strictly “momentum received from the opponent”.
+
+Current implementation intentionally applies the same Push delta to both participants so the contacting pair translates together. Therefore the pushing participant can also carry non-zero `externalVelocity` from its own Push.
+
+For the current Prototype, interpret the field as:
+
+- **external / pair momentum not produced by grounded footwork**
+
+rather than literally only “momentum received from opponent”.
+
+No Production correction is required before User Play Test.
+At the next legitimate Current-State/code-comment sync, adjust wording if those comments are touched.
+
+This does not change the accepted Model B state ownership.
+
+## Verification Review
+
+Direct Source review confirmed:
+
+- `ParticipantIntent.pushPressed` is semantic, not a raw key.
+- action Snapshot is copied and isolated.
+- Push phase timing is deterministic and tested.
+- direction locking is tested against later facing changes.
+- Action steering suppression and return to WASD are tested.
+- non-contact Push creates a short self-driven step with zero external momentum.
+- contact Push creates external pair movement.
+- external momentum decay is independent from grounded damping.
+- no-Push Contact no-creep regression remains covered.
+- no-contact Movement regression remains covered.
+- PressLatch is Pure TypeScript and has focused consumption tests.
+- Browser wiring consumes the latch only for the first Simulation tick in a multi-tick frame.
+- No Counter, Ring-out, Rikishi attributes, Physics engine, or new dependency was introduced.
+
+## Reported Unexpected Scope Review
+
+The one trailing-whitespace cleanup in `BoutSimulation.test.ts` is behavior-neutral and occurred in a Task-owned file already being edited.
+
+Accepted as non-material for this Task, but do not use unrelated cleanup as a reason to expand future Task scope.
+
+## Do Not Reopen
+
+- discrete one-press Push semantics
+- ArrowUp as current temporary Prototype binding
+- locked Push direction during one action
+- selfVelocity / externalVelocity separation
+- accepted ACTION-03A2 Contact behavior
+- grounded ACTION-02B Movement baseline
+- no Physics engine
+- no auto-repeat Push in this Prototype
+
+Do not add Counter / Dodge / Ring-out / attributes until Push Feel is evaluated.
+
+## Deferred
+
+- ↓ pull / deflection / counter
+- explicit lateral dodge Action
+- left/right thrust
+- Push combo / auto-repeat
+- one-time impact / Tachiai impulse
+- Weight / Power / LowerBody
+- mass / traction / pushForce derivation
+- Stamina / Balance
+- Ring-out / BoutOutcome
+- CPU AI
+- Touch / Gamepad
+- animation / VFX / camera / audio
+
+## User Play Test
+
+REQUIRED / READY.
+
+User should verify:
+
+1. ArrowUp feels like one deliberate Push action.
+2. Holding ArrowUp does not repeatedly Push.
+3. Startup feels responsive enough while still creating a readable commitment.
+4. Active movement feels like a short step-in/drive, not a dash.
+5. Contact Push visibly moves the opponent and feels causally connected to ArrowUp.
+6. Recovery feels like useful commitment/vulnerability rather than frustrating lockout.
+7. Steering lock during Push feels appropriate for future side-step/counter play.
+8. WASD returns cleanly after Recovery.
+9. Contact without Push still feels like accepted ACTION-03A2.
+10. Normal non-contact movement still feels like accepted ACTION-02B.
+11. Push seems like a good future target for ↓ pull/deflection and lateral evasion timing.
+12. Note whether the opponent moves too far/too little per Push and whether momentum lingers too long/too briefly.
+
+If accepted:
+- ACTION-03B becomes the current Push baseline.
+- Do not immediately add all combat actions.
+- Next design step should choose whether to validate incoming/contested Push feel with a minimal dummy opponent before implementing Counter, or proceed to the next explicitly chosen interaction.
+
+If rejected:
+- record concrete phase/timing/drive/momentum feedback and perform a focused Push Feel correction.
+
+## Regression Risks
+
+- Future traction/mass parameters accidentally damping self and external components together.
+- Counter implementation modifying Push phase semantics rather than reacting to them.
+- Future impact/Tachiai impulse being layered in without distinguishing it from sustained Push momentum.
+- Push external tuning becoming treated as final balance.
+- Future Input work bypassing the semantic edge latch and reintroducing frame-dependent actions.
+
+## Next Task Constraints
+
+1. User Play Test ACTION-03B first.
+2. Do not create Counter / Ring-out / parameter implementation before Push Feel is accepted.
+3. Preserve one-keydown-one-action semantics unless User explicitly changes it.
+4. If User accepts Push but wants the opponent to push back interactively, use the smallest dummy-controller test path before introducing full CPU AI.
