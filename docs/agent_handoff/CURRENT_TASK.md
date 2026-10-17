@@ -1,5 +1,5 @@
 Task-ID: FOUNDATION-02-BOUT-SIMULATION-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PURE TYPESCRIPT SIMULATION FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -397,3 +397,101 @@ Commit / Push / Report完了後停止し、
 「FOUNDATION-02-BOUT-SIMULATION-FOUNDATION が完了し、ChatGPT Review待ちです」
 
 と日本語で報告する。
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTION
+
+## Accepted Baseline
+
+- Accepted implementation commit: `572990944674f82f31964f8c27b369eaf26faefc`
+- Agent-Start-Head: `e41f772974ea85591b943576ab88bc7d9942d507`
+- Agent Task Diff is one implementation commit.
+- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
+- Vitest is now part of the Current Technology baseline (`pnpm test = vitest run`).
+
+## Accepted Decisions
+
+- Bout runtime canonical state is owned by Pure TypeScript `BoutSimulation`.
+- `BoutSetup` is the explicit future Management / game-state → Bout boundary; Management State itself is not Bout runtime canonical state.
+- `BoutSimulation` copies setup data and does not alias caller-owned mutable objects.
+- `getSnapshot()` returns fresh data so consumer mutation cannot change canonical simulation state.
+- `BoutTypes.ts` / `BoutSimulation.ts` have no Phaser dependency.
+- `BoutScene` is presentation-only and reads a Simulation snapshot; it does not own canonical participant position.
+- Simulation logical coordinates are separated from the Phaser canvas through a presentation mapping in the Scene.
+- A bout currently requires exactly two participants. This is consistent with the sumo bout domain and may remain unless a future explicit requirement changes it.
+- No movement, timestep, Physics, push, stamina, balance, CPU, ring-out or victory semantics have been prematurely defined.
+- Current ring radius, positions, logical coordinate scale, colors and canvas mapping are Prototype values, not final accepted gameplay values.
+- The previous stale `public/` Current-State entry in `AGENTS.md` has been corrected without recreating an empty directory.
+
+## Corrections
+
+### C-1 — Participant identity must not become presentation-role identity
+
+The current Prototype Scene uses:
+
+`PARTICIPANT_STYLE[participant.id]`
+
+with the fixture IDs `player` / `cpu`.
+
+This is acceptable for the current static Prototype, but it is **not an accepted long-term architecture contract**.
+
+Future Management integration may use stable wrestler identities that are not literally `player` / `cpu`. Before arbitrary wrestler IDs are introduced, presentation role / side / styling must be separated from canonical participant identity, or otherwise mapped explicitly outside the Simulation.
+
+Do not add a speculative role system now. Resolve this only when the next relevant input / participant / Management integration design requires it.
+
+## Do Not Reopen
+
+- Do not move canonical Bout state into Phaser GameObjects or Scene fields.
+- Do not pass future Management State objects directly into the Simulation as shared mutable runtime state.
+- Do not expose mutable canonical state to Presentation consumers.
+- Do not add Physics, movement, velocity, fixed-step, delta-time semantics or push formulas without a dedicated design Task.
+- Do not introduce ECS / DI / global Event Bus / generic rule engine / plugin architecture for this small simulation.
+- Do not treat Prototype ring/spawn/scale/style constants as final game design.
+
+## Deferred
+
+- Player input and movement
+- Fixed-step / delta-time / simulation cadence
+- Collision / separation / Physics adoption
+- Push interaction
+- stamina / balance / wrestler stats
+- CPU behavior
+- ring-out / victory
+- tachiai / clinch / throws / kimarite
+- Management → Bout conversion and real wrestler identity integration
+- Result / Reward / Stable / Training loop
+- Playwright
+- CrazyGames SDK
+- Mobile / touch / multi-viewport verification
+
+## User Play Test
+
+NOT REQUIRED for FOUNDATION-02.
+
+The Browser Smoke is accepted as Technical Verification only. No Game Feel has been accepted by this Task.
+
+## Regression Risks
+
+- Scene or Phaser GameObjects becoming a second canonical position/state source.
+- Future Setup fields retaining mutable references from Management State.
+- Returning live internal state instead of isolated snapshots.
+- Conflating stable wrestler identity with Player/CPU presentation role.
+- Choosing movement timestep / Physics architecture opportunistically inside an implementation Task.
+
+## Next Task Constraints
+
+The next high-risk Action step should not jump directly to a full push/collision implementation.
+
+Before movement and pushing are implemented, explicitly design or investigate:
+- player input intent boundary,
+- simulation movement ownership,
+- fixed-step vs delta-time semantics,
+- coordinate/time units,
+- Scene synchronization from Simulation,
+- whether Phaser Physics is needed at all.
+
+A small Investigation / design Task is preferred before implementing Movement / Collision / Push.
+
+Do not add Management systems yet; Action foundation remains the current priority.
