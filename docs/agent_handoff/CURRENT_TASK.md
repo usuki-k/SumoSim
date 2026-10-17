@@ -1,554 +1,554 @@
-Task-ID: ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / FOCUSED GAME FEEL CORRECTION
+Task-ID: ACTION-03-PUSH-CONTACT-COLLISION-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / CORE ACTION DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 8b9acf7444c13648ea36b603b9c642d7c07ca046
+Source-Baseline: 29073732a123163bb11e81d7b4b82ac7ffeb5bbd
 Handoff-Mode: GITHUB
 
-# ACTION-02B — Grounded Movement Feel Correction
+# ACTION-03 — Push / Contact / Collision Investigation
 
 ## 1. Purpose
 
-ACTION-02のMovement ArchitectureはTechnical PASSだが、User Play TestでMovement Feelは未受理。
+ACTION-02BでMovement FeelがUser Play TestによりCurrent BaselineとしてAcceptされた。
 
-User feedback:
+次のProduction実装へ進む前に、相撲Actionの中心となる以下を設計調査する：
 
-- 現在は「スケートリンクを滑っている」ように感じる
-- もう少し「人間が移動している」「足で踏ん張っている」重さが欲しい
+- participant body / contact representation
+- collision / separation
+- push action
+- momentum / impulse transfer
+- Weight / Power / LowerBody等のparameter boundary
+- current grounded locomotionとの相互作用
+- ring boundary / ring-out geometry
+- numerical stability / fixed-step boundary cases
+- 次の最小Implementation sequence
 
-このTaskではArchitectureを変更せず、Movement model / provisional tuningだけをFocusedに修正する。
+このTaskはInvestigation Only / No Production Fixes。
 
-目標は：
+Production Source、package、lockfile、AGENTS、ARCHITECTURE、GAME_CONCEPT等を変更しない。
+調査結果は `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` のみへ記録する。
 
-- 発進には少し重さがある
-- 入力中は意図した方向へしっかり進む
-- キーを離すと足で踏ん張るように止まる
-- 方向転換時に横滑り・円弧状の慣性を引きずりすぎない
-- 逆方向入力時は一度現在の勢いを殺してから反対方向へ移る感覚
-- screen-relative WASDとauto-facingは維持
+## 2. Accepted Baseline
 
-Technical PASSだけでは受理しない。最終GateはUser Play Test。
+Accepted Production Baseline:
 
-## 2. Current Baseline / Handoff
+`29073732a123163bb11e81d7b4b82ac7ffeb5bbd`
 
-Accepted Production Source Baseline:
-
-`8b9acf7444c13648ea36b603b9c642d7c07ca046`
-
-Current developにはChatGPT Review / User Play Test feedbackのcoordination-only commitsが存在する。
-AGENTS.mdのRemote-Task-First Preflightに従い、Source-Baseline..origin/developが`docs/agent_handoff/`のみであることを確認してFF-onlyすること。
-
-ACTION-02 Technical ArchitectureはAccepted:
+Current accepted Movement baseline:
 
 - screen/world-relative WASD
-- Pure TypeScript BoutSimulationがcanonical position / velocity / facing owner
+- auto-facing opponent
+- Pure TypeScript `BoutSimulation` owns canonical position / velocity / facing
 - fixed timestep + accumulator
-- 60Hzは暫定technical value
-- raw keysはSimulationへ入れない
-- SceneはSnapshotを一方向描画
-- meter / m/s / radian logical units
-- auto-facingはSimulation rule
-- Phaser Physics / Matter.jsをGameplay Coreに使わない
-- stable participant identityとcontrol/presentation roleを分離
-- Collision / Push / Ring-out等は未実装
+- 60Hz is provisional, not final
+- semantic movement intent; raw key does not enter Simulation
+- logical units: meter / m/s / radian
+- grounded locomotion:
+  - forward acceleration
+  - strong grounded stop
+  - lateral damping / turning grip
+  - reverse braking
+- Scene is one-way Snapshot presentation
+- Phaser Physics / Matter.js are not Gameplay Core
+- participant identity is separate from controller/presentation role
 
-変更してよいのはMovement Feelに必要な最小範囲だけ。
-
-## 3. User Play Test Result
-
-Movement Feel: NOT ACCEPTED YET
-
-UserがRejectしたのはArchitectureではなく現在の移動感。
-
-Current provisional model:
+Current provisional Movement values:
 
 - MAX_SPEED = 3 m/s
-- ACCELERATION = 12 m/s²
-- DECELERATION = 15 m/s²
-- velocity全体をtarget velocityへ等方的に近づける
+- FORWARD_ACCELERATION = 10 m/s²
+- STOP_DECELERATION = 24 m/s²
+- LATERAL_DECELERATION = 36 m/s²
+- REVERSE_BRAKING = 30 m/s²
+- SIMULATION_HZ = 60
 
-この方式により、方向転換時にも横方向のvelocityが滑らかに残り、
-「慣性を持つ円が氷上を滑る」感覚が出ている。
+These are current Prototype tuning values, not final balance.
 
-今回の修正は「慣性を完全に無くす」ことではない。
-後続のMomentum / Push拡張に耐えるvelocity stateは維持する。
+User Play Test result:
 
-## 4. Required Movement Behavior
+- previous skating/ice feel is materially reduced
+- current grounded Movement is accepted as working baseline
+- full human/rikishi-like feel is not yet complete, but no concrete additional correction is currently required
+- do not reopen movement preemptively without new evidence
 
-### 4.1 No input — grounded stop
+## 3. User-Accepted Future Action Direction Relevant to This Task
 
-入力が0なら、current velocityを0へ明示的に減速する。
+Normal Bout — FREE:
 
-Currentより「踏ん張って止まる」感覚を強めてよい。
+- Left action: left-hand thrust
+- Right action: right-hand thrust
+- Up action: push
+- Down action: pull/counter-style action
+- Grapple Action: attempt grapple
+- Custom Action: equipped technique
 
-ただし瞬間停止に固定しない。
-停止の速さはprovisional tuningとしてUser Play Test対象。
+This Investigation focuses only on **contact + push + ring boundary**.
 
-### 4.2 Same-direction acceleration
+Do not design thrust / pull / grapple / custom technique implementation beyond interfaces that must remain extensible.
 
-現在velocityとdesired movementがおおむね同方向の場合：
+Important:
+- exact keyboard binding for action buttons is still not final
+- Simulation must receive semantic action intent, not raw key codes
+- whether Push is hold/repeat/edge-triggered is a Player-facing semantic that must be explicitly addressed; do not silently assume if it materially affects the design
 
-- desired directionへ加速
-- max speedまで段階的に到達
-- accelerationは残す
-- immediate teleport / immediate max speedは禁止
+## 4. User-Accepted Parameter Direction Relevant to Push
 
-発進の「重さ」を残す。
+Future Rikishi Parameters include the following direction:
 
-### 4.3 Perpendicular / turning grip
+Body:
+- Height
+- Weight
 
-desired movement directionに対してcurrent velocityの横成分がある場合、
-そのperpendicular componentを通常加速とは別に強く減衰させる。
+Physical:
+- Power
+- LowerBody / 足腰
+- Speed
+- StaminaCapacity
 
-目的：
+Sumo Skills include Tachiai / ThrustPower / ThrustTempo / Grapple / Throw / Lift / Counter.
 
-- 90°方向転換で大きな円弧を描いて滑り続けない
-- 足を踏み替えて進行方向を変える感覚を出す
-- screen-relative WASDの応答性を保つ
+For Push specifically, User expectation includes:
 
-Small explicit vector mathで実装する。
-Physics engineやgeneric locomotion frameworkを導入しない。
+Weight:
+- push strength influence
+- resistance to being pushed
+- throw/lift resistance later
 
-### 4.4 Reverse direction
+LowerBody:
+- push strength
+- resistance to being pushed
+- balance
+- throw strength/resistance later
 
-current velocityとdesired movementが逆向きの場合：
+Power is also an accepted general physical candidate.
 
-- まず現在方向の勢いを強く減らす
-- その後、新しいdesired directionへ加速する
-- 1 tickで不自然にフルスピード反転しない
+However:
+- exact stat ranges are undecided
+- exact formulas are undecided
+- Balance is currently a Bout Runtime candidate, not a permanent Rikishi parameter
+- Stamina is deferred
 
-「重いが滑らない」方向を狙う。
+This Investigation must decide the **minimum safe parameter boundary** for the first Push Prototype without prematurely locking the full progression/balance system.
 
-### 4.5 Velocity remains canonical
+## 5. Core Investigation Questions
 
-velocity fieldは削除しない。
+Current Source and Accepted Decisions must be inspected directly.
 
-後続のPush / Momentumで利用できるcanonical runtime stateとして維持する。
+### Q1 — Body / Contact Representation
 
-Movement Feel修正のためにposition直接補正やPhaser TweenをGameplay movementへ使わない。
+Recommend the smallest body representation for FREE-state contact.
 
-## 5. Recommended Small Design
+Compare at minimum:
 
-Current「velocity vectorをtarget velocityへ1種類のrateで追従」から、
-movement intent方向を基準にvelocityを分解するsmall explicit modelを推奨する。
+- participant center + constant circle radius
+- participant-specific circle radius derived later from body attributes
+- other simple shape only if materially better
 
-概念：
+Determine:
+
+- canonical collision/contact geometry ownership
+- whether body radius belongs in BoutSetup/static participant data or temporary Prototype configuration
+- whether current presentation-only BODY_RADIUS_METERS should remain presentation-only or a separate simulation contact radius should be introduced
+- how future Height / Weight may or may not affect contact radius
+
+Do not equate sprite size with gameplay collision geometry by accident.
+
+### Q2 — Contact Detection / Separation
+
+Design minimal deterministic participant collision/separation for exactly two participants.
+
+Address:
+
+- overlap detection
+- separation direction
+- equal-position / zero-distance case
+- whether position correction is symmetric
+- whether movement velocity should be altered by separation
+- jitter/resting-contact prevention
+- tunneling risk at current fixed-step/max speed and future higher-impact states
+- whether continuous collision detection is needed now or Deferred
+
+Goal:
+participants should not pass through each other in FREE contact, while preserving Pure TypeScript ownership and deterministic tests.
+
+### Q3 — Push Intent Semantics
+
+Determine the semantic Push input contract.
+
+Address:
+
+- Push as hold/continuous pressure vs edge-triggered discrete action vs repeated pulses
+- how it fits future common `ParticipantIntent`
+- whether movement + push can occur simultaneously
+- whether Push requires contact at tick resolution
+- what happens if Push is attempted out of contact
+- how future CPU can use the same contract
+- how future Touch can map to it
+
+If a Player-facing choice is required, mark it as **User Decision Required before implementation** rather than silently fixing it.
+
+### Q4 — Push Ownership / Resolution Order
+
+Recommend exact high-level order inside one fixed Simulation tick.
+
+At minimum address the relationship between:
+
+- semantic intents
+- grounded self-locomotion update
+- contact detection
+- push effort / impulse
+- velocity update
+- position integration
+- overlap separation / constraints
+- facing
+- ring-out / outcome
+
+The order must be explicit enough that the Implementation Task is not forced to invent semantics.
+
+Avoid generic pipeline/framework architecture.
+
+### Q5 — Grounded Locomotion vs External Push Momentum
+
+This is the highest-risk architecture question.
+
+Current self-locomotion strongly damps lateral / reverse velocity to create grounded human movement.
+
+A future external Push impulse must not be unintentionally erased immediately by those self-locomotion damping rules.
+
+Compare concrete alternatives such as:
+
+A. One canonical total velocity, with locomotion and external push both modifying it and traction/damping applying to the whole value.
+
+B. Separate self-locomotion velocity and externally induced momentum/impulse component, combined for movement but with distinct damping semantics.
+
+C. Another smaller explicit model if better.
+
+Evaluate against:
+
+- single Source of Truth
+- deterministic behavior
+- Push Feel tuning
+- Weight / LowerBody influence
+- future thrust / tachiai
+- future grapple/lift
+- complexity
+- existing accepted movement feel
+
+Recommend one architecture.
+
+If separate components are recommended, explain why they are distinct physical/runtime concepts rather than duplicate Sources of Truth.
+
+### Q6 — Minimal Parameter Boundary for Push
+
+Recommend what the first Push Prototype needs.
+
+Options may include:
+
+- equal-stat participants first; formula constants only
+- introduce only Weight
+- introduce Weight + Power
+- introduce Weight + Power + LowerBody
+- another minimal subset
+
+For each chosen parameter, define only its **semantic role**, not final numeric range/formula.
+
+Example distinction:
+
+- Weight: inertia/resistance contribution
+- Power: active pushing effort
+- LowerBody: traction / force transfer / resistance
+
+Do not invent full progression values.
+
+Also specify where immutable static attributes belong:
+Management future state → copied BoutSetup participant attributes → immutable during Bout.
+
+### Q7 — Push Formula Shape
+
+Do not finalize tuning numbers, but recommend the **shape** of the first formula.
+
+Address:
+
+- active push effort
+- attacker parameters
+- defender resistance
+- relative facing/contact normal
+- current velocity / momentum
+- simultaneous push from both participants
+- no-input defender
+- stronger but lighter vs heavier but weaker wrestlers
+- avoiding hard-coded archetype matchup bonuses
+
+The design should allow the six future archetypes to emerge from parameters/states rather than `if archetype === ...`.
+
+Specify which quantities are:
+- accepted rule semantics
+- provisional tuning coefficients
+- Deferred
+
+### Q8 — Contact Direction / Facing
+
+Current fighters auto-face each other.
+
+Determine how Push direction is resolved:
+
+- attacker facing direction
+- center-to-center contact normal
+- movement direction
+- combination
+
+Address side contact / glancing contact even if first Prototype simplifies it.
+
+Do not make every contact automatically a full-strength frontal Push unless explicitly justified.
+
+### Q9 — Ring Boundary / Ring-out Geometry
+
+Compare and recommend a simple top-down ring-out criterion.
+
+At minimum compare:
+
+- participant center crosses ring radius
+- gameplay contact/support circle touches/crosses ring boundary
+- whole gameplay circle leaves ring
+- another small criterion
+
+Consider:
+- intuitive visual feedback
+- edge tension
+- current top-down circle abstraction
+- future body/foot presentation
+- deterministic geometric test
+- possibility of later refinement
+
+This is a gameplay rule. If multiple reasonable choices exist and materially change feel, mark a User Decision instead of silently locking one.
+
+### Q10 — Outcome Boundary
+
+Recommend the minimum `BoutOutcome` / finished-state boundary needed for ring-out implementation.
+
+Do not design the full kimarite system.
+
+Address:
+- winner/loser identity
+- minimal reason/category
+- no post-finish movement
+- reset/restart responsibility
+- Scene vs Simulation ownership
+
+### Q11 — Numerical / Boundary Cases
+
+Specify required tests for the implementation.
+
+At minimum:
+
+- exact touching circles
+- slight overlap
+- exact same center
+- high-speed approach at current max movement speed
+- both pushing equally
+- one pushes / one neutral
+- opposite simultaneous pushes
+- diagonal/glancing contact
+- participant at ring threshold
+- both near/outside boundary same tick
+- deterministic replay from same intents
+- no NaN/Infinity
+- frame partition independence remains intact
+- movement feel regression invariants remain intact
+
+If any simultaneous-outcome rule is not designable without User choice, report it.
+
+### Q12 — Prototype Test Harness / User Play Test
+
+Recommend the smallest interactive setup for Push Feel validation.
+
+Examples to compare:
+
+- Player pushes stationary opponent
+- opponent holds forward constantly as dummy CPU
+- two-keyboard local control
+- small toggle/debug mode
+
+Prefer minimal production code and avoid temporary framework.
+
+Define what the User should be able to feel/test:
+
+- first contact
+- resistance
+- pushing opponent backward
+- being pushed / contested
+- edge tension
+- whether movement baseline survives contact
+
+### Q13 — Minimal Implementation Sequence
+
+Based on findings, propose the next 2–4 Tasks.
+
+Do not bundle all of Contact + Push + Ring-out if splitting gives a safer User Play Test loop.
+
+For each proposed Task:
+- exact scope
+- technical verification
+- User Play Test gate
+- prerequisites / User Decisions
+
+## 6. Important Architecture Constraints
+
+Maintain:
 
 ```
-desired direction
-      │
-      ├─ parallel velocity     → acceleration / reversal braking
-      └─ perpendicular velocity → stronger turn/grip damping
+Input Adapter / CPU
+        ↓ semantic Intent
+Pure TypeScript BoutSimulation
+        ↓ Snapshot / Outcome
+Phaser Presentation
 ```
 
-必要に応じて以下のnamed provisional constantsへ整理してよい：
+- Phaser Scene is not gameplay rule Source of Truth
+- Phaser Physics / Matter.js remain excluded unless this Investigation finds a Material reason and reports BLOCKED for User review
+- fixed timestep remains
+- grounded Movement baseline remains
+- Simulation logical units remain independent from pixels
+- no ECS / DI / Event Bus / generic collision framework
+- no full stat system
+- no speculative FREE/GRAPPLED/LIFTED implementation
 
-- MAX_SPEED
-- FORWARD_ACCELERATION
-- STOP_DECELERATION
-- TURN_GRIP / LATERAL_DECELERATION
-- REVERSE_BRAKING
+## 7. Scope Out
 
-名前はCurrent code styleに合わせて調整可。
+Do NOT implement or fully design beyond necessary boundaries:
 
-すべてPrototype tuning values。
-Final balance / final Rikishi stat semanticsではない。
+- Production collision code
+- Production push code
+- ring-out code
+- keyboard action binding
+- thrust left/right
+- pull/counter
+- Tachiai
+- Grapple / Throw / Lift
+- Stamina / Balance mechanics
+- CPU AI
+- Management
+- full Rikishi stat progression/ranges
+- Animation / Camera / VFX / Audio
+- CrazyGames SDK
+- new dependency
+- source refactor
 
-Implementationをより小さく同じbehaviorで実現できる場合は可。
-Materialに異なるmovement semanticsを採用する場合はDesign DeviationとしてSTOP / Reportする。
+Current Source problems found during investigation are reported, not fixed.
 
-## 6. Do Not Change
+## 8. Stop Conditions
 
-以下はBaseline維持：
+Return reportable BLOCKED if:
 
-- screen-relative WASD
-- W=-y / S=+y / A=-x / D=+x
-- diagonal normalization
-- fixed timestep + accumulator
-- BoutSimulation canonical ownership
-- 60Hz provisional simulation cadence
-- meter logical units
-- auto-facing
-- identity/control role separation
-- one-way Snapshot rendering
-- opponent stationary
-- no Collision / Push / Ring-out
+- Current Source / Review / Accepted Movement baseline materially conflict
+- Push architecture cannot be chosen safely without a User gameplay decision
+- Ring-out semantics require a User choice before Production implementation
+- Grounded locomotion and external push cannot coexist without a Material movement redesign
+- Physics engine adoption appears necessary
+- a prototype experiment requiring Production Source change is necessary before choosing the architecture
+- Scope expansion is required
 
-## 7. Scope
+Git Safety / Preflight STOP follows AGENTS.md and produces no repository write.
 
-変更可：
+## 9. Investigation Method
 
+Inspect at minimum:
+
+- `src/game/sumo/BoutTypes.ts`
 - `src/game/sumo/BoutSimulation.ts`
 - `src/game/sumo/BoutSimulation.test.ts`
-- Movement Feel実装に本当に必要ならsmall Pure helper file / test
-- `docs/ARCHITECTURE.md` Current movement descriptionの最小同期
-- `AGENTS.md` Current Stateの時間依存記述の最小同期
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `src/game/sumo/FixedStepAccumulator.ts`
+- `src/game/input/movementVector.ts`
+- `src/game/scenes/BoutScene.ts`
+- `docs/ARCHITECTURE.md`
+- `docs/GAME_CONCEPT.md`
+- `AGENTS.md`
+- previous Final Review / User Play Test Handoff
 
-前Review Correctionとして、AGENTS.mdの
-「Phaser 4.2.1（src/main.tsからGame起動。表示のみのFoundation）」
-というstale wordingを、Current Sourceに合う最小表現へ修正してよい。
+External research is optional.
+If real sumo rules or physics references are used, distinguish:
+- real-world fact/reference
+- proposed game abstraction
+- accepted project rule
 
-Scene/Input変更は原則不要。
-Movement Feel correctionに必須でない限り触らない。
+Do not silently turn real sumo detail into game specification.
 
-## 8. Scope Out
+## 10. Verification
 
-実装しない：
+Investigation / Design Review.
 
-- body collision / separation
-- push / impulse
-- ring-out
-- Tachiai
-- FREE / GRAPPLED / LIFTED
-- Grapple / Throw / Lift
-- Thrust / Pull / Counter
-- Stamina / Balance
-- Weight / Power / LowerBody等のRikishi attributes
-- CPU gameplay
-- Touch / Gamepad
-- animation / footstep animation
-- camera / VFX / audio
-- render interpolation
-- Phaser Physics / Matter.js
-- generic movement framework
-- input event buffering framework
-- short-tap問題の先回り修正
+Required:
 
-今回の「人間らしさ」をAnimationで誤魔化さない。
-まずPure Simulation movementのFeelを改善する。
-
-## 9. Required Automated Verification
-
-Existing T1〜T11 regressionを維持し、Movement model変更に合わせて必要なexpected値のみ更新する。
-
-さらに最低限：
-
-T12. Grounded stop
-- moving stateからzero intent
-- speedが単調に減少
-- overshoot / reverse / NaNなし
-- finite ticksでexact zeroへ停止
-
-T13. 90-degree turn
-- 右移動中に上入力等へ変更
-- perpendicular旧velocity成分が明示的に減衰
-- 新方向成分が増加
-- 横滑り成分が無制限に残らない
-
-T14. Reverse
-- 右移動中に左入力
-- 旧方向velocityが減速してから符号反転
-- 1 tickで +MAX_SPEED → -MAX_SPEED にならない
-- reverse transitionがdeterministic
-
-T15. Same-direction acceleration
-- stopからhold input
-- 段階的に加速
-- max speedを超えない
-
-T16. Diagonal / arbitrary normalized intent
-- speed advantageなし
-- turn modelでもfinite / stable
-
-T17. Frame partition regression
-- fixed-step accumulator architectureは変更されず、同じtick intent sequenceなら同じSimulation結果
-
-T18. Existing alias / snapshot / facing / Phaser-free tests PASS。
-
-Testが特定のFeel値を「最終正解」と固定しすぎないよう、
-behavioral invariantとprovisional constantsに対するfocused assertionを分ける。
-
-## 10. Verification Level
-
-Heavy寄りStandard / Game Feel Correction。
-
-Required：
-
-- `pnpm test` PASS
-- `pnpm build` PASS
+- Q1〜Q13 all answered, or explicit BLOCKED point
+- Recommendation / Rejected / Deferred clearly separated
+- User Decisions Required explicitly listed
+- Accepted Rule vs Prototype Tuning clearly separated
+- Production Source unchanged
+- package / lockfile unchanged
+- repository change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 - `git diff --check` PASS
-- Existing Movement tests regression PASS
-- T12〜T18 PASS
-- new dependencyなし
-- Simulation core Phaser-free
-- Scope外Gameplayなし
 
-### Browser Smoke
+`pnpm test` / `pnpm build` not required unless Source integrity concern appears.
 
-最低限：
+## 11. Completion Report
 
-- Canvas起動 / runtime errorなし
-- WASD screen-relative movement維持
-- key release後に停止
-- 90°方向転換が機能
-- reverse入力が機能
-- auto-facing維持
-- opponent stationary
-- collision / ring boundaryなし
-- Snapshot描画同期維持
+Use Investigation-only Report Commit Exception.
 
-AgentはBrowser Smokeで「人間らしくなった」「Feel改善PASS」と判断しない。
-FeelはUserだけがAcceptする。
-
-## 11. User Play Test — REQUIRED
-
-Technical完了後、Userが再度Play Testする。
-
-比較ポイント：
-
-1. 前回の「スケートリンクを滑る」感覚が減ったか
-2. 発進時に身体の重さを感じるか
-3. キーを離した時に踏ん張って止まる感じがあるか
-4. 90°方向転換で不自然な横滑りがないか
-5. 逆方向へ切り返した時に、重量感と操作 responsivenessの両方があるか
-6. auto-facingしながらの横移動 / 後退が自然か
-7. 動きが重すぎて操作ストレスになっていないか
-8. 相撲Actionの土台として「人間が足で動いている」方向に近づいたか
-
-Agent Completion Report:
-
-`User Play Test: REQUIRED / NOT RUN`
-
-Technical PASS != Movement Feel Accepted。
-
-UserがAcceptするまでPush / Contact / Collision Designへ進まない。
-
-## 12. Acceptance Criteria
-
-AC-01: ACTION-02 Architectureを維持。
-AC-02: screen-relative WASDを維持。
-AC-03: velocity canonical stateを維持。
-AC-04: zero inputでgrounded stop behaviorを持つ。
-AC-05: turn時のperpendicular slipを明示的に抑える。
-AC-06: reverse時に旧momentumを殺してから新方向へ移るbehaviorを持つ。
-AC-07: same-direction accelerationは段階的。
-AC-08: max speed / diagonal normalization regressionなし。
-AC-09: fixed-step determinism regressionなし。
-AC-10: auto-facing regressionなし。
-AC-11: Collision / Push / Ring-out等のScope creepなし。
-AC-12: T12〜T18 + existing tests PASS。
-AC-13: `pnpm build` PASS。
-AC-14: Browser Smoke PASS。
-AC-15: AGENTS stale Current wordingが同期される。
-AC-16: provisional tuning constantsがCompletion Reportへ明記される。
-AC-17: User Play Test REQUIRED / NOT RUNとして報告。
-AC-18: Scope外変更なし。
-
-## 13. Stop Conditions
-
-STOP：
-
-- Preflight failure
-- Current Source / Review Handoff conflict
-- grounded movementを作るためCollision / Weight / Animation等が必須と判明
-- Architecture変更が必要
-- new dependencyが必要
-- Task外User changes / remote divergence
-- Feel改善のためPhaser Physicsが必要という結論になる
-- Movement semanticsをscreen-relativeから変更する必要が出る
-
-数値tuningのprovisional変更はSTOP不要。
-必ずCompletion Reportに記載しUser Play Testへ渡す。
-
-## 14. Completion Report
-
-最低限：
+Minimum sections:
 
 - Result
 - Preflight
-- Changed Files
-- Root Cause / Previous Feel
-- Implemented Grounded Movement Model
-- Provisional constants: before → after
-- Direction-change behavior
-- T12〜T18 + regression tests
-- Browser Smoke
-- AC-01〜AC-18
-- Implementation Evidence
+- Current Source Findings
+- Q1〜Q13
+- Recommended Contact Model
+- Recommended Push/Momentum Architecture
+- Recommended Parameter Boundary
+- Recommended Ring-out Rule / alternatives
+- Fixed Tick Resolution Order
+- Accepted Rule Semantics vs Provisional Tuning
+- Required Boundary Tests
+- Prototype User Play Test Plan
+- Rejected / Deferred alternatives
+- Design Conflicts / Ambiguities
+- User Decisions Required
+- Next Implementation Sequence
 - Design Deviations
 - Unexpected Scope
-- Known Untested
-- User Play Test: REQUIRED / NOT RUN
+- Verification
 - Git delivery
 
-Implementation Evidence：
+Result:
+- PASS: safe recommendation exists and implementation can proceed after any explicitly non-blocking decisions
+- BLOCKED: User decision / prototype evidence is required before safe implementation
+- PARTIAL / FAIL as AGENTS defines
 
-1. fixed-step architecture preserved
-2. grounded stop
-3. lateral/turn grip
-4. reverse braking
-5. max speed / diagonal invariants
-6. Simulation ownership preserved
-7. no Collision/Push scope creep
-8. docs Current State correction
+## 12. User Play Test
 
-## 15. Git Delivery
+NOT REQUIRED for Investigation itself.
 
-AGENTS.mdに従う。
+Completion Report must identify the earliest subsequent Implementation Task where Push / Contact Feel becomes a REQUIRED User Play Test gate.
 
-Technical PASS時：
+## 13. Git Delivery
 
-- Task-owned filesのみstage
-- tests / build / diff-check
-- Completion Reportを同Commitへ含める
-- 1 Agent Task ≈ 1 Commit
-- `origin/develop`へpush
-- remote SHA / clean working tree確認
+If Preflight succeeds and investigation reaches a reportable conclusion:
 
-Commit message例：
+- change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- explicit stage
+- `git diff --check`
+- one Report-only commit
+- push `origin/develop`
+- verify remote SHA / clean working tree
 
-`fix: ground bout movement feel`
+Commit message example:
 
-mainは変更しない。
+`docs(agent): investigate push contact architecture`
 
-## 16. Final Instruction
+## 14. Final Instruction
 
-このTaskではMovement Feel correctionまで。
+This Task ends at investigation/design.
 
-Technical実装後、Push / Contact / Collisionへ進まない。
+Do not implement Contact / Push / Ring-out.
 
-Commit / Push / Completion Report後停止し、
+After Report Commit / Push, stop and report:
 
-「ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-と日本語で報告する。
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
-
-## Accepted Baseline
-
-- Accepted implementation commit for technical review: `29073732a123163bb11e81d7b4b82ac7ffeb5bbd`
-- Agent-Start-Head: `d282a51eae4f88e465a6125f596c64d416aa17d3`
-- Agent Task Diff is exactly one implementation commit.
-- Changed Production scope is limited to `BoutSimulation.ts` / tests plus Current-State docs and Completion Report.
-- Scene / Input / FixedStepAccumulator / package / lockfile were not changed.
-- Technical Verification is accepted from Completion Report + direct Source/Diff review.
-- Movement Feel is NOT accepted until User Play Test.
-
-## Accepted Decisions
-
-- ACTION-02 architecture remains accepted:
-  - screen/world-relative WASD
-  - Pure TypeScript canonical position / velocity / facing
-  - fixed timestep + accumulator
-  - semantic movement intent
-  - one-way Snapshot rendering
-  - auto-facing
-  - no Phaser Physics / Matter.js
-- Velocity remains canonical runtime state for later Push / Momentum work.
-- Grounded movement now decomposes velocity relative to desired movement direction:
-  - parallel component for forward acceleration / reverse braking
-  - perpendicular component for stronger lateral damping
-- No-input movement uses stronger explicit braking to exact zero.
-- Reverse input brakes existing opposite momentum to zero before accelerating in the new direction.
-- 90-degree turns explicitly damp old lateral velocity instead of carrying ice-like arc momentum.
-- A final MAX_SPEED clamp preserves the speed invariant during turning.
-- Current provisional values are:
-  - MAX_SPEED = 3 m/s
-  - FORWARD_ACCELERATION = 10 m/s²
-  - STOP_DECELERATION = 24 m/s²
-  - LATERAL_DECELERATION = 36 m/s²
-  - REVERSE_BRAKING = 30 m/s²
-  - SIMULATION_HZ = 60
-- These values are Prototype tuning values only and are not final accepted balance.
-- No Collision / Push / Ring-out / Rikishi attributes / Animation / Physics scope creep was introduced.
-- The stale AGENTS.md Phaser wording from ACTION-02 has been corrected.
-
-## Corrections
-
-NONE required before User Play Test.
-
-## Do Not Reopen
-
-- Do not replace this with Phaser Physics merely to alter movement feel.
-- Do not change screen-relative WASD without explicit User request.
-- Do not remove canonical velocity; later Push / Momentum should build on it.
-- Do not add Weight / LowerBody / Stamina to solve the current movement feel before their dedicated design.
-- Do not add Collision / Push / Ring-out until Movement Feel is accepted.
-- Do not treat current movement constants as final balance.
-- Do not add Animation as a substitute for unresolved Simulation movement feel.
-
-## Deferred
-
-- body collision / separation
-- push / impulse / momentum transfer
-- ring-out / victory
-- Rikishi Weight / Power / LowerBody influence
-- FREE / GRAPPLED / LIFTED
-- Tachiai
-- grapple / throw / lift
-- stamina / balance
-- CPU gameplay
-- Touch / Gamepad
-- animation / footsteps
-- short-tap input buffering
-- render interpolation
-
-## User Play Test
-
-REQUIRED / PENDING.
-
-User should compare directly against the rejected ACTION-02 feel.
-
-Verify:
-
-1. The previous skating / ice-gliding sensation is materially reduced.
-2. Starting movement still has enough body weight without feeling sluggish.
-3. Releasing WASD feels like planting the feet / stopping, not coasting.
-4. A 90-degree direction change does not produce an obvious sliding arc.
-5. Reversing direction feels weighted but responsive.
-6. Sideways/backward movement while auto-facing remains controllable.
-7. Movement is not now too stiff or robotic.
-8. This feels closer to a human / rikishi moving on the dohyo and is acceptable as the baseline for later Push/Contact work.
-
-If accepted:
-- ACTION-02B Movement Feel becomes the current baseline.
-- Push / Contact / Collision Investigation may be created next.
-- Numeric values remain tunable later when Weight / Push / stamina interactions are introduced.
-
-If rejected:
-- record the concrete feel issue and perform another focused Movement correction.
-- do not proceed to Push / Contact / Collision.
-
-## Regression Risks
-
-- Later Push code overwriting the grounded movement model rather than applying impulse/momentum through the canonical velocity boundary.
-- Weight/LowerBody tuning accidentally changing ordinary locomotion beyond the accepted User baseline.
-- Strong lateral damping making future external push impulses disappear too quickly unless self-locomotion damping vs external impulse semantics are designed explicitly.
-- Current provisional constants becoming treated as permanent balance values.
-
-## Next Task Constraints
-
-1. User Play Test ACTION-02B first.
-2. Do not create Push / Contact / Collision implementation before User acceptance.
-3. After User accepts Movement Feel, create the previously required focused Push / Contact / Collision Investigation / Design Task.
-4. That design must explicitly consider how grounded self-movement damping interacts with external push/impulse so that future pushing is not unintentionally cancelled by the locomotion grip model.
-
-
-# User Play Test Result — 2026-10-18
-
-Movement Feel: ACCEPTED AS CURRENT BASELINE
-
-User feedback:
-- The previous skating / ice-gliding sensation is materially reduced.
-- Current movement is acceptable for now.
-- It still does not fully feel human / rikishi-like, but the User does not yet have a concrete preferred correction direction.
-
-Accepted baseline:
-- Keep the current grounded movement model and current provisional tuning as the working baseline for subsequent Action work.
-- This acceptance is about current Movement Feel only; numeric constants remain tunable when later Push / Weight / LowerBody / Stamina interactions are introduced.
-- Do not reopen Movement Feel preemptively without a concrete regression, new interaction requirement, or User feedback.
-
-Deferred feel improvement:
-- Additional human/rikishi-like locomotion feel is deferred until there is concrete evidence from later gameplay interactions.
-- Candidate future sources of that feel may include Push/Contact response, body/weight parameters, animation/footwork presentation, or action commitment, but none are accepted solutions yet.
-- Do not add any of those systems solely to chase an undefined movement feel issue.
-
-Next Task Constraint:
-- Movement baseline is accepted, so Push / Contact / Collision Investigation may proceed.
-- Push / Contact / Collision must preserve the accepted grounded locomotion behavior unless an explicit interaction rule requires otherwise.
+「ACTION-03-PUSH-CONTACT-COLLISION-INVESTIGATION が完了し、ChatGPT Review待ちです」
