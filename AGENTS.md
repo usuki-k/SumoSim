@@ -30,7 +30,7 @@ Stable → Training → Bout → Result / Reward → Stable
 - pnpm 12系
 - Vite 8
 - TypeScript 6
-- Phaser 4.2.1（dependencyのみ。Game bootstrapは未実装）
+- Phaser 4.2.1（`src/main.ts`からGame起動。表示のみのFoundation）
 - VSCode / Codex / Claude Code
 - Git / GitHub
 
@@ -76,7 +76,7 @@ Phaser Rendering / Input / Animation
 
 Current:
 
-- `src/` — Game source（現状はVite initial sampleのまま。整理は後続Task）
+- `src/` — Game source（`main.ts`、`game/scenes/BoutScene.ts`。表示Foundationのみ）
 - `public/` — static assets
 - `docs/GAME_CONCEPT.md` — 確定したGame方針のみ
 - `docs/ARCHITECTURE.md` — 確定したArchitectureのみ

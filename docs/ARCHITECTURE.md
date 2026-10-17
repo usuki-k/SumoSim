@@ -38,4 +38,5 @@ Small explicit designを優先し、過剰なFramework、ECS、DI Framework、Gl
 
 ## 現状
 
-SourceはVite initial sampleのまま。Phaser Game bootstrap、simulation、Sceneは未実装。
+`src/main.ts`がPhaser Gameを起動し、`src/game/scenes/BoutScene.ts`が円形土俵とPlayer / CPU placeholderを表示するだけのPresentation Foundationがある（色・位置・寸法・logical sizeは暫定値）。
+Pure TypeScriptのsimulation、入力、Physics、gameplay logicは未実装。
