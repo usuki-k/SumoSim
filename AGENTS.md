@@ -78,7 +78,7 @@ Current:
 
 - `src/` — Game source（`main.ts`、`game/scenes/BoutScene.ts`はinput読取・fixed step駆動・Snapshot描画）
 - `src/game/sumo/` — Pure TypeScript simulation（`BoutTypes.ts`、`BoutSimulation.ts`、`FixedStepAccumulator.ts`。Phaser import禁止）
-- `src/game/input/` — raw入力からsemantic Intent（world-frame vector）への変換（Pure部分は`movementVector.ts`）
+- `src/game/input/` — raw入力からsemantic Intent（world-frame vector）への変換（Pure部分は`movementVector.ts`、押下edgeの保持は`pressLatch.ts`）
 - `docs/GAME_CONCEPT.md` — 確定したGame方針のみ
 - `docs/ARCHITECTURE.md` — 確定したArchitectureのみ
 - `docs/agent_handoff/` — Agent Handoff（§13）

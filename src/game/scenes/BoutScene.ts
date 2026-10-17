@@ -1,8 +1,15 @@
 import Phaser from 'phaser'
 import { movementVectorFromKeys } from '../input/movementVector.ts'
+import { PressLatch } from '../input/pressLatch.ts'
 import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
-import type { BoutSetup, ParticipantId, ParticipantIntent, Vec2 } from '../sumo/BoutTypes.ts'
+import type {
+  BoutSetup,
+  ParticipantActionState,
+  ParticipantId,
+  ParticipantIntent,
+  Vec2,
+} from '../sumo/BoutTypes.ts'
 
 // Prototype fixture values (meters); not final gameplay values.
 // Ring inner diameter of a real dohyo is about 4.55 m.
@@ -39,6 +46,15 @@ interface ParticipantView {
   readonly body: Phaser.GameObjects.Arc
   readonly facingMarker: Phaser.GameObjects.Arc
   readonly label: Phaser.GameObjects.Text
+  readonly phaseText: Phaser.GameObjects.Text
+}
+
+// Presentation-only label for the current Push phase (idle shows nothing).
+function phaseLabel(action: ParticipantActionState): string {
+  if (action.kind !== 'push') return ''
+  if (action.phase === 'startup') return 'STARTUP'
+  if (action.phase === 'active') return 'PUSH'
+  return 'RECOVERY'
 }
 
 interface MovementKeys {
@@ -54,6 +70,8 @@ export class BoutScene extends Phaser.Scene {
   private simulation!: BoutSimulation
   private accumulator!: FixedStepAccumulator
   private keys: MovementKeys | null = null
+  // Prototype binding: ArrowUp = Push (temporary, not the final control scheme).
+  private readonly pushLatch = new PressLatch()
   private views = new Map<ParticipantId, ParticipantView>()
   private pixelsPerMeter = 1
   private origin: Vec2 = { x: 0, y: 0 }
@@ -78,6 +96,10 @@ export class BoutScene extends Phaser.Scene {
         left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
         right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       }
+      // Key 'down' fires once per physical press (no auto-repeat while held).
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => this.pushLatch.press())
+      // Prototype convenience: R restarts from the prototype setup.
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R).on('down', () => this.restart())
     }
 
     const snapshot = this.simulation.getSnapshot()
@@ -102,7 +124,10 @@ export class BoutScene extends Phaser.Scene {
       const label = this.add
         .text(0, 0, style.label, { fontFamily: 'sans-serif', fontSize: '18px', color: '#ffffff' })
         .setOrigin(0.5)
-      this.views.set(style.id, { body, facingMarker, label })
+      const phaseText = this.add
+        .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '14px', color: '#ffe08a' })
+        .setOrigin(0.5)
+      this.views.set(style.id, { body, facingMarker, label, phaseText })
     }
     this.syncViews()
   }
@@ -110,13 +135,20 @@ export class BoutScene extends Phaser.Scene {
   update(_time: number, deltaMs: number): void {
     const ticks = this.accumulator.advance(deltaMs)
     if (ticks > 0) {
-      const intents = this.collectIntents()
-      for (let i = 0; i < ticks; i++) this.simulation.step(intents)
+      // A latched press goes to the first tick of this frame only; a frame with 0 ticks keeps it.
+      const pushPressed = this.pushLatch.consume()
+      for (let i = 0; i < ticks; i++) this.simulation.step(this.collectIntents(i === 0 && pushPressed))
     }
     this.syncViews()
   }
 
-  private collectIntents(): Map<ParticipantId, ParticipantIntent> {
+  private restart(): void {
+    this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
+    this.pushLatch.clear()
+    this.syncViews()
+  }
+
+  private collectIntents(pushPressed: boolean): Map<ParticipantId, ParticipantIntent> {
     const intents = new Map<ParticipantId, ParticipantIntent>()
     for (const style of PARTICIPANT_PRESENTATION) {
       if (style.controller === 'keyboard' && this.keys) {
@@ -127,6 +159,7 @@ export class BoutScene extends Phaser.Scene {
             left: this.keys.left.isDown,
             right: this.keys.right.isDown,
           }),
+          pushPressed,
         })
       }
     }
@@ -153,6 +186,8 @@ export class BoutScene extends Phaser.Scene {
         pos.y + Math.sin(participant.facing) * bodyPixels * 0.8,
       )
       view.label.setPosition(pos.x, pos.y - bodyPixels - 18)
+      view.phaseText.setText(phaseLabel(participant.action))
+      view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 38)
     }
   }
 }

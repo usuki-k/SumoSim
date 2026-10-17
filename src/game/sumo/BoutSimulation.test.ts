@@ -15,6 +15,7 @@ import simulationSource from './BoutSimulation.ts?raw'
 import typesSource from './BoutTypes.ts?raw'
 import accumulatorSource from './FixedStepAccumulator.ts?raw'
 import movementVectorSource from '../input/movementVector.ts?raw'
+import pressLatchSource from '../input/pressLatch.ts?raw'
 
 interface MutableSetupLike {
   arena: { radius: number }
@@ -32,7 +33,7 @@ function makeSetup(): BoutSetup {
 }
 
 function intent(x: number, y: number): Map<ParticipantId, ParticipantIntent> {
-  return new Map([['a', { move: { x, y } }]])
+  return new Map([['a', { move: { x, y }, pushPressed: false }]])
 }
 
 const NO_INTENT = new Map<ParticipantId, ParticipantIntent>()
@@ -411,8 +412,8 @@ describe('contact & separation (ACTION-03A)', () => {
   }
   const intentsFor = (ax: number, ay: number, bx = 0, by = 0) =>
     new Map<ParticipantId, ParticipantIntent>([
-      ['a', { move: { x: ax, y: ay } }],
-      ['b', { move: { x: bx, y: by } }],
+      ['a', { move: { x: ax, y: ay }, pushPressed: false }],
+      ['b', { move: { x: bx, y: by }, pushPressed: false }],
     ])
 
   it('exposes the simulation-owned body radius in the snapshot (isolated copy)', () => {
@@ -623,7 +624,7 @@ describe('contact & separation (ACTION-03A)', () => {
     const before = sim.getSnapshot().participants
     sim.step(intentsFor(1, 0, -0.04, 0))
     const [p, q] = sim.getSnapshot().participants
-    // Free displacement this tick: A forward by vA*dt, B toward A by vB*dt 
+    // Free displacement this tick: A forward by vA*dt, B toward A by vB*dt
     const vA = FORWARD_ACCELERATION * TICK_SECONDS
     const vB = 0.04 * MAX_SPEED // below one acceleration step, so reached in a single tick
     const gap = COMBINED + 0.003 - (vA + vB) * TICK_SECONDS
@@ -685,7 +686,13 @@ describe('contact & separation (ACTION-03A)', () => {
 
 describe('Phaser independence', () => {
   it('T10: simulation / fixed-step / input-vector sources do not depend on Phaser', () => {
-    for (const src of [simulationSource, typesSource, accumulatorSource, movementVectorSource]) {
+    for (const src of [
+      simulationSource,
+      typesSource,
+      accumulatorSource,
+      movementVectorSource,
+      pressLatchSource,
+    ]) {
       expect(src).not.toMatch(/from\s+['"]phaser['"]/)
       expect(src).not.toMatch(/import\s+['"]phaser['"]/)
       expect(src).not.toMatch(/require\(\s*['"]phaser['"]/)

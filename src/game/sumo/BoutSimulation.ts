@@ -4,8 +4,10 @@ import type {
   BoutSetup,
   BoutSnapshot,
   ParticipantId,
+  ParticipantActionState,
   ParticipantIntent,
   ParticipantState,
+  PushPhase,
   Vec2,
 } from './BoutTypes.ts'
 
@@ -24,18 +26,93 @@ export const BODY_RADIUS = 0.35 // m
 // Contact is detected within this distance of touching, so resting contact does not flicker.
 export const CONTACT_SLOP = 0.002 // m
 
+// Discrete Push (ACTION-03B). Provisional Prototype tuning, subject to User Play Test.
+export const PUSH_STARTUP_TICKS = 6 // ~100 ms: steering suppressed, braking, no force yet
+export const PUSH_ACTIVE_TICKS = 8 // ~133 ms: short locked drive; pushes only while in contact
+export const PUSH_RECOVERY_TICKS = 10 // ~167 ms: steering suppressed, braking, no force
+// Pair acceleration along the contact normal per net active Push (+1 / -1).
+export const PUSH_EXTERNAL_ACCELERATION = 20 // m/s^2
+// External (received) momentum decays toward zero independently of grounded footwork damping.
+export const EXTERNAL_DECELERATION = 8 // m/s^2
+export const MAX_EXTERNAL_SPEED = 3 // m/s
+
 // Inward self-velocity sums at or below this (m/s) count as no contribution.
 const INWARD_EPSILON = 1e-9
 
 // Below this center distance the contact normal is undefined and a fallback is used.
 const MIN_CONTACT_DISTANCE = 1e-9
 
+type MutableVec2 = { x: number; y: number }
+
+type MutableAction =
+  | { kind: 'idle' }
+  | { kind: 'push'; phase: PushPhase; ticksRemaining: number; direction: MutableVec2 }
+
 interface MutableParticipant {
   id: string
-  position: { x: number; y: number }
-  velocity: { x: number; y: number }
+  position: MutableVec2
+  // Own footwork; the grounded movement rule and contact closing removal apply only here.
+  selfVelocity: MutableVec2
+  // Momentum induced by the opponent Push; decays on its own. Displacement uses self + external.
+  externalVelocity: MutableVec2
+  action: MutableAction
   facing: number
   bodyRadius: number
+}
+
+interface ContactResult {
+  readonly nx: number
+  readonly ny: number
+}
+
+const ZERO_MOVE: Vec2 = { x: 0, y: 0 }
+
+function nextPushPhase(phase: PushPhase): { phase: PushPhase; ticks: number } | null {
+  if (phase === 'startup') return { phase: 'active', ticks: PUSH_ACTIVE_TICKS }
+  if (phase === 'active') return { phase: 'recovery', ticks: PUSH_RECOVERY_TICKS }
+  return null
+}
+
+// Effective self-movement intent: free steering only while idle; Push owns movement otherwise.
+function effectiveMove(action: MutableAction, move: Vec2): Vec2 {
+  if (action.kind === 'idle') return move
+  return action.phase === 'active' ? action.direction : ZERO_MOVE
+}
+
+// Brakes external momentum toward exact zero (no reversal).
+function decayExternal(v: MutableVec2): void {
+  const speed = Math.hypot(v.x, v.y)
+  const drop = EXTERNAL_DECELERATION * TICK_SECONDS
+  if (speed <= drop) {
+    v.x = 0
+    v.y = 0
+    return
+  }
+  const scale = (speed - drop) / speed
+  v.x *= scale
+  v.y *= scale
+}
+
+function clampExternal(v: MutableVec2): void {
+  const speed = Math.hypot(v.x, v.y)
+  if (speed > MAX_EXTERNAL_SPEED) {
+    v.x *= MAX_EXTERNAL_SPEED / speed
+    v.y *= MAX_EXTERNAL_SPEED / speed
+  }
+}
+
+function isPushActive(p: MutableParticipant): boolean {
+  return p.action.kind === 'push' && p.action.phase === 'active'
+}
+
+function copyAction(action: MutableAction): ParticipantActionState {
+  if (action.kind === 'idle') return { kind: 'idle' }
+  return {
+    kind: 'push',
+    phase: action.phase,
+    ticksRemaining: action.ticksRemaining,
+    direction: { x: action.direction.x, y: action.direction.y },
+  }
 }
 
 function assertFiniteVec2(v: Vec2, label: string): void {
@@ -45,7 +122,7 @@ function assertFiniteVec2(v: Vec2, label: string): void {
 }
 
 // Non-finite input is treated as no input; length is clamped to at most 1.
-function sanitizeMove(move: Vec2): { x: number; y: number } {
+function sanitizeMove(move: Vec2): MutableVec2 {
   if (!Number.isFinite(move.x) || !Number.isFinite(move.y)) return { x: 0, y: 0 }
   const length = Math.hypot(move.x, move.y)
   if (length > 1) return { x: move.x / length, y: move.y / length }
@@ -57,7 +134,7 @@ function sanitizeMove(move: Vec2): { x: number; y: number } {
 //  - parallel part: opposing -> braked to zero first; same direction -> accelerates up to the
 //    target speed; above target -> braked
 // With no input the whole velocity brakes to exact zero.
-function applyGroundedVelocity(v: { x: number; y: number }, move: Vec2): void {
+function applyGroundedVelocity(v: MutableVec2, move: Vec2): void {
   const inputLength = Math.hypot(move.x, move.y)
   if (inputLength === 0) {
     const speed = Math.hypot(v.x, v.y)
@@ -143,7 +220,9 @@ export class BoutSimulation {
     this.participants = setup.participants.map((p) => ({
       id: p.id,
       position: { x: p.position.x, y: p.position.y },
-      velocity: { x: 0, y: 0 },
+      selfVelocity: { x: 0, y: 0 },
+      externalVelocity: { x: 0, y: 0 },
+      action: { kind: 'idle' },
       facing: 0,
       bodyRadius: BODY_RADIUS,
     }))
@@ -151,15 +230,32 @@ export class BoutSimulation {
   }
 
   // Advances exactly one logical tick (TICK_SECONDS). Participants without an intent have zero move.
+  // Order: intent -> Push start -> effective move -> grounded self velocity -> external decay ->
+  // integrate (self + external) -> contact -> Push resolution -> Push timers -> facing.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     for (const p of this.participants) {
-      const move = sanitizeMove(intents.get(p.id)?.move ?? { x: 0, y: 0 })
-      applyGroundedVelocity(p.velocity, move)
+      const intent = intents.get(p.id)
+      const move = sanitizeMove(intent?.move ?? ZERO_MOVE)
 
-      p.position.x += p.velocity.x * TICK_SECONDS
-      p.position.y += p.velocity.y * TICK_SECONDS
+      // A Push starts only from idle; presses during an action are ignored (not queued).
+      if (intent?.pushPressed === true && p.action.kind === 'idle') {
+        p.action = {
+          kind: 'push',
+          phase: 'startup',
+          ticksRemaining: PUSH_STARTUP_TICKS,
+          direction: { x: Math.cos(p.facing), y: Math.sin(p.facing) },
+        }
+      }
+
+      applyGroundedVelocity(p.selfVelocity, effectiveMove(p.action, move))
+      decayExternal(p.externalVelocity)
+
+      p.position.x += (p.selfVelocity.x + p.externalVelocity.x) * TICK_SECONDS
+      p.position.y += (p.selfVelocity.y + p.externalVelocity.y) * TICK_SECONDS
     }
-    this.resolveContact()
+    const contact = this.resolveContact()
+    if (contact) this.resolvePush(contact)
+    for (const p of this.participants) this.advanceAction(p)
     this.updateFacing()
   }
 
@@ -171,7 +267,12 @@ export class BoutSimulation {
         (p): ParticipantState => ({
           id: p.id,
           position: { x: p.position.x, y: p.position.y },
-          velocity: { x: p.velocity.x, y: p.velocity.y },
+          velocity: {
+            x: p.selfVelocity.x + p.externalVelocity.x,
+            y: p.selfVelocity.y + p.externalVelocity.y,
+          },
+          externalVelocity: { x: p.externalVelocity.x, y: p.externalVelocity.y },
+          action: copyAction(p.action),
           facing: p.facing,
           bodyRadius: p.bodyRadius,
         }),
@@ -181,13 +282,15 @@ export class BoutSimulation {
 
   // Two-circle contact: removes the closing normal self velocity (tangential kept) and separates any
   // overlap, assigning the correction by each participant's inward contribution (no mass weighting).
-  private resolveContact(): void {
+  // Only self velocity counts: external momentum is shared by the pair and is never treated as
+  // footwork. Returns the contact normal (A -> B) when in contact, otherwise null.
+  private resolveContact(): ContactResult | null {
     const [a, b] = this.participants
     const dx = b.position.x - a.position.x
     const dy = b.position.y - a.position.y
     const distance = Math.hypot(dx, dy)
     const combined = a.bodyRadius + b.bodyRadius
-    if (distance > combined + CONTACT_SLOP) return
+    if (distance > combined + CONTACT_SLOP) return null
 
     // Normal A -> B. Same-center fallback: A's facing, which is always finite.
     let nx: number
@@ -202,15 +305,15 @@ export class BoutSimulation {
 
     // Inward contributions are captured before the closing velocity is removed; they decide who
     // "caused" the penetration and therefore who is moved back.
-    const inwardA = Math.max(0, a.velocity.x * nx + a.velocity.y * ny) // A moving toward B
-    const inwardB = Math.max(0, -(b.velocity.x * nx + b.velocity.y * ny)) // B moving toward A
+    const inwardA = Math.max(0, a.selfVelocity.x * nx + a.selfVelocity.y * ny) // A moving toward B
+    const inwardB = Math.max(0, -(b.selfVelocity.x * nx + b.selfVelocity.y * ny)) // B moving toward A
     if (inwardA > 0) {
-      a.velocity.x -= inwardA * nx
-      a.velocity.y -= inwardA * ny
+      a.selfVelocity.x -= inwardA * nx
+      a.selfVelocity.y -= inwardA * ny
     }
     if (inwardB > 0) {
-      b.velocity.x += inwardB * nx
-      b.velocity.y += inwardB * ny
+      b.selfVelocity.x += inwardB * nx
+      b.selfVelocity.y += inwardB * ny
     }
 
     if (distance < combined) {
@@ -225,8 +328,8 @@ export class BoutSimulation {
       } else {
         // Overlap without inward motion (e.g. curvature while circling): still never displace a
         // body that is not moving. Even split only when both or neither are moving.
-        const aMoving = Math.hypot(a.velocity.x, a.velocity.y) > INWARD_EPSILON
-        const bMoving = Math.hypot(b.velocity.x, b.velocity.y) > INWARD_EPSILON
+        const aMoving = Math.hypot(a.selfVelocity.x, a.selfVelocity.y) > INWARD_EPSILON
+        const bMoving = Math.hypot(b.selfVelocity.x, b.selfVelocity.y) > INWARD_EPSILON
         if (aMoving && !bMoving) shareA = 1
         else if (bMoving && !aMoving) shareA = 0
       }
@@ -234,6 +337,35 @@ export class BoutSimulation {
       a.position.y -= ny * overlap * shareA
       b.position.x += nx * overlap * (1 - shareA)
       b.position.y += ny * overlap * (1 - shareA)
+    }
+    return { nx, ny }
+  }
+
+  // Active Pushes in contact: +1 for A along A->B, -1 for B. The same external velocity delta goes
+  // to both participants so the pair moves together; equal Pushes cancel.
+  private resolvePush(contact: ContactResult): void {
+    const [a, b] = this.participants
+    const net = (isPushActive(a) ? 1 : 0) - (isPushActive(b) ? 1 : 0)
+    if (net === 0) return
+    const dv = net * PUSH_EXTERNAL_ACCELERATION * TICK_SECONDS
+    for (const p of this.participants) {
+      p.externalVelocity.x += contact.nx * dv
+      p.externalVelocity.y += contact.ny * dv
+      clampExternal(p.externalVelocity)
+    }
+  }
+
+  // Counts down the current Push phase: startup -> active -> recovery -> idle.
+  private advanceAction(p: MutableParticipant): void {
+    if (p.action.kind !== 'push') return
+    p.action.ticksRemaining -= 1
+    if (p.action.ticksRemaining > 0) return
+    const next = nextPushPhase(p.action.phase)
+    if (next) {
+      p.action.phase = next.phase
+      p.action.ticksRemaining = next.ticks
+    } else {
+      p.action = { kind: 'idle' }
     }
   }
 
