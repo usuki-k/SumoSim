@@ -513,3 +513,25 @@ If rejected:
    - D1 Push semantic: recommended hold / continuous pressure
    - D2 Prototype Push key: recommended ArrowUp, temporary only
 4. ACTION-03B may then introduce externalVelocity / push constants / impact transfer, but must preserve accepted Contact and Movement behavior when Push is absent.
+
+
+# User Play Test Result — 2026-10-18
+
+Contact Feel: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- ACTION-03A2 Contact & Separation Play Test is acceptable.
+- No additional Contact correction is currently required.
+
+Accepted baseline:
+- Simulation-owned circular body geometry remains the Contact baseline.
+- Stationary participants do not drift from Contact-only positional correction.
+- One-sided inward penetration correction applies to the moving participant.
+- Two-sided inward correction is split by inward contribution.
+- Tangential motion remains preserved for circling.
+- CONTACT_SLOP / deterministic fallback / fixed-step ownership remain accepted.
+- No-contact ACTION-02B grounded Movement remains accepted.
+
+Next:
+- ACTION-03B Push & External Momentum may proceed after User decisions D1 and D2 are confirmed.
+- Do not reopen Contact Feel without a concrete regression or later interaction requirement.
