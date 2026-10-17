@@ -1,5 +1,5 @@
 Task-ID: ACTION-03-PUSH-CONTACT-COLLISION-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / CORE ACTION DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -552,3 +552,174 @@ Do not implement Contact / Push / Ring-out.
 After Report Commit / Push, stop and report:
 
 「ACTION-03-PUSH-CONTACT-COLLISION-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS
+
+## Accepted Baseline
+
+- Investigation report commit: `bdffe83384ddc1c434654b1733aecd7547eb3606`
+- Agent-Start-Head: `43c8085a6fe2326675ac8e2661fd247ad0618a3e`
+- Agent Task Diff is exactly one Report-only commit.
+- The only changed repository file is `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
+- Production Source / package / lockfile were not changed.
+- ACTION-02B grounded Movement Feel remains the accepted current baseline.
+
+## Accepted Decisions
+
+- Keep custom Pure TypeScript gameplay contact/push logic; do not adopt Phaser Arcade Physics or Matter.js for Gameplay Core.
+- FREE contact uses a Simulation-owned circle representation.
+- Initial gameplay body radius may use a single provisional equal value (0.35 m), distinct from future sprite/art size semantics.
+- Scene must render gameplay body geometry from Snapshot/state rather than owning collision radius as a gameplay rule.
+- Initial collision/separation is explicit deterministic two-circle math; no generic collision framework.
+- Use a small CONTACT_SLOP to stabilize resting contact.
+- Equal-center contact must have a deterministic fallback normal and never produce NaN/Infinity.
+- ACTION-03A uses equal participants and symmetric overlap separation. Participant-specific mass weighting is deferred until a Task actually introduces mass.
+- Closing self-locomotion velocity into the contact normal should be removed at solid contact so Snapshot velocity does not claim motion through the opponent.
+- CCD is deferred while fixed-step displacement remains safely below the body-diameter boundary; this must be protected by tests and revisited when faster Tachiai/impulse states are added.
+- For Push/Momentum architecture, accept Model B as the future direction:
+  - self locomotion velocity = footwork / accepted grounded movement
+  - external velocity = opponent-induced impulse/momentum
+  - actual displacement uses their sum
+  - these are distinct runtime concepts, not duplicate Sources of Truth
+- Existing ACTION-02B self-locomotion behavior must remain unchanged when no contact/external force exists.
+- Push force should act primarily along the contact normal, not via sprite/facing position hacks.
+- First Push prototype should use equal participant physical constants; Weight / Power / LowerBody-derived differences are deferred until the push interaction itself is accepted.
+- No archetype-specific matchup bonuses. Future archetypes should emerge from parameters/state/intent.
+- Bout outcome remains Simulation-owned; Scene/flow handles presentation/restart.
+- Implementation sequence is accepted in principle:
+  1. ACTION-03A Contact & Separation
+  2. ACTION-03B Push & External Momentum
+  3. ACTION-03C Ring-out & Outcome
+  4. ACTION-03D Body Parameters
+- Each interaction step has its own User Play Test gate rather than bundling the entire action core.
+
+## Corrections
+
+### C-1 — Do not add unused externalVelocity or mass placeholders in ACTION-03A
+
+The Report proposes that ACTION-03A introduce the Model B `externalVelocity` container while it remains permanently zero, and references mass-ratio separation while participants are still equal.
+
+This would violate the current small-explicit / no-speculative-placeholder discipline.
+
+For ACTION-03A:
+- implement gameplay `bodyRadius`
+- contact detection
+- CONTACT_SLOP
+- deterministic fallback normal
+- symmetric overlap separation
+- closing **self** velocity removal
+- minimal stationary / walk-toward dummy behavior needed for contact testing
+
+Do **not** add `externalVelocity`, `mass`, `pushForce`, or `traction` yet.
+
+Introduce `externalVelocity` in ACTION-03B, where external momentum/impact actually exists.
+Introduce mass/push/traction constants only when the Push implementation needs them.
+
+This does not reject Model B; it defers its concrete field until first use.
+
+### C-2 — Q7 Push formula is a Prototype design direction, not permanent accepted game balance
+
+The Report's Q7 formula shape is useful and sufficiently concrete for a future ACTION-03B prototype, but the following are not permanent accepted rules yet:
+
+- exact passive/braced resistance semantics
+- WALK_PRESSURE
+- IMPACT_TRANSFER behavior
+- exact resistance subtraction shape
+- any numeric coefficients
+
+Treat them as prototype semantics/tuning subject to Push User Play Test.
+
+The durable accepted architecture is:
+- semantic press input
+- contact-normal force resolution
+- self vs external motion separation
+- deterministic fixed-tick resolution
+- parameter-driven behavior without archetype conditionals
+
+### C-3 — Ring-out semantics remain pending User decisions
+
+Do not treat support-circle ring-out or simultaneous ring-out handling as accepted rules yet.
+
+D3 and D4 remain User decisions required before ACTION-03C.
+
+## User Decisions Required
+
+The following decisions are preserved from the Investigation:
+
+- D1 — Push input semantic before ACTION-03B
+  - Recommended: hold / continuous pressure
+- D2 — Prototype press key before ACTION-03B
+  - Recommended: ArrowUp (temporary binding only)
+- D3 — Ring-out criterion before ACTION-03C
+  - Recommended: support-circle criterion with provisional ratio
+- D4 — simultaneous ring-out before ACTION-03C
+  - Recommended: deeper-out participant loses; exact tie = redo
+
+No User decision is required before ACTION-03A.
+
+## Do Not Reopen
+
+- Do not reopen accepted grounded Movement Feel without new evidence.
+- Do not introduce Phaser Physics / Matter.js.
+- Do not derive gameplay collision from sprite size.
+- Do not add a generic collision/contact framework for two participants.
+- Do not add full Rikishi attributes before Push interaction is proven.
+- Do not add Balance/Stamina/Tachiai/Grapple systems into Contact work.
+- Do not introduce archetype-specific matchup branches.
+- Do not implement Ring-out during ACTION-03A or ACTION-03B.
+
+## Deferred
+
+- externalVelocity concrete state until ACTION-03B
+- mass / pushForce / traction until ACTION-03B prototype constants
+- Weight / Power / LowerBody attribute derivation until ACTION-03D design/implementation
+- Push input/key decisions D1/D2
+- Ring-out decisions D3/D4
+- CCD
+- lateral push force
+- Balance / Stamina
+- Tachiai / thrust / pull / counter
+- Grapple / Throw / Lift
+- kimarite
+
+## User Play Test
+
+ACTION-03 Investigation: NOT REQUIRED.
+
+ACTION-03A Contact & Separation: REQUIRED, focused on:
+- bodies no longer passing through each other
+- resting contact stability / jitter
+- whether contact feels unnaturally rigid
+- whether glancing movement / circling around the opponent is still possible
+- whether accepted non-contact Movement Feel is preserved
+
+ACTION-03B Push: REQUIRED and is the first full Push Feel gate.
+
+## Regression Risks
+
+- Separation logic accidentally changing accepted movement when participants are not in contact.
+- Contact correction creating jitter or a sticky invisible wall.
+- Closing-velocity removal eliminating tangential movement and preventing natural circling.
+- Future external momentum being damped by grounded self-locomotion if Model B boundary is not preserved.
+- Gameplay body radius becoming coupled to sprite scale/presentation.
+- Prototype push coefficients being mistaken for final balance.
+
+## Next Task Constraints
+
+The next Task may be ACTION-03A Contact & Separation without further User decisions.
+
+ACTION-03A must remain narrow:
+- Simulation-owned equal body radius
+- deterministic contact detection
+- CONTACT_SLOP
+- symmetric overlap separation
+- closing normal self-velocity removal
+- minimal contact test harness
+- no Push / impact transfer / externalVelocity / mass attributes / Ring-out
+
+Technical Verification must include exact touch, slight overlap, same-center fallback, head-on high-speed approach, glancing contact, prolonged resting contact, determinism, finite values, and full no-contact ACTION-02B movement regression.
+
+User Play Test is required before proceeding to ACTION-03B.
