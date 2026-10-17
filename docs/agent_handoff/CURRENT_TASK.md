@@ -535,3 +535,18 @@ Accepted baseline:
 Next:
 - ACTION-03B Push & External Momentum may proceed after User decisions D1 and D2 are confirmed.
 - Do not reopen Contact Feel without a concrete regression or later interaction requirement.
+
+
+# User Decision Update — 2026-10-18
+
+D2 Prototype Push Key: ACCEPTED
+- ArrowUp is accepted as the temporary Prototype binding for Push.
+- This does not determine the final control scheme.
+
+D1 Push Input Semantics: STILL UNDECIDED
+- User wants timing-based counterplay:
+  - Pull / deflection (Down) timed against Push
+  - lateral evasion
+- Do not assume hold semantics.
+- User is considering a discrete committed Push that advances slightly forward.
+- Resolve D1 before ACTION-03B implementation task is created.
