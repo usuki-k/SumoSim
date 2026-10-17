@@ -1,497 +1,506 @@
-Task-ID: FOUNDATION-02-BOUT-SIMULATION-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / PURE TYPESCRIPT SIMULATION FOUNDATION
+Task-ID: ACTION-01-MOVEMENT-INPUT-TIMESTEP-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / ACTION ARCHITECTURE DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: d0b81c29bb10af0ba05863f38643d73ca234f170
+Source-Baseline: 572990944674f82f31964f8c27b369eaf26faefc
 Handoff-Mode: GITHUB
 
-# FOUNDATION-02 — BoutSimulation Foundation
+# ACTION-01 — Movement / Input / Time-Step Investigation
 
 ## 1. Purpose
 
-SumoSimの相撲Actionを将来作り込んでも、Phaser SceneとGameplay Ruleが密結合して破綻しないよう、最小のPure TypeScript BoutSimulation境界を実装する。
+SumoSimの相撲Actionを簡易Prototypeから段階的に作り込んでも破綻しないよう、
+Movement / Input Intent / Interaction State / Simulation cadence / Physics採否の設計を調査し、
+次のImplementation Taskで一意に実装できるレベルまでArchitectureを固める。
 
-同時に、将来のManagement / Training側から育成済み力士をBoutへ渡す場合も、Management StateそのものをBout Runtimeの正本にしない構造を作る。
+このTaskはInvestigation Only / No Production Fixes。
 
-このTaskはGameplay Rule実装ではない。
+Production Source、package、lockfile、AGENTS、ARCHITECTURE、GAME_CONCEPT等を変更しない。
+調査結果は `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` のみへ記録する。
 
-今回成立させる境界：
+## 2. Accepted Baseline
 
-Management / future game state
-→ BoutSetup（明示的な入力境界）
-→ BoutSimulation（canonical bout runtime ownership）
-→ read-only Snapshot / State
-→ Phaser BoutScene rendering
+Accepted implementation baseline:
 
-初期版は小さく保つが、将来stamina / balance / push / movement / ring-out / CPU等を追加するときに同じ境界を拡張できる構造にする。
+`572990944674f82f31964f8c27b369eaf26faefc`
 
-過剰なFrameworkや将来機能の空実装は作らない。
+Current accepted architecture:
 
-## 2. Current Baseline / Review Handoff
+- Pure TypeScript Simulation → State / Results → Phaser Presentation
+- `BoutSimulation` がcanonical Bout Runtime Stateを所有
+- `BoutSetup` はfuture Management/Game StateからBoutへ入る明示的境界
+- SetupとSnapshotはcaller/consumer mutable stateをaliasしない
+- `BoutScene` はSnapshotから描画し、canonical gameplay positionを所有しない
+- Simulation logical coordinatesとPhaser canvas mappingは分離
+- Vitest導入済み
+- Movement / Input / Physics / timestep / push / stamina / balance / CPU / ring-out / victoryは未実装
+- Prototypeのring/spawn/scale/style値はFinal Designではない
 
-Accepted Source Baseline:
+Previous Review Correction:
 
-`d0b81c29bb10af0ba05863f38643d73ca234f170`
+- Stable wrestler identityとPlayer/CPU presentation roleを同一視しない
+- 現在の `PARTICIPANT_STYLE[participant.id]` はPrototype限定
+- speculative role systemは今作らない。必要な時点で明示的に分離する
 
-Previous FOUNDATION-01 Review:
+## 3. User-Accepted Action Direction
 
-- Phaser bootstrap / independent `BoutScene` はAccepted
-- 現在の640x640、色、位置、寸法は暫定値でありFinal Designではない
-- Gameplay Simulation / Input / Movement / Physics / CPU / stamina / balance / ring-out / victoryは未実装
-- Pure TypeScript Simulation → State / Results → Phaser Presentationを維持
-- Physicsを先回り導入しない
-- Correction: `public/` は現在存在しないのにAGENTS.mdのCurrent directory listに残っている。空Directoryを作らず、今回AGENTS Current Stateを同期する際に修正してよい
+以下は今回のInvestigationで前提として扱う。
+ただしexact key binding、数値、formulaは未決。
 
-Current developにはChatGPT Review coordination commitが上にあるため、AGENTS.mdのGitHub Handoff Workflowに従い、Source-BaselineからのCoordination Diffが`docs/agent_handoff/`のみであることを確認してからFF-onlyすること。
+### 3.1 Movement
 
-## 3. Required Reading
+- WASDで前後左右移動
+- 力士は基本的に相手方向を自動で向く
+- 見下ろし型Action
+- Keyboardの具体的なキー配置は将来変更可能なInput Mappingとして扱う
+- Touch対応を将来可能にするため、Simulationへraw keyそのものを渡さない
 
-- `AGENTS.md`
-- `CLAUDE.md`
-- `docs/GAME_CONCEPT.md`
-- `docs/ARCHITECTURE.md`
-- `docs/agent_handoff/CURRENT_TASK.md`
-- FOUNDATION-01 Final Review Handoff
-- Current `src/main.ts`
-- Current `src/game/scenes/BoutScene.ts`
-- Current `package.json`
+### 3.2 Tachiai Phase
 
-## 4. Architecture Contract
+取組開始時に通常Boutとは別の立合いPhaseを持つ方向。
 
-### 4.1 Canonical ownership
+Timing Gauge:
+- 左右に動くゲージをPlayerがタイミング良く止める
+- 0%〜100%相当の操作結果を得る
+- Gauge結果は力士Parameterそのものではなく、その立合いでのPlayer操作結果
 
-BoutのRuntime Stateの正本はPure TypeScript側に置く。
+Tachiai action direction:
 
-`BoutScene` がcanonical position等を別に所有しない。
+- Up: 当たり / 突進して押す
+- Left: 変化
+- Right: 掴みに行く
+- Down: 様子を見る
 
-Phaser Objectの `x/y` 等はPresentationであり、Gameplay Stateの正本ではない。
+立合い結果は将来的に、
+力士Parameter + Timing結果 + 自他の選択Action / State
+から決定する方向。
 
-### 4.2 Setup と Runtime Stateを分ける
+exact matchup table / formulaは未決。
 
-将来のManagement Stateを直接BoutSimulationへ持ち込まない。
+### 3.3 Normal Bout — FREE
 
-明示的な `BoutSetup` / participant setup boundaryを設ける。
+非掴み状態でのAction方向：
 
-今回は未決の能力値を追加しない。
+- Left: 左手突っ張り
+- Right: 右手突っ張り
+- Up: 押す
+- Down: 引き技
+- Grapple Action: 掴みに行く
+- Custom Action: 事前設定技を試みる（例: 足払い）
 
-BoutSetupに必要な最小情報のみ：
+Grapple Actionは専用Actionとして扱う。
+最終Keyboard keyは未決。
 
-- participant identity
-- initial logical position
-- arena/ring geometryとして必要な最小情報
+Custom ActionのKeyboard案はSpaceだが、Simulation contractではraw Space keyに依存しない。
 
-将来Power / stamina / technique等を追加できるが、今回勝手に定義しない。
+### 3.4 Normal Bout — GRAPPLED
 
-### 4.3 Simulation coordinate と Presentationを分ける
+掴み状態：
 
-Simulationのposition / ring geometryはPhaser GameObjectやCanvas DOM値そのものに依存しないPure number dataとする。
+- Up: 寄る / 寄り切り方向に押す
+- Left: 左投げ
+- Right: 右投げ
+- Down: 吊りを試みる
+- Grapple Action: 自主的に掴み解除 → FREE
+- Custom Action: 装備した技を試みる
 
-Phaser SceneがSnapshotをCanvasへ描画する責務を持つ。
+Throw:
+- 投げを実行し、Boutが継続する場合はFREEへ遷移
+- 投げで決着した場合はBout終了
+- Throw success/failure semanticsや決着判定formulaは未決
 
-現在の座標単位・ring radius・spawn位置等はPrototype fixtureでありFinal Gameplay値ではない。
+### 3.5 Normal Bout — LIFTED
 
-### 4.4 No time-step decision yet
+吊り：
 
-fixed-step / variable delta / tick rateは未決。
+- GRAPPLEDでLift actionを試みる
+- Lift失敗 → GRAPPLED
+- Lift成功 → LIFTED
+- LIFTED中は吊っている側のWASD Movementのみ
+- 他の通常Actionは行わない
+- 吊り状態を維持できる時間/能力限界に達すると自動でGRAPPLEDへ戻る
+- LIFTED中は吊る側がMovement主体で、吊られる側のpositionは独立通常Movementではなく従属する方向
 
-このTaskでは `step(delta)`、simulation loop、time accumulator等を実装しない。
+exact Lift formula / duration formulaは未決。
 
-Movement Taskで設計判断する。
+### 3.6 Interaction State
 
-### 4.5 No speculative systems
+設計概念として最低限：
 
-導入しない：
+- FREE
+- GRAPPLED
+- LIFTED
 
-- ECS
-- DI
-- Event Bus
-- generic reducer framework
-- command bus
-- rule engine
-- physics abstraction
-- plugin architecture
-- generic entity/component hierarchy
+を扱う。
 
-2人の力士に必要なsmall explicit designを優先する。
+実際のType/State Machine shapeは今回調査して提案する。
+過剰なState Machine Frameworkは導入しない。
 
-## 5. Implementation Direction
+## 4. User-Accepted Parameter Direction
 
-基本構造は以下を推奨する。Current Sourceを確認し、同じ責務をより小さく明確に実装できる場合は最小限の調整可。MaterialなDeviationはReportする。
+将来のRikishi Parametersは以下の方向で検討する。
+このInvestigationでは数値rangeやformulaを決めない。
 
-```
-src/
-├─ game/
-│  ├─ sumo/
-│  │  ├─ BoutTypes.ts
-│  │  ├─ BoutSimulation.ts
-│  │  └─ BoutSimulation.test.ts
-│  └─ scenes/
-│     └─ BoutScene.ts
-├─ main.ts
-└─ style.css
-```
+### Body
+- Height
+- Weight
 
-### 5.1 BoutTypes
+### Physical
+- Power
+- LowerBody / 足腰
+- Speed
+- StaminaCapacity
 
-Pure TypeScriptのみ。
+### Sumo Skill
+- Tachiai
+- ThrustPower
+- ThrustTempo
+- Grapple
+- Throw
+- Lift
+- Counter
 
-最小限の概念：
+Important distinction:
 
-- logical 2D vector
-- participant identity
-- participant setup
-- arena/ring setup
-- bout setup
-- participant runtime state
-- bout snapshot/state
+- Rikishi Parameter = 育成で変化する比較的恒久的な能力
+- Bout Runtime State = 取組中に変化する状態
 
-Phaser import禁止。
+Bout Runtime候補：
 
-名前はTypeScriptとして自然な範囲で調整可。
+- Position
+- Facing
+- Momentum
+- CurrentStamina
+- CurrentBalance
+- Engagement/Interaction State
+- CurrentAction
+- Recovery / Commitment
+- LIFTED維持に必要なruntime data
 
-### 5.2 BoutSimulation
+Balanceは現時点では育成ParameterではなくRuntime Stateとして扱う方向。
+LowerBody等のParameterと現在のMomentum/Impulse/Stamina等から変動する可能性がある。
 
-Pure TypeScript classまたは同等に明確なsmall API。
+このTaskでexact formulaを決めない。
 
-最低限の責務：
+## 5. Core Investigation Questions
 
-- BoutSetupを受けてruntime stateを初期化
-- canonical bout runtime stateを所有
-- Phaser非依存のread-only snapshot / state viewを提供
-- caller supplied setup objectをcanonical mutable stateとしてそのまま保持しない
-- participant identityの重複など、Foundationとして明らかに不正なSetupを安全に拒否
+以下をCurrent Sourceと上記Accepted Directionに照らして調査し、明確な推奨案を出す。
 
-現在はGameplay advancementを行わない。
+### Q1 — Input Intent Boundary
 
-No `update`, No `step`, No movement。
+Keyboard / Touch / CPUからSimulationへ渡すIntentの最小構造を提案する。
 
-### 5.3 State isolation
+最低限検討：
 
-Scene等のconsumerがSnapshotを変更しても、Simulation内部のcanonical stateが書き換わらない設計にする。
+- Movement intent
+- directional action intent
+- Grapple action
+- Custom technique action
+- Tachiai input / timing result
+- FREE / GRAPPLED / LIFTEDで同じIntent contractを使うか、Phase別contractに分けるか
+- raw key dependencyをSimulationへ入れない方法
+- PlayerとCPUが同じSimulation input contractを共有できる形
 
-Readonly Typeだけでなく、runtime aliasingを避ける小さな実装とFocused Testを用意する。
+目的は将来Touch / CPU / remappingを増やしてもSimulationを壊さないこと。
 
-ただしdeep-clone Framework等は導入しない。
+### Q2 — Movement Ownership
 
-### 5.4 BoutScene integration
+Movementの正本と更新責務をどこに置くべきか決める。
 
-現在の土俵とPlayer / CPU placeholderを、BoutSimulationのSetup / Snapshotを通して描画するよう変更する。
+最低限：
 
-Scene内にcanonical participant positionを別途持たない。
+- desired movement / intent
+- canonical position
+- facing
+- movement result
+- Scene synchronization
+- LIFTED時のdependent participant position
+- GRAPPLED時に2 participantをどう扱うか。ただし具体的な押し/衝突formulaはまだ決めない
 
-Sceneは：
+Phaser GameObjectのpositionをcanonical stateにしないこと。
 
-- Prototype BoutSetupを組み立てる
-- BoutSimulationを生成
-- Snapshotを読む
-- Simulation logical coordinatesをPhaser canvasへpresentation mapping
-- ring / participantsを描画
+### Q3 — Time-Step / Simulation Cadence
 
-まで。
+以下を比較し、SumoSimに推奨する方式を1つ選ぶ：
 
-Prototype Setup値は仮値とコメント等で明示する。
+- variable delta direct simulation
+- fixed timestep
+- fixed timestep + accumulator / render interpolation等
 
-Simulation logical coordinateを直接Canvas sizeの正本として設計しない。
-Scene側に小さく明示的なpresentation transformを置いてよい。
+検討観点：
 
-### 5.5 Vitest
+- Browser frame rate差
+- deterministic/testable gameplay
+- Player input responsiveness
+- CPUとPlayerの同一rule
+- push / momentum / balance / collisionを将来追加する拡張性
+- implementation complexity
+- Phaserとの接続
+- pause / slow frame / tab background等
+- CrazyGames等Web配信
 
-Pure TypeScript Simulationを継続的に検証できるよう、このTaskでVitestをdevDependencyとして導入する。
+必要ならlogical simulation Hzのrangeを提案してよいが、
+未検証の具体HzをFinal Gameplay値として固定しない。
 
-必要最小限：
+### Q4 — Coordinate / Time Units
 
-- `vitest`
-- package.jsonにnon-watch CI/focused実行用のtest script（例 `vitest run`）
+Simulation内部でCanvas pixelそのものをGameplay単位として固定すべきか、
+logical unitsを別にすべきか提案する。
 
-Playwrightや他Test Frameworkは導入しない。
+最低限：
 
-## 6. Required Focused Tests
+- logical position unit
+- movement speed unit
+- momentum / velocityを将来導入する場合の単位
+- seconds / milliseconds / tick基準
+- Scene側transform責務
 
-最低限、以下を自動Testする。
+過剰なUnit Frameworkは不要。
 
-T1. valid BoutSetupから2 participantのruntime snapshotを生成できる。
+### Q5 — Physics Adoption
 
-T2. initial logical positions / arena geometryがSetupから正しく反映される。
+Phaser Arcade Physics / Matter.js / custom Pure TypeScript movementのどれが、
+このゲームの現在のAction方向に最も適するか調査し、推奨を出す。
 
-T3. participant ID重複など明らかにinvalidなSetupを拒否する。
+検討対象：
 
-T4. Simulationが入力Setupを直接canonical mutable stateとしてaliasしない。
-作成後にcaller側Setup objectを変更してもSimulation snapshotが変わらない。
+- 2人の力士
+- 円形土俵
+- 押し合い
+- momentum
+- balance
+- grapple
+- throw
+- lift
+- deterministic / testable core
+- SceneとSimulation分離
+- 将来のGame Feel tuning
 
-T5. 取得したSnapshot / nested position等をconsumer側で変更しようとしても、次のSnapshotのcanonical stateに影響しないこと。
-TypeScript readonlyだけでなくruntime ownershipを確認する。
+結論は：
+- Use
+- Do Not Use for Gameplay Core
+- Defer pending specific prototype evidence
 
-T6. Simulation module / TypesがPhaserに依存しないことをSource inspectionで確認。
+のどれかを明確にする。
 
-TestのためだけにGameplay Ruleを作らない。
+Physics LibraryをProductionへ導入しない。
 
-## 7. Scope
+### Q6 — Interaction State Model
 
-変更可：
+FREE / GRAPPLED / LIFTEDの最小State modelを提案する。
 
-- `src/game/sumo/` の必要最小File
+最低限、以下の遷移を矛盾なく表現：
+
+FREE
+→ Grapple成功 → GRAPPLED
+
+GRAPPLED
+→ Grapple Action → FREE
+→ Throw & Bout continues → FREE
+→ Throw & Bout ends → Finished Outcome
+→ Lift failure → GRAPPLED
+→ Lift success → LIFTED
+
+LIFTED
+→ duration/end condition → GRAPPLED
+
+LIFTED中：
+- lifter movementのみ
+- lifted participantは通常Movementしない
+- standard actionsは無効
+
+State modelとBout Outcomeを混同しないこと。
+
+### Q7 — Auto-Facing
+
+常に相手方向を向く設計をどうSimulationへ置くか提案する。
+
+検討：
+
+- facingをcanonical runtime stateとして持つ必要があるか
+- positionからderivedで十分か
+- throw / side attack / custom technique等の将来拡張で明示Facingが必要になる境界
+- automatic facingがMovement/techniqueの表現を制限しないか
+
+初期Prototypeと将来拡張の両方を考える。
+
+### Q8 — Momentum / Balance Foundation
+
+今回実装はしないが、次のMovement Implementationが将来Momentum / Balanceを追加できる形になるために、
+最小限どのState/Result boundaryを予約すべきか提案する。
+
+注意：
+- placeholder fieldを大量に追加する提案は避ける
+- formulaを決めない
+- Current Movement implementationに本当に必要になるまでfieldを作らない方針を優先
+
+### Q9 — Parameter Boundary
+
+上記Rikishi Parametersを将来Boutへ渡す際、
+Management StateとBout Runtimeを直接共有しない構造を提案する。
+
+特に：
+- immutable setup snapshotとして渡すか
+- static participant attributesとruntime stateをどう分けるか
+- Height / Weight等の体格値とSkill値の扱い
+- stable wrestler identityとPlayer/CPU presentation roleを分離する方法
+
+このTaskでManagement Systemを設計しすぎない。
+
+### Q10 — Minimal Implementation Sequence
+
+調査結果を基に、次の3〜5個程度の小さなImplementation Task順序を提案する。
+
+各TaskがUser Play Test可能か、
+何をTechnical Gateにするかも簡潔に示す。
+
+中心仮説を最短で検証できる順序を優先する。
+
+## 6. Scope Out
+
+このInvestigationではProduction実装しない：
+
+- input code
+- movement code
+- simulation step
+- fixed-step loop
+- Physics
+- collision
+- push mechanics
+- stamina/balance mechanics
+- tachiai implementation
+- grapple implementation
+- throw/lift implementation
+- ring-out/victory
+- CPU
+- real Rikishi Parameters
+- Management
+- Custom Technique system
+- animation/audio/camera effects
+- new dependency
+- source refactor
+
+Current Sourceに問題を見つけても修正しない。
+
+## 7. Stop Conditions
+
+以下の場合は推測で設計確定せず、Completion ReportをBLOCKEDとしてUser判断点を明示：
+
+- Current Source / AGENTS / ARCHITECTURE / accepted directionにMaterial Conflict
+- Movement architectureを決めるために未決のGame Design選択が必須で複数案が同等
+- Physics採否がSource inspectionだけでは安全に判断できず、Prototype experimentが必須
+- accepted input/state transitionに矛盾があり一意に整理できない
+- Task Scopeを超えるProduction experimentが必要
+
+Preflight Safety STOPの場合はAGENTS.mdに従いRepositoryへ何も書かない。
+
+## 8. Investigation Method
+
+Current Sourceを直接inspectする。
+
+最低限：
+
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- `src/game/sumo/BoutSimulation.test.ts`
 - `src/game/scenes/BoutScene.ts`
+- `src/main.ts`
 - `package.json`
-- `pnpm-lock.yaml`
-- `docs/ARCHITECTURE.md` のCurrent State / accepted architecture synchronization
-- `AGENTS.md` のCurrent Technology / Source Directory等の時間依存記述の最小同期
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `docs/ARCHITECTURE.md`
+- `docs/GAME_CONCEPT.md`
+- `AGENTS.md`
+- Previous Final Review Handoff
 
-前回Correctionとして、AGENTS.md Current listに存在しない `public/` が残っている問題も、Current State同期の一部として修正する。
-空の`public/`を再作成しない。
+必要ならPhaser 4のcurrent API/behaviorを公式Documentationで確認してよい。
+外部資料を使った場合はCompletion ReportにSource / conclusionを簡潔に記録する。
 
-## 8. Scope Out
+Production changesは禁止。
 
-実装しない：
+## 9. Verification Level
 
-- movement
-- keyboard / touch input
-- simulation step / delta / fixed timestep
-- velocity / acceleration（Movement Design前に勝手に決めない）
-- collision / separation
-- Arcade Physics / Matter.js
-- push formula
-- stamina / balance
-- power / technique等の能力値
-- CPU AI
-- ring-out / victory
-- tachiai / clinch / throw / kimarite
-- Stable / Training / Management State
-- actual Management→Bout conversion service
-- Reward / Money
-- Save / Load
-- CrazyGames SDK
-- Playwright
-- React / Zustand
-- audio / animation / camera effects
-- generic framework / plugin system
+Investigation / Design Review。
 
-Managementとの将来接続のために、未実装Management ClassやStoreを作らない。
+必須：
 
-## 9. Stop Conditions
+- Current Source inspection完了
+- Q1〜Q10すべてに回答、またはBLOCKED理由を明記
+- RecommendationとRejected/Deferred alternativesを区別
+- Current accepted designとのConflict有無を明記
+- Production Source変更なし
+- package / lockfile変更なし
+- `git diff --check`（Reportのみ）
+- Repository変更が `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` のみ
 
-以下ではSTOP：
+`pnpm test` / `pnpm build` はProduction Sourceを変更しないInvestigationのため原則不要。
+Source integrityに疑義があり実行した場合は結果を報告する。
 
-- GitHub Handoff Preflight失敗
-- Source / Review / SPECのMaterial Conflict
-- Source-Baseline mismatch
-- Vitest以外の新Dependencyが必須
-- Foundationを作るために未決Gameplay Stat / Control / time-step semanticsの決定が必須
-- SceneとSimulationのState ownershipを二重化しないと成立しない
-- Task外User変更 / remote divergence
-- Current Phaser API / TypeScriptで想定構造が成立しないMaterialな問題
+## 10. Completion Report
 
-Agent独断でGameplay設計を確定しない。
+Remote-Task-First Preflight成功後、
+Investigation-only Report Commit Exceptionに従って
+`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` のみ更新してよい。
 
-## 10. Verification Level
+Result:
+- 推奨設計を一意に提示できた → PASS
+- 一部にUser Decisionが必須で実装へ進めない → BLOCKED
+- Materialな不足がある → PARTIAL / FAILを適切に使用
 
-Standard。
-
-Required：
-
-1. `pnpm test`（またはTaskで追加したnon-watch test script）PASS
-2. T1〜T6 PASS / evidence
-3. `pnpm build` PASS
-4. `git diff --check` PASS
-5. `package.json` / lockfile変更がVitest導入に必要な範囲のみ
-6. Simulation sourceにPhaser importなし
-7. BoutSceneにGameplay advancement / Physics / Inputなし
-8. Scope外変更なし
-
-### Browser Smoke
-
-Foundation integrationのRegression確認としてBrowser Smokeを行う。
-
-最低限：
-
-- Phaser Canvas起動
-- runtime errorなし
-- ring表示
-- Player / opponent placeholders表示
-- Vite starter UIが戻っていない
-- current basic viewportでCanvas表示
-
-既存Chrome等を使える場合は使用可。
-Playwright等のDependencyをこのために追加しない。
-
-## 11. Acceptance Criteria
-
-AC-01: Pure TypeScriptのBoutSimulation boundaryが存在する。
-AC-02: Simulation / TypesにPhaser依存が無い。
-AC-03: BoutSetupとruntime state/snapshotが分離されている。
-AC-04: 未決Management Stateを直接Bout runtimeの正本にしていない。
-AC-05: Simulationがcanonical Bout runtime state ownerである。
-AC-06: SceneはSimulation snapshotからring / participantsを描画し、canonical gameplay positionを二重所有しない。
-AC-07: Simulation logical coordinatesとPhaser presentation mappingの境界がある。
-AC-08: caller Setup mutation / snapshot mutationからcanonical stateが保護される。
-AC-09: T1〜T6がPASS。
-AC-10: Vitest以外の新Dependencyなし。
-AC-11: Movement / Input / Physics / time step / gameplay formulaを実装していない。
-AC-12: `pnpm build` PASS。
-AC-13: Browser Smoke PASS。
-AC-14: AGENTS / ARCHITECTURE Current Stateが実SourceとMaterialに一致する。
-AC-15: 前Reviewの`public/` Current-state mismatchが解消される。
-AC-16: Scope外変更なし。
-
-## 12. User Play Test
-
-NOT REQUIRED。
-
-このTaskはState ownership / architectural boundary / test foundationであり、Game Feelを変更・評価しない。
-
-Browser SmokeはTechnical Verification。
-
-## 13. Completion Report
-
-AGENTS.mdに従う。
-
-最低限：
+Report最低限：
 
 - Result
 - Preflight
-- Changed Files
-- Architecture / State Ownership
-- Vitest導入内容
-- T1〜T6結果
-- Browser Smoke
-- AC-01〜AC-16
-- Implementation Evidence
-- Design Deviations
+- Current Source Findings
+- Q1〜Q10
+- Recommended Architecture
+- Recommended State / Intent Flow
+- Recommended Time-Step
+- Physics Recommendation
+- Interaction State Transition
+- Parameter vs Runtime Boundary
+- Rejected / Deferred Alternatives
+- Design Conflicts / Ambiguities
+- Next Implementation Sequence
+- User Decisions Required
+- Design Deviations: NONE または詳細
 - Unexpected Scope
-- Known Untested
-- User Play Test: NOT REQUIRED
+- Verification
 - Git delivery
 
-Implementation Evidenceでは最低限：
+図示できる場合は簡潔なASCII diagramを使ってよい。
 
-1. Setup → Runtime ownership boundary
-2. Phaser-free Simulation
-3. State alias protection
-4. BoutScene integration
-5. Test foundation
-6. No speculative Gameplay implementation
+## 11. User Play Test
 
-Design Deviationsがなければ：
+NOT REQUIRED for Investigation acceptance。
 
-`Design Deviations: NONE`
+ただしCompletion ReportのNext Implementation Sequenceでは、
+Movement Feel / control feel / push feel等、どのTaskからUser Play Testを必須Gateにすべきか提案すること。
 
-## 14. Git Delivery
+## 12. Git Delivery
 
-AGENTS.mdのGitHub Handoff Workflowに従う。
+Investigation-only Report Commit Exceptionを使用する。
 
-成功時はTask-owned Files + CURRENT_COMPLETION_REPORTを1 Agent Task Commitにまとめ、`origin/develop`へpush。
+成功した調査結果またはreportable BLOCKEDの場合：
+
+- Production Sourceを変更しない
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` だけを明示Stage
+- `git diff --check`
+- Report-only 1 commit
+- `origin/develop`へpush
+- remote SHA / clean working tree確認
 
 Commit message例：
 
-`feat: add bout simulation foundation`
+`docs(agent): investigate action movement architecture`
 
-mainは変更しない。
+## 13. Final Instruction
 
-## 15. Final Instruction
+このTaskでは設計調査まで。
 
-このTask完了後、Movement / Input / Push / Physics / CPU等へ自主的に進まない。
+Movement / Input / Physics / fixed-step等をProductionへ実装しない。
 
-Commit / Push / Report完了後停止し、
+Report Commit / Push後停止し、
 
-「FOUNDATION-02-BOUT-SIMULATION-FOUNDATION が完了し、ChatGPT Review待ちです」
+「ACTION-01-MOVEMENT-INPUT-TIMESTEP-INVESTIGATION が完了し、ChatGPT Review待ちです」
 
 と日本語で報告する。
-
-
-# Final ChatGPT Review
-
-Overall Result: PASS WITH CORRECTION
-
-## Accepted Baseline
-
-- Accepted implementation commit: `572990944674f82f31964f8c27b369eaf26faefc`
-- Agent-Start-Head: `e41f772974ea85591b943576ab88bc7d9942d507`
-- Agent Task Diff is one implementation commit.
-- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
-- Vitest is now part of the Current Technology baseline (`pnpm test = vitest run`).
-
-## Accepted Decisions
-
-- Bout runtime canonical state is owned by Pure TypeScript `BoutSimulation`.
-- `BoutSetup` is the explicit future Management / game-state → Bout boundary; Management State itself is not Bout runtime canonical state.
-- `BoutSimulation` copies setup data and does not alias caller-owned mutable objects.
-- `getSnapshot()` returns fresh data so consumer mutation cannot change canonical simulation state.
-- `BoutTypes.ts` / `BoutSimulation.ts` have no Phaser dependency.
-- `BoutScene` is presentation-only and reads a Simulation snapshot; it does not own canonical participant position.
-- Simulation logical coordinates are separated from the Phaser canvas through a presentation mapping in the Scene.
-- A bout currently requires exactly two participants. This is consistent with the sumo bout domain and may remain unless a future explicit requirement changes it.
-- No movement, timestep, Physics, push, stamina, balance, CPU, ring-out or victory semantics have been prematurely defined.
-- Current ring radius, positions, logical coordinate scale, colors and canvas mapping are Prototype values, not final accepted gameplay values.
-- The previous stale `public/` Current-State entry in `AGENTS.md` has been corrected without recreating an empty directory.
-
-## Corrections
-
-### C-1 — Participant identity must not become presentation-role identity
-
-The current Prototype Scene uses:
-
-`PARTICIPANT_STYLE[participant.id]`
-
-with the fixture IDs `player` / `cpu`.
-
-This is acceptable for the current static Prototype, but it is **not an accepted long-term architecture contract**.
-
-Future Management integration may use stable wrestler identities that are not literally `player` / `cpu`. Before arbitrary wrestler IDs are introduced, presentation role / side / styling must be separated from canonical participant identity, or otherwise mapped explicitly outside the Simulation.
-
-Do not add a speculative role system now. Resolve this only when the next relevant input / participant / Management integration design requires it.
-
-## Do Not Reopen
-
-- Do not move canonical Bout state into Phaser GameObjects or Scene fields.
-- Do not pass future Management State objects directly into the Simulation as shared mutable runtime state.
-- Do not expose mutable canonical state to Presentation consumers.
-- Do not add Physics, movement, velocity, fixed-step, delta-time semantics or push formulas without a dedicated design Task.
-- Do not introduce ECS / DI / global Event Bus / generic rule engine / plugin architecture for this small simulation.
-- Do not treat Prototype ring/spawn/scale/style constants as final game design.
-
-## Deferred
-
-- Player input and movement
-- Fixed-step / delta-time / simulation cadence
-- Collision / separation / Physics adoption
-- Push interaction
-- stamina / balance / wrestler stats
-- CPU behavior
-- ring-out / victory
-- tachiai / clinch / throws / kimarite
-- Management → Bout conversion and real wrestler identity integration
-- Result / Reward / Stable / Training loop
-- Playwright
-- CrazyGames SDK
-- Mobile / touch / multi-viewport verification
-
-## User Play Test
-
-NOT REQUIRED for FOUNDATION-02.
-
-The Browser Smoke is accepted as Technical Verification only. No Game Feel has been accepted by this Task.
-
-## Regression Risks
-
-- Scene or Phaser GameObjects becoming a second canonical position/state source.
-- Future Setup fields retaining mutable references from Management State.
-- Returning live internal state instead of isolated snapshots.
-- Conflating stable wrestler identity with Player/CPU presentation role.
-- Choosing movement timestep / Physics architecture opportunistically inside an implementation Task.
-
-## Next Task Constraints
-
-The next high-risk Action step should not jump directly to a full push/collision implementation.
-
-Before movement and pushing are implemented, explicitly design or investigate:
-- player input intent boundary,
-- simulation movement ownership,
-- fixed-step vs delta-time semantics,
-- coordinate/time units,
-- Scene synchronization from Simulation,
-- whether Phaser Physics is needed at all.
-
-A small Investigation / design Task is preferred before implementing Movement / Collision / Push.
-
-Do not add Management systems yet; Action foundation remains the current priority.
