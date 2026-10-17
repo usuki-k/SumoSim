@@ -1,5 +1,5 @@
 Task-ID: ACTION-01-MOVEMENT-INPUT-TIMESTEP-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / ACTION ARCHITECTURE DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -504,3 +504,143 @@ Report Commit / Push後停止し、
 「ACTION-01-MOVEMENT-INPUT-TIMESTEP-INVESTIGATION が完了し、ChatGPT Review待ちです」
 
 と日本語で報告する。
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS / USER DECISION REQUIRED BEFORE ACTION-02
+
+## Accepted Baseline
+
+- Investigation report commit: `3fa3c446361db136e60e93fd308bd9210c8f6586`
+- Agent-Start-Head: `073277f1092bea8113a7e7693ede1aae0b6eceba`
+- Agent Task Diff is exactly one Report-only commit.
+- The only changed repository file is `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
+- Production Source / package / lockfile were not changed.
+- `main` remains outside this normal develop workflow and is unchanged by this Task.
+
+## Accepted Decisions
+
+- Gameplay Core uses custom Pure TypeScript movement/state, not Phaser Arcade Physics or Matter.js as the gameplay Source of Truth.
+- Simulation cadence uses a fixed timestep with an accumulator at the Phaser/integration boundary.
+- Initial simulation rate may use 60 Hz as a provisional technical value for ACTION-02 Play Test; it is not a final gameplay constant.
+- `BoutSimulation.step()` advances one logical tick and does not consume render-frame delta directly.
+- Raw keyboard/touch/gamepad keys do not enter the Simulation. Input adapters produce semantic Participant Intent.
+- Player and future CPU should feed the same Simulation intent contract.
+- Continuous movement input and edge-triggered action input are distinct; action edges must be buffered/consumed exactly once across 0..N fixed ticks per render frame.
+- Canonical position / velocity / facing stay in Pure TypeScript Simulation. Scene/GameObject position is presentation only.
+- Logical gameplay units are independent of canvas pixels. Meter/second-based units are accepted as an internal direction; concrete ring/spawn/movement values remain provisional.
+- Interaction is a bout-level relationship represented minimally as FREE / GRAPPLED / LIFTED; Bout Phase and Bout Outcome remain separate concepts.
+- In LIFTED, the lifter is the movement owner and the lifted participant does not perform independent normal movement.
+- Facing is canonical runtime state. Initial ACTION-02 behavior may auto-face the opponent immediately each tick; future turn limits/action locks may refine this.
+- ACTION-02 may introduce velocity as the only momentum-related runtime foundation. Balance/Stamina/CurrentAction/etc. remain deferred until first needed.
+- Future Rikishi attributes enter Bout through copied immutable Setup data; Management State is not shared as mutable Bout runtime state.
+- Stable wrestler identity remains separate from Player/CPU control role and presentation style.
+
+## Corrections
+
+### C-1 — WASD reference frame is blocking for ACTION-02
+
+The Report lists U1 as non-blocking and recommends screen/world-relative movement by default.
+
+This is a user-facing control semantic and must not be silently fixed by the Agent.
+
+Before ACTION-02 is registered, User must choose one:
+
+A. Screen/world-relative:
+- W = screen up, S = screen down, A/D = screen left/right
+- wrestler still auto-faces opponent
+- movement therefore naturally includes strafing/backpedaling relative to facing
+
+B. Wrestler-relative:
+- W = toward current facing/opponent
+- S = backward
+- A/D = left/right strafe relative to current facing
+
+The Simulation intent boundary can support either; this decision belongs in the input adapter semantics.
+
+### C-2 — ACTION-03 Push/Collision requires its own design gate
+
+Do not move directly from Movement Play Test into a combined Production implementation of:
+body contact + separation + push + ring-out.
+
+Movement/Collision/Push are high-risk Game Feel/Core Rule areas.
+
+After ACTION-02 is implemented and User Play Tested, perform a focused Push/Contact/Collision Investigation or Design Task before its Production implementation.
+
+That Task should define at minimum:
+- body/contact representation
+- overlap/separation semantics
+- push/impulse ownership
+- mass/weight influence boundary
+- momentum transfer boundary
+- edge/ring-out geometric criterion
+- numerical stability / fixed-tick boundary cases
+- what is tuning vs accepted rule
+
+### C-3 — Control-role separation is required; a framework is not
+
+The requirement to separate stable participant identity from Player/CPU controller role is Accepted.
+
+However, `BoutControlAssignment` is a conceptual name, not a required new framework/class.
+ACTION-02 should implement the smallest explicit mapping needed and avoid speculative controller architecture.
+
+## Do Not Reopen
+
+- Do not use Phaser Physics as Gameplay Core without a future explicit architecture change.
+- Do not make Phaser GameObject positions canonical.
+- Do not feed raw keys directly into BoutSimulation.
+- Do not use render delta directly for gameplay advancement.
+- Do not add Balance/Stamina/Action/Event placeholder fields before a Task needs them.
+- Do not treat 60 Hz, meter-scale fixture values, acceleration values, ring radius, spawn positions or movement constants as final accepted tuning.
+- Do not add generic State Machine / ECS / Event Bus / controller framework.
+- Do not conflate wrestler identity with player/CPU role.
+
+## Deferred
+
+- Exact ACTION key bindings
+- Tachiai input confirmation semantics
+- GRAPPLED symmetric vs asymmetric grip details
+- render interpolation
+- turn-rate limits / facing lock
+- body collision / separation
+- push / momentum transfer formulas
+- ring-out criterion
+- stamina / balance
+- tachiai implementation
+- grapple / throw / lift implementation
+- CPU gameplay behavior
+- real Rikishi attributes
+- custom techniques
+
+## User Play Test
+
+- ACTION-01 Investigation: NOT REQUIRED.
+- ACTION-02 Movement Foundation: REQUIRED for movement/control feel.
+- Push/Contact implementation: REQUIRED for push/impact/edge feel after its design gate.
+
+## Regression Risks
+
+- Accumulator/tick orchestration leaking gameplay rules into BoutScene instead of remaining a small testable integration boundary.
+- An action edge being lost or fired multiple times when a render frame executes 0 or multiple simulation ticks.
+- Scene position becoming a second source of truth.
+- Future collision code relying on frame delta rather than fixed ticks.
+- Prototype movement constants becoming accidental permanent balance rules.
+- Over-generalizing control assignment before CPU/Touch actually require it.
+
+## Next Task Constraints
+
+1. Resolve C-1 with User before ACTION-02 task creation.
+2. Then create ACTION-02 Movement Foundation only:
+   - fixed-step integration
+   - semantic movement intent
+   - velocity + provisional accel/decel/max speed
+   - canonical facing
+   - keyboard adapter
+   - minimal identity→controller/presentation separation
+   - meter-to-pixel presentation mapping
+   - automated deterministic/fixed-step tests
+   - Browser Smoke
+   - User Play Test
+3. Do not include body collision, push, ring-out, Tachiai, Grapple or CPU gameplay logic in ACTION-02.
+4. After ACTION-02 User Play Test, design/investigate Push/Contact/Collision before implementing it.
