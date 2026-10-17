@@ -580,15 +580,106 @@ describe('contact & separation (ACTION-03A)', () => {
     expect(run()).toEqual(run())
   })
 
-  it('records the position-correction creep of a stationary body pushed against (finding)', () => {
-    // Symmetric separation moves the stationary body slightly while the other keeps walking in.
+  it('T29: walking into a stationary body never moves it (no implicit positional push)', () => {
     const sim = new BoutSimulation(setupAt(-1, 0, 0, 0))
-    stepN(sim, 200, intentsFor(1, 0))
-    const bx0 = sim.getSnapshot().participants[1].position.x
-    stepN(sim, 60, intentsFor(1, 0))
-    const creepPerSecond = sim.getSnapshot().participants[1].position.x - bx0
-    expect(creepPerSecond).toBeGreaterThan(0)
-    expect(creepPerSecond).toBeLessThan(0.2)
+    for (let i = 0; i < 600; i++) {
+      sim.step(intentsFor(1, 0))
+      const [, q] = sim.getSnapshot().participants
+      expect(q.position).toEqual({ x: 0, y: 0 })
+      expect(q.velocity).toEqual({ x: 0, y: 0 })
+    }
+    const [p] = sim.getSnapshot().participants
+    expect(dist(sim)).toBeCloseTo(COMBINED, 9)
+    const settled = p.position.x
+    stepN(sim, 120, intentsFor(1, 0))
+    expect(Math.abs(sim.getSnapshot().participants[0].position.x - settled)).toBeLessThan(1e-9)
+  })
+
+  it('T30: the mirrored one-sided walk-in leaves A unchanged', () => {
+    const sim = new BoutSimulation(setupAt(0, 0, 1, 0))
+    for (let i = 0; i < 600; i++) {
+      sim.step(intentsFor(0, 0, -1, 0))
+      const [p] = sim.getSnapshot().participants
+      expect(p.position).toEqual({ x: 0, y: 0 })
+      expect(p.velocity).toEqual({ x: 0, y: 0 })
+    }
+    expect(dist(sim)).toBeCloseTo(COMBINED, 9)
+  })
+
+  it('T31: equal head-on walk-in splits the correction evenly and settles', () => {
+    const sim = new BoutSimulation(setupAt(-1, 0, 1, 0))
+    stepN(sim, 300, intentsFor(1, 0, -1, 0))
+    const [p, q] = sim.getSnapshot().participants
+    expect(p.position.x + q.position.x).toBeCloseTo(0, 9) // symmetric about the start midpoint
+    expect(dist(sim)).toBeCloseTo(COMBINED, 9)
+    const x = p.position.x
+    stepN(sim, 200, intentsFor(1, 0, -1, 0))
+    expect(Math.abs(sim.getSnapshot().participants[0].position.x - x)).toBeLessThan(1e-9)
+  })
+
+  it('T32: unequal inward motion splits the correction by contribution ratio', () => {
+    // A walks in at full input; B walks in slowly (target speed below one acceleration step).
+    const sim = new BoutSimulation(setupAt(0, 0, COMBINED + 0.003, 0))
+    const before = sim.getSnapshot().participants
+    sim.step(intentsFor(1, 0, -0.04, 0))
+    const [p, q] = sim.getSnapshot().participants
+    // Free displacement this tick: A forward by vA*dt, B toward A by vB*dt 
+    const vA = FORWARD_ACCELERATION * TICK_SECONDS
+    const vB = 0.04 * MAX_SPEED // below one acceleration step, so reached in a single tick
+    const gap = COMBINED + 0.003 - (vA + vB) * TICK_SECONDS
+    expect(gap).toBeLessThan(COMBINED) // overlap occurs
+    const overlap = COMBINED - gap
+    const shareA = vA / (vA + vB)
+    const moveA = p.position.x - before[0].position.x
+    const moveB = q.position.x - before[1].position.x
+    expect(moveA).toBeCloseTo(vA * TICK_SECONDS - overlap * shareA, 10)
+    expect(moveB).toBeCloseTo(-vB * TICK_SECONDS + overlap * (1 - shareA), 10)
+    // higher inward contributor is moved back by more
+    expect(overlap * shareA).toBeGreaterThan(overlap * (1 - shareA))
+    expect(dist(sim)).toBeCloseTo(COMBINED, 10)
+  })
+
+  it('T33: pre-existing overlap with no movement falls back to an even split', () => {
+    const ordinary = new BoutSimulation(setupAt(0, 0, 0.5, 0))
+    ordinary.step(NO_INTENT)
+    const [p, q] = ordinary.getSnapshot().participants
+    expect(p.position.x).toBeCloseTo(-(COMBINED - 0.5) / 2, 10)
+    expect(q.position.x).toBeCloseTo(0.5 + (COMBINED - 0.5) / 2, 10)
+    expect(dist(ordinary)).toBeCloseTo(COMBINED, 10)
+
+    const same = new BoutSimulation(setupAt(0.2, -0.1, 0.2, -0.1))
+    same.step(NO_INTENT)
+    const [sp, sq] = same.getSnapshot().participants
+    expect(sp.position.x + sq.position.x).toBeCloseTo(0.4, 10)
+    expect(dist(same)).toBeCloseTo(COMBINED, 10)
+    for (const s of [sp, sq]) {
+      expect(Number.isFinite(s.position.x) && Number.isFinite(s.position.y)).toBe(true)
+    }
+  })
+
+  it('T34: circling a stationary body for 30 seconds never displaces it', () => {
+    const sim = new BoutSimulation(setupAt(-0.4, 0.55, 0, 0))
+    for (let i = 0; i < 1800; i++) {
+      const [p, q] = sim.getSnapshot().participants
+      const dx = q.position.x - p.position.x
+      const dy = q.position.y - p.position.y
+      const d = Math.hypot(dx, dy)
+      sim.step(intentsFor(-dy / d, dx / d)) // steer along the tangent
+    }
+    const [p, q] = sim.getSnapshot().participants
+    expect(q.position).toEqual({ x: 0, y: 0 })
+    expect(Math.hypot(p.velocity.x, p.velocity.y)).toBeGreaterThan(MAX_SPEED * 0.99)
+    expect(dist(sim)).toBeGreaterThanOrEqual(COMBINED - 1e-9)
+  })
+
+  it('T34: glancing walk-in keeps tangential motion and does not translate the stationary body', () => {
+    const sim = new BoutSimulation(setupAt(-0.4, 0.55, 0, 0))
+    const start = sim.getSnapshot().participants[0].position
+    stepN(sim, 120, intentsFor(1, -0.2))
+    const [p, q] = sim.getSnapshot().participants
+    expect(q.position).toEqual({ x: 0, y: 0 })
+    expect(Math.hypot(p.position.x - start.x, p.position.y - start.y)).toBeGreaterThan(0.3)
+    expect(dist(sim)).toBeGreaterThanOrEqual(COMBINED - 1e-9)
   })
 })
 

@@ -52,5 +52,5 @@ Small explicit designを優先し、過剰なFramework、ECS、DI Framework、Gl
 - 単位: simulationはmeter、m/s、radian。meter→pixelのscale + translateはScene側（presentation）。
 - Vitest導入済み（`pnpm test`）。
 - 速度・加速度・減速度・tick rate・ring半径・spawn位置・body半径・色・logical sizeはPrototype / 暫定値でありFinal値ではない（User Play Testで調整する）。
-- Contact（ACTION-03A）: 各participantはSimulation所有の円（`bodyRadius`、Snapshotで公開。暫定で同値0.35m）を持つ。`step()`の順序は 移動入力のsanitize → grounded self velocity更新 → position積分 → contact解決 → facing更新。contact解決は、`CONTACT_SLOP`付きの距離判定、法線A→B（同一点ならAのfacing方向）、接近方向の法線速度成分のみ除去（接線成分は保持、反発なし）、重なりの対称な位置補正（質量重み付けなし）。非接触時の移動はACTION-02Bと同一。
+- Contact（ACTION-03A）: 各participantはSimulation所有の円（`bodyRadius`、Snapshotで公開。暫定で同値0.35m）を持つ。`step()`の順序は 移動入力のsanitize → grounded self velocity更新 → position積分 → contact解決 → facing更新。contact解決は、`CONTACT_SLOP`付きの距離判定、法線A→B（同一点ならAのfacing方向）、接近方向の法線速度成分のみ除去（接線成分は保持、反発なし）、重なりの位置補正（接近方向のself velocity成分＝inward contributionの比で配分し、静止している側は動かさない。寄与が無い場合は動いている側のみ、両方または両方動いていなければ50/50。質量重み付けなし）。非接触時の移動はACTION-02Bと同一。
 - 未実装: 押し / externalVelocity / mass / ring-out / 勝敗、立合い、組み・投げ・吊り、能力値、stamina / balance、CPU、Touch / Gamepad、render interpolation、Physics。

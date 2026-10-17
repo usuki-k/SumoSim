@@ -24,6 +24,9 @@ export const BODY_RADIUS = 0.35 // m
 // Contact is detected within this distance of touching, so resting contact does not flicker.
 export const CONTACT_SLOP = 0.002 // m
 
+// Inward self-velocity sums at or below this (m/s) count as no contribution.
+const INWARD_EPSILON = 1e-9
+
 // Below this center distance the contact normal is undefined and a fallback is used.
 const MIN_CONTACT_DISTANCE = 1e-9
 
@@ -176,8 +179,8 @@ export class BoutSimulation {
     }
   }
 
-  // Two-circle contact: removes the closing normal self velocity (tangential kept) and separates
-  // any overlap symmetrically (equal participants; no mass weighting yet).
+  // Two-circle contact: removes the closing normal self velocity (tangential kept) and separates any
+  // overlap, assigning the correction by each participant's inward contribution (no mass weighting).
   private resolveContact(): void {
     const [a, b] = this.participants
     const dx = b.position.x - a.position.x
@@ -197,23 +200,40 @@ export class BoutSimulation {
       ny = Math.sin(a.facing)
     }
 
-    const closingA = a.velocity.x * nx + a.velocity.y * ny // A moving toward B
-    if (closingA > 0) {
-      a.velocity.x -= closingA * nx
-      a.velocity.y -= closingA * ny
+    // Inward contributions are captured before the closing velocity is removed; they decide who
+    // "caused" the penetration and therefore who is moved back.
+    const inwardA = Math.max(0, a.velocity.x * nx + a.velocity.y * ny) // A moving toward B
+    const inwardB = Math.max(0, -(b.velocity.x * nx + b.velocity.y * ny)) // B moving toward A
+    if (inwardA > 0) {
+      a.velocity.x -= inwardA * nx
+      a.velocity.y -= inwardA * ny
     }
-    const closingB = -(b.velocity.x * nx + b.velocity.y * ny) // B moving toward A
-    if (closingB > 0) {
-      b.velocity.x += closingB * nx
-      b.velocity.y += closingB * ny
+    if (inwardB > 0) {
+      b.velocity.x += inwardB * nx
+      b.velocity.y += inwardB * ny
     }
 
     if (distance < combined) {
-      const half = (combined - distance) / 2
-      a.position.x -= nx * half
-      a.position.y -= ny * half
-      b.position.x += nx * half
-      b.position.y += ny * half
+      const overlap = combined - distance
+      // Share of the correction applied to A. Only the participant moving inward is moved back, so a
+      // stationary body is never displaced (no implicit positional push). With no meaningful inward
+      // contribution (setup overlap, same center) fall back to an even split.
+      const inwardSum = inwardA + inwardB
+      let shareA = 0.5
+      if (inwardSum > INWARD_EPSILON) {
+        shareA = inwardA / inwardSum
+      } else {
+        // Overlap without inward motion (e.g. curvature while circling): still never displace a
+        // body that is not moving. Even split only when both or neither are moving.
+        const aMoving = Math.hypot(a.velocity.x, a.velocity.y) > INWARD_EPSILON
+        const bMoving = Math.hypot(b.velocity.x, b.velocity.y) > INWARD_EPSILON
+        if (aMoving && !bMoving) shareA = 1
+        else if (bMoving && !aMoving) shareA = 0
+      }
+      a.position.x -= nx * overlap * shareA
+      a.position.y -= ny * overlap * shareA
+      b.position.x += nx * overlap * (1 - shareA)
+      b.position.y += ny * overlap * (1 - shareA)
     }
   }
 
