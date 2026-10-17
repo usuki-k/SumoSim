@@ -768,3 +768,37 @@ If rejected:
 2. Do not create Counter / Ring-out / parameter implementation before Push Feel is accepted.
 3. Preserve one-keydown-one-action semantics unless User explicitly changes it.
 4. If User accepts Push but wants the opponent to push back interactively, use the smallest dummy-controller test path before introducing full CPU AI.
+
+
+# User Play Test Result — 2026-10-18
+
+Push Feel: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- Current discrete Push is acceptable for now.
+- One-press Action semantics, timing, recovery, steering lock, and return to WASD are acceptable as the working baseline.
+- The forward step distance feels slightly short, but this is not a blocker at the current stage.
+- The amount the opponent moves is also acceptable for the current equal-stat Prototype.
+- Both forward step distance and opponent displacement are expected to be revisited when later parameters / balance (e.g. Weight / Power / LowerBody and related Push tuning) are introduced.
+
+Accepted baseline:
+- ArrowUp remains the temporary Prototype Push key.
+- Push remains one keydown = one discrete action.
+- Startup / Active / Recovery structure remains.
+- Push direction remains locked during the action.
+- Action-time steering lock remains.
+- Model B selfVelocity / externalVelocity separation remains.
+- Current Push/contact behavior is accepted as the working baseline.
+
+Deferred tuning:
+- Push forward step distance
+- opponent displacement amount
+- phase timings
+- PUSH_EXTERNAL_ACCELERATION / EXTERNAL_DECELERATION / MAX_EXTERNAL_SPEED
+- future parameter-derived differences
+
+Do not reopen these values preemptively without a concrete later interaction requirement, regression, or User feedback.
+
+Next-step choice remains open:
+- validate incoming / contested Push with the smallest dummy opponent first, or
+- move to focused design of the next counter interaction (Down pull / deflection), preserving the accepted Push baseline.
