@@ -1,5 +1,5 @@
 Task-ID: FOUNDATION-01-PHASER-BOOTSTRAP
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PHASER FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -336,3 +336,90 @@ Commit / Push / Completion Reportまで完了したら停止し、
 「FOUNDATION-01-PHASER-BOOTSTRAP が完了し、ChatGPT Review待ちです」
 
 と日本語で報告する。
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTION
+
+## Accepted Baseline
+
+- Accepted implementation commit: `d0b81c29bb10af0ba05863f38643d73ca234f170`
+- Agent-Start-Head: `b91ff9f8f7e2b7afd0b25937f717442505132fec`
+- Agent Task Diff is one implementation commit.
+- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
+
+## Accepted Decisions
+
+- Vite starter presentation has been removed.
+- `src/main.ts` is the Phaser game bootstrap entry.
+- `src/game/scenes/BoutScene.ts` is the first independent Phaser Scene.
+- The current Bout foundation is presentation-only: ring + Player / CPU placeholders.
+- The current logical size, colors, positions and dimensions are provisional and are not accepted final gameplay / resolution values.
+- No Gameplay Simulation, input, movement, Physics, CPU AI, stamina, balance, ring-out or victory rules are present yet.
+- Pure TypeScript Simulation → State / Results → Phaser Presentation remains the architecture baseline.
+- No new dependency was introduced.
+
+## Corrections
+
+### C-1 — AGENTS.md Current directory description
+
+The implementation deleted all Vite starter files under `public/`, so the `public/` directory no longer exists in the committed tree.
+
+However, `AGENTS.md` §5 still lists:
+
+`public/ — static assets`
+
+under a section labeled `Current`.
+
+This is a minor Current-State documentation mismatch. It does not affect the implementation or architecture, but a later documentation/source-structure synchronization Task should either:
+
+- remove that Current entry while the directory is absent, or
+- reintroduce `public/` only when a real static asset is actually needed.
+
+Do not create an empty `public/` directory solely to satisfy the document.
+
+## Do Not Reopen
+
+- Do not reintroduce the Vite starter UI/assets.
+- Do not move gameplay formulas into `BoutScene`.
+- Do not introduce Physics merely because the bout is top-down.
+- Do not treat 640x640, current colors, ring radius, placeholder positions, or placeholder sizes as final accepted design values.
+- Do not add React / Zustand / ECS / DI / Event Bus / generic framework as part of the foundation.
+
+## Deferred
+
+- Pure TypeScript Bout Simulation
+- Player movement and input
+- CPU behavior
+- Collision / separation / Physics adoption decision
+- stamina / balance / push mechanics
+- ring-out / victory
+- tachiai / clinch / throws / kimarite
+- Training / Stable / Result / Reward loop
+- Vitest
+- Playwright
+- CrazyGames SDK
+- Aseprite / Tiled
+- final resolution / responsive / mobile controls
+
+## User Play Test
+
+NOT REQUIRED for this Task.
+
+The reported Browser Smoke is technical evidence only. It does not constitute Game Feel acceptance.
+
+## Regression Risks
+
+- Future work accidentally putting gameplay state/formulas directly into `BoutScene`.
+- Treating provisional presentation constants as final design.
+- Adding Physics before the gameplay movement/push model is designed.
+- Reintroducing unnecessary starter/framework assets.
+
+## Next Task Constraints
+
+The next Task should remain small and should not jump directly into full sumo gameplay.
+
+Before implementing high-risk movement / pushing / collision behavior, preserve the architecture boundary and decide the next smallest independently verifiable step.
+
+The minor `AGENTS.md` Current-state correction above may be included in a future documentation synchronization Task or in a later Task that already has an explicit documentation-current-state scope. It is not a reason to reopen FOUNDATION-01.
