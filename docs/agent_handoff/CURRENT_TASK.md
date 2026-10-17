@@ -1,470 +1,371 @@
-Task-ID: ACTION-02-MOVEMENT-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / ACTION MOVEMENT FOUNDATION
+Task-ID: ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION
+Status: READY
+Task-Type: IMPLEMENTATION / FOCUSED GAME FEEL CORRECTION
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 572990944674f82f31964f8c27b369eaf26faefc
+Source-Baseline: 8b9acf7444c13648ea36b603b9c642d7c07ca046
 Handoff-Mode: GITHUB
 
-# ACTION-02 — Movement Foundation
+# ACTION-02B — Grounded Movement Feel Correction
 
 ## 1. Purpose
 
-ACTION-01で確定したArchitectureに従い、SumoSimの最初の動くAction foundationを実装する。
+ACTION-02のMovement ArchitectureはTechnical PASSだが、User Play TestでMovement Feelは未受理。
 
-今回の中心は：
+User feedback:
 
-- screen/world-relative WASD movement
-- semantic movement intent
+- 現在は「スケートリンクを滑っている」ように感じる
+- もう少し「人間が移動している」「足で踏ん張っている」重さが欲しい
+
+このTaskではArchitectureを変更せず、Movement model / provisional tuningだけをFocusedに修正する。
+
+目標は：
+
+- 発進には少し重さがある
+- 入力中は意図した方向へしっかり進む
+- キーを離すと足で踏ん張るように止まる
+- 方向転換時に横滑り・円弧状の慣性を引きずりすぎない
+- 逆方向入力時は一度現在の勢いを殺してから反対方向へ移る感覚
+- screen-relative WASDとauto-facingは維持
+
+Technical PASSだけでは受理しない。最終GateはUser Play Test。
+
+## 2. Current Baseline / Handoff
+
+Accepted Production Source Baseline:
+
+`8b9acf7444c13648ea36b603b9c642d7c07ca046`
+
+Current developにはChatGPT Review / User Play Test feedbackのcoordination-only commitsが存在する。
+AGENTS.mdのRemote-Task-First Preflightに従い、Source-Baseline..origin/developが`docs/agent_handoff/`のみであることを確認してFF-onlyすること。
+
+ACTION-02 Technical ArchitectureはAccepted:
+
+- screen/world-relative WASD
+- Pure TypeScript BoutSimulationがcanonical position / velocity / facing owner
 - fixed timestep + accumulator
-- canonical position / velocity / facing in Pure TypeScript BoutSimulation
-- Phaser Sceneへの一方向Snapshot同期
-- stable participant identityとPlayer/CPU control roleの分離
-- logical meter units → canvas presentation mapping
+- 60Hzは暫定technical value
+- raw keysはSimulationへ入れない
+- SceneはSnapshotを一方向描画
+- meter / m/s / radian logical units
+- auto-facingはSimulation rule
+- Phaser Physics / Matter.jsをGameplay Coreに使わない
+- stable participant identityとcontrol/presentation roleを分離
+- Collision / Push / Ring-out等は未実装
 
-まで。
+変更してよいのはMovement Feelに必要な最小範囲だけ。
 
-Collision / Push / Ring-out / Tachiai / Grapple / Throw / Lift等は実装しない。
+## 3. User Play Test Result
 
-このTaskのTechnical Completion後、User Play Testでmovement/control feelを確認する。
+Movement Feel: NOT ACCEPTED YET
 
-## 2. Current Baseline / Review Handoff
+UserがRejectしたのはArchitectureではなく現在の移動感。
 
-Accepted Production Baseline:
+Current provisional model:
 
-`572990944674f82f31964f8c27b369eaf26faefc`
+- MAX_SPEED = 3 m/s
+- ACCELERATION = 12 m/s²
+- DECELERATION = 15 m/s²
+- velocity全体をtarget velocityへ等方的に近づける
 
-Current developにはACTION-01 Investigation ReportとChatGPT Review coordination commitsが存在する。
-AGENTS.mdのRemote-Task-First Preflightに従い、Source-Baseline..origin/develop が `docs/agent_handoff/` のみであることを確認してFF-onlyすること。
+この方式により、方向転換時にも横方向のvelocityが滑らかに残り、
+「慣性を持つ円が氷上を滑る」感覚が出ている。
 
-ACTION-01 Accepted Decisions:
+今回の修正は「慣性を完全に無くす」ことではない。
+後続のMomentum / Push拡張に耐えるvelocity stateは維持する。
 
-- Gameplay CoreはCustom Pure TypeScript。Phaser Arcade Physics / Matter.jsをGameplay Coreにしない
-- fixed timestep + accumulator
-- `BoutSimulation.step()` はrender deltaを直接受けず、1 logical tick進める
-- canonical position / velocity / facingはSimulation側
-- raw keyboard inputをSimulationへ渡さない
-- Player / future CPUはsemantic Intent contractを共有する方向
-- Scene/GameObject positionはPresentationのみ
-- logical gameplay unitsはcanvas pixelから分離
-- internal unitはmeter/second方向
-- 60 HzはACTION-02用の暫定technical value。Final値ではない
-- velocityはACTION-02で導入してよい
-- Balance / Stamina / CurrentAction / events等はまだ追加しない
-- stable wrestler identityとPlayer/CPU roleを分離する
-- render interpolationはDeferred
+## 4. Required Movement Behavior
 
-## 3. User Decision — WASD Semantics
+### 4.1 No input — grounded stop
 
-User承認済み：
+入力が0なら、current velocityを0へ明示的に減速する。
 
-**WASDは画面基準 / world-relativeを採用する。**
+Currentより「踏ん張って止まる」感覚を強めてよい。
 
-つまり：
+ただし瞬間停止に固定しない。
+停止の速さはprovisional tuningとしてUser Play Test対象。
 
-- W = screen/world up
-- S = screen/world down
-- A = screen/world left
-- D = screen/world right
+### 4.2 Same-direction acceleration
 
-力士自身は相手をauto-faceする。
+現在velocityとdesired movementがおおむね同方向の場合：
 
-したがって、相手との位置関係によってWASDは前進・後退・横移動になる。
+- desired directionへ加速
+- max speedまで段階的に到達
+- accelerationは残す
+- immediate teleport / immediate max speedは禁止
 
-Simulationへはraw W/A/S/Dではなくworld-frameのmovement vectorを渡す。
+発進の「重さ」を残す。
 
-## 4. User Direction — Tachiai → Normal Bout
+### 4.3 Perpendicular / turning grip
 
-将来のTachiaiと通常Actionは**シームレス接続を必須としない**。
+desired movement directionに対してcurrent velocityの横成分がある場合、
+そのperpendicular componentを通常加速とは別に強く減衰させる。
 
-許容される方向：
+目的：
 
-Tachiai
-→ 一度結果を解決
-→ その結果からnormal action開始時のinitial positions / state等を決定
-→ Normal Bout開始
+- 90°方向転換で大きな円弧を描いて滑り続けない
+- 足を踏み替えて進行方向を変える感覚を出す
+- screen-relative WASDの応答性を保つ
 
-シームレスに自然かつ単純に作れる場合は将来採用してよいが、Architecture上の必須条件ではない。
+Small explicit vector mathで実装する。
+Physics engineやgeneric locomotion frameworkを導入しない。
 
-ACTION-02ではTachiaiを実装しない。
+### 4.4 Reverse direction
 
-ACTION-02のMovement foundationは、normal action prototypeが直接初期位置から開始できる構造でよい。
-Future Tachiaiがnormal Bout initial conditionsを供給できる余地だけを壊さないこと。
+current velocityとdesired movementが逆向きの場合：
 
-Tachiai用の空Class / Phase Frameworkを先回り作成しない。
+- まず現在方向の勢いを強く減らす
+- その後、新しいdesired directionへ加速する
+- 1 tickで不自然にフルスピード反転しない
 
-## 5. Architecture Constraints
+「重いが滑らない」方向を狙う。
 
-### 5.1 State ownership
+### 4.5 Velocity remains canonical
 
-Pure TypeScript `BoutSimulation` が以下のcanonical stateを所有：
+velocity fieldは削除しない。
 
-- participant position
-- participant velocity
-- participant facing
+後続のPush / Momentumで利用できるcanonical runtime stateとして維持する。
 
-Phaser GameObjectの x/y/rotation はcanonical stateではない。
+Movement Feel修正のためにposition直接補正やPhaser TweenをGameplay movementへ使わない。
 
-SceneからGameplay positionをSimulationへ書き戻さない。
+## 5. Recommended Small Design
 
-### 5.2 Intent boundary
+Current「velocity vectorをtarget velocityへ1種類のrateで追従」から、
+movement intent方向を基準にvelocityを分解するsmall explicit modelを推奨する。
 
-Movement inputはsemantic world-frame vector。
+概念：
 
-最小例：
-
-```ts
-interface ParticipantIntent {
-  readonly move: Vec2
-}
+```
+desired direction
+      │
+      ├─ parallel velocity     → acceleration / reversal braking
+      └─ perpendicular velocity → stronger turn/grip damping
 ```
 
-今回Action command fieldは不要。
-後続Action Taskで同じIntent contractへ拡張できるようsmall explicit designにする。
+必要に応じて以下のnamed provisional constantsへ整理してよい：
 
-Simulation側でもmove vector lengthを最大1へclampし、keyboard/touch/CPU sourceの不正値に依存しない。
+- MAX_SPEED
+- FORWARD_ACCELERATION
+- STOP_DECELERATION
+- TURN_GRIP / LATERAL_DECELERATION
+- REVERSE_BRAKING
 
-### 5.3 Fixed timestep
+名前はCurrent code styleに合わせて調整可。
 
-Initial technical rate:
+すべてPrototype tuning values。
+Final balance / final Rikishi stat semanticsではない。
 
-- 60 Hz provisional
-- Final Game Feel valueではない
+Implementationをより小さく同じbehaviorで実現できる場合は可。
+Materialに異なるmovement semanticsを採用する場合はDesign DeviationとしてSTOP / Reportする。
 
-`BoutSimulation.step(...)` は1 tickだけ進める。
-render deltaMsは受け取らない。
+## 6. Do Not Change
 
-Phaser integration側でaccumulatorを管理する。
+以下はBaseline維持：
 
-- frame deltaをaccumulate
-- fixed step分たまったら0..N tick進める
-- huge frame delta / spiral of deathに小さな明示的capを置く
-- render interpolationは実装しない
+- screen-relative WASD
+- W=-y / S=+y / A=-x / D=+x
+- diagonal normalization
+- fixed timestep + accumulator
+- BoutSimulation canonical ownership
+- 60Hz provisional simulation cadence
+- meter logical units
+- auto-facing
+- identity/control role separation
+- one-way Snapshot rendering
+- opponent stationary
+- no Collision / Push / Ring-out
 
-Accumulator logicはPhaser依存を避け、Vitest可能なsmall Pure TypeScript helper/moduleにすること。
-
-### 5.4 Movement model
-
-ACTION-01 recommendationどおり、velocity + acceleration/deceleration方式を採用する。
-
-Intent
-→ target velocity
-→ acceleration/decelerationでcurrent velocityが追従
-→ position integration
-
-Provisional tuning values：
-
-- max speed
-- acceleration
-- deceleration
-
-はAgentがmovement foundationを成立させる最小のtemporary valuesを選んでよい。
-
-ただし：
-- named constantsにする
-- Completion Reportへ値を記載
-- User Play Test前の暫定値と明記
-- Accepted final balanceとしてDocへ固定しない
-
-参加者間で能力差はまだ付けない。
-Rikishi attributesはまだ追加しない。
-
-### 5.5 Auto-facing
-
-Facingはcanonical runtime stateとして保持する。
-
-ACTION-02では毎simulation tickの終わりに、相手participantのposition方向へ即時auto-faceする。
-
-Facing representation:
-- radians
-- 0 = +x 等、明示的なcoordinate conventionを1つ決めてcomment/documentする
-
-将来のturn rate / action lock / henka / throw rotation等はDeferred。
-
-2 participantが完全に同一点の場合など、方向が定義できないcaseをNaNにしない。
-安全なprevious facing維持等の明示的挙動にする。
-
-### 5.6 Logical units
-
-Simulation positionはmeter-based logical unitsに移行する。
-
-Current 1unit=1px fixtureは廃止。
-
-Prototype ring radius / spawn positionsはmeter-basedのtemporary fixtureへ置き換える。
-exact valuesはFinal Designではない。
-
-Scene側で：
-
-Simulation meters
-→ pixels
-
-のscale + translate mappingを行う。
-
-No unit framework / branded type framework。
-
-## 6. Control / Presentation Separation
-
-Previous Correction C-1をACTION-02で解消する。
-
-Current `player` / `cpu` participant IDをPresentation roleそのものとして扱う構造に依存しないこと。
-
-最低限：
-
-- Simulation participant identity
-- keyboard-controlled participant selection
-- stationary opponent / future CPU role
-- presentation style
-
-をSimulation外で明示的に対応付ける。
-
-ただし `BoutControlAssignment` 等の概念名はFramework要件ではない。
-
-小さなconstant / map / local structureで十分ならそれを優先する。
-
-Future Management wrestler IDが任意文字列でも破綻しない形にする。
-
-## 7. Keyboard Adapter
-
-WASD keyboard stateをworld-frame Vec2へ変換するPresentation/Input側のsmall adapterを作る。
-
-Required behavior：
-
-- W: y negative
-- S: y positive
-- A: x negative
-- D: x positive
-- opposite keys cancel
-- diagonal vector is normalized/clamped so diagonal speedが速くならない
-- Simulationはkeyboard key codeを知らない
-
-具体Key APIはCurrent Phaser 4に自然な方法を使用してよい。
-
-Touch / Gamepadは実装しない。
-
-## 8. Scene Integration
-
-BoutSceneは：
-
-1. BoutSimulationを作る
-2. keyboard movement intentを読む
-3. accumulatorで0..N simulation stepsを実行
-4. latest snapshotを読む
-5. persistent presentation objectsをsnapshotへ同期
-
-する。
-
-毎frame大量にGameObjectを作り直さない。
-
-Player/CPU placeholderの見た目はFoundationとして維持してよい。
-
-Auto-facingがUserから確認できるよう、placeholderへ小さな向きmarker / line等のpresentation-only表示を追加してよい。
-
-OpponentはACTION-02ではstationaryでよい。
-CPU Gameplay Logicは実装しない。
-
-## 9. Scope
+## 7. Scope
 
 変更可：
 
-- `src/game/sumo/` のMovement / Intent / fixed-stepに必要なsmall Pure TypeScript files
-- `src/game/scenes/BoutScene.ts`
-- 必要なら `src/game/input/` 等のsmall keyboard adapter file
-- Existing Bout Types / Simulation / Tests
-- additional focused Vitest files
-- `docs/ARCHITECTURE.md` Current State同期
-- `AGENTS.md` Current Source / Technology / Architectureの時間依存記述の最小同期
+- `src/game/sumo/BoutSimulation.ts`
+- `src/game/sumo/BoutSimulation.test.ts`
+- Movement Feel実装に本当に必要ならsmall Pure helper file / test
+- `docs/ARCHITECTURE.md` Current movement descriptionの最小同期
+- `AGENTS.md` Current Stateの時間依存記述の最小同期
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-新Dependency追加は禁止。
+前Review Correctionとして、AGENTS.mdの
+「Phaser 4.2.1（src/main.tsからGame起動。表示のみのFoundation）」
+というstale wordingを、Current Sourceに合う最小表現へ修正してよい。
 
-## 10. Scope Out
+Scene/Input変更は原則不要。
+Movement Feel correctionに必須でない限り触らない。
+
+## 8. Scope Out
 
 実装しない：
 
-- body collision
-- participant separation
-- push / impulse / pressure
-- ring-out / victory / reset
+- body collision / separation
+- push / impulse
+- ring-out
 - Tachiai
-- FREE / GRAPPLED / LIFTED runtime interaction implementation
-- grapple
-- throw
-- lift
-- thrust
-- pull / counter
-- custom technique
-- Stamina
-- Balance
-- Rikishi attributes / stats
-- CPU gameplay AI
+- FREE / GRAPPLED / LIFTED
+- Grapple / Throw / Lift
+- Thrust / Pull / Counter
+- Stamina / Balance
+- Weight / Power / LowerBody等のRikishi attributes
+- CPU gameplay
 - Touch / Gamepad
+- animation / footstep animation
+- camera / VFX / audio
 - render interpolation
-- Phaser Physics
-- Matter.js
-- animation system
-- camera effects
-- audio
-- management
-- result/reward loop
+- Phaser Physics / Matter.js
+- generic movement framework
+- input event buffering framework
+- short-tap問題の先回り修正
 
-Playerがopponentを通り抜けたりring外へ移動できても、このTaskではexpected。
-Collision / ring boundaryをついでに追加しない。
+今回の「人間らしさ」をAnimationで誤魔化さない。
+まずPure Simulation movementのFeelを改善する。
 
-## 11. Required Automated Verification
+## 9. Required Automated Verification
 
-最低限以下をVitestで確認する。
+Existing T1〜T11 regressionを維持し、Movement model変更に合わせて必要なexpected値のみ更新する。
 
-T1. Same initial setup + same intent sequence → same snapshot/state（deterministic）。
+さらに最低限：
 
-T2. zero movement intentではpositionが移動せず、既存velocityがある場合はdeceleration ruleに従う。
+T12. Grounded stop
+- moving stateからzero intent
+- speedが単調に減少
+- overshoot / reverse / NaNなし
+- finite ticksでexact zeroへ停止
 
-T3. world-frame cardinal movement：
-- up/down/left/rightがcorrect axisへ進む。
+T13. 90-degree turn
+- 右移動中に上入力等へ変更
+- perpendicular旧velocity成分が明示的に減衰
+- 新方向成分が増加
+- 横滑り成分が無制限に残らない
 
-T4. diagonal inputがclampされ、cardinalより高速にならない。
+T14. Reverse
+- 右移動中に左入力
+- 旧方向velocityが減速してから符号反転
+- 1 tickで +MAX_SPEED → -MAX_SPEED にならない
+- reverse transitionがdeterministic
 
-T5. acceleration：
-- velocityがtarget speedへ段階的に近づく。
-- provisional constantsに対してexpected boundaryを確認。
+T15. Same-direction acceleration
+- stopからhold input
+- 段階的に加速
+- max speedを超えない
 
-T6. deceleration：
-- input release後にvelocityが安全に0へ近づき、overshoot / NaNしない。
+T16. Diagonal / arbitrary normalized intent
+- speed advantageなし
+- turn modelでもfinite / stable
 
-T7. fixed-step accumulator：
-- equivalent unclamped elapsed time partitioningで同tick数になる。
-  例：16ms + 17ms等の分割差で結果がframe partitionに依存しない。
-- large delta cap / max steps behaviorも明示Test。
+T17. Frame partition regression
+- fixed-step accumulator architectureは変更されず、同じtick intent sequenceなら同じSimulation結果
 
-T8. auto-facing：
-- participantが相手方向を向く。
-- relative positionsが変われば更新される。
-- coincident positionでもNaN/Infinityにならない。
+T18. Existing alias / snapshot / facing / Phaser-free tests PASS。
 
-T9. snapshot isolation / existing setup alias protection regression PASS。
+Testが特定のFeel値を「最終正解」と固定しすぎないよう、
+behavioral invariantとprovisional constantsに対するfocused assertionを分ける。
 
-T10. Simulation / fixed-step coreにPhaser dependencyがない。
+## 10. Verification Level
 
-T11. keyboard adapterのvector semantics：
-- W/S/A/D
-- opposite cancel
-- diagonal clamp
-
-Test implementationを簡潔に保つ。
-Gameplay formulaをTestのために追加しない。
-
-## 12. Verification Level
-
-Heavy寄りStandard / Movement Foundation。
+Heavy寄りStandard / Game Feel Correction。
 
 Required：
 
 - `pnpm test` PASS
 - `pnpm build` PASS
 - `git diff --check` PASS
-- T1〜T11 evidence
-- Simulation coreにPhaser importなし
+- Existing Movement tests regression PASS
+- T12〜T18 PASS
 - new dependencyなし
+- Simulation core Phaser-free
 - Scope外Gameplayなし
-- Agent Task Diff review
 
 ### Browser Smoke
 
-Browserで最低限確認：
+最低限：
 
-- Phaser Canvas起動
-- runtime errorなし
-- W/A/S/Dでcontrolled participantが画面基準に移動
-- diagonal movementが異常に速く見えない
-- key release後、provisional decelerationで停止
-- opponentはstationary
-- both placeholdersが互いをauto-faceしていることがpresentation markerで確認可能
-- Scene表示がSnapshotに追従
-- Vite starter UIなし
+- Canvas起動 / runtime errorなし
+- WASD screen-relative movement維持
+- key release後に停止
+- 90°方向転換が機能
+- reverse入力が機能
+- auto-facing維持
+- opponent stationary
+- collision / ring boundaryなし
+- Snapshot描画同期維持
 
-Browser automationのためのDependency追加禁止。
+AgentはBrowser Smokeで「人間らしくなった」「Feel改善PASS」と判断しない。
+FeelはUserだけがAcceptする。
 
-## 13. User Play Test — REQUIRED
+## 11. User Play Test — REQUIRED
 
-Technical Verification完了後、UserがBrowserでmovement/control feelを確認する。
+Technical完了後、Userが再度Play Testする。
 
-確認項目：
+比較ポイント：
 
-- 画面基準WASDが直感的か
-- auto-facingしながら横移動/後退する感覚
-- 加速が重すぎない / 軽すぎない
-- 減速が滑りすぎない / 急停止すぎない
-- diagonal movement
-- 反応速度
-- 60Hz fixed-stepで違和感がないか
-- 「相撲Actionの移動土台として調整を続けられそうか」
+1. 前回の「スケートリンクを滑る」感覚が減ったか
+2. 発進時に身体の重さを感じるか
+3. キーを離した時に踏ん張って止まる感じがあるか
+4. 90°方向転換で不自然な横滑りがないか
+5. 逆方向へ切り返した時に、重量感と操作 responsivenessの両方があるか
+6. auto-facingしながらの横移動 / 後退が自然か
+7. 動きが重すぎて操作ストレスになっていないか
+8. 相撲Actionの土台として「人間が足で動いている」方向に近づいたか
 
-Technical PASSだけでMovement Feel Acceptedとしない。
-
-AgentはUser Play Testを自分でPASS扱いしない。
-Completion Reportは：
+Agent Completion Report:
 
 `User Play Test: REQUIRED / NOT RUN`
 
-とする。
+Technical PASS != Movement Feel Accepted。
 
-Technical gatesが全PASSの場合、Production commit/pushは可能。
-ResultはAGENTS vocabularyに従い、User Play Test未実施をKnown Untested / pending acceptanceとして明示する。
+UserがAcceptするまでPush / Contact / Collision Designへ進まない。
 
-## 14. Acceptance Criteria
+## 12. Acceptance Criteria
 
-AC-01: semantic world-frame movement intentが存在し、Simulationはraw keyboardを知らない。
-AC-02: WASDは画面基準で正しくworld vectorへ変換される。
-AC-03: diagonal inputはspeed advantageを生まない。
-AC-04: BoutSimulationがcanonical position / velocity / facingを所有する。
-AC-05: fixed timestepでSimulationがframe-rate-independentに進む。
-AC-06: accumulatorはPure/testableで、large-delta safetyを持つ。
-AC-07: velocity acceleration/deceleration modelがsmall explicit constantsで実装される。
-AC-08: auto-facingがSimulation ruleとして実装される。
-AC-09: meter logical unitsとpixel presentation mappingが分離される。
-AC-10: SceneはSnapshotからpresentation objectを一方向同期する。
-AC-11: stable participant identityとKeyboard/CPU roleをSimulation外で分離する。
-AC-12: Phaser Physics / Matter.jsを使わない。
-AC-13: Collision / Push / Ring-out / Tachiai / Grapple等を実装していない。
-AC-14: T1〜T11 PASS。
-AC-15: `pnpm build` PASS。
-AC-16: Browser Smoke PASS。
-AC-17: Docs Current StateがSourceとMaterialに一致。
+AC-01: ACTION-02 Architectureを維持。
+AC-02: screen-relative WASDを維持。
+AC-03: velocity canonical stateを維持。
+AC-04: zero inputでgrounded stop behaviorを持つ。
+AC-05: turn時のperpendicular slipを明示的に抑える。
+AC-06: reverse時に旧momentumを殺してから新方向へ移るbehaviorを持つ。
+AC-07: same-direction accelerationは段階的。
+AC-08: max speed / diagonal normalization regressionなし。
+AC-09: fixed-step determinism regressionなし。
+AC-10: auto-facing regressionなし。
+AC-11: Collision / Push / Ring-out等のScope creepなし。
+AC-12: T12〜T18 + existing tests PASS。
+AC-13: `pnpm build` PASS。
+AC-14: Browser Smoke PASS。
+AC-15: AGENTS stale Current wordingが同期される。
+AC-16: provisional tuning constantsがCompletion Reportへ明記される。
+AC-17: User Play Test REQUIRED / NOT RUNとして報告。
 AC-18: Scope外変更なし。
-AC-19: User Play TestはREQUIRED / pendingとして正しく報告される。
 
-## 15. Stop Conditions
+## 13. Stop Conditions
 
-以下ではSTOPし、Scopeを広げない：
+STOP：
 
 - Preflight failure
-- Current Source / Review HandoffとのMaterial Conflict
+- Current Source / Review Handoff conflict
+- grounded movementを作るためCollision / Weight / Animation等が必須と判明
+- Architecture変更が必要
 - new dependencyが必要
-- fixed-step設計を成立させるためProduction architectureのMaterial変更が必要
-- movement実装にCollision / Push formulaが必須と判明
-- Phaser 4 input/update behaviorがCurrent assumptionとMaterialに異なる
 - Task外User changes / remote divergence
-- movement constantsをFinal balanceとして固定しないと進めない状況
+- Feel改善のためPhaser Physicsが必要という結論になる
+- Movement semanticsをscreen-relativeから変更する必要が出る
 
-Minor provisional tuningはAgent判断で選択可。
-その場合必ずReportしてUser Play Test対象とする。
+数値tuningのprovisional変更はSTOP不要。
+必ずCompletion Reportに記載しUser Play Testへ渡す。
 
-## 16. Completion Report
-
-AGENTS.mdに従う。
+## 14. Completion Report
 
 最低限：
 
 - Result
 - Preflight
 - Changed Files
-- Implemented Movement Architecture
-- Fixed-Step / Accumulator
-- Keyboard Adapter
-- State Ownership
-- Provisional constants and fixture values
-- T1〜T11
+- Root Cause / Previous Feel
+- Implemented Grounded Movement Model
+- Provisional constants: before → after
+- Direction-change behavior
+- T12〜T18 + regression tests
 - Browser Smoke
-- AC-01〜AC-19
+- AC-01〜AC-18
 - Implementation Evidence
 - Design Deviations
 - Unexpected Scope
@@ -472,201 +373,44 @@ AGENTS.mdに従う。
 - User Play Test: REQUIRED / NOT RUN
 - Git delivery
 
-Implementation Evidence最低限：
+Implementation Evidence：
 
-1. semantic Input boundary
-2. canonical Simulation movement ownership
-3. fixed timestep
-4. accumulator frame partition independence
-5. auto-facing
-6. Scene one-way snapshot sync
-7. identity/control role separation
-8. no Collision/Push/Tachiai scope creep
+1. fixed-step architecture preserved
+2. grounded stop
+3. lateral/turn grip
+4. reverse braking
+5. max speed / diagonal invariants
+6. Simulation ownership preserved
+7. no Collision/Push scope creep
+8. docs Current State correction
 
-Design Deviationsなし：
-
-`Design Deviations: NONE`
-
-## 17. Git Delivery
+## 15. Git Delivery
 
 AGENTS.mdに従う。
 
-成功時：
+Technical PASS時：
 
-- Task-owned filesだけstage
-- focused diff review
-- tests/build/diff-check
-- CURRENT_COMPLETION_REPORTを同じImplementation Commitへ含める
+- Task-owned filesのみstage
+- tests / build / diff-check
+- Completion Reportを同Commitへ含める
 - 1 Agent Task ≈ 1 Commit
 - `origin/develop`へpush
 - remote SHA / clean working tree確認
 
 Commit message例：
 
-`feat: add bout movement foundation`
+`fix: ground bout movement feel`
 
 mainは変更しない。
 
-## 18. Final Instruction
+## 16. Final Instruction
 
-このTaskはMovement Foundationまで。
+このTaskではMovement Feel correctionまで。
 
-Technical implementation完了後にCollision / Push / Ring-out / Tachiaiへ進まない。
+Technical実装後、Push / Contact / Collisionへ進まない。
 
 Commit / Push / Completion Report後停止し、
 
-「ACTION-02-MOVEMENT-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+「ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
 
 と日本語で報告する。
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS WITH CORRECTION / USER PLAY TEST REQUIRED
-
-## Accepted Baseline
-
-- Accepted implementation commit for technical review: `8b9acf7444c13648ea36b603b9c642d7c07ca046`
-- Agent-Start-Head: `1f8de847db8a2981e67eef964265f1400ab05f5a`
-- Agent Task Diff is one implementation commit.
-- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
-- Technical Verification is accepted based on Completion Report plus direct Source / Diff review.
-- Movement / control feel is NOT accepted until User Play Test.
-
-## Accepted Decisions
-
-- WASD is screen/world-relative:
-  - W = -y / screen up
-  - S = +y / screen down
-  - A = -x / screen left
-  - D = +x / screen right
-- Simulation receives semantic movement vectors, not raw keyboard codes.
-- `BoutSimulation` owns canonical participant position / velocity / facing.
-- `BoutSimulation.step()` advances exactly one logical tick and does not receive render-frame delta.
-- Fixed timestep + accumulator remains the accepted cadence architecture.
-- ACTION-02 provisional simulation rate is 60 Hz; this is NOT final tuning.
-- Velocity + acceleration/deceleration is accepted as the Movement Foundation model, subject to User Play Test tuning.
-- Auto-facing is Simulation-owned and currently updates immediately toward the opponent each tick.
-- Coincident participant positions preserve previous facing and do not produce NaN/Infinity.
-- Simulation logical units are meters / m/s / radians; Phaser pixels remain Presentation.
-- Scene synchronizes persistent GameObjects one-way from Simulation Snapshot.
-- Stable participant identity is separated from keyboard/stationary control role and presentation styling outside Simulation.
-- Phaser Arcade Physics / Matter.js remain unused for Gameplay Core.
-- Collision / Push / Ring-out / Tachiai / Grapple / Throw / Lift / Stamina / Balance / CPU Gameplay are still unimplemented as required.
-- It is acceptable in this Task that participants pass through each other and leave the ring.
-- Tachiai → Normal Bout is not required to be seamless. Future Tachiai may resolve first and provide initial conditions for the normal Action phase.
-
-## Corrections
-
-### C-1 — AGENTS.md Technology wording is stale
-
-`AGENTS.md` §2 currently says:
-
-`Phaser 4.2.1（src/main.tsからGame起動。表示のみのFoundation）`
-
-After ACTION-02 this is no longer accurate because Phaser now reads keyboard input, drives the fixed-step integration boundary, and renders moving Snapshot state.
-
-This is documentation-only and does not invalidate the implementation.
-
-In the next Task that legitimately synchronizes Current State docs, change this wording to a minimal accurate description. Do not create a standalone production refactor for this correction unless needed.
-
-### C-2 — Short-tap input limitation is Known, not accepted as final control behavior
-
-Current keyboard movement samples Phaser `isDown` once per render frame and reuses that movement intent for all fixed ticks in the frame.
-
-For hold-based WASD movement this is acceptable for the current prototype. However, a press+release that occurs entirely between render samples could theoretically be missed, especially under poor frame pacing.
-
-Do not introduce an input event/buffering framework now.
-
-User Play Test must check responsiveness. If missed/laggy movement taps are observable, investigate the smallest fix before accepting the control baseline.
-
-## Do Not Reopen
-
-- Do not change WASD back to wrestler-relative without explicit User request.
-- Do not make Phaser GameObject position canonical.
-- Do not pass render delta into gameplay movement formulas.
-- Do not add Phaser Physics / Matter.js for Movement.
-- Do not add Collision / Push / Ring-out as a convenience fix for walking through the opponent or ring.
-- Do not add Stamina / Balance / attributes before their dedicated Task.
-- Do not treat current speed / acceleration / deceleration / body radius / ring fixture / spawn values as final balance.
-- Do not add render interpolation unless a later visual/play test demonstrates the need.
-- Do not build a generic controller/input framework from the current small mapping.
-
-## Deferred
-
-- Collision / participant separation
-- Push / impulse / momentum transfer
-- Ring-out / victory / reset
-- Tachiai
-- FREE / GRAPPLED / LIFTED runtime interaction
-- Grapple / Throw / Lift
-- Stamina / Balance / Rikishi attributes
-- CPU gameplay
-- Touch / Gamepad
-- action-key edge buffering
-- render interpolation
-- turn-rate limits / facing locks
-- audio / animation / camera effects
-
-## User Play Test
-
-REQUIRED / PENDING.
-
-Technical PASS does not accept Movement Feel.
-
-User must verify in Browser:
-
-- screen-relative WASD feels intuitive
-- auto-facing while moving sideways / backward feels natural
-- acceleration is not too heavy or too twitchy
-- deceleration is not too slippery or too abrupt
-- diagonal movement feels consistent
-- response to press/release is immediate enough
-- no obvious missed short movement taps
-- current 60 Hz fixed-step does not feel visibly or responsively wrong
-- this feels like a usable movement foundation for the later sumo action
-
-If User accepts:
-- current movement/control feel becomes the baseline, while provisional numeric constants remain tunable for later gameplay interaction.
-
-If User rejects or identifies a concrete issue:
-- do not proceed to Push/Collision design until the Movement issue is reviewed and corrected.
-
-## Regression Risks
-
-- Scene/GameObject state becoming a second gameplay source of truth.
-- Future collision implementation bypassing fixed-step Simulation ownership.
-- Current provisional movement constants becoming accidental final rules.
-- Event-style action input later reusing frame-sampled hold semantics without edge buffering.
-- Slow/stalled frames causing noticeable slow-motion behavior due to deliberate accumulator caps.
-- Future participant/controller mappings becoming over-generalized prematurely.
-
-## Next Task Constraints
-
-1. User Play Test ACTION-02 first.
-2. Do not register the Push/Contact/Collision implementation yet.
-3. After Movement Feel is accepted, create a focused Push / Contact / Collision Investigation or Design Task.
-4. That design gate must define body/contact representation, separation semantics, push/impulse ownership, weight/mass boundary, momentum transfer, ring-out geometry, numerical boundary cases, and tuning-vs-rule separation before Production implementation.
-5. Tachiai remains later; seamless Tachiai→Action transition is not required.
-
-
-# User Play Test Result — 2026-10-18
-
-Movement Feel: NOT ACCEPTED YET
-
-User feedback:
-- Current movement feels too much like skating / gliding on ice.
-- User wants more sense of human body weight / grounded human movement.
-
-Interpretation:
-- Technical Movement Architecture remains accepted.
-- Screen-relative WASD and auto-facing remain accepted unless separately changed.
-- Current provisional movement tuning/model feel is NOT accepted as the gameplay baseline.
-- Do not proceed to Push / Contact / Collision design until Movement Feel is corrected and re-tested.
-
-Next correction direction:
-- Keep Pure TypeScript canonical movement + fixed timestep + semantic intent architecture.
-- Investigate/tune grounded locomotion behavior rather than replacing the architecture.
-- In particular, review max speed, acceleration, braking/deceleration, and direction-change behavior.
-- Avoid solving this with Phaser Physics or unrelated animation/collision work.
-- After correction, User Play Test remains the acceptance gate.
