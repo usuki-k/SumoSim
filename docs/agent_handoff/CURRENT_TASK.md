@@ -1,5 +1,5 @@
 Task-ID: ACTION-02-MOVEMENT-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / ACTION MOVEMENT FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -518,3 +518,133 @@ Commit / Push / Completion Report後停止し、
 「ACTION-02-MOVEMENT-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
 
 と日本語で報告する。
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH CORRECTION / USER PLAY TEST REQUIRED
+
+## Accepted Baseline
+
+- Accepted implementation commit for technical review: `8b9acf7444c13648ea36b603b9c642d7c07ca046`
+- Agent-Start-Head: `1f8de847db8a2981e67eef964265f1400ab05f5a`
+- Agent Task Diff is one implementation commit.
+- `main` remains unchanged at `4ebe840e029a0c8b7faa515934fbeea7e7e05acf`.
+- Technical Verification is accepted based on Completion Report plus direct Source / Diff review.
+- Movement / control feel is NOT accepted until User Play Test.
+
+## Accepted Decisions
+
+- WASD is screen/world-relative:
+  - W = -y / screen up
+  - S = +y / screen down
+  - A = -x / screen left
+  - D = +x / screen right
+- Simulation receives semantic movement vectors, not raw keyboard codes.
+- `BoutSimulation` owns canonical participant position / velocity / facing.
+- `BoutSimulation.step()` advances exactly one logical tick and does not receive render-frame delta.
+- Fixed timestep + accumulator remains the accepted cadence architecture.
+- ACTION-02 provisional simulation rate is 60 Hz; this is NOT final tuning.
+- Velocity + acceleration/deceleration is accepted as the Movement Foundation model, subject to User Play Test tuning.
+- Auto-facing is Simulation-owned and currently updates immediately toward the opponent each tick.
+- Coincident participant positions preserve previous facing and do not produce NaN/Infinity.
+- Simulation logical units are meters / m/s / radians; Phaser pixels remain Presentation.
+- Scene synchronizes persistent GameObjects one-way from Simulation Snapshot.
+- Stable participant identity is separated from keyboard/stationary control role and presentation styling outside Simulation.
+- Phaser Arcade Physics / Matter.js remain unused for Gameplay Core.
+- Collision / Push / Ring-out / Tachiai / Grapple / Throw / Lift / Stamina / Balance / CPU Gameplay are still unimplemented as required.
+- It is acceptable in this Task that participants pass through each other and leave the ring.
+- Tachiai → Normal Bout is not required to be seamless. Future Tachiai may resolve first and provide initial conditions for the normal Action phase.
+
+## Corrections
+
+### C-1 — AGENTS.md Technology wording is stale
+
+`AGENTS.md` §2 currently says:
+
+`Phaser 4.2.1（src/main.tsからGame起動。表示のみのFoundation）`
+
+After ACTION-02 this is no longer accurate because Phaser now reads keyboard input, drives the fixed-step integration boundary, and renders moving Snapshot state.
+
+This is documentation-only and does not invalidate the implementation.
+
+In the next Task that legitimately synchronizes Current State docs, change this wording to a minimal accurate description. Do not create a standalone production refactor for this correction unless needed.
+
+### C-2 — Short-tap input limitation is Known, not accepted as final control behavior
+
+Current keyboard movement samples Phaser `isDown` once per render frame and reuses that movement intent for all fixed ticks in the frame.
+
+For hold-based WASD movement this is acceptable for the current prototype. However, a press+release that occurs entirely between render samples could theoretically be missed, especially under poor frame pacing.
+
+Do not introduce an input event/buffering framework now.
+
+User Play Test must check responsiveness. If missed/laggy movement taps are observable, investigate the smallest fix before accepting the control baseline.
+
+## Do Not Reopen
+
+- Do not change WASD back to wrestler-relative without explicit User request.
+- Do not make Phaser GameObject position canonical.
+- Do not pass render delta into gameplay movement formulas.
+- Do not add Phaser Physics / Matter.js for Movement.
+- Do not add Collision / Push / Ring-out as a convenience fix for walking through the opponent or ring.
+- Do not add Stamina / Balance / attributes before their dedicated Task.
+- Do not treat current speed / acceleration / deceleration / body radius / ring fixture / spawn values as final balance.
+- Do not add render interpolation unless a later visual/play test demonstrates the need.
+- Do not build a generic controller/input framework from the current small mapping.
+
+## Deferred
+
+- Collision / participant separation
+- Push / impulse / momentum transfer
+- Ring-out / victory / reset
+- Tachiai
+- FREE / GRAPPLED / LIFTED runtime interaction
+- Grapple / Throw / Lift
+- Stamina / Balance / Rikishi attributes
+- CPU gameplay
+- Touch / Gamepad
+- action-key edge buffering
+- render interpolation
+- turn-rate limits / facing locks
+- audio / animation / camera effects
+
+## User Play Test
+
+REQUIRED / PENDING.
+
+Technical PASS does not accept Movement Feel.
+
+User must verify in Browser:
+
+- screen-relative WASD feels intuitive
+- auto-facing while moving sideways / backward feels natural
+- acceleration is not too heavy or too twitchy
+- deceleration is not too slippery or too abrupt
+- diagonal movement feels consistent
+- response to press/release is immediate enough
+- no obvious missed short movement taps
+- current 60 Hz fixed-step does not feel visibly or responsively wrong
+- this feels like a usable movement foundation for the later sumo action
+
+If User accepts:
+- current movement/control feel becomes the baseline, while provisional numeric constants remain tunable for later gameplay interaction.
+
+If User rejects or identifies a concrete issue:
+- do not proceed to Push/Collision design until the Movement issue is reviewed and corrected.
+
+## Regression Risks
+
+- Scene/GameObject state becoming a second gameplay source of truth.
+- Future collision implementation bypassing fixed-step Simulation ownership.
+- Current provisional movement constants becoming accidental final rules.
+- Event-style action input later reusing frame-sampled hold semantics without edge buffering.
+- Slow/stalled frames causing noticeable slow-motion behavior due to deliberate accumulator caps.
+- Future participant/controller mappings becoming over-generalized prematurely.
+
+## Next Task Constraints
+
+1. User Play Test ACTION-02 first.
+2. Do not register the Push/Contact/Collision implementation yet.
+3. After Movement Feel is accepted, create a focused Push / Contact / Collision Investigation or Design Task.
+4. That design gate must define body/contact representation, separation semantics, push/impulse ownership, weight/mass boundary, momentum transfer, ring-out geometry, numerical boundary cases, and tuning-vs-rule separation before Production implementation.
+5. Tachiai remains later; seamless Tachiai→Action transition is not required.
