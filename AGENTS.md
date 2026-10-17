@@ -203,7 +203,15 @@ Result / Scope / Changed Files / Verification / Acceptance Criteria / Design Dev
 
 - Source-BaselineとAgent-Start-Headを区別する。
 - Agent Task Diffは `Agent-Start-Head..Implementation-Commit` をReviewの正とする。
-- Resultが成功の場合のみcommit/pushする。失敗・Safety STOPでは無理に直さずcommit/pushせず報告する。
+- Resultは以下のいずれか：
+  - `PASS`: 必須Acceptance CriteriaとVerificationを満たした
+  - `PASS WITH KNOWN UNTESTED ITEMS`: 必須Gateは満たしたが、明示的な非Blocking未検証項目がある
+  - `PARTIAL`: Taskの一部のみ完了。通常は成功Taskとして扱わない
+  - `BLOCKED`: 外部判断・Material Conflict・Prerequisite等で安全に続行できない
+  - `FAIL`: 必須要件またはVerificationに失敗した
+- 通常、commit/pushするのは`PASS` / `PASS WITH KNOWN UNTESTED ITEMS`のみ。`PARTIAL` / `BLOCKED` / `FAIL`のProduction変更は通常成功Commitとしてpushしない。無理に直さず報告する。
+- 例外は§13のInvestigation-only Report Commit Exceptionのみ。
+- Git Safety / Preflight STOPではCompletion Reportも書かない（§13参照）。
 
 ## 13. GitHub Handoff Workflow
 
@@ -244,10 +252,24 @@ git merge --ff-only origin/<branch>
 git rev-parse HEAD
 ```
 
-- Coordination Diff（Source-Baseline..origin/<branch>）は`docs/agent_handoff/`配下のみであること。
-- Task-ID / Status: READY / Target-Branchをremote taskで確認してからff-onlyで取り込む。
+#### Remote Task Metadata Gate
+
+`git merge --ff-only`の**前**に、`git show origin/<branch>:docs/agent_handoff/CURRENT_TASK.md`から以下をすべて明示的に検証する（欄が存在するだけでは不十分）：
+
+- Task-ID: Userが開始指示で指定したTask-IDと一致する
+- Status: `READY`である
+- Target-Branch: 現在のBranchおよびTaskのTarget Branchと一致する
+- Source-Baseline: 記載されており、Taskが期待するBaselineと一致し、`origin/<branch>`のancestorである
+- Handoff-Mode: 記載されており、`GITHUB`である
+
+#### Coordination-only Diff Gate
+
+`Source-Baseline..origin/<branch>`の変更Fileがすべて`docs/agent_handoff/`配下である場合だけ、`git merge --ff-only origin/<branch>`を許可する。
+Source、SPEC、AGENTS.md、CLAUDE.md、package等が1つでも混ざっていればFFせずSTOPする。
 
 ### STOP Conditions
+
+A. Git Safety / Preflight STOP：
 
 - dirty working tree
 - wrong branch
@@ -256,11 +278,32 @@ git rev-parse HEAD
 - remote task missing
 - Task-ID mismatch
 - Status != READY
-- baseline invalid
+- Target-Branch mismatch
+- Remote TaskにSource-Baselineが無い
+- Source-Baselineが期待値と異なる
+- Source-Baselineが`origin/<branch>`のancestorでない（baseline invalid）
+- Handoff-Modeが無い、または`GITHUB`でない
 - unexpected coordination diff
 - FF-only failure
 
-Preflight safety STOPの場合はRepositoryへ何も書かない（Completion Reportも変更しない）。Userへ日本語で報告する。
+この場合はRepositoryへ何も書かない（Completion Reportも変更しない）。Report Commitを作らず、pushせず、Chatで状態だけ日本語で報告する。
+
+B. Investigationの結果としてのBLOCKEDは、Preflightが正常な場合の結果であり、上記Aとは別物（下記Exception参照）。
+
+### Investigation-only Report Commit Exception
+
+通常Rule「成功したTaskだけcommit/pushする」は維持する。そのうえで、以下を**すべて**満たす場合のみ狭い例外を許可する：
+
+1. GitHub Handoff Task（Investigation / Readiness / Design Investigation等）である
+2. Remote-Task-First Preflightが正常に成功している
+3. 調査がReport可能な結論まで完了している
+4. TaskがProduction / Source変更を許可していない
+5. 実際にProduction / Source変更をしていない
+6. Repositoryで変更するFileが`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`だけである
+
+この場合、`CURRENT_COMPLETION_REPORT.md`だけのReport-only Commit / Pushを許可する（例: `docs(agent): report <Task-ID>`）。`Result: BLOCKED`（Material Conflict、User Decision要、未決設計、必須Prerequisite不足など）でもよい。
+
+これは失敗した実装をcommitしてよいという意味ではない。Implementation Taskの FAIL / BLOCKED / PARTIAL / Verification FAIL / 実装途中 / Blocking Acceptance Criteria未完了 / 未承認Material Design Deviation では、Production変更をcommit / pushしない。
 
 ### Final Review Handoff Semantics
 
