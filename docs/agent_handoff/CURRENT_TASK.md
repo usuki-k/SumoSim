@@ -1,350 +1,559 @@
-Task-ID: ACTION-03A2-CONTACT-CREEP-CORRECTION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / FOCUSED CONTACT CORRECTION
+Task-ID: ACTION-03B-DISCRETE-PUSH-EXTERNAL-MOMENTUM
+Status: READY
+Task-Type: IMPLEMENTATION / CORE PUSH PROTOTYPE
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 02a4047328e560a986d677ea13c890a43607b381
+Source-Baseline: c11edc5c6e3ffcb7dcb192b4f80bb5af1243fb72
 Handoff-Mode: GITHUB
 
-# ACTION-03A2 — Contact Creep Correction
+# ACTION-03B — Discrete Push & External Momentum
 
 ## 1. Purpose
 
-ACTION-03AのContact Foundationは大部分Technical PASSだったが、User Play Test前にBlocking correctionが1点ある。
+ACTION-03A2 Contact FeelはUser Play TestでAcceptされた。
 
-現状は、moving participantがstationary participantへ毎tick食い込むと、
-overlapを常に50/50で対称分離するため、
-Push未実装なのにstationary participantが約0.083 m/sでじわじわ移動する。
+次に、相撲Actionの最初の能動Actionとして **Push（↑）** を実装する。
 
-このTaskではこの **implicit positional Push / creep** だけを修正する。
+Userが狙う将来の駆け引き：
 
-目標：
+- Pushにタイミング良く引き技 / 捌き（↓）を合わせる
+- Pushを左右へ躱す
+- 相手のCommitment / Recoveryを読んで差し返す
 
-- stationary participantへ歩き込んでも、Contactだけではstationary participantを動かさない
-- 両者が互いに歩き込んだ場合は、双方のinward contributionに応じてpenetration correctionを分配する
-- pre-existing overlap / same-center等でinward contributionが無い場合のみ、50/50 fallbackで安全に分離する
-- existing Contact / Movement architectureを維持する
+このため、Pushはhold型の連続圧力ではなく、**1回の押下で1回発生する短い踏み込みAction** とする。
 
-Push / external momentum / mass / Ring-outは実装しない。
+このTaskの目的：
 
-## 2. Current Baseline / Review Handoff
+- ArrowUp押下をsemantic edgeとしてSimulationへ渡す
+- PushにStartup → Active Drive → Recoveryの時間構造を持たせる
+- Active中は開始時方向へ短く踏み込む
+- Contact中のActive Pushだけが相手へ外力Momentumを与える
+- grounded self movementとexternal momentumを分離する
+- Push後にMomentumが自然に減衰する
+- Counter / Pull / Dodge自体はまだ実装しない
 
-Accepted Production Source Baseline:
+Technical PASSだけではPush FeelをAcceptしない。User Play Testが必須。
 
-`02a4047328e560a986d677ea13c890a43607b381`
+## 2. Accepted User Decisions
 
-Current developにはChatGPT Review coordination commitが上にある。
+### D1 — Push semantic: ACCEPTED
+
+Pushは **edge-triggered discrete action**。
+
+- 1回の押下につき1回
+- holdによる自動連続Pushはしない
+- Startup / Active Drive / Recoveryを持つ
+- Active Drive中は短い前進Commitmentを持つ
+- ContactしていればPushを伝える
+- Contactしていなければ短い踏み込みだけ行う
+- Action中の新しいPush入力は無視する
+- 次のPushには新しいkey downが必要
+
+目的は将来のCounter / lateral dodgeのTiming Windowを成立させること。
+
+### D2 — Prototype key: ACCEPTED
+
+Player Pushの仮Binding：
+
+`ArrowUp`
+
+これはPrototype bindingでありFinal control schemeではない。
+
+## 3. Current Accepted Baseline
+
+Accepted Production Source:
+
+`c11edc5c6e3ffcb7dcb192b4f80bb5af1243fb72`
+
+Current developにはReview / User Play Test / User Decisionのcoordination-only commitsがある。
 AGENTS.mdのRemote-Task-First Preflightに従い、
-Source-Baseline..origin/developの変更が`docs/agent_handoff/`のみであることを確認してFF-onlyすること。
+Source-Baseline..origin/developが`docs/agent_handoff/`だけであることを確認してFF-onlyする。
 
-ACTION-03Aで維持するAccepted parts：
+Maintain:
 
-- Simulation-owned `bodyRadius`
-- Snapshot exposes gameplay body geometry
-- `BODY_RADIUS = 0.35 m` provisional
-- `CONTACT_SLOP = 0.002 m` provisional
-- deterministic contact normal
-- same-center fallback
-- closing normal self-velocity removal
-- tangential velocity preservation
-- Pure TypeScript contact core
-- fixed timestep
-- grounded ACTION-02B Movement baseline
+- screen/world-relative WASD
+- grounded ACTION-02B Movement
+- Simulation-owned position / velocity / facing / body geometry
+- fixed timestep 60Hz provisional
+- ACTION-03A2 Contact / Separation
+- no-contact Movement Feel accepted
+- Contact Feel accepted
+- stationary opponent does not drift from Contact-only correction
+- tangential circling preserved
+- Scene is one-way Snapshot presentation
 - no Phaser Physics / Matter.js
 
-Blocking finding：
+## 4. Push Runtime State
 
-- unconditional 50/50 positional correction creates hidden Push before Push exists
+Add the smallest explicit Push runtime state.
 
-## 3. Required Correction Semantics
+Recommended shape conceptually:
 
-Keep the current step architecture.
+```ts
+type PushPhase = 'startup' | 'active' | 'recovery'
 
-For overlap correction, use each participant's **inward contribution toward the contact normal for the current tick**.
+type ParticipantActionState =
+  | { kind: 'idle' }
+  | {
+      kind: 'push'
+      phase: PushPhase
+      ticksRemaining: number
+      direction: Vec2
+    }
+```
 
-Normal is A → B.
-
-Conceptually, before removing closing normal velocity:
-
-- `inwardA = max(0, dot(vA, n))`
-- `inwardB = max(0, -dot(vB, n))`
-
-These are self-locomotion closing contributions only.
-
-When `overlap > 0`:
-
-### Case A — Only A moved inward
-
-`inwardA > 0 && inwardB == 0`
-
-- Apply the full penetration correction to A
-- B position does not move from separation
-- Contact still removes A's closing normal velocity
-
-### Case B — Only B moved inward
-
-`inwardB > 0 && inwardA == 0`
-
-- Apply the full correction to B
-- A position does not move from separation
-
-### Case C — Both moved inward
-
-`inwardA > 0 && inwardB > 0`
-
-Split overlap proportionally:
-
-- A correction share = `inwardA / (inwardA + inwardB)`
-- B correction share = `inwardB / (inwardA + inwardB)`
-
-A moves backward along `-n`.
-B moves backward along `+n`.
-
-For equal inward contributions this becomes 50/50.
-
-### Case D — No meaningful inward contribution
-
-Examples:
-
-- invalid/pre-existing overlap in setup
-- same-center setup with no movement
-- numeric correction state where neither velocity explains the overlap
-
-Use deterministic 50/50 separation fallback.
-
-Do not leave an invalid overlap unresolved.
-
-## 4. Important Ordering
-
-The correction weights must be captured **before** closing normal velocity components are removed.
-
-Current `resolveContact()` may remain one small explicit function.
-
-Recommended internal order:
-
-1. compute contact normal
-2. compute inwardA / inwardB from current self velocity
-3. remove closing normal velocity components
-4. if overlap > 0:
-   - choose correction shares from inward contributions
-   - fallback 50/50 if contribution sum is effectively zero
-   - apply position correction
-
-Do not add a general solver/framework.
-
-## 5. Numerical Safety
-
-Use a small explicit epsilon only where necessary to decide whether inward contribution is effectively zero.
+Naming may follow surrounding code.
 
 Requirements:
 
-- deterministic
-- finite
-- no division by zero
-- no NaN / Infinity
-- exact stationary body remains stationary in one-sided walk-in
-- same-center fallback still separates safely
-- CONTACT_SLOP behavior unchanged
-- resulting circles non-overlapping within numeric tolerance
+- action state is canonical Simulation runtime state
+- direction is captured when Push begins
+- Push direction does not retarget during the action
+- normal auto-facing may continue visually/runtime as before, but Push Drive direction is locked separately
+- Snapshot exposes enough action phase state for deterministic tests and minimal presentation/debug indication
+- do not create a generic Action framework beyond this small discriminated union
 
-Do not add mass weighting.
+## 5. Push Phase Semantics
 
-## 6. Do Not Change
+Use provisional tick constants, all subject to User Play Test.
 
-Preserve:
+Recommended initial values:
 
-- screen-relative WASD
-- grounded Movement constants/behavior
-- fixed timestep / accumulator
-- auto-facing
-- Simulation ownership
-- body radius
-- CONTACT_SLOP
-- contact normal rule
-- tangential velocity preservation
-- Scene Snapshot rendering
-- no-contact movement behavior
+- `PUSH_STARTUP_TICKS = 6` (~100 ms)
+- `PUSH_ACTIVE_TICKS = 8` (~133 ms)
+- `PUSH_RECOVERY_TICKS = 10` (~167 ms)
 
-## 7. Scope
+Total ~400 ms.
+
+These are Prototype tuning, not final values.
+
+### Startup
+
+- capture locked direction from current facing at action start
+- no Push force yet
+- normal WASD steering is suppressed
+- self locomotion should settle/brake using the existing grounded movement rule with zero effective move intent
+
+### Active Drive
+
+- normal WASD steering remains suppressed
+- effective self movement intent is the locked Push direction
+- use existing grounded locomotion behavior for the short forward drive rather than creating a second self-movement physics system
+- Push force is active only during this phase and only while in Contact
+
+### Recovery
+
+- no Push force
+- normal WASD steering remains suppressed
+- use zero effective move intent so the participant settles
+- after Recovery ends, return to idle and normal WASD immediately
+
+If these initial timings feel poor, Agent may adjust them only as provisional tuning and must report before/after values.
+Do not materially change the phase semantics.
+
+## 6. Semantic Intent / Edge Input
+
+Extend semantic intent minimally, e.g.:
+
+```ts
+interface ParticipantIntent {
+  readonly move: Vec2
+  readonly pushPressed: boolean
+}
+```
+
+`pushPressed` means a **new semantic press edge for this Simulation tick**, not raw key state.
+
+Raw keyboard handling stays outside Simulation.
+
+### ArrowUp latch requirement
+
+Current Scene samples keyboard state once per render frame and may run 0..N Simulation ticks.
+
+A short ArrowUp press must not be:
+- lost because a render frame had 0 Simulation ticks
+- repeated across all N ticks in one frame
+- repeated while ArrowUp remains held
+
+Implement the smallest explicit pending-edge latch in the Input/Scene boundary.
+
+Required behavior:
+
+- ArrowUp key-down latches one pending Push edge
+- first subsequent Simulation tick consumes it
+- later ticks receive `pushPressed: false`
+- holding ArrowUp does not queue repeats
+- release + new press can queue the next edge
+- do not introduce a generic Input Buffer framework
+
+Movement keys may remain hold-state WASD.
+
+## 7. Self Velocity vs External Momentum — Model B
+
+ACTION-03 Investigation accepted Model B.
+
+Concrete implementation begins now because external force actually exists.
+
+Internal runtime concepts:
+
+- `selfVelocity`
+  - participant's own footwork
+  - existing ACTION-02B grounded movement rule applies here
+- `externalVelocity`
+  - opponent-induced Push momentum
+  - not processed by grounded movement acceleration/lateral/reverse braking
+
+Actual displacement:
+
+`totalVelocity = selfVelocity + externalVelocity`
+
+Snapshot's existing `velocity` should continue to mean actual total movement velocity.
+
+When `externalVelocity = 0`, all existing ACTION-02B / 03A2 movement behavior must remain unchanged.
+
+Do not expose duplicate Sources of Truth.
+The total Snapshot velocity is derived from the two distinct canonical components.
+
+## 8. External Momentum Decay
+
+Add a small explicit external momentum decay rule.
+
+Requirements:
+
+- externalVelocity decays toward exact zero
+- overshoot/reversal impossible
+- deterministic fixed-tick
+- independent from grounded self movement damping
+- finite and clamped to a provisional `MAX_EXTERNAL_SPEED`
+
+Use named provisional constants.
+
+Exact initial coefficients are Agent-tunable Prototype values.
+Report all values.
+
+Do not derive from Weight / LowerBody yet.
+
+## 9. Push Force Prototype
+
+Keep first Push formula deliberately simple because all participants are still equal-stat.
+
+During Active phase and Contact:
+
+- A Push contributes +1 along contact normal A→B
+- B Push contributes -1 along the same axis
+- `netPush = activePushA - activePushB`
+
+Behavior:
+
+- only A active → pair receives external acceleration toward B's side
+- only B active → pair receives external acceleration toward A's side
+- both active equally → net external Push acceleration = 0
+- neither active → no new Push acceleration
+
+Apply the same pair external velocity delta to both participants so they can move together while staying in Contact.
+
+Use one named provisional `PUSH_EXTERNAL_ACCELERATION` constant.
+
+No mass / traction / passive resistance / WALK_PRESSURE in this Task.
+
+Reason:
+first User Play Test should answer whether the **discrete Push interaction itself** feels promising before adding body parameters.
+
+Do not add archetype branches.
+
+## 10. Contact Interaction
+
+Preserve ACTION-03A2 Contact semantics.
+
+Important:
+
+- penetration ownership remains based on **selfVelocity inward contribution**
+- externalVelocity must not be interpreted as self locomotion and must not reintroduce stationary-body creep
+- closing normal self velocity removal remains
+- tangential self velocity preservation remains
+- Contact-only behavior with no Push must be unchanged
+
+Push is an explicit external-momentum layer on top of accepted Contact, not hidden positional correction.
+
+## 11. Fixed Tick Resolution Order
+
+Keep one explicit small order in `BoutSimulation.step()`.
+
+Recommended high-level order:
+
+1. sanitize semantic intents
+2. begin Push action from `pushPressed` if participant is idle
+3. derive effective self movement intent from current action phase
+4. update `selfVelocity` using existing grounded locomotion rule
+5. decay existing `externalVelocity`
+6. integrate positions using `selfVelocity + externalVelocity`
+7. resolve accepted Contact / Separation
+8. if Contact and one/both Push actions are in Active phase:
+   - resolve net Push
+   - add external velocity delta to both participants
+9. advance Push phase timers/state
+10. update facing
+
+This means a Push external acceleration resolved on this tick affects displacement starting next tick.
+That one-tick latency is accepted for the Prototype if deterministic and consistent.
+
+If Agent finds a Material reason this ordering fails, STOP and report rather than silently redesigning.
+
+## 12. No Separate Impact Transfer Yet
+
+Do NOT add a separate collision impact / tachiai-like impulse in this Task.
+
+The short Active Push drive + explicit external acceleration is enough for the first Push Feel test.
+
+One-time impact transfer is Deferred until User feedback shows it is needed.
+
+## 13. Minimal Presentation / Test Harness
+
+Player:
+
+- WASD = existing movement
+- ArrowUp = discrete Push
+
+Add only minimal presentation needed to understand Push state.
+
+Recommended:
+- show current Push phase near Player label:
+  - STARTUP
+  - PUSH
+  - RECOVERY
+- idle shows no extra phase text
+
+This is presentation only.
+
+A minimal `R` restart/reset-to-prototype-setup key is allowed and recommended for repeated Push testing.
+
+Do not add full UI.
+
+CPU may remain stationary in this Task.
+
+Do not create CPU AI or automatic Push loops unless strictly necessary for technical verification.
+Incoming/contested Push can be covered by Simulation tests; User Play Test for this Task focuses first on Player Push Feel.
+
+## 14. Scope
 
 Allowed:
 
+- `src/game/sumo/BoutTypes.ts`
 - `src/game/sumo/BoutSimulation.ts`
 - `src/game/sumo/BoutSimulation.test.ts`
-- `docs/ARCHITECTURE.md` only if Current contact description needs minimal clarification
+- smallest focused input latch helper/test if useful
+- `src/game/scenes/BoutScene.ts`
+- `src/game/input/` only for semantic Push edge handling if cleaner
+- `docs/ARCHITECTURE.md`
+- `AGENTS.md` only if Current Source description requires sync
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-Touch `BoutTypes.ts` / Scene / AGENTS only if strictly required by the correction; otherwise leave unchanged.
+No new dependency.
 
-New dependency prohibited.
-
-## 8. Scope Out
+## 15. Scope Out
 
 Do NOT implement:
 
-- Push / press action
-- externalVelocity
-- impact transfer
-- mass / pushForce / traction
+- Down counter / pull / deflection
+- lateral dodge Action
+- left/right thrust Action
+- Push auto-repeat / hold repeat
+- Push combo system
+- Stamina
+- Balance
 - Weight / Power / LowerBody
-- Ring-out / BoutOutcome
+- mass / traction / pushForce attributes
+- passive/braced formula
+- WALK_PRESSURE
+- one-time impact transfer
 - Tachiai
 - Grapple / Throw / Lift
-- Stamina / Balance
+- Ring-out / BoutOutcome
 - CPU AI
-- Physics engine
-- contact framework
-- CCD
-- animation / camera / VFX / audio
+- Touch / Gamepad
+- animation framework
+- camera / VFX / audio
+- Phaser Physics / Matter.js
+- generic Action / Input framework
 
-This Task is only about removing implicit positional Push from penetration correction.
+## 16. Required Automated Verification
 
-## 9. Required Automated Verification
+Existing 51 tests must remain PASS, updating internals only where Snapshot velocity now means total velocity.
 
-All existing 45 tests must continue to pass unless the old creep-finding test is intentionally replaced by the corrected expectation.
+Add focused tests at minimum:
 
-Add / update focused tests:
+T37. Push starts on one `pushPressed` edge
+- idle → startup
+- locked direction captured from facing
 
-T29. One-sided walk-in against stationary participant
-- A moves directly into stationary B for a prolonged period
-- B's position remains unchanged within strict tolerance
-- A stops at contact
-- no overlap
-- no jitter
+T38. Phase timing
+- startup → active → recovery → idle
+- exact deterministic tick counts
+- no negative timers / invalid phase
 
-T30. Mirrored one-sided walk-in
-- B moves into stationary A
-- A remains unchanged
-- symmetric behavior by participant role/order
+T39. Direction commitment
+- opponent/facing changes after Push begins
+- locked Push direction does not retarget during current action
 
-T31. Equal head-on walk-in
-- A and B move toward each other equally
-- correction remains symmetric
-- settle without jitter
+T40. Movement suppression during Push
+- WASD input does not steer during startup/active/recovery
+- active uses locked forward drive
+- normal WASD resumes after idle
 
-T32. Unequal inward contribution
-- both move inward with different movement magnitudes / velocities
-- penetration correction follows contribution ratio
-- higher inward contributor receives larger backward correction
-- deterministic and finite
+T41. Non-contact Push
+- produces a short forward committed step
+- no external Push momentum is created without Contact
+- does not become a long dash
 
-T33. Pre-existing overlap with no movement
-- fallback 50/50 separation
-- same-center and ordinary overlap both safe
-- no NaN
+T42. One-sided Contact Push
+- Player Active Push against neutral opponent moves the pair in defender direction via externalVelocity
+- accepted Contact non-penetration remains
 
-T34. Glancing contact regression
-- tangential component preserved
-- stationary participant is not spuriously translated by a purely one-sided penetration correction beyond what geometry requires
-- circling remains possible
+T43. Equal simultaneous Push
+- equal active Push from both sides yields zero net Push acceleration
+- no NaN/jitter
 
-T35. No-contact ACTION-02B regression
-- unchanged
+T44. External momentum decay
+- decays monotonically to exact zero
+- no reversal
+- respects max external speed
 
-T36. Existing CONTACT_SLOP / exact-touch / high-speed / determinism / Phaser-free tests remain PASS.
+T45. External momentum independence
+- grounded self damping does not immediately erase external momentum
+- external component remains behaviorally distinct
 
-Remove or rewrite the previous test that intentionally asserted positive stationary-body creep.
-The test suite must now assert creep is absent.
+T46. No-Push Contact regression
+- ACTION-03A2 stationary no-creep / circling / contact tests remain unchanged
 
-## 10. Verification Level
+T47. No-contact Movement regression
+- ACTION-02B behavior remains unchanged when no Push/external momentum exists
 
-Heavy / Focused Core Contact Correction.
+T48. Determinism / finite values
+- repeated same intent sequence yields identical action/movement result
+- all state finite
+
+T49. Semantic edge integration
+- holding ArrowUp in Browser/input boundary triggers only one Push action
+- release + new press triggers another
+- a pending press is consumed by exactly one Simulation tick
+
+Input-boundary edge behavior may use focused unit tests where practical plus Browser Smoke.
+
+## 17. Verification Level
+
+Heavy / Core Push Action.
 
 Required:
 
 - `pnpm test` PASS
 - `pnpm build` PASS
 - `git diff --check` PASS
-- T29〜T36 evidence
-- existing contact + movement tests PASS
-- no new dependency
-- no Push / externalVelocity / mass / Ring-out
-- Agent Task Diff limited to Scope
+- T37〜T49 evidence
+- existing Movement + Contact regression PASS
+- new dependency none
+- Simulation Phaser-free
+- no Counter / Ring-out / attributes scope creep
 
 ### Browser Smoke
 
-Verify at minimum:
+Verify:
 
-- Canvas starts / no runtime errors
-- direct walk-in stops at opponent
-- stationary opponent does not drift during sustained walk-in
-- opposite-side/mirrored contact behaves consistently if practical
-- diagonal contact still allows circling
-- no resting jitter
-- non-contact Movement unchanged
-- Player can still leave ring
+- Canvas starts / runtime errors none
+- WASD idle movement unchanged
+- ArrowUp press starts one Push
+- holding ArrowUp does not auto-repeat
+- release + press triggers second Push
+- visible Startup / Active / Recovery indication if implemented
+- non-contact Push moves Player only a short distance
+- Contact Push moves stationary CPU backward
+- after Recovery, WASD control returns
+- Contact still has no creep when Push is not active
+- circling still works outside Push
+- ring remains non-functional; leaving ring is still allowed
+- R restart works if implemented
 
-Technical Smoke does not accept Contact Feel.
+Browser Smoke does not accept Push Feel.
 
-## 11. User Play Test — REQUIRED
+## 18. User Play Test — REQUIRED
 
-After Technical PASS, User Play Test becomes ready.
+User should evaluate:
 
-User should verify:
-
-1. Player no longer passes through opponent.
-2. Stationary opponent does not visibly drift when merely walked into.
-3. Direct contact has no large visual gap.
-4. Resting contact has no jitter.
-5. Circling around opponent remains possible.
-6. Contact is not sticky.
-7. Non-contact Movement still feels like accepted ACTION-02B baseline.
-8. It is acceptable that no real Push exists yet.
+1. ArrowUp feels like one deliberate Action, not continuous hold pressure.
+2. Holding ArrowUp does not machine-gun Push.
+3. Startup is responsive enough but creates a readable commitment.
+4. Active phase feels like a short step-in / drive, not a dash.
+5. Contact Push visibly moves the opponent and feels causally connected to the button press.
+6. Recovery creates some vulnerability/commitment without feeling frustrating.
+7. During Push, inability to freely steer feels appropriate for future lateral dodge counterplay.
+8. After Push, normal WASD returns cleanly.
+9. Contact without Push still behaves like the accepted 03A2 baseline.
+10. Non-contact Movement still feels like the accepted ACTION-02B baseline.
+11. The action seems suitable as the future target for ↓ counter / lateral evade timing.
 
 Agent report:
 
 `User Play Test: REQUIRED / NOT RUN`
 
-Do not proceed to ACTION-03B.
+Technical PASS != Push Feel Accepted.
 
-## 12. Acceptance Criteria
+Do not proceed to Counter or Ring-out.
 
-AC-01: implicit positional Push/creep is removed.
-AC-02: one-sided walk-in corrects only the inward-moving participant.
-AC-03: mirrored one-sided case is symmetric.
-AC-04: two-sided inward motion splits correction by inward contribution.
-AC-05: no-contribution overlap uses deterministic 50/50 fallback.
-AC-06: closing normal velocity removal remains.
-AC-07: tangential velocity remains.
-AC-08: CONTACT_SLOP semantics remain.
-AC-09: same-center remains finite/deterministic.
-AC-10: prolonged resting contact has no jitter.
-AC-11: no-contact grounded Movement regressionなし.
-AC-12: no Push / externalVelocity / mass / Ring-out.
-AC-13: T29〜T36 + existing tests PASS.
-AC-14: `pnpm build` PASS.
-AC-15: Browser Smoke PASS.
-AC-16: User Play Test REQUIRED / NOT RUN.
-AC-17: Scope外変更なし.
+## 19. Acceptance Criteria
 
-## 13. Stop Conditions
+AC-01: D1 discrete edge Push semantics implemented.
+AC-02: D2 ArrowUp temporary binding implemented.
+AC-03: one keydown creates one Push only; hold does not repeat.
+AC-04: Push has deterministic startup / active / recovery state.
+AC-05: Push direction locks at action start.
+AC-06: Push suppresses free steering during commitment.
+AC-07: non-contact Push creates only a short forward step.
+AC-08: Active Contact Push creates explicit external momentum.
+AC-09: selfVelocity and externalVelocity remain distinct canonical runtime concepts.
+AC-10: Snapshot velocity represents total actual velocity.
+AC-11: external momentum decays independently to zero.
+AC-12: equal simultaneous Push yields no net external drive.
+AC-13: ACTION-03A2 Contact no-creep regression PASS.
+AC-14: ACTION-02B no-contact Movement regression PASS.
+AC-15: no attributes / Counter / Ring-out / impact-transfer scope creep.
+AC-16: T37〜T49 + existing tests PASS.
+AC-17: `pnpm build` PASS.
+AC-18: Browser Smoke PASS.
+AC-19: Current State docs match material Source changes.
+AC-20: User Play Test REQUIRED / NOT RUN.
+AC-21: Scope外変更なし.
+
+## 20. Stop Conditions
 
 STOP if:
 
-- Preflight failure
-- Current Source / Review conflict
-- creep cannot be removed without introducing Push/mass/externalVelocity
-- accepted Movement architecture must change
-- contact stability requires Physics/CCD at current speeds
-- new dependency is required
+- Preflight fails
+- Current Source / Review Handoff conflict
+- discrete Push cannot work without changing accepted Contact semantics
+- external momentum requires reworking accepted grounded Movement behavior
+- input edge cannot be delivered reliably without a broad Input framework
+- Physics engine/new dependency appears required
+- Push needs Weight / mass / traction to function at all
 - task-external User changes / divergence exist
 
 Do not broaden Scope.
 
-## 14. Completion Report
+## 21. Completion Report
 
 Minimum:
 
 - Result
 - Preflight
 - Changed Files
-- Root Cause
-- Corrected Penetration Ownership Rule
-- Inward Contribution Calculation
-- Fallback behavior
-- T29〜T36 + regression tests
+- D1 / D2 Implementation
+- Push Runtime State
+- provisional phase timings
+- Input edge latch
+- selfVelocity / externalVelocity ownership
+- Push force / external momentum constants
+- Contact integration
+- T37〜T49 + regression tests
 - Browser Smoke
-- AC-01〜AC-17
+- AC-01〜AC-21
 - Implementation Evidence
 - Design Deviations
 - Unexpected Scope
@@ -354,16 +563,16 @@ Minimum:
 
 Implementation Evidence minimum:
 
-1. one-sided stationary-body no-creep
-2. mirrored case
-3. proportional two-sided correction
-4. 50/50 fallback
-5. closing velocity preserved semantics
-6. tangential preservation
-7. movement/contact regression
-8. no Push scope creep
+1. one press = one Push
+2. hold no-repeat
+3. startup/active/recovery
+4. locked direction
+5. short non-contact drive
+6. Contact Push external momentum
+7. self/external separation
+8. Contact + Movement regression preservation
 
-## 15. Git Delivery
+## 22. Git Delivery
 
 Follow AGENTS.md.
 
@@ -378,175 +587,16 @@ Technical PASS:
 
 Commit message example:
 
-`fix: prevent contact separation creep`
+`feat: add discrete push action`
 
 Do not change main.
 
-## 16. Final Instruction
+## 23. Final Instruction
 
-This Task ends after the Contact creep correction.
+This Task ends after the discrete Push prototype.
 
-Do not continue to Push / external momentum / Ring-out.
+Do not continue to ↓ Counter, thrust, attributes, Ring-out, or Tachiai.
 
 After commit / push / Completion Report, stop and report:
 
-「ACTION-03A2-CONTACT-CREEP-CORRECTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
-
-## Accepted Baseline
-
-- Accepted implementation commit for technical review: `c11edc5c6e3ffcb7dcb192b4f80bb5af1243fb72`
-- Agent-Start-Head: `417cec630b82e37b675fae04ad8537ea8d2e31c5`
-- Agent Task Diff is one implementation commit.
-- Changed Production scope is limited to contact correction logic/tests plus Current-State docs and Completion Report.
-- Technical Verification is accepted from Completion Report + direct Source/Diff review.
-- Contact Feel remains NOT accepted until User Play Test.
-
-## Accepted Decisions
-
-- ACTION-03A Contact architecture remains accepted:
-  - Simulation-owned circle body geometry
-  - `BODY_RADIUS = 0.35 m` provisional
-  - `CONTACT_SLOP = 0.002 m` provisional
-  - deterministic normal / same-center fallback
-  - closing normal self-velocity removal
-  - tangential velocity preservation
-  - fixed-step Pure TypeScript ownership
-  - no Phaser Physics / Matter.js
-- Penetration correction is now assigned by inward self-locomotion contribution:
-  - one-sided inward motion → only the inward-moving participant is corrected backward
-  - two-sided inward motion → overlap correction is split proportionally to inward contributions
-  - equal inward motion → symmetric split
-  - no meaningful inward contribution → deterministic fallback
-- The focused Case-D refinement is accepted for the current Prototype:
-  - if inward contribution is effectively zero but only one participant still has motion, correct that moving participant rather than translating the stationary participant
-  - if both/neither are moving, use 50/50 fallback
-- This refinement is accepted because it prevents curvature/circling contact from reintroducing slow stationary-body creep.
-- Stationary participant drift from Contact-only positional correction is no longer part of the baseline.
-- Push / externalVelocity / mass / Ring-out remain unimplemented as required.
-- No-contact ACTION-02B grounded Movement remains the accepted baseline.
-
-## Design Deviation Review
-
-Reported deviation:
-- Planned: zero-inward Case D always uses 50/50 fallback.
-- Implemented: zero-inward + only-one-moving uses full correction on the moving participant.
-
-Review result: ACCEPTED FOR CURRENT CONTACT PROTOTYPE.
-
-Reason:
-- preserves the explicit Task goal that Contact alone must not move a stationary opponent
-- avoids the measured long-term circling creep
-- does not introduce Push, mass, external momentum, or a new framework
-- remains deterministic and tested
-- does not alter normal one-sided/two-sided inward cases
-
-This is not a permanent physical model. If future Push/traction/mass interaction requires a different contact projection rule, it must be revisited explicitly rather than silently changed.
-
-## Corrections
-
-NONE required before User Play Test.
-
-## Do Not Reopen
-
-- Do not restore unconditional 50/50 separation for one-sided walk-in.
-- Do not add Push / externalVelocity / mass before ACTION-03B.
-- Do not change accepted grounded Movement to solve Contact issues.
-- Do not introduce Physics / CCD without new high-speed evidence.
-- Do not treat body radius / slop values as final Rikishi tuning.
-- Do not conflate Contact positional correction with actual Push force.
-
-## Deferred
-
-- explicit Push / press input
-- externalVelocity / impact transfer
-- mass / pushForce / traction
-- Weight / Power / LowerBody
-- Ring-out / BoutOutcome
-- Tachiai / thrust / pull / counter
-- Grapple / Throw / Lift
-- Stamina / Balance
-- CCD for future higher-speed states
-
-## User Play Test
-
-REQUIRED / READY.
-
-User should verify in Browser:
-
-1. Player cannot pass through the stationary opponent.
-2. Holding movement directly into the opponent does not visibly drift the opponent.
-3. Contact does not leave a noticeable artificial gap.
-4. Resting contact does not jitter/shake.
-5. Diagonal movement can circle around the opponent.
-6. Contact does not feel excessively sticky or like sliding along an invisible square wall.
-7. Non-contact grounded Movement still feels like the accepted ACTION-02B baseline.
-8. It is acceptable that there is still no real Push response yet.
-
-Additional observation to pay attention to:
-- circling may feel very free/frictionless because tangential velocity is intentionally preserved. This is not automatically a bug; User should judge the feel before Push is added.
-
-If accepted:
-- ACTION-03A Contact & Separation becomes current baseline.
-- Proceed to D1/D2 decisions and ACTION-03B Push & External Momentum.
-
-If rejected:
-- record the concrete Contact Feel issue and correct it before Push.
-
-## Regression Risks
-
-- Future Push positional correction being layered on top of Contact correction rather than entering through explicit external momentum.
-- Future mass weighting accidentally reintroducing stationary drift.
-- Tangential preservation becoming too frictionless once Push is present.
-- Higher-speed Tachiai/thrust states invalidating the current no-CCD assumption.
-- Contact SLOP becoming visible if body scale/presentation changes.
-
-## Next Task Constraints
-
-1. User Play Test ACTION-03A2 first.
-2. Do not create ACTION-03B implementation until Contact Feel is accepted.
-3. Before ACTION-03B, obtain User decisions:
-   - D1 Push semantic: recommended hold / continuous pressure
-   - D2 Prototype Push key: recommended ArrowUp, temporary only
-4. ACTION-03B may then introduce externalVelocity / push constants / impact transfer, but must preserve accepted Contact and Movement behavior when Push is absent.
-
-
-# User Play Test Result — 2026-10-18
-
-Contact Feel: ACCEPTED AS CURRENT BASELINE
-
-User feedback:
-- ACTION-03A2 Contact & Separation Play Test is acceptable.
-- No additional Contact correction is currently required.
-
-Accepted baseline:
-- Simulation-owned circular body geometry remains the Contact baseline.
-- Stationary participants do not drift from Contact-only positional correction.
-- One-sided inward penetration correction applies to the moving participant.
-- Two-sided inward correction is split by inward contribution.
-- Tangential motion remains preserved for circling.
-- CONTACT_SLOP / deterministic fallback / fixed-step ownership remain accepted.
-- No-contact ACTION-02B grounded Movement remains accepted.
-
-Next:
-- ACTION-03B Push & External Momentum may proceed after User decisions D1 and D2 are confirmed.
-- Do not reopen Contact Feel without a concrete regression or later interaction requirement.
-
-
-# User Decision Update — 2026-10-18
-
-D2 Prototype Push Key: ACCEPTED
-- ArrowUp is accepted as the temporary Prototype binding for Push.
-- This does not determine the final control scheme.
-
-D1 Push Input Semantics: STILL UNDECIDED
-- User wants timing-based counterplay:
-  - Pull / deflection (Down) timed against Push
-  - lateral evasion
-- Do not assume hold semantics.
-- User is considering a discrete committed Push that advances slightly forward.
-- Resolve D1 before ACTION-03B implementation task is created.
+「ACTION-03B-DISCRETE-PUSH-EXTERNAL-MOMENTUM が完了し、ChatGPT ReviewとUser Play Test待ちです」
