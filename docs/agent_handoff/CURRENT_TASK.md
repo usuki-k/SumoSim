@@ -1,5 +1,5 @@
 Task-ID: ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / FOCUSED GAME FEEL CORRECTION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -414,3 +414,117 @@ Commit / Push / Completion Report後停止し、
 「ACTION-02B-GROUNDED-MOVEMENT-FEEL-CORRECTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
 
 と日本語で報告する。
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+
+## Accepted Baseline
+
+- Accepted implementation commit for technical review: `29073732a123163bb11e81d7b4b82ac7ffeb5bbd`
+- Agent-Start-Head: `d282a51eae4f88e465a6125f596c64d416aa17d3`
+- Agent Task Diff is exactly one implementation commit.
+- Changed Production scope is limited to `BoutSimulation.ts` / tests plus Current-State docs and Completion Report.
+- Scene / Input / FixedStepAccumulator / package / lockfile were not changed.
+- Technical Verification is accepted from Completion Report + direct Source/Diff review.
+- Movement Feel is NOT accepted until User Play Test.
+
+## Accepted Decisions
+
+- ACTION-02 architecture remains accepted:
+  - screen/world-relative WASD
+  - Pure TypeScript canonical position / velocity / facing
+  - fixed timestep + accumulator
+  - semantic movement intent
+  - one-way Snapshot rendering
+  - auto-facing
+  - no Phaser Physics / Matter.js
+- Velocity remains canonical runtime state for later Push / Momentum work.
+- Grounded movement now decomposes velocity relative to desired movement direction:
+  - parallel component for forward acceleration / reverse braking
+  - perpendicular component for stronger lateral damping
+- No-input movement uses stronger explicit braking to exact zero.
+- Reverse input brakes existing opposite momentum to zero before accelerating in the new direction.
+- 90-degree turns explicitly damp old lateral velocity instead of carrying ice-like arc momentum.
+- A final MAX_SPEED clamp preserves the speed invariant during turning.
+- Current provisional values are:
+  - MAX_SPEED = 3 m/s
+  - FORWARD_ACCELERATION = 10 m/s²
+  - STOP_DECELERATION = 24 m/s²
+  - LATERAL_DECELERATION = 36 m/s²
+  - REVERSE_BRAKING = 30 m/s²
+  - SIMULATION_HZ = 60
+- These values are Prototype tuning values only and are not final accepted balance.
+- No Collision / Push / Ring-out / Rikishi attributes / Animation / Physics scope creep was introduced.
+- The stale AGENTS.md Phaser wording from ACTION-02 has been corrected.
+
+## Corrections
+
+NONE required before User Play Test.
+
+## Do Not Reopen
+
+- Do not replace this with Phaser Physics merely to alter movement feel.
+- Do not change screen-relative WASD without explicit User request.
+- Do not remove canonical velocity; later Push / Momentum should build on it.
+- Do not add Weight / LowerBody / Stamina to solve the current movement feel before their dedicated design.
+- Do not add Collision / Push / Ring-out until Movement Feel is accepted.
+- Do not treat current movement constants as final balance.
+- Do not add Animation as a substitute for unresolved Simulation movement feel.
+
+## Deferred
+
+- body collision / separation
+- push / impulse / momentum transfer
+- ring-out / victory
+- Rikishi Weight / Power / LowerBody influence
+- FREE / GRAPPLED / LIFTED
+- Tachiai
+- grapple / throw / lift
+- stamina / balance
+- CPU gameplay
+- Touch / Gamepad
+- animation / footsteps
+- short-tap input buffering
+- render interpolation
+
+## User Play Test
+
+REQUIRED / PENDING.
+
+User should compare directly against the rejected ACTION-02 feel.
+
+Verify:
+
+1. The previous skating / ice-gliding sensation is materially reduced.
+2. Starting movement still has enough body weight without feeling sluggish.
+3. Releasing WASD feels like planting the feet / stopping, not coasting.
+4. A 90-degree direction change does not produce an obvious sliding arc.
+5. Reversing direction feels weighted but responsive.
+6. Sideways/backward movement while auto-facing remains controllable.
+7. Movement is not now too stiff or robotic.
+8. This feels closer to a human / rikishi moving on the dohyo and is acceptable as the baseline for later Push/Contact work.
+
+If accepted:
+- ACTION-02B Movement Feel becomes the current baseline.
+- Push / Contact / Collision Investigation may be created next.
+- Numeric values remain tunable later when Weight / Push / stamina interactions are introduced.
+
+If rejected:
+- record the concrete feel issue and perform another focused Movement correction.
+- do not proceed to Push / Contact / Collision.
+
+## Regression Risks
+
+- Later Push code overwriting the grounded movement model rather than applying impulse/momentum through the canonical velocity boundary.
+- Weight/LowerBody tuning accidentally changing ordinary locomotion beyond the accepted User baseline.
+- Strong lateral damping making future external push impulses disappear too quickly unless self-locomotion damping vs external impulse semantics are designed explicitly.
+- Current provisional constants becoming treated as permanent balance values.
+
+## Next Task Constraints
+
+1. User Play Test ACTION-02B first.
+2. Do not create Push / Contact / Collision implementation before User acceptance.
+3. After User accepts Movement Feel, create the previously required focused Push / Contact / Collision Investigation / Design Task.
+4. That design must explicitly consider how grounded self-movement damping interacts with external push/impulse so that future pushing is not unintentionally cancelled by the locomotion grip model.
