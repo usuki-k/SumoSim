@@ -528,3 +528,27 @@ If rejected:
 2. Do not create Push / Contact / Collision implementation before User acceptance.
 3. After User accepts Movement Feel, create the previously required focused Push / Contact / Collision Investigation / Design Task.
 4. That design must explicitly consider how grounded self-movement damping interacts with external push/impulse so that future pushing is not unintentionally cancelled by the locomotion grip model.
+
+
+# User Play Test Result — 2026-10-18
+
+Movement Feel: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- The previous skating / ice-gliding sensation is materially reduced.
+- Current movement is acceptable for now.
+- It still does not fully feel human / rikishi-like, but the User does not yet have a concrete preferred correction direction.
+
+Accepted baseline:
+- Keep the current grounded movement model and current provisional tuning as the working baseline for subsequent Action work.
+- This acceptance is about current Movement Feel only; numeric constants remain tunable when later Push / Weight / LowerBody / Stamina interactions are introduced.
+- Do not reopen Movement Feel preemptively without a concrete regression, new interaction requirement, or User feedback.
+
+Deferred feel improvement:
+- Additional human/rikishi-like locomotion feel is deferred until there is concrete evidence from later gameplay interactions.
+- Candidate future sources of that feel may include Push/Contact response, body/weight parameters, animation/footwork presentation, or action commitment, but none are accepted solutions yet.
+- Do not add any of those systems solely to chase an undefined movement feel issue.
+
+Next Task Constraint:
+- Movement baseline is accepted, so Push / Contact / Collision Investigation may proceed.
+- Push / Contact / Collision must preserve the accepted grounded locomotion behavior unless an explicit interaction rule requires otherwise.
