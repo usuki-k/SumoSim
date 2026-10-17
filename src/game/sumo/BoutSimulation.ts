@@ -19,11 +19,20 @@ export const STOP_DECELERATION = 24 // m/s^2, braking with no input (and when ov
 export const LATERAL_DECELERATION = 36 // m/s^2, damping of velocity perpendicular to the desired direction
 export const REVERSE_BRAKING = 30 // m/s^2, killing velocity that opposes the desired direction
 
+// Gameplay body geometry (provisional; equal for both participants, not final rikishi size).
+export const BODY_RADIUS = 0.35 // m
+// Contact is detected within this distance of touching, so resting contact does not flicker.
+export const CONTACT_SLOP = 0.002 // m
+
+// Below this center distance the contact normal is undefined and a fallback is used.
+const MIN_CONTACT_DISTANCE = 1e-9
+
 interface MutableParticipant {
   id: string
   position: { x: number; y: number }
   velocity: { x: number; y: number }
   facing: number
+  bodyRadius: number
 }
 
 function assertFiniteVec2(v: Vec2, label: string): void {
@@ -133,6 +142,7 @@ export class BoutSimulation {
       position: { x: p.position.x, y: p.position.y },
       velocity: { x: 0, y: 0 },
       facing: 0,
+      bodyRadius: BODY_RADIUS,
     }))
     this.updateFacing()
   }
@@ -146,6 +156,7 @@ export class BoutSimulation {
       p.position.x += p.velocity.x * TICK_SECONDS
       p.position.y += p.velocity.y * TICK_SECONDS
     }
+    this.resolveContact()
     this.updateFacing()
   }
 
@@ -159,8 +170,50 @@ export class BoutSimulation {
           position: { x: p.position.x, y: p.position.y },
           velocity: { x: p.velocity.x, y: p.velocity.y },
           facing: p.facing,
+          bodyRadius: p.bodyRadius,
         }),
       ),
+    }
+  }
+
+  // Two-circle contact: removes the closing normal self velocity (tangential kept) and separates
+  // any overlap symmetrically (equal participants; no mass weighting yet).
+  private resolveContact(): void {
+    const [a, b] = this.participants
+    const dx = b.position.x - a.position.x
+    const dy = b.position.y - a.position.y
+    const distance = Math.hypot(dx, dy)
+    const combined = a.bodyRadius + b.bodyRadius
+    if (distance > combined + CONTACT_SLOP) return
+
+    // Normal A -> B. Same-center fallback: A's facing, which is always finite.
+    let nx: number
+    let ny: number
+    if (distance > MIN_CONTACT_DISTANCE) {
+      nx = dx / distance
+      ny = dy / distance
+    } else {
+      nx = Math.cos(a.facing)
+      ny = Math.sin(a.facing)
+    }
+
+    const closingA = a.velocity.x * nx + a.velocity.y * ny // A moving toward B
+    if (closingA > 0) {
+      a.velocity.x -= closingA * nx
+      a.velocity.y -= closingA * ny
+    }
+    const closingB = -(b.velocity.x * nx + b.velocity.y * ny) // B moving toward A
+    if (closingB > 0) {
+      b.velocity.x += closingB * nx
+      b.velocity.y += closingB * ny
+    }
+
+    if (distance < combined) {
+      const half = (combined - distance) / 2
+      a.position.x -= nx * half
+      a.position.y -= ny * half
+      b.position.x += nx * half
+      b.position.y += ny * half
     }
   }
 

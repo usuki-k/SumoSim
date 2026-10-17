@@ -29,7 +29,6 @@ const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
 ]
 
 // Provisional presentation values.
-const BODY_RADIUS_METERS = 0.35
 const RING_FILL_RATIO = 0.9 // ring radius as a fraction of half the canvas
 
 // Accumulator limits (provisional safety values).
@@ -95,8 +94,9 @@ export class BoutScene extends Phaser.Scene {
     ring.lineStyle(8, 0xf2e6c9, 1)
     ring.strokeCircle(this.origin.x, this.origin.y, ringPixels)
 
-    const bodyPixels = BODY_RADIUS_METERS * this.pixelsPerMeter
     for (const style of PARTICIPANT_PRESENTATION) {
+      const radius = snapshot.participants.find((q) => q.id === style.id)?.bodyRadius ?? 0
+      const bodyPixels = radius * this.pixelsPerMeter
       const body = this.add.circle(0, 0, bodyPixels, style.color).setStrokeStyle(3, 0xffffff)
       const facingMarker = this.add.circle(0, 0, bodyPixels * 0.25, 0xffffff)
       const label = this.add
@@ -142,10 +142,10 @@ export class BoutScene extends Phaser.Scene {
 
   // One-way sync: simulation snapshot -> persistent GameObjects.
   private syncViews(): void {
-    const bodyPixels = BODY_RADIUS_METERS * this.pixelsPerMeter
     for (const participant of this.simulation.getSnapshot().participants) {
       const view = this.views.get(participant.id)
       if (!view) continue
+      const bodyPixels = participant.bodyRadius * this.pixelsPerMeter
       const pos = this.toCanvas(participant.position)
       view.body.setPosition(pos.x, pos.y)
       view.facingMarker.setPosition(

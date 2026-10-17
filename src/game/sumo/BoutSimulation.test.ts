@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BODY_RADIUS,
+  CONTACT_SLOP,
   FORWARD_ACCELERATION,
   LATERAL_DECELERATION,
   REVERSE_BRAKING,
@@ -387,6 +389,206 @@ describe('grounded movement model (ACTION-02B)', () => {
     expect(speedOf(a(sim).velocity)).toBeCloseTo(MAX_SPEED * 0.5, 9)
     stepN(sim, 200, intent(0.25, 0)) // above target: brakes down to it
     expect(speedOf(a(sim).velocity)).toBeCloseTo(MAX_SPEED * 0.25, 9)
+  })
+})
+
+describe('contact & separation (ACTION-03A)', () => {
+  const R = BODY_RADIUS
+  const COMBINED = 2 * R
+
+  function setupAt(ax: number, ay: number, bx: number, by: number): BoutSetup {
+    return {
+      arena: { radius: 100 },
+      participants: [
+        { id: 'a', position: { x: ax, y: ay } },
+        { id: 'b', position: { x: bx, y: by } },
+      ],
+    }
+  }
+  const dist = (sim: BoutSimulation) => {
+    const [p, q] = sim.getSnapshot().participants
+    return Math.hypot(q.position.x - p.position.x, q.position.y - p.position.y)
+  }
+  const intentsFor = (ax: number, ay: number, bx = 0, by = 0) =>
+    new Map<ParticipantId, ParticipantIntent>([
+      ['a', { move: { x: ax, y: ay } }],
+      ['b', { move: { x: bx, y: by } }],
+    ])
+
+  it('exposes the simulation-owned body radius in the snapshot (isolated copy)', () => {
+    const sim = new BoutSimulation(setupAt(-2, 0, 2, 0))
+    const snap = sim.getSnapshot()
+    expect(snap.participants.map((p) => p.bodyRadius)).toEqual([BODY_RADIUS, BODY_RADIUS])
+    ;(snap.participants[0] as unknown as { bodyRadius: number }).bodyRadius = 99
+    expect(sim.getSnapshot().participants[0].bodyRadius).toBe(BODY_RADIUS)
+  })
+
+  it('T19: exact touch applies no overlap correction and stays stable', () => {
+    const sim = new BoutSimulation(setupAt(0, 0, COMBINED, 0))
+    stepN(sim, 120)
+    const [p, q] = sim.getSnapshot().participants
+    expect(p.position).toEqual({ x: 0, y: 0 })
+    expect(q.position).toEqual({ x: COMBINED, y: 0 })
+  })
+
+  it('T19: contact slop does not create a gap or push apart', () => {
+    const gap = COMBINED + CONTACT_SLOP / 2
+    const sim = new BoutSimulation(setupAt(0, 0, gap, 0))
+    stepN(sim, 60)
+    expect(dist(sim)).toBeCloseTo(gap, 12)
+  })
+
+  it('T20: slight overlap is separated symmetrically to non-overlap', () => {
+    const overlap = 0.1
+    const sim = new BoutSimulation(setupAt(-0.3, 0, -0.3 + COMBINED - overlap, 0))
+    sim.step(NO_INTENT)
+    const [p, q] = sim.getSnapshot().participants
+    expect(dist(sim)).toBeGreaterThanOrEqual(COMBINED - 1e-12)
+    expect(dist(sim)).toBeCloseTo(COMBINED, 10)
+    expect(p.position.x).toBeCloseTo(-0.3 - overlap / 2, 10)
+    expect(q.position.x).toBeCloseTo(-0.3 + COMBINED - overlap + overlap / 2, 10)
+    expect(p.position.y).toBe(0)
+    expect(q.position.y).toBe(0)
+  })
+
+  it('T21: same center uses a deterministic fallback normal and separates safely', () => {
+    const run = () => {
+      const sim = new BoutSimulation(setupAt(0, 0, 0, 0))
+      sim.step(NO_INTENT)
+      return sim.getSnapshot()
+    }
+    const snap = run()
+    expect(run()).toEqual(snap)
+    for (const p of snap.participants) {
+      for (const v of [p.position.x, p.position.y, p.velocity.x, p.velocity.y, p.facing]) {
+        expect(Number.isFinite(v)).toBe(true)
+      }
+    }
+    const [p, q] = snap.participants
+    expect(Math.hypot(q.position.x - p.position.x, q.position.y - p.position.y)).toBeCloseTo(
+      COMBINED,
+      10,
+    )
+    // A facing starts at 0 (+x): B is moved toward +x, A toward -x
+    expect(q.position.x).toBeGreaterThan(p.position.x)
+  })
+
+  it('T22: head-on approach at max speed never tunnels or swaps sides', () => {
+    const sim = new BoutSimulation(setupAt(-3, 0, 3, 0))
+    for (let i = 0; i < 400; i++) {
+      sim.step(intentsFor(1, 0, -1, 0))
+      const [p, q] = sim.getSnapshot().participants
+      expect(q.position.x - p.position.x).toBeGreaterThanOrEqual(COMBINED - 1e-9)
+      if (dist(sim) <= COMBINED + CONTACT_SLOP) {
+        expect(p.velocity.x).toBeLessThanOrEqual(1e-9) // closing normal removed at contact
+        expect(q.velocity.x).toBeGreaterThanOrEqual(-1e-9)
+      }
+    }
+    const [fp, fq] = sim.getSnapshot().participants
+    expect(fp.velocity.x).toBeLessThanOrEqual(1e-9)
+    expect(fq.velocity.x).toBeGreaterThanOrEqual(-1e-9)
+    expect(dist(sim)).toBeCloseTo(COMBINED, 9)
+  })
+
+  it('T22: a fast approach into a stationary body does not pass through it', () => {
+    const sim = new BoutSimulation(setupAt(-3, 0, 0, 0))
+    for (let i = 0; i < 400; i++) {
+      sim.step(intentsFor(1, 0))
+      const [p, q] = sim.getSnapshot().participants
+      expect(p.position.x).toBeLessThan(q.position.x)
+    }
+  })
+
+  it('T22: worst-case per-tick approach displacement stays below the combined radius', () => {
+    expect(2 * MAX_SPEED * TICK_SECONDS).toBeLessThan(COMBINED)
+  })
+
+  it('T23: glancing contact keeps tangential velocity so the body can circle', () => {
+    const sim = new BoutSimulation(setupAt(-0.4, 0.55, 0, 0))
+    const start = sim.getSnapshot().participants[0].position
+    stepN(sim, 90, intentsFor(1, -0.2))
+    const [p, q] = sim.getSnapshot().participants
+    expect(Math.hypot(p.position.x - start.x, p.position.y - start.y)).toBeGreaterThan(0.3)
+    expect(Math.hypot(p.velocity.x, p.velocity.y)).toBeGreaterThan(0)
+    const nx = (q.position.x - p.position.x) / dist(sim)
+    const ny = (q.position.y - p.position.y) / dist(sim)
+    expect(p.velocity.x * nx + p.velocity.y * ny).toBeLessThanOrEqual(1e-9)
+    expect(dist(sim)).toBeGreaterThanOrEqual(COMBINED - 1e-9)
+  })
+
+  it('T23: velocity is not zeroed on contact (only the closing normal part is removed)', () => {
+    const sim = new BoutSimulation(setupAt(-0.3, 0.6, 0.3, 0))
+    stepN(sim, 30, intentsFor(1, 0))
+    const v = sim.getSnapshot().participants[0].velocity
+    expect(Math.hypot(v.x, v.y)).toBeGreaterThan(0)
+  })
+
+  it('T24: two participants walking at each other settle without jitter', () => {
+    const sim = new BoutSimulation(setupAt(-2, 0, 2, 0))
+    stepN(sim, 200, intentsFor(1, 0, -1, 0))
+    const settled = sim.getSnapshot().participants.map((p) => ({ ...p.position }))
+    for (let i = 0; i < 300; i++) {
+      sim.step(intentsFor(1, 0, -1, 0))
+      const now = sim.getSnapshot().participants
+      expect(Math.abs(now[0].position.x - settled[0].x)).toBeLessThan(1e-9)
+      expect(Math.abs(now[1].position.x - settled[1].x)).toBeLessThan(1e-9)
+      expect(Math.abs(now[0].position.y - settled[0].y)).toBeLessThan(1e-9)
+    }
+    expect(dist(sim)).toBeCloseTo(COMBINED, 9)
+  })
+
+  it('T25: without contact, movement is identical to having a distant opponent', () => {
+    const near = new BoutSimulation(setupAt(-1.5, 0, 1.5, 0))
+    const far = new BoutSimulation(setupAt(-1.5, 0, 1000, 0))
+    const script: [number, number, number][] = [
+      [30, 0, -1],
+      [20, -1, -1],
+      [25, -1, 0],
+      [15, 0, 0],
+    ]
+    for (const [n, x, y] of script) {
+      for (let i = 0; i < n; i++) {
+        near.step(intentsFor(x, y))
+        far.step(intentsFor(x, y))
+        expect(dist(near)).toBeGreaterThan(COMBINED + CONTACT_SLOP)
+        expect(near.getSnapshot().participants[0].velocity).toEqual(
+          far.getSnapshot().participants[0].velocity,
+        )
+        expect(near.getSnapshot().participants[0].position).toEqual(
+          far.getSnapshot().participants[0].position,
+        )
+      }
+    }
+  })
+
+  it('T28: contact scenarios are deterministic and always finite', () => {
+    const run = () => {
+      const sim = new BoutSimulation(setupAt(-1, 0.2, 1, -0.1))
+      for (const ang of [0, 1.2, 2.5, 3.9, 5.1]) {
+        for (let i = 0; i < 80; i++) {
+          sim.step(intentsFor(Math.cos(ang), Math.sin(ang), Math.cos(ang + 3), Math.sin(ang + 3)))
+          for (const p of sim.getSnapshot().participants) {
+            for (const v of [p.position.x, p.position.y, p.velocity.x, p.velocity.y, p.facing]) {
+              expect(Number.isFinite(v)).toBe(true)
+            }
+          }
+          expect(dist(sim)).toBeGreaterThanOrEqual(COMBINED - 1e-9)
+        }
+      }
+      return sim.getSnapshot()
+    }
+    expect(run()).toEqual(run())
+  })
+
+  it('records the position-correction creep of a stationary body pushed against (finding)', () => {
+    // Symmetric separation moves the stationary body slightly while the other keeps walking in.
+    const sim = new BoutSimulation(setupAt(-1, 0, 0, 0))
+    stepN(sim, 200, intentsFor(1, 0))
+    const bx0 = sim.getSnapshot().participants[1].position.x
+    stepN(sim, 60, intentsFor(1, 0))
+    const creepPerSecond = sim.getSnapshot().participants[1].position.x - bx0
+    expect(creepPerSecond).toBeGreaterThan(0)
+    expect(creepPerSecond).toBeLessThan(0.2)
   })
 })
 

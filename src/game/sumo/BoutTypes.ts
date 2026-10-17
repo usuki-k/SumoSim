@@ -38,6 +38,8 @@ export interface ParticipantState {
   readonly position: Vec2
   readonly velocity: Vec2
   readonly facing: number
+  // Gameplay contact radius in meters (simulation-owned; presentation reads it from the snapshot).
+  readonly bodyRadius: number
 }
 
 export interface BoutSnapshot {
