@@ -648,3 +648,25 @@ If User rejects or identifies a concrete issue:
 3. After Movement Feel is accepted, create a focused Push / Contact / Collision Investigation or Design Task.
 4. That design gate must define body/contact representation, separation semantics, push/impulse ownership, weight/mass boundary, momentum transfer, ring-out geometry, numerical boundary cases, and tuning-vs-rule separation before Production implementation.
 5. Tachiai remains later; seamless Tachiai→Action transition is not required.
+
+
+# User Play Test Result — 2026-10-18
+
+Movement Feel: NOT ACCEPTED YET
+
+User feedback:
+- Current movement feels too much like skating / gliding on ice.
+- User wants more sense of human body weight / grounded human movement.
+
+Interpretation:
+- Technical Movement Architecture remains accepted.
+- Screen-relative WASD and auto-facing remain accepted unless separately changed.
+- Current provisional movement tuning/model feel is NOT accepted as the gameplay baseline.
+- Do not proceed to Push / Contact / Collision design until Movement Feel is corrected and re-tested.
+
+Next correction direction:
+- Keep Pure TypeScript canonical movement + fixed timestep + semantic intent architecture.
+- Investigate/tune grounded locomotion behavior rather than replacing the architecture.
+- In particular, review max speed, acceleration, braking/deceleration, and direction-change behavior.
+- Avoid solving this with Phaser Physics or unrelated animation/collision work.
+- After correction, User Play Test remains the acceptance gate.
