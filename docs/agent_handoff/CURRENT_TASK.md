@@ -1,5 +1,5 @@
 Task-ID: ACTION-03A2-CONTACT-CREEP-CORRECTION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / FOCUSED CONTACT CORRECTION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -391,3 +391,125 @@ Do not continue to Push / external momentum / Ring-out.
 After commit / push / Completion Report, stop and report:
 
 「ACTION-03A2-CONTACT-CREEP-CORRECTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+
+## Accepted Baseline
+
+- Accepted implementation commit for technical review: `c11edc5c6e3ffcb7dcb192b4f80bb5af1243fb72`
+- Agent-Start-Head: `417cec630b82e37b675fae04ad8537ea8d2e31c5`
+- Agent Task Diff is one implementation commit.
+- Changed Production scope is limited to contact correction logic/tests plus Current-State docs and Completion Report.
+- Technical Verification is accepted from Completion Report + direct Source/Diff review.
+- Contact Feel remains NOT accepted until User Play Test.
+
+## Accepted Decisions
+
+- ACTION-03A Contact architecture remains accepted:
+  - Simulation-owned circle body geometry
+  - `BODY_RADIUS = 0.35 m` provisional
+  - `CONTACT_SLOP = 0.002 m` provisional
+  - deterministic normal / same-center fallback
+  - closing normal self-velocity removal
+  - tangential velocity preservation
+  - fixed-step Pure TypeScript ownership
+  - no Phaser Physics / Matter.js
+- Penetration correction is now assigned by inward self-locomotion contribution:
+  - one-sided inward motion → only the inward-moving participant is corrected backward
+  - two-sided inward motion → overlap correction is split proportionally to inward contributions
+  - equal inward motion → symmetric split
+  - no meaningful inward contribution → deterministic fallback
+- The focused Case-D refinement is accepted for the current Prototype:
+  - if inward contribution is effectively zero but only one participant still has motion, correct that moving participant rather than translating the stationary participant
+  - if both/neither are moving, use 50/50 fallback
+- This refinement is accepted because it prevents curvature/circling contact from reintroducing slow stationary-body creep.
+- Stationary participant drift from Contact-only positional correction is no longer part of the baseline.
+- Push / externalVelocity / mass / Ring-out remain unimplemented as required.
+- No-contact ACTION-02B grounded Movement remains the accepted baseline.
+
+## Design Deviation Review
+
+Reported deviation:
+- Planned: zero-inward Case D always uses 50/50 fallback.
+- Implemented: zero-inward + only-one-moving uses full correction on the moving participant.
+
+Review result: ACCEPTED FOR CURRENT CONTACT PROTOTYPE.
+
+Reason:
+- preserves the explicit Task goal that Contact alone must not move a stationary opponent
+- avoids the measured long-term circling creep
+- does not introduce Push, mass, external momentum, or a new framework
+- remains deterministic and tested
+- does not alter normal one-sided/two-sided inward cases
+
+This is not a permanent physical model. If future Push/traction/mass interaction requires a different contact projection rule, it must be revisited explicitly rather than silently changed.
+
+## Corrections
+
+NONE required before User Play Test.
+
+## Do Not Reopen
+
+- Do not restore unconditional 50/50 separation for one-sided walk-in.
+- Do not add Push / externalVelocity / mass before ACTION-03B.
+- Do not change accepted grounded Movement to solve Contact issues.
+- Do not introduce Physics / CCD without new high-speed evidence.
+- Do not treat body radius / slop values as final Rikishi tuning.
+- Do not conflate Contact positional correction with actual Push force.
+
+## Deferred
+
+- explicit Push / press input
+- externalVelocity / impact transfer
+- mass / pushForce / traction
+- Weight / Power / LowerBody
+- Ring-out / BoutOutcome
+- Tachiai / thrust / pull / counter
+- Grapple / Throw / Lift
+- Stamina / Balance
+- CCD for future higher-speed states
+
+## User Play Test
+
+REQUIRED / READY.
+
+User should verify in Browser:
+
+1. Player cannot pass through the stationary opponent.
+2. Holding movement directly into the opponent does not visibly drift the opponent.
+3. Contact does not leave a noticeable artificial gap.
+4. Resting contact does not jitter/shake.
+5. Diagonal movement can circle around the opponent.
+6. Contact does not feel excessively sticky or like sliding along an invisible square wall.
+7. Non-contact grounded Movement still feels like the accepted ACTION-02B baseline.
+8. It is acceptable that there is still no real Push response yet.
+
+Additional observation to pay attention to:
+- circling may feel very free/frictionless because tangential velocity is intentionally preserved. This is not automatically a bug; User should judge the feel before Push is added.
+
+If accepted:
+- ACTION-03A Contact & Separation becomes current baseline.
+- Proceed to D1/D2 decisions and ACTION-03B Push & External Momentum.
+
+If rejected:
+- record the concrete Contact Feel issue and correct it before Push.
+
+## Regression Risks
+
+- Future Push positional correction being layered on top of Contact correction rather than entering through explicit external momentum.
+- Future mass weighting accidentally reintroducing stationary drift.
+- Tangential preservation becoming too frictionless once Push is present.
+- Higher-speed Tachiai/thrust states invalidating the current no-CCD assumption.
+- Contact SLOP becoming visible if body scale/presentation changes.
+
+## Next Task Constraints
+
+1. User Play Test ACTION-03A2 first.
+2. Do not create ACTION-03B implementation until Contact Feel is accepted.
+3. Before ACTION-03B, obtain User decisions:
+   - D1 Push semantic: recommended hold / continuous pressure
+   - D2 Prototype Push key: recommended ArrowUp, temporary only
+4. ACTION-03B may then introduce externalVelocity / push constants / impact transfer, but must preserve accepted Contact and Movement behavior when Push is absent.
