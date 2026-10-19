@@ -651,3 +651,29 @@ If Browser Smoke reveals a functional/runtime problem:
 - Stamina / Balance
 - Tachiai
 - Grapple / Throw / Lift
+
+
+# User Play Test Result — 2026-10-19
+
+Contested Push Validation: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- Browser / manual Play Test is OK.
+- Incoming Push works.
+- Simultaneous Push contest / stalemate feels natural.
+- Current Push distance still feels somewhat too short.
+- Push distance is NOT a blocker and should not be tuned now; defer until later parameter/balance work.
+
+Accepted baseline:
+- ACTION-03B2 Dummy harness is sufficient as a validation tool.
+- Existing equal-stat contested Push semantics are accepted for now.
+- Push Core / Contact / Movement baseline remains accepted.
+- Do not reopen Push distance tuning preemptively.
+
+Deferred:
+- forward step distance
+- opponent displacement amount
+- Push tuning with future Weight / Power / LowerBody / traction / stamina / balance interactions
+
+Next:
+- proceed to focused investigation/design for Down pull / deflection Counter.
