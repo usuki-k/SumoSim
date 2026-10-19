@@ -1,5 +1,5 @@
 Task-ID: ACTION-05B1-GRAPPLED-ORIENTATION-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE GRAPPLED ORIENTATION FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -524,3 +524,258 @@ Do not continue to Drive, Throw, Lift, directional Push advantage, Ring-out, or 
 
 After commit/push/report:
 「ACTION-05B1-GRAPPLED-ORIENTATION-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `f28542fce7b5996916a7769b9690905c41ca0608`
+- Agent-Start-Head:
+  `02e3aa652d8f0b1c9368b6559ee341a640155da5`
+- Agent Task Diff is exactly one implementation commit.
+- `main` remains unchanged.
+- No new dependency.
+- Scope is limited to Grappled Orientation helpers, Simulation integration, focused tests, debug presentation, and Current-State docs.
+
+## Reported Implementation vs Design
+
+PASS.
+
+Direct Source review confirmed:
+
+### Canonical state / derived readiness
+
+- no persistent side/rear/orientation/timer state was added.
+- readiness is derived from canonical:
+  - participant position
+  - participant facing
+  - pair Engagement.
+- `BoutTypes.ts` required no new canonical field.
+
+### Shared Pure helper
+
+`src/game/sumo/grappleOrientation.ts` is Phaser-free and owns:
+
+- `normalizeAngle`
+- `grappleFacingError`
+- `isGrappleReady`
+- `turnFacingTowardGrapple`
+- `canActInGrapple`
+
+Simulation and Scene both reuse this boundary; the facing formula is not duplicated in Phaser.
+
+### Accepted provisional values
+
+- `GRAPPLE_TURN_RATE = Math.PI` rad/s = 180°/s
+- `GRAPPLE_FACING_TOLERANCE = Math.PI / 12` = 15°
+
+### FREE vs GRAPPLED facing
+
+- FREE stable auto-facing remains immediate.
+- FREE Kuzushi facing freeze remains unchanged.
+- GRAPPLED facing rotates by at most 3° per 60Hz tick.
+- positions are not orbited by the orientation rule.
+- Grapple bond remains radial-only.
+
+### Rear tie
+
+- exact/effectively ±π error takes one fixed +angular direction.
+- no randomness or participant-array tie winner.
+
+### Tick ownership
+
+- release/action readiness is checked from the state at tick start.
+- orientation turning occurs at tick end.
+- entering tolerance at tick t end permits action only from tick t+1.
+
+### Release gate
+
+- TURNING participant Shift edge is ignored.
+- no Grip Recovery is created.
+- input is not queued.
+- READY participant can release with existing ACTION-05A semantics.
+- READY + TURNING simultaneous Shift lets only READY participant release.
+
+### Morozashi separation
+
+- Morozashi holder remains persistent in Engagement.
+- orientation READY/TURNING remains derived.
+- no combined side/rear-Morozashi state.
+
+### Counter integration
+
+- Success→Grip produces a side-facing disadvantage.
+- Best→Grip produces a rear-facing disadvantage.
+- same orientation rule is used for both; Counter tier is not special-cased.
+- rear takes materially longer to become READY than side.
+
+## Verification Review
+
+Reported:
+
+- `pnpm test`: 163/163 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+- prior 148 tests PASS with zero modifications
+- T115–T129 added
+
+Direct test inspection confirms:
+
+- normalizeAngle / -π→+π
+- front Grip immediate READY
+- side gradual turning
+- rear longer turning
+- shortest signed turn
+- exact rear deterministic tie
+- max turn / snap / no overshoot
+- inclusive tolerance helper boundary
+- next-tick action eligibility
+- TURNING release ignored/no queue
+- READY release regression
+- mixed READY/TURNING release
+- Morozashi persistence / no duplicate orientation state
+- bond/position stability
+- FREE/Kuzushi facing regressions
+- deterministic replay / finite facing
+
+## Non-Blocking Note — Floating-point boundary
+
+The nominal geometry gives:
+
+- side: 90° → 15° at 3°/tick
+- rear: 180° → 15° at 3°/tick
+
+which suggests 25 / 55 turn steps.
+
+In current integrated floating-point arithmetic, the Report observes 26 / 56 updates because a mathematically boundary-equal value can remain microscopically outside the tolerance.
+
+This is non-blocking:
+- deterministic
+- one tick = ~16.7 ms
+- side remains clearly shorter than rear
+- direct tolerance-boundary helper tests are correct.
+
+Do not change the helper solely for theoretical tick-count purity before User Play Test.
+
+If a later exact-timing requirement needs it, add the smallest explicit numerical tolerance with focused boundary tests rather than changing Gameplay constants.
+
+## Browser Smoke
+
+NOT RUN due Agent environment limitation.
+
+This is a Known Untested runtime item, not a Source failure.
+
+## Accepted Technical Baseline Pending Play Test
+
+If User Play Test passes:
+
+- FREE instant auto-facing remains baseline
+- GRAPPLED auto-turn = 180°/s provisional
+- READY tolerance = 15° provisional
+- readiness is derived, not stored
+- frontal Grip is immediately READY
+- side Grip creates shorter TURNING
+- rear Grip creates longer TURNING
+- TURNING participant cannot Release
+- ignored TURNING Shift is not queued
+- READY participant Release preserves ACTION-05A semantics
+- Morozashi and Orientation remain independent gameplay axes
+
+## User Play Test — REQUIRED / READY
+
+Run `pnpm dev`.
+
+### Front Grip
+
+1. Use stationary/normal frontal Grip.
+2. Confirm both sides show READY immediately.
+3. Confirm no artificial rotation delay was added.
+4. Shift release should still work normally.
+
+### Side orientation
+
+5. Mode 2: get a Counter Success so Player moves to CPU side.
+6. Shift Grip while CPU is Kuzushi.
+7. Confirm:
+   - Player is READY.
+   - CPU shows TURNING.
+   - CPU facing marker rotates gradually toward Player instead of snapping.
+   - TURNING lasts roughly a short fraction of a second.
+
+### Rear orientation
+
+8. Get a Counter Best so Player moves behind CPU.
+9. Shift Grip.
+10. Confirm:
+    - Player is READY.
+    - CPU starts near 180° away.
+    - CPU visibly turns for clearly longer than the side case.
+    - rear opening feels materially stronger than side opening.
+
+### Readability / regression
+
+11. Judge whether 180°/s is readable, not obviously too fast or too slow.
+12. Judge whether READY at 15° looks reasonable rather than visibly premature.
+13. Confirm TURNING/READY text agrees with the facing marker.
+14. Confirm grapple bond does not jitter while facing rotates.
+15. Confirm MOROZASHI display remains distinct from TURNING/READY.
+16. Confirm FREE Push / Counter / Movement / Grip remain unchanged.
+17. Check browser console/runtime errors.
+
+Known harness limitation:
+- Dummy does not Grip, so User cannot directly control a TURNING disadvantaged Player and test blocked Shift release interactively.
+- TURNING release blocking is technically covered by tests.
+
+Do not treat that harness limitation as a task failure.
+
+## Acceptance State
+
+Technical implementation: PASS.
+
+Orientation Feel: PENDING USER PLAY TEST.
+
+Do not start Grappled Drive until this focused Play Test is reviewed.
+
+If accepted:
+- ACTION-05B1 becomes the current Grappled Orientation baseline.
+- next candidate is ACTION-05C Grappled Drive / Yorikiri.
+
+If rejected:
+classify narrowly:
+- turn speed
+- READY tolerance
+- side/rear readability
+- facing direction/tie
+- release gate
+- presentation
+- runtime bug
+
+and correct only that area.
+
+## Do Not Reopen
+
+Unless concrete Play Test feedback requires it:
+
+- pair-level Engagement
+- Kuzushi→Morozashi
+- Counter Success side / Best rear geometry
+- no stored side/rear orientation state
+- FREE instant auto-facing
+- Grapple bond
+- Shift temporary Grip/Release binding
+
+## Deferred
+
+- Grappled Drive / Yorikiri
+- Morozashi Drive bonus
+- Throw
+- Lift
+- stat-scaled turn rate
+- manual grapple rotation
+- directional FREE Push advantage
+- Ring-out / BoutOutcome
+- final animation
