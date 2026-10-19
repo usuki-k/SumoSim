@@ -727,3 +727,65 @@ Unless User feedback provides a concrete reason:
 - directional side/rear Push advantage
 - Ring-out / BoutOutcome
 - final graphics / grapple animation
+
+
+# User Play Test Result — 2026-10-20
+
+ACTION-05A Grip / Engagement Foundation: ACCEPTED AS CURRENT FUNCTIONAL BASELINE
+
+User feedback:
+- Focused Play Test is OK.
+- Shift Grip / neutral grapple / Kuzushi→Morozashi / release / bond are functioning.
+- User identified a missing future distinction:
+  - Grip after taking the side
+  - Grip after taking the rear
+  currently lose most of their positional meaning once grapple establishes.
+
+## New Future Gameplay Requirement — Orientation Advantage
+
+User wants future behavior:
+
+- If a participant is gripped from the side or rear, that disadvantaged participant cannot immediately act.
+- The disadvantaged participant must first rotate / realign to face the opponent.
+- Until frontal alignment is restored:
+  - disadvantaged participant cannot use offensive/defensive grapple Actions
+  - advantaged participant may act unopposed
+- Rear should therefore create a stronger/longer positional opening than side.
+- This should make Counter Success(side) and Counter Best(rear) remain meaningfully different even after Grip.
+
+## Review Classification
+
+This is NOT a simple balance tweak.
+
+Current Source:
+- stable participants auto-face the opponent instantly every tick
+- ACTION-05A consumes Kuzushi on Morozashi establishment
+- therefore current auto-facing erases side/rear facing disadvantage immediately after Grip
+
+To support the new requirement, a future task must explicitly redesign Grappled facing/alignment semantics.
+
+Do not silently implement this as:
+- an arbitrary fixed stun timer
+- a hidden side/rear bonus flag duplicated from geometry
+- a presentation-only animation
+
+Preferred architecture direction to investigate:
+- facing remains Simulation-owned canonical state
+- GRAPPLED facing should no longer snap instantly when there is meaningful misalignment
+- action eligibility should be derived from current relative alignment/facing state
+- side/rear advantage should persist only until the disadvantaged participant has actually reoriented enough
+- avoid storing duplicate "side/rear" state if the same meaning can be derived from canonical positions/facing
+- exact turn speed / alignment threshold / whether holder can also rotate the pair are undecided
+
+## Deferred / Next-Task Constraint
+
+Before Grappled Drive / Throw implementation, investigate the minimum Grappled Orientation rule because it directly affects:
+- when each participant may Drive / Throw / Lift
+- whether Morozashi holder can act first
+- how Counter Best(rear) differs from Success(side)
+- future directional Push advantage
+- visual/gameplay readability of side/rear control
+
+Do not implement Drive/Throw on top of instant grapple auto-facing without reviewing this requirement.
+
+ACTION-05A itself remains accepted; do not reopen Grip Foundation unless the orientation design requires a material prerequisite.
