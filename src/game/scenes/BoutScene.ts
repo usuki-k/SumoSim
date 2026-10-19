@@ -5,6 +5,7 @@ import { PushDummyController, type DummyMode } from '../input/pushDummyControlle
 import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import type {
+  BoutEngagement,
   BoutSetup,
   ParticipantActionState,
   ParticipantId,
@@ -56,10 +57,20 @@ interface ParticipantView {
 function phaseLabel(action: ParticipantActionState, posture: ParticipantPosture): string {
   if (posture.kind === 'kuzushi') return 'KUZUSHI'
   if (action.kind === 'counter') return 'COUNTER'
+  if (action.kind === 'grip') return action.phase === 'reach' ? 'GRIP' : 'GRIP REC'
   if (action.kind !== 'push') return ''
   if (action.phase === 'startup') return 'STARTUP'
   if (action.phase === 'active') return 'PUSH'
   return 'RECOVERY'
+}
+
+// Presentation-only engagement label (holder shown by its presentation label).
+function engagementLabel(engagement: BoutEngagement): string {
+  if (engagement.kind === 'free') return 'ENGAGE: FREE'
+  if (engagement.advantage.kind === 'neutral') return 'ENGAGE: GRAPPLED'
+  const holderId = engagement.advantage.holderId
+  const holder = PARTICIPANT_PRESENTATION.find((style) => style.id === holderId)?.label ?? holderId
+  return `ENGAGE: MOROZASHI (${holder})`
 }
 
 interface MovementKeys {
@@ -79,9 +90,13 @@ export class BoutScene extends Phaser.Scene {
   private readonly pushLatch = new PressLatch()
   // Prototype binding: ArrowDown = Counter (temporary, not the final control scheme).
   private readonly counterLatch = new PressLatch()
+  // Prototype binding: Shift (either side) = Grip while free / Release while grappled.
+  private readonly gripLatch = new PressLatch()
   // Prototype test harness (not CPU AI): drives the CPU participant; mode keys 1 / 2.
   private readonly dummy = new PushDummyController('wrestler-b', 'wrestler-a')
   private modeText: Phaser.GameObjects.Text | null = null
+  private engagementText: Phaser.GameObjects.Text | null = null
+  private grappleLine: Phaser.GameObjects.Graphics | null = null
   private views = new Map<ParticipantId, ParticipantView>()
   private pixelsPerMeter = 1
   private origin: Vec2 = { x: 0, y: 0 }
@@ -109,6 +124,8 @@ export class BoutScene extends Phaser.Scene {
       // Key 'down' fires once per physical press (no auto-repeat while held).
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => this.pushLatch.press())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.counterLatch.press())
+      // SHIFT matches both the left and right Shift keys.
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT).on('down', () => this.gripLatch.press())
       // Prototype convenience: R restarts from the prototype setup.
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R).on('down', () => this.restart())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
@@ -142,7 +159,9 @@ export class BoutScene extends Phaser.Scene {
         .setOrigin(0.5)
       this.views.set(style.id, { body, facingMarker, label, phaseText })
     }
+    this.grappleLine = this.add.graphics()
     this.modeText = this.add.text(12, 10, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
+    this.engagementText = this.add.text(12, 32, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
     this.setDummyMode('stationary')
     this.syncViews()
   }
@@ -153,9 +172,12 @@ export class BoutScene extends Phaser.Scene {
       // A latched press goes to the first tick of this frame only; a frame with 0 ticks keeps it.
       const pushPressed = this.pushLatch.consume()
       const counterPressed = this.counterLatch.consume()
+      const gripPressed = this.gripLatch.consume()
       // Intents (incl. the dummy's) are built per tick from the current Snapshot, never reused per frame.
       for (let i = 0; i < ticks; i++) {
-        this.simulation.step(this.collectIntents(i === 0 && pushPressed, i === 0 && counterPressed))
+        this.simulation.step(
+          this.collectIntents(i === 0 && pushPressed, i === 0 && counterPressed, i === 0 && gripPressed),
+        )
       }
     }
     this.syncViews()
@@ -165,16 +187,21 @@ export class BoutScene extends Phaser.Scene {
     this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
     this.pushLatch.clear()
     this.counterLatch.clear()
+    this.gripLatch.clear()
     this.dummy.reset() // keeps the selected dummy mode
     this.syncViews()
   }
 
   private setDummyMode(mode: DummyMode): void {
     this.dummy.setMode(mode)
-    this.modeText?.setText(mode === 'push' ? 'DUMMY: PUSH  (1: stationary / 2: push / R: restart)' : 'DUMMY: STATIONARY  (1: stationary / 2: push / R: restart)')
+    this.modeText?.setText(mode === 'push' ? 'DUMMY: PUSH  (1: stationary / 2: push / R: restart / Shift: grip)' : 'DUMMY: STATIONARY  (1: stationary / 2: push / R: restart / Shift: grip)')
   }
 
-  private collectIntents(pushPressed: boolean, counterPressed: boolean): Map<ParticipantId, ParticipantIntent> {
+  private collectIntents(
+    pushPressed: boolean,
+    counterPressed: boolean,
+    gripPressed: boolean,
+  ): Map<ParticipantId, ParticipantIntent> {
     const intents = new Map<ParticipantId, ParticipantIntent>()
     const snapshot = this.simulation.getSnapshot()
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -188,6 +215,7 @@ export class BoutScene extends Phaser.Scene {
           }),
           pushPressed,
           counterPressed,
+          gripPressed,
         })
       } else if (style.controller === 'dummy') {
         intents.set(style.id, this.dummy.nextIntent(snapshot))
@@ -205,7 +233,20 @@ export class BoutScene extends Phaser.Scene {
 
   // One-way sync: simulation snapshot -> persistent GameObjects.
   private syncViews(): void {
-    for (const participant of this.simulation.getSnapshot().participants) {
+    const snapshot = this.simulation.getSnapshot()
+    this.engagementText?.setText(engagementLabel(snapshot.engagement))
+    this.grappleLine?.clear()
+    if (this.grappleLine && snapshot.engagement.kind === 'grappled') {
+      const [p0, p1] = snapshot.participants.map((q) => this.toCanvas(q.position))
+      const advantage = snapshot.engagement.advantage
+      const holderColor =
+        advantage.kind === 'morozashi'
+          ? (PARTICIPANT_PRESENTATION.find((style) => style.id === advantage.holderId)?.color ?? 0xffffff)
+          : 0xffffff
+      this.grappleLine.lineStyle(advantage.kind === 'morozashi' ? 8 : 4, holderColor, 1)
+      this.grappleLine.lineBetween(p0.x, p0.y, p1.x, p1.y)
+    }
+    for (const participant of snapshot.participants) {
       const view = this.views.get(participant.id)
       if (!view) continue
       const bodyPixels = participant.bodyRadius * this.pixelsPerMeter

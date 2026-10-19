@@ -35,9 +35,13 @@ export interface ParticipantIntent {
   readonly pushPressed: boolean
   // A new Counter press edge for this tick. If pushPressed is also true, Push wins and this is dropped.
   readonly counterPressed: boolean
+  // A new Grip press edge for this tick: starts a Grip while free, releases while grappled.
+  // Lowest same-tick priority (Push > Counter > Grip).
+  readonly gripPressed: boolean
 }
 
 export type PushPhase = 'startup' | 'active' | 'recovery'
+export type GripPhase = 'reach' | 'recovery'
 
 export type ParticipantActionState =
   | { readonly kind: 'idle' }
@@ -52,6 +56,12 @@ export type ParticipantActionState =
   | {
       readonly kind: 'counter'
       // Counter window ticks left, including the next tick (always >= 1).
+      readonly ticksRemaining: number
+    }
+  | {
+      readonly kind: 'grip'
+      readonly phase: GripPhase
+      // Ticks left in the current phase, including the next tick (always >= 1).
       readonly ticksRemaining: number
     }
 
@@ -81,7 +91,18 @@ export interface ParticipantState {
   readonly bodyRadius: number
 }
 
+export type GrappleAdvantage =
+  | { readonly kind: 'neutral' }
+  // Exactly one participant holds Morozashi (both arms inside); the other is at a disadvantage.
+  | { readonly kind: 'morozashi'; readonly holderId: ParticipantId }
+
+// Pair-level relationship: the single source of truth for "are these two grappled, and how".
+export type BoutEngagement =
+  | { readonly kind: 'free' }
+  | { readonly kind: 'grappled'; readonly advantage: GrappleAdvantage }
+
 export interface BoutSnapshot {
   readonly arena: ArenaSetup
   readonly participants: readonly ParticipantState[]
+  readonly engagement: BoutEngagement
 }

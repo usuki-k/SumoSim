@@ -1,9 +1,12 @@
 // Canonical owner of bout runtime state. Pure TypeScript; must not import Phaser.
 import type {
   ArenaSetup,
+  BoutEngagement,
   BoutSetup,
   BoutSnapshot,
   CounterTier,
+  GrappleAdvantage,
+  GripPhase,
   ParticipantId,
   ParticipantActionState,
   ParticipantIntent,
@@ -51,6 +54,12 @@ export const COUNTER_OVERSHOOT_SPEED = 1.0 // m/s
 // Lateral offsets within this (m) count as a tie when choosing the side.
 export const COUNTER_SIDE_EPSILON = 1e-6
 
+// Grip / Engagement (ACTION-05A). Provisional Prototype tuning, subject to User Play Test.
+export const GRIP_REACH_TICKS = 6 // ~100 ms: waits for an in-range idle target
+export const GRIP_RECOVERY_TICKS = 12 // ~200 ms after a whiffed Grip or a release
+// Grip range = combined radius + this margin (m). Kuzushi never bypasses it.
+export const GRIP_RANGE_MARGIN = 0.09
+
 // Inward self-velocity sums at or below this (m/s) count as no contribution.
 const INWARD_EPSILON = 1e-9
 
@@ -63,6 +72,7 @@ type MutableAction =
   | { kind: 'idle' }
   | { kind: 'push'; phase: PushPhase; ticksRemaining: number; direction: MutableVec2 }
   | { kind: 'counter'; ticksRemaining: number }
+  | { kind: 'grip'; phase: GripPhase; ticksRemaining: number }
 
 type MutablePosture = { kind: 'stable' } | { kind: 'kuzushi'; ticksRemaining: number }
 
@@ -93,13 +103,26 @@ function nextPushPhase(phase: PushPhase): { phase: PushPhase; ticks: number } | 
   return null
 }
 
-// Effective self-movement intent: free steering only while idle and stable. Kuzushi and Counter
-// brake (zero intent); Push owns movement during its phases.
+// Effective self-movement intent: free steering only while idle and stable. Kuzushi, Counter and Grip
+// brake (zero intent); Push owns movement during its phases. Grappled steering is handled by the caller.
 function effectiveMove(p: MutableParticipant, move: Vec2): Vec2 {
   if (p.posture.kind === 'kuzushi') return ZERO_MOVE
   if (p.action.kind === 'idle') return move
-  if (p.action.kind === 'counter') return ZERO_MOVE
+  if (p.action.kind === 'counter' || p.action.kind === 'grip') return ZERO_MOVE
   return p.action.phase === 'active' ? p.action.direction : ZERO_MOVE
+}
+
+function isGripReaching(p: MutableParticipant): boolean {
+  return p.action.kind === 'grip' && p.action.phase === 'reach'
+}
+
+function copyEngagement(engagement: BoutEngagement): BoutEngagement {
+  if (engagement.kind === 'free') return { kind: 'free' }
+  const advantage: GrappleAdvantage =
+    engagement.advantage.kind === 'neutral'
+      ? { kind: 'neutral' }
+      : { kind: 'morozashi', holderId: engagement.advantage.holderId }
+  return { kind: 'grappled', advantage }
 }
 
 // Tier of a Counter that catches an active Push, from the Push's active ticks remaining.
@@ -188,6 +211,9 @@ function isPushActive(p: MutableParticipant): boolean {
 function copyAction(action: MutableAction): ParticipantActionState {
   if (action.kind === 'idle') return { kind: 'idle' }
   if (action.kind === 'counter') return { kind: 'counter', ticksRemaining: action.ticksRemaining }
+  if (action.kind === 'grip') {
+    return { kind: 'grip', phase: action.phase, ticksRemaining: action.ticksRemaining }
+  }
   return {
     kind: 'push',
     phase: action.phase,
@@ -285,6 +311,8 @@ function facingToward(from: Vec2, to: Vec2, fallback: number): number {
 export class BoutSimulation {
   private readonly arena: ArenaSetup
   private readonly participants: MutableParticipant[]
+  // Pair relationship; the only place grappling is recorded (participants carry no grapple flags).
+  private engagement: BoutEngagement = { kind: 'free' }
 
   constructor(setup: BoutSetup) {
     if (!Number.isFinite(setup.arena.radius) || setup.arena.radius <= 0) {
@@ -317,18 +345,32 @@ export class BoutSimulation {
   }
 
   // Advances exactly one logical tick (TICK_SECONDS). Participants without an intent have zero move.
-  // Order: posture timers -> intent -> Push / Counter start -> effective move -> grounded self
-  // velocity -> external decay -> integrate (self + external) -> contact -> Counter resolution ->
-  // Push resolution -> action timers -> facing.
+  // Order: posture timers -> release (if the tick began grappled) -> FREE action start -> effective
+  // move -> grounded self velocity -> external decay -> integrate (self + external) -> contact ->
+  // grapple bond (grappled) -> Counter / Grip / Push resolution (free) -> action timers -> facing.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     for (const p of this.participants) advancePosture(p)
+
+    // While grappled a Grip edge releases. Releasing participants enter Grip Recovery; nobody starts a
+    // FREE action on the release tick (those edges are dropped, not queued).
+    let released = false
+    if (this.engagement.kind === 'grappled') {
+      const releasers = this.participants.filter((p) => intents.get(p.id)?.gripPressed === true)
+      if (releasers.length > 0) {
+        this.engagement = { kind: 'free' }
+        for (const p of releasers) p.action = { kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS }
+        released = true
+      }
+    }
+    const grappled = this.engagement.kind === 'grappled'
+
     for (const p of this.participants) {
       const intent = intents.get(p.id)
       const move = sanitizeMove(intent?.move ?? ZERO_MOVE)
 
-      // Actions start only from idle + stable; presses during an action or Kuzushi are ignored (not
-      // queued). Same-tick Push and Counter edges: Push wins and the Counter edge is dropped.
-      if (p.action.kind === 'idle' && p.posture.kind === 'stable') {
+      // FREE actions start only from idle + stable; presses during an action or Kuzushi are ignored
+      // (not queued). Same-tick priority: Push > Counter > Grip; the losing edges are dropped.
+      if (!grappled && !released && p.action.kind === 'idle' && p.posture.kind === 'stable') {
         if (intent?.pushPressed === true) {
           p.action = {
             kind: 'push',
@@ -338,19 +380,25 @@ export class BoutSimulation {
           }
         } else if (intent?.counterPressed === true) {
           p.action = { kind: 'counter', ticksRemaining: COUNTER_WINDOW_TICKS }
+        } else if (intent?.gripPressed === true) {
+          p.action = { kind: 'grip', phase: 'reach', ticksRemaining: GRIP_REACH_TICKS }
         }
       }
 
-      applyGroundedVelocity(p.selfVelocity, effectiveMove(p, move))
+      // Grappled: ordinary WASD is suppressed for both (Foundation; no grappled movement yet).
+      applyGroundedVelocity(p.selfVelocity, grappled ? ZERO_MOVE : effectiveMove(p, move))
       decayExternal(p.externalVelocity)
 
       p.position.x += (p.selfVelocity.x + p.externalVelocity.x) * TICK_SECONDS
       p.position.y += (p.selfVelocity.y + p.externalVelocity.y) * TICK_SECONDS
     }
     const contact = this.resolveContact()
-    if (contact) {
-      this.resolveCounter()
-      this.resolvePush(contact)
+    if (grappled) {
+      this.resolveGrappleBond()
+    } else {
+      if (contact) this.resolveCounter()
+      this.resolveGrip()
+      if (contact && this.engagement.kind === 'free') this.resolvePush(contact)
     }
     for (const p of this.participants) this.advanceAction(p)
     this.updateFacing()
@@ -375,7 +423,76 @@ export class BoutSimulation {
           bodyRadius: p.bodyRadius,
         }),
       ),
+      engagement: copyEngagement(this.engagement),
     }
+  }
+
+  // FREE Grip: a reaching, stable participant grips an action-idle opponent within
+  // combined radius + GRIP_RANGE_MARGIN (never interrupting a Push / Counter / Grip). A Kuzushi target
+  // gives Morozashi to the gripper. Both reaching and in range on the same tick: neutral (symmetric).
+  private resolveGrip(): void {
+    if (this.engagement.kind !== 'free') return
+    const [a, b] = this.participants
+    const distance = Math.hypot(b.position.x - a.position.x, b.position.y - a.position.y)
+    if (distance > a.bodyRadius + b.bodyRadius + GRIP_RANGE_MARGIN) return
+
+    const canGrip = (p: MutableParticipant) => isGripReaching(p) && p.posture.kind === 'stable'
+    if (canGrip(a) && canGrip(b)) {
+      this.enterGrapple({ kind: 'neutral' })
+      return
+    }
+    for (const [gripper, target] of [
+      [a, b],
+      [b, a],
+    ]) {
+      if (!canGrip(gripper) || target.action.kind !== 'idle') continue
+      if (target.posture.kind === 'kuzushi') {
+        target.posture = { kind: 'stable' } // Kuzushi is consumed; the advantage lives in the engagement
+        this.enterGrapple({ kind: 'morozashi', holderId: gripper.id })
+      } else {
+        this.enterGrapple({ kind: 'neutral' })
+      }
+      return
+    }
+  }
+
+  // The only entry into a grapple: both actions end, the pair shares the average external momentum
+  // (equal-body Prototype normalization, not mass physics), and the centers attach at contact distance.
+  private enterGrapple(advantage: GrappleAdvantage): void {
+    const [a, b] = this.participants
+    this.engagement = { kind: 'grappled', advantage }
+    a.action = { kind: 'idle' }
+    b.action = { kind: 'idle' }
+    const avgX = (a.externalVelocity.x + b.externalVelocity.x) / 2
+    const avgY = (a.externalVelocity.y + b.externalVelocity.y) / 2
+    for (const p of this.participants) {
+      p.externalVelocity.x = avgX
+      p.externalVelocity.y = avgY
+    }
+    this.resolveGrappleBond()
+  }
+
+  // Grapple bond: moves both centers symmetrically along their axis so the distance is exactly the
+  // combined radius (the smallest radial rule; no constraint solver). Same-center fallback: A's facing.
+  private resolveGrappleBond(): void {
+    const [a, b] = this.participants
+    const dx = b.position.x - a.position.x
+    const dy = b.position.y - a.position.y
+    const distance = Math.hypot(dx, dy)
+    let nx: number
+    let ny: number
+    if (distance > MIN_CONTACT_DISTANCE) {
+      nx = dx / distance
+      ny = dy / distance
+    } else {
+      nx = Math.cos(a.facing)
+      ny = Math.sin(a.facing)
+    }
+    const half = (distance - (a.bodyRadius + b.bodyRadius)) / 2
+    a.position.x += nx * half
+    a.position.y += ny * half
+    b.position.x -= nx * half
+    b.position.y -= ny * half
   }
 
   // Two-circle contact: removes the closing normal self velocity (tangential kept) and separates any
@@ -500,6 +617,17 @@ export class BoutSimulation {
     if (p.action.kind === 'counter') {
       p.action.ticksRemaining -= 1
       if (p.action.ticksRemaining <= 0) enterKuzushi(p)
+      return
+    }
+    // Grip: a reach that expires is a whiff (no Kuzushi penalty) -> recovery -> idle.
+    if (p.action.kind === 'grip') {
+      p.action.ticksRemaining -= 1
+      if (p.action.ticksRemaining > 0) return
+      if (p.action.phase === 'reach') {
+        p.action = { kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS }
+      } else {
+        p.action = { kind: 'idle' }
+      }
       return
     }
     if (p.action.kind !== 'push') return

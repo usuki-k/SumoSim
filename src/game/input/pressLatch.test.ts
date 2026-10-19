@@ -43,8 +43,8 @@ describe('PressLatch', () => {
   })
 })
 
-// Scene-shaped driver: each frame consumes both latches once and hands the edges to its first tick.
-function runFrames(plan: { ticks: number; pressDown?: boolean; pressUp?: boolean }[]): string[] {
+// Scene-shaped driver: each frame consumes every latch once and hands the edges to its first tick.
+function runFrames(plan: { ticks: number; pressDown?: boolean; pressUp?: boolean; pressShift?: boolean }[]): string[] {
   const sim = new BoutSimulation({
     arena: { radius: 100 },
     participants: [
@@ -54,18 +54,21 @@ function runFrames(plan: { ticks: number; pressDown?: boolean; pressUp?: boolean
   })
   const pushLatch = new PressLatch()
   const counterLatch = new PressLatch()
+  const gripLatch = new PressLatch()
   const starts: string[] = []
   for (const frame of plan) {
     if (frame.pressDown) counterLatch.press()
     if (frame.pressUp) pushLatch.press()
+    if (frame.pressShift) gripLatch.press()
     if (frame.ticks === 0) continue
     const pushPressed = pushLatch.consume()
     const counterPressed = counterLatch.consume()
+    const gripPressed = gripLatch.consume()
     for (let i = 0; i < frame.ticks; i++) {
       const before = sim.getSnapshot().participants[0].action.kind
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
-          ['a', { move: { x: 0, y: 0 }, pushPressed: i === 0 && pushPressed, counterPressed: i === 0 && counterPressed }],
+          ['a', { move: { x: 0, y: 0 }, pushPressed: i === 0 && pushPressed, counterPressed: i === 0 && counterPressed, gripPressed: i === 0 && gripPressed }],
         ]),
       )
       const after = sim.getSnapshot().participants[0].action.kind
@@ -94,5 +97,24 @@ describe('ArrowDown Counter latch integration', () => {
 
   it('T77: Up and Down latched into the same frame -> Push wins, Counter is not queued', () => {
     expect(runFrames([{ ticks: 2, pressDown: true, pressUp: true }, ...Array.from({ length: 20 }, () => ({ ticks: 4 }))])).toEqual(['push'])
+  })
+})
+
+describe('Shift Grip latch integration (ACTION-05A)', () => {
+  it('T111: a pending Shift edge survives a 0-tick frame and starts exactly one Grip', () => {
+    expect(runFrames([{ ticks: 0, pressShift: true }, { ticks: 4 }, { ticks: 4 }])).toEqual(['grip'])
+  })
+
+  it('T111: a held Shift (no new key-down) never repeats; a new press after Recovery does', () => {
+    expect(runFrames([{ ticks: 8, pressShift: true }, ...Array.from({ length: 20 }, () => ({ ticks: 4 }))])).toEqual(['grip'])
+    expect(
+      runFrames([{ ticks: 8, pressShift: true }, ...Array.from({ length: 4 }, () => ({ ticks: 4 })), { ticks: 1, pressShift: true }]),
+    ).toEqual(['grip', 'grip'])
+  })
+
+  it('T111: Up / Down / Shift latched into one frame -> Push > Counter > Grip', () => {
+    const rest = Array.from({ length: 20 }, () => ({ ticks: 4 }))
+    expect(runFrames([{ ticks: 2, pressUp: true, pressDown: true, pressShift: true }, ...rest])).toEqual(['push'])
+    expect(runFrames([{ ticks: 2, pressDown: true, pressShift: true }, ...rest]).at(0)).toBe('counter')
   })
 })
