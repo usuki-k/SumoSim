@@ -9,6 +9,7 @@ import type {
   ParticipantActionState,
   ParticipantId,
   ParticipantIntent,
+  ParticipantPosture,
   Vec2,
 } from '../sumo/BoutTypes.ts'
 
@@ -50,8 +51,11 @@ interface ParticipantView {
   readonly phaseText: Phaser.GameObjects.Text
 }
 
-// Presentation-only label for the current Push phase (idle shows nothing).
-function phaseLabel(action: ParticipantActionState): string {
+// Presentation-only label for the current posture / action (stable idle shows nothing).
+// Kuzushi takes priority (entering it cancels the action anyway).
+function phaseLabel(action: ParticipantActionState, posture: ParticipantPosture): string {
+  if (posture.kind === 'kuzushi') return 'KUZUSHI'
+  if (action.kind === 'counter') return 'COUNTER'
   if (action.kind !== 'push') return ''
   if (action.phase === 'startup') return 'STARTUP'
   if (action.phase === 'active') return 'PUSH'
@@ -73,6 +77,8 @@ export class BoutScene extends Phaser.Scene {
   private keys: MovementKeys | null = null
   // Prototype binding: ArrowUp = Push (temporary, not the final control scheme).
   private readonly pushLatch = new PressLatch()
+  // Prototype binding: ArrowDown = Counter (temporary, not the final control scheme).
+  private readonly counterLatch = new PressLatch()
   // Prototype test harness (not CPU AI): drives the CPU participant; mode keys 1 / 2.
   private readonly dummy = new PushDummyController('wrestler-b', 'wrestler-a')
   private modeText: Phaser.GameObjects.Text | null = null
@@ -102,6 +108,7 @@ export class BoutScene extends Phaser.Scene {
       }
       // Key 'down' fires once per physical press (no auto-repeat while held).
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => this.pushLatch.press())
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.counterLatch.press())
       // Prototype convenience: R restarts from the prototype setup.
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R).on('down', () => this.restart())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
@@ -145,8 +152,11 @@ export class BoutScene extends Phaser.Scene {
     if (ticks > 0) {
       // A latched press goes to the first tick of this frame only; a frame with 0 ticks keeps it.
       const pushPressed = this.pushLatch.consume()
+      const counterPressed = this.counterLatch.consume()
       // Intents (incl. the dummy's) are built per tick from the current Snapshot, never reused per frame.
-      for (let i = 0; i < ticks; i++) this.simulation.step(this.collectIntents(i === 0 && pushPressed))
+      for (let i = 0; i < ticks; i++) {
+        this.simulation.step(this.collectIntents(i === 0 && pushPressed, i === 0 && counterPressed))
+      }
     }
     this.syncViews()
   }
@@ -154,6 +164,7 @@ export class BoutScene extends Phaser.Scene {
   private restart(): void {
     this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
     this.pushLatch.clear()
+    this.counterLatch.clear()
     this.dummy.reset() // keeps the selected dummy mode
     this.syncViews()
   }
@@ -163,7 +174,7 @@ export class BoutScene extends Phaser.Scene {
     this.modeText?.setText(mode === 'push' ? 'DUMMY: PUSH  (1: stationary / 2: push / R: restart)' : 'DUMMY: STATIONARY  (1: stationary / 2: push / R: restart)')
   }
 
-  private collectIntents(pushPressed: boolean): Map<ParticipantId, ParticipantIntent> {
+  private collectIntents(pushPressed: boolean, counterPressed: boolean): Map<ParticipantId, ParticipantIntent> {
     const intents = new Map<ParticipantId, ParticipantIntent>()
     const snapshot = this.simulation.getSnapshot()
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -176,6 +187,7 @@ export class BoutScene extends Phaser.Scene {
             right: this.keys.right.isDown,
           }),
           pushPressed,
+          counterPressed,
         })
       } else if (style.controller === 'dummy') {
         intents.set(style.id, this.dummy.nextIntent(snapshot))
@@ -204,7 +216,7 @@ export class BoutScene extends Phaser.Scene {
         pos.y + Math.sin(participant.facing) * bodyPixels * 0.8,
       )
       view.label.setPosition(pos.x, pos.y - bodyPixels - 18)
-      view.phaseText.setText(phaseLabel(participant.action))
+      view.phaseText.setText(phaseLabel(participant.action, participant.posture))
       view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 38)
     }
   }

@@ -33,7 +33,7 @@ function makeSetup(): BoutSetup {
 }
 
 function intent(x: number, y: number): Map<ParticipantId, ParticipantIntent> {
-  return new Map([['a', { move: { x, y }, pushPressed: false }]])
+  return new Map([['a', { move: { x, y }, pushPressed: false, counterPressed: false }]])
 }
 
 const NO_INTENT = new Map<ParticipantId, ParticipantIntent>()
@@ -412,8 +412,8 @@ describe('contact & separation (ACTION-03A)', () => {
   }
   const intentsFor = (ax: number, ay: number, bx = 0, by = 0) =>
     new Map<ParticipantId, ParticipantIntent>([
-      ['a', { move: { x: ax, y: ay }, pushPressed: false }],
-      ['b', { move: { x: bx, y: by }, pushPressed: false }],
+      ['a', { move: { x: ax, y: ay }, pushPressed: false, counterPressed: false }],
+      ['b', { move: { x: bx, y: by }, pushPressed: false, counterPressed: false }],
     ])
 
   it('exposes the simulation-owned body radius in the snapshot (isolated copy)', () => {

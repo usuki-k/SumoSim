@@ -3,9 +3,11 @@ import type {
   ArenaSetup,
   BoutSetup,
   BoutSnapshot,
+  CounterTier,
   ParticipantId,
   ParticipantActionState,
   ParticipantIntent,
+  ParticipantPosture,
   ParticipantState,
   PushPhase,
   Vec2,
@@ -36,6 +38,14 @@ export const PUSH_EXTERNAL_ACCELERATION = 20 // m/s^2
 export const EXTERNAL_DECELERATION = 8 // m/s^2
 export const MAX_EXTERNAL_SPEED = 3 // m/s
 
+// Down Counter + Kuzushi (ACTION-04A1). Provisional Prototype tuning, subject to User Play Test.
+export const COUNTER_WINDOW_TICKS = 12 // ~200 ms: waits for an opponent active Push in contact
+// A Counter catching the first COUNTER_BEST_TICKS active Push ticks (elapsed 0..2) is Best.
+export const COUNTER_BEST_TICKS = 3
+export const KUZUSHI_TICKS = 30 // ~500 ms of full Kuzushi ticks (countered attacker and failed Counter)
+// Received Push acceleration multiplier while the driven-back participant is in Kuzushi.
+export const KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5
+
 // Inward self-velocity sums at or below this (m/s) count as no contribution.
 const INWARD_EPSILON = 1e-9
 
@@ -47,6 +57,9 @@ type MutableVec2 = { x: number; y: number }
 type MutableAction =
   | { kind: 'idle' }
   | { kind: 'push'; phase: PushPhase; ticksRemaining: number; direction: MutableVec2 }
+  | { kind: 'counter'; ticksRemaining: number }
+
+type MutablePosture = { kind: 'stable' } | { kind: 'kuzushi'; ticksRemaining: number }
 
 interface MutableParticipant {
   id: string
@@ -56,6 +69,8 @@ interface MutableParticipant {
   // Momentum induced by the opponent Push; decays on its own. Displacement uses self + external.
   externalVelocity: MutableVec2
   action: MutableAction
+  // Invariant: kuzushi => action is idle (entered only through enterKuzushi).
+  posture: MutablePosture
   facing: number
   bodyRadius: number
 }
@@ -73,10 +88,34 @@ function nextPushPhase(phase: PushPhase): { phase: PushPhase; ticks: number } | 
   return null
 }
 
-// Effective self-movement intent: free steering only while idle; Push owns movement otherwise.
-function effectiveMove(action: MutableAction, move: Vec2): Vec2 {
-  if (action.kind === 'idle') return move
-  return action.phase === 'active' ? action.direction : ZERO_MOVE
+// Effective self-movement intent: free steering only while idle and stable. Kuzushi and Counter
+// brake (zero intent); Push owns movement during its phases.
+function effectiveMove(p: MutableParticipant, move: Vec2): Vec2 {
+  if (p.posture.kind === 'kuzushi') return ZERO_MOVE
+  if (p.action.kind === 'idle') return move
+  if (p.action.kind === 'counter') return ZERO_MOVE
+  return p.action.phase === 'active' ? p.action.direction : ZERO_MOVE
+}
+
+// Tier of a Counter that catches an active Push, from the Push's active ticks remaining.
+// ACTION-04A1: Best and Success share the same result; positional outcomes come later.
+export function counterTier(pushActiveTicksRemaining: number): Exclude<CounterTier, 'fail'> {
+  const activeElapsed = PUSH_ACTIVE_TICKS - pushActiveTicksRemaining
+  return activeElapsed < COUNTER_BEST_TICKS ? 'best' : 'success'
+}
+
+// The only entry into Kuzushi: cancels the current action, so nothing chosen earlier carries over.
+function enterKuzushi(p: MutableParticipant): void {
+  p.action = { kind: 'idle' }
+  p.posture = { kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS }
+}
+
+// Runs at the start of a tick: an expired Kuzushi becomes stable before input is read; otherwise
+// this tick is spent as one full Kuzushi tick. A Kuzushi entered later in a tick is not counted yet.
+function advancePosture(p: MutableParticipant): void {
+  if (p.posture.kind !== 'kuzushi') return
+  if (p.posture.ticksRemaining <= 0) p.posture = { kind: 'stable' }
+  else p.posture.ticksRemaining -= 1
 }
 
 // Brakes external momentum toward exact zero (no reversal).
@@ -107,12 +146,18 @@ function isPushActive(p: MutableParticipant): boolean {
 
 function copyAction(action: MutableAction): ParticipantActionState {
   if (action.kind === 'idle') return { kind: 'idle' }
+  if (action.kind === 'counter') return { kind: 'counter', ticksRemaining: action.ticksRemaining }
   return {
     kind: 'push',
     phase: action.phase,
     ticksRemaining: action.ticksRemaining,
     direction: { x: action.direction.x, y: action.direction.y },
   }
+}
+
+function copyPosture(posture: MutablePosture): ParticipantPosture {
+  if (posture.kind === 'stable') return { kind: 'stable' }
+  return { kind: 'kuzushi', ticksRemaining: posture.ticksRemaining }
 }
 
 function assertFiniteVec2(v: Vec2, label: string): void {
@@ -223,6 +268,7 @@ export class BoutSimulation {
       selfVelocity: { x: 0, y: 0 },
       externalVelocity: { x: 0, y: 0 },
       action: { kind: 'idle' },
+      posture: { kind: 'stable' },
       facing: 0,
       bodyRadius: BODY_RADIUS,
     }))
@@ -230,31 +276,41 @@ export class BoutSimulation {
   }
 
   // Advances exactly one logical tick (TICK_SECONDS). Participants without an intent have zero move.
-  // Order: intent -> Push start -> effective move -> grounded self velocity -> external decay ->
-  // integrate (self + external) -> contact -> Push resolution -> Push timers -> facing.
+  // Order: posture timers -> intent -> Push / Counter start -> effective move -> grounded self
+  // velocity -> external decay -> integrate (self + external) -> contact -> Counter resolution ->
+  // Push resolution -> action timers -> facing.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
+    for (const p of this.participants) advancePosture(p)
     for (const p of this.participants) {
       const intent = intents.get(p.id)
       const move = sanitizeMove(intent?.move ?? ZERO_MOVE)
 
-      // A Push starts only from idle; presses during an action are ignored (not queued).
-      if (intent?.pushPressed === true && p.action.kind === 'idle') {
-        p.action = {
-          kind: 'push',
-          phase: 'startup',
-          ticksRemaining: PUSH_STARTUP_TICKS,
-          direction: { x: Math.cos(p.facing), y: Math.sin(p.facing) },
+      // Actions start only from idle + stable; presses during an action or Kuzushi are ignored (not
+      // queued). Same-tick Push and Counter edges: Push wins and the Counter edge is dropped.
+      if (p.action.kind === 'idle' && p.posture.kind === 'stable') {
+        if (intent?.pushPressed === true) {
+          p.action = {
+            kind: 'push',
+            phase: 'startup',
+            ticksRemaining: PUSH_STARTUP_TICKS,
+            direction: { x: Math.cos(p.facing), y: Math.sin(p.facing) },
+          }
+        } else if (intent?.counterPressed === true) {
+          p.action = { kind: 'counter', ticksRemaining: COUNTER_WINDOW_TICKS }
         }
       }
 
-      applyGroundedVelocity(p.selfVelocity, effectiveMove(p.action, move))
+      applyGroundedVelocity(p.selfVelocity, effectiveMove(p, move))
       decayExternal(p.externalVelocity)
 
       p.position.x += (p.selfVelocity.x + p.externalVelocity.x) * TICK_SECONDS
       p.position.y += (p.selfVelocity.y + p.externalVelocity.y) * TICK_SECONDS
     }
     const contact = this.resolveContact()
-    if (contact) this.resolvePush(contact)
+    if (contact) {
+      this.resolveCounter()
+      this.resolvePush(contact)
+    }
     for (const p of this.participants) this.advanceAction(p)
     this.updateFacing()
   }
@@ -273,6 +329,7 @@ export class BoutSimulation {
           },
           externalVelocity: { x: p.externalVelocity.x, y: p.externalVelocity.y },
           action: copyAction(p.action),
+          posture: copyPosture(p.posture),
           facing: p.facing,
           bodyRadius: p.bodyRadius,
         }),
@@ -341,13 +398,35 @@ export class BoutSimulation {
     return { nx, ny }
   }
 
+  // In contact, a Counter window catching an active opponent Push succeeds: the attacker's Push is
+  // cancelled into Kuzushi before this tick's Push force, and the defender returns to idle.
+  // Returns the tier (Best and Success share one result in ACTION-04A1), or null.
+  private resolveCounter(): CounterTier | null {
+    const [a, b] = this.participants
+    for (const [defender, attacker] of [
+      [a, b],
+      [b, a],
+    ]) {
+      if (defender.action.kind !== 'counter') continue
+      if (attacker.action.kind !== 'push' || attacker.action.phase !== 'active') continue
+      const tier = counterTier(attacker.action.ticksRemaining)
+      enterKuzushi(attacker)
+      defender.action = { kind: 'idle' }
+      return tier
+    }
+    return null
+  }
+
   // Active Pushes in contact: +1 for A along A->B, -1 for B. The same external velocity delta goes
-  // to both participants so the pair moves together; equal Pushes cancel.
+  // to both participants so the pair moves together; equal Pushes cancel. A driven-back participant
+  // in Kuzushi receives KUZUSHI_PUSH_SUSCEPTIBILITY times the acceleration.
   private resolvePush(contact: ContactResult): void {
     const [a, b] = this.participants
     const net = (isPushActive(a) ? 1 : 0) - (isPushActive(b) ? 1 : 0)
     if (net === 0) return
-    const dv = net * PUSH_EXTERNAL_ACCELERATION * TICK_SECONDS
+    const receiver = net > 0 ? b : a
+    const susceptibility = receiver.posture.kind === 'kuzushi' ? KUZUSHI_PUSH_SUSCEPTIBILITY : 1
+    const dv = net * PUSH_EXTERNAL_ACCELERATION * susceptibility * TICK_SECONDS
     for (const p of this.participants) {
       p.externalVelocity.x += contact.nx * dv
       p.externalVelocity.y += contact.ny * dv
@@ -355,8 +434,14 @@ export class BoutSimulation {
     }
   }
 
-  // Counts down the current Push phase: startup -> active -> recovery -> idle.
+  // Counts down the current action. Push: startup -> active -> recovery -> idle. Counter: an
+  // expired window is a failed Counter and the user enters Kuzushi.
   private advanceAction(p: MutableParticipant): void {
+    if (p.action.kind === 'counter') {
+      p.action.ticksRemaining -= 1
+      if (p.action.ticksRemaining <= 0) enterKuzushi(p)
+      return
+    }
     if (p.action.kind !== 'push') return
     p.action.ticksRemaining -= 1
     if (p.action.ticksRemaining > 0) return
@@ -370,9 +455,10 @@ export class BoutSimulation {
   }
 
   // Each participant faces the other; keeps the previous facing if positions coincide.
+  // A participant in Kuzushi keeps its facing fixed (side / back exposure stays readable).
   private updateFacing(): void {
     const [a, b] = this.participants
-    a.facing = facingToward(a.position, b.position, a.facing)
-    b.facing = facingToward(b.position, a.position, b.facing)
+    if (a.posture.kind !== 'kuzushi') a.facing = facingToward(a.position, b.position, a.facing)
+    if (b.posture.kind !== 'kuzushi') b.facing = facingToward(b.position, a.position, b.facing)
   }
 }

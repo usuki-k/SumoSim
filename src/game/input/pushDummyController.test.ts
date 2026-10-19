@@ -16,7 +16,7 @@ function setup(ax: number, bx: number): BoutSetup {
   }
 }
 
-const IDLE_INTENT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false }
+const IDLE_INTENT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false }
 
 function newDummy(mode: 'stationary' | 'push' = 'push'): PushDummyController {
   const dummy = new PushDummyController('b', 'a')
@@ -29,7 +29,7 @@ function tick(sim: BoutSimulation, dummy: PushDummyController, playerPush = fals
   const dummyIntent = dummy.nextIntent(sim.getSnapshot())
   sim.step(
     new Map<ParticipantId, ParticipantIntent>([
-      ['a', { move: { x: 0, y: 0 }, pushPressed: playerPush }],
+      ['a', { move: { x: 0, y: 0 }, pushPressed: playerPush, counterPressed: false }],
       ['b', dummyIntent],
     ]),
   )
@@ -82,7 +82,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
   it('T52: in Contact, idle and ready: zero move and exactly one edge, not repeated', () => {
     const sim = new BoutSimulation(setup(-COMBINED / 2, COMBINED / 2))
     const dummy = newDummy()
-    expect(tick(sim, dummy)).toEqual({ move: { x: 0, y: 0 }, pushPressed: true })
+    expect(tick(sim, dummy)).toEqual({ move: { x: 0, y: 0 }, pushPressed: true, counterPressed: false })
     expect(b(sim.getSnapshot()).action.kind).toBe('push')
     expect(tick(sim, dummy).pushPressed).toBe(false)
   })
@@ -195,5 +195,33 @@ describe('PushDummyController (ACTION-03B2)', () => {
     for (let t = 1; t < PUSH_TOTAL_TICKS; t++) tick(sim, dummy)
     expect(b(sim.getSnapshot()).action.kind).toBe('idle')
     expect(b(sim.getSnapshot()).position.x).toBeGreaterThan(COMBINED / 2) // pushed away by the player only
+  })
+
+  it('T74: Kuzushi dummy emits nothing, holds its cooldown, and does not Push right after recovery', () => {
+    const sim = new BoutSimulation(setup(-COMBINED / 2, COMBINED / 2))
+    const dummy = newDummy()
+    const playerCounterAt = 0 // the player's window catches the dummy's first active Push tick
+    let sawKuzushi = false
+    let firstStableIdle = -1
+    let nextEdge = -1
+    for (let t = 0; t < 200 && nextEdge < 0; t++) {
+      const before = sim.getSnapshot()
+      const intent = dummy.nextIntent(before)
+      if (b(before).posture.kind === 'kuzushi') {
+        sawKuzushi = true
+        expect(intent).toEqual(IDLE_INTENT)
+      } else if (sawKuzushi) {
+        if (firstStableIdle < 0) firstStableIdle = t
+        if (intent.pushPressed) nextEdge = t
+      }
+      sim.step(
+        new Map<ParticipantId, ParticipantIntent>([
+          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: t === playerCounterAt }],
+          ['b', intent],
+        ]),
+      )
+    }
+    expect(sawKuzushi).toBe(true)
+    expect(nextEdge - firstStableIdle).toBe(DUMMY_PUSH_COOLDOWN_TICKS)
   })
 })

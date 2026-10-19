@@ -33,6 +33,8 @@ export interface ParticipantIntent {
   readonly move: Vec2
   // A new Push press edge for this tick (one press = one Push), not the held key state.
   readonly pushPressed: boolean
+  // A new Counter press edge for this tick. If pushPressed is also true, Push wins and this is dropped.
+  readonly counterPressed: boolean
 }
 
 export type PushPhase = 'startup' | 'active' | 'recovery'
@@ -47,6 +49,23 @@ export type ParticipantActionState =
       // Unit drive direction locked when the Push began.
       readonly direction: Vec2
     }
+  | {
+      readonly kind: 'counter'
+      // Counter window ticks left, including the next tick (always >= 1).
+      readonly ticksRemaining: number
+    }
+
+// Best / Success are decided when a Counter catches an active Push; Fail is a window that expired.
+export type CounterTier = 'best' | 'success' | 'fail'
+
+// Physical stability, separate from the chosen action. While in kuzushi the action is always idle.
+export type ParticipantPosture =
+  | { readonly kind: 'stable' }
+  | {
+      readonly kind: 'kuzushi'
+      // Full Kuzushi ticks still to come (0 = recovers at the start of the next tick).
+      readonly ticksRemaining: number
+    }
 
 export interface ParticipantState {
   readonly id: ParticipantId
@@ -56,6 +75,7 @@ export interface ParticipantState {
   // The externally induced part of `velocity` (Push momentum received); own footwork = velocity - this.
   readonly externalVelocity: Vec2
   readonly action: ParticipantActionState
+  readonly posture: ParticipantPosture
   readonly facing: number
   // Gameplay contact radius in meters (simulation-owned; presentation reads it from the snapshot).
   readonly bodyRadius: number
