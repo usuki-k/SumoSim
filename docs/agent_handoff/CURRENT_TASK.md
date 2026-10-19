@@ -557,3 +557,29 @@ Do NOT integrate into Phaser.
 
 After commit/push/report:
 「ACTION-ART-01A-PRODUCT-BACKGROUND-CREATION が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
+
+
+# User Visual Decision — Product Arena Base
+
+User has visually approved the generated Product background direction as the accepted `arena_base` baseline.
+
+Accepted:
+- 16:9 top-down sumo venue direction
+- warm painted/stylized Product-quality look
+- central dohyo/platform composition
+- surrounding wooden venue and restrained spectators
+- no wrestlers / Gyoji / HUD baked into the background
+
+Important follow-up:
+- Do NOT preemptively repaint or erase the broad circular clay wear marks in the center.
+- First composite the exact `dohyo_ring_overlay` against this background.
+- Only if the wear marks materially compete with or visually contradict the exact gameplay boundary should they be softened with a targeted local edit.
+- Preserve the original accepted arena-base source before any such edit.
+
+Next visual step:
+1. preserve accepted arena base unchanged
+2. create exact tawara + shikiri overlay using the accepted art-space geometry
+3. create 1920×1080 composite preview
+4. User checks whether the center wear ring conflicts with the exact boundary
+5. if necessary, apply only a local/non-destructive reduction of the wear ring
+6. then lock the Product background before HUD work
