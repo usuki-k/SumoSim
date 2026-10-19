@@ -1,976 +1,703 @@
-Task-ID: ACTION-05C1-GRAPPLED-DRIVE-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / CORE GRAPPLED DRIVE FOUNDATION
+Task-ID: ACTION-06-RINGOUT-BOUTOUTCOME-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / RING-OUT & BOUT OUTCOME DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: f28542fce7b5996916a7769b9690905c41ca0608
+Source-Baseline: 7a28a211cf718a15e29cc7b15817b55e38be6bbf
 Handoff-Mode: GITHUB
 
-# ACTION-05C1 — Grappled Drive Foundation
+# ACTION-06 — Ring-out / BoutOutcome Investigation
 
 ## Purpose
 
-ACTION-05A Grip / Engagement、ACTION-05B1 Grappled OrientationはUser Play TestでAccept済み。
+ACTION-05C1 Grappled Drive FoundationはTechnical Review + User Play TestでAcceptされた。
 
-今回、GRAPPLED中の
-**↑長押し = Drive / 寄り**
-を最小Foundationとして実装する。
+Current Boutは:
+- Pushで押し出せる
+- Counterで位置が変わる
+- Grip / Morozashiがある
+- Grappled Driveでpairを土俵外まで運べる
+- しかし土俵外へ出ても勝敗が発生しない
 
-成立させるもの:
-- ArrowUp held → semantic `driveHeld`
-- READY participantだけDrive可能
-- READY vs TURNINGならREADY側だけ一方的にDrive
-- neutral同士の同時Driveは拮抗
-- Morozashi holderはDriveが強い
-- pairはGrapple bondを維持したままshared external velocityで移動
-- READY participantはDrive中でもShift Release可能
-- Dummy Mode 2はGRAPPLED中にDriveして押し返す
-- 最小debug表示
+次は、超小型Gameplay LoopのBoutを「終われる」ようにするため、
+**最小Ring-out判定 + BoutOutcomeのSimulation-owned設計**
+を確定する。
 
-今回は未実装:
-- Ring-out / 勝敗
-- stamina
-- stats
+Investigation Only / No Production Changes.
+
+このTaskでは:
+- Ring-outの境界
+- 同時Ring-out
+- Outcome state
+- Outcome後のSimulation
+- Sceneの最小表示
+- Drive/Push/Counterとのtick順序
+を決める。
+
+まだ実装しない:
+- Result / Reward画面
+- 決まり手一般
+- 倒れ/手付き
 - Throw / Lift
-- directional FREE Push advantage
-- 全体Tempo調整
-
-## Accepted User Decisions
-
-UD-1:
-Driveは**continuous hold**。
-↑を押している間だけDrive effort。
-
-UD-2:
-`ParticipantIntent`へ
-```ts
-readonly driveHeld: boolean
-```
-を追加。
-
-同じArrowUp:
-- `pushPressed` = edge、FREE Push用
-- `driveHeld` = held state、GRAPPLED Drive用
-
-SceneはGameplay contextで意味を分岐しない。
-SimulationがFREE/GRAPPLEDに応じて解釈する。
-
-UD-3 provisional:
-- `GRAPPLE_DRIVE_SPEED = 0.6` m/s
-- `GRAPPLE_DRIVE_ACCELERATION = 4` m/s²
-
-UD-4:
-- neutral strength = 1.0
-- Morozashi holder = `MOROZASHI_DRIVE_FACTOR = 1.5`
-- disadvantaged side = 1.0
-
-UD-5:
-Drive中でもREADY participantはShift Release可能。
-ReleaseがDriveより優先。
-
-UD-6:
-Ring-outはまだ実装しない。
-Driveを変位/contestとして先にPlayTestする。
+- Training / Management loop
 
 ## Accepted Baseline
 
+Accepted Production Source:
+`7a28a211cf718a15e29cc7b15817b55e38be6bbf`
+
+Current developとの差分はReview / PlayTest coordinationのみ。
+
 Preserve:
-- FREE Movement / Contact
-- FREE ArrowUp Push
-- Counter / Kuzushi
-- Counter side/rear
-- Grip / Engagement
-- Morozashi
-- Grapple bond
-- GRAPPLED WASD suppression
-- GRAPPLED Orientation TURNING/READY
-- TURNING中Release不可
-- Shift Grip/Release
-- current provisional tuning
-
-Do not retune:
-- Movement
+- Movement / Contact
 - Push
-- Counter
-- Kuzushi
-- Grip
-- Orientation
-- overall Game Speed
+- Counter / Kuzushi
+- Counter Success→side / Best→rear
+- Grip / Engagement / Morozashi
+- Grapple bond
+- Grappled Orientation
+- Grappled Drive
+- Model B external/pair momentum
+- current Input semantics
+- current provisional numeric tuning
 
-## Intent / Input
+User Play Test:
+- Grappled DriveはOK
+- 全体Game Speedはまだ速いが、今は局所調整しない
 
-Extend `ParticipantIntent`:
+Do not retune existing systems.
+
+## Current Known Gap
+
+Current Source:
+- arena is a circle centered at (0,0) with `arena.radius`
+- participant has `position` and `bodyRadius`
+- bodyRadius is Contact geometry, not explicitly a foot/support radius
+- there is no BoutOutcome / winner / loser
+- Scene R restart exists
+- Drive can move the pair arbitrarily beyond ring boundary
+- no wall/clamp exists
+
+Previous early Ring-out discussion contained only **recommendations**, not Accepted Decisions:
+- a support-circle style criterion was suggested
+- a provisional support ratio around 0.5 was suggested
+- simultaneous Ring-out could compare who is deeper out
+- exact tie could become redo
+
+Treat these as prior proposals only.
+Re-evaluate against Current Source.
+Do not silently adopt them as fact.
+
+## Central Design Goal
+
+Ring-out must be:
+
+- Pure TypeScript Simulation-owned
+- deterministic
+- independent of rendering pixels
+- based on canonical position/geometry
+- compatible with future unequal body sizes
+- testable at exact boundaries
+- small enough for Prototype
+- able to terminate Bout after Push or Drive
+
+Do not introduce general collision/physics/rule frameworks.
+
+# Investigation Questions
+
+## Q1 — What is Ring-out in this top-down Prototype?
+
+Compare minimal geometric proxies:
+
+A. **Center criterion**
+```
+distanceFromCenter > arena.radius
+```
+
+B. **Full body circle**
+```
+distanceFromCenter + bodyRadius > arena.radius
+```
+
+C. **Support-circle proxy**
+```
+supportRadius = bodyRadius * RING_OUT_SUPPORT_RATIO
+distanceFromCenter + supportRadius > arena.radius
+```
+
+Explain Game Feel:
+- how far the visible body can cross the dohyo line
+- too-early vs too-late loss
+- relation to feet/support rather than torso collision circle
+
+Recommend one.
+
+No real foot simulation exists yet.
+
+## Q2 — Support ratio
+
+If C is recommended, propose one provisional constant:
+
 ```ts
-readonly driveHeld: boolean
+RING_OUT_SUPPORT_RATIO
 ```
 
-All existing intent helpers/tests add `driveHeld:false`.
-
-Scene:
-- keep one ArrowUp Key reference
-- key down still feeds existing Push PressLatch
-- key `isDown` feeds `driveHeld`
-- each Simulation tick receives current held state
-
-Do not synthesize held state from repeated keydown events.
-
-FREE:
-- ignore `driveHeld`
-- existing `pushPressed` semantics unchanged
-
-GRAPPLED:
-- FREE Push start remains unavailable
-- `driveHeld` may contribute only if READY
-
-## Drive Action State
-
-Add minimal timerless action variant:
-```ts
-| { readonly kind: 'drive' }
-```
-
-Meaning:
-- participant is actually contributing Drive this tick
-
-No timer.
-No startup/recovery.
-
-While GRAPPLED:
-- `driveHeld && canActInGrapple(...)` → action drive
-- otherwise, if no other grapple action applies → idle
-
-Important:
-- held while TURNING = idle, no contribution
-- held before READY may automatically become drive on the first tick it is READY
-- releasing ↑ returns drive→idle
-
-Do not add duplicate `isDriving` state.
-
-## Drive Direction
-
-Use current pair axis only.
-
-Let:
-```
-n = normalized vector A → B
-```
-
-A Drive contribution is +n.
-B Drive contribution is -n.
-
-Do NOT use participant facing direction.
-READY permits up to 15° error, so facing-based Drive could create lateral sliding and imperfect cancellation.
-
-No stored Drive direction.
-
-## Drive Strength / Net
-
-Define a small Pure helper/boundary if useful.
-
-```
-strength(p) =
-  MOROZASHI_DRIVE_FACTOR
-    if engagement.morozashi && holderId === p.id
-  1
-    otherwise
-
-net =
-  strength(A) * ADriving
-  - strength(B) * BDriving
-```
-
-where ADriving/BDriving are 1 or 0 from actual READY+held contribution.
-
-Expected:
-- A neutral only → net +1
-- B neutral only → net -1
-- neutral vs neutral → net 0
-- Morozashi holder A vs neutral B → net +0.5
-- Morozashi holder only → net +1.5
-
-Participant order must not create priority.
-
-## Pair Movement / Model B
-
-Drive uses the current pair shared `externalVelocity`.
-
-Do NOT:
-- use selfVelocity as Drive force
-- move only target
-- teleport positions
-- modify bond semantics
-- create new physics system
-
-Both participants must end each GRAPPLED Drive update with the same externalVelocity.
-
-## Critical Drive Velocity Rule
-
-This section is mandatory.
-
-Current:
-- `EXTERNAL_DECELERATION = 8 m/s²`
-- Drive acceleration = 4 m/s²
-
-Therefore, **do not call the existing full-vector `decayExternal()` first and then add Drive acceleration on the axis**.
-That would prevent correct acceleration toward 0.6m/s.
-
-### GRAPPLED shared external update
-
-When GRAPPLED, update the shared pair external velocity once per tick.
-
-Use pair axis `n`.
-
-Decompose:
-- parallel scalar along n
-- perpendicular vector
-
-### If net === 0
-
-No new Drive contribution.
-
-Apply existing external decay semantics to the shared external velocity.
-
-Then copy same result to both participants.
-
-This allows:
-- equal Drive contest = no new acceleration
-- pre-existing pair momentum still decays naturally
-
-### If net !== 0
-
-Define:
-```
-dirSign = sign(net)
-strength = abs(net)
-targetParallel =
-  dirSign * GRAPPLE_DRIVE_SPEED * strength
-
-driveStep =
-  GRAPPLE_DRIVE_ACCELERATION * strength * TICK_SECONDS
-
-decayStep =
-  EXTERNAL_DECELERATION * TICK_SECONDS
-```
-
-Update axis component toward target:
-
-- if current parallel is below/toward target:
-  approach target by at most `driveStep`
-  **without first subtracting axial EXTERNAL_DECELERATION**
-- if current parallel is already beyond target in the same direction:
-  bleed back toward target using existing `EXTERNAL_DECELERATION`
-- if current parallel is opposite requested direction:
-  Drive acceleration deterministically cancels it and then reverses toward target over subsequent ticks
-
-Perpendicular component:
-- decay toward zero using existing `EXTERNAL_DECELERATION`
-
-Reconstruct shared external velocity.
-
-Apply existing `MAX_EXTERNAL_SPEED` safety clamp.
-
-Copy exact same resulting externalVelocity to both participants.
-
-Equivalent minimal math is allowed if these semantics are identical.
-
-Do not change FREE `decayExternal()` or FREE Push formula.
-
-## Step Order
-
-A small refactor of `step()` into separate velocity/update phases is allowed if needed.
-
-Required semantics:
-
-1. advance posture
-2. determine tick-start grapple readiness
-3. handle GRAPPLED Release
-4. start FREE actions if FREE
-5. set GRAPPLED drive/idle action contribution
-6. update all selfVelocity
-7. update external velocity:
-   - FREE participants: existing decay behavior
-   - GRAPPLED pair: one shared Drive/external update as above
-8. integrate all positions
-9. ordinary Contact
-10. GRAPPLED bond or FREE Counter/Grip/Push resolution
-11. advance timed actions
-12. facing update
-
-Important:
-- Drive held input affects movement on that same tick when participant was READY at tick start.
-- orientation READY transition from tick end remains actionable only next tick, as accepted 05B1.
-
-Equivalent order allowed only with same semantics and explicit report.
-
-## Release During Drive
-
-Release gate remains:
-- participant must be READY
-
-If any READY participant Shift-releases:
-- release happens before Drive contribution for that tick
-- Engagement → FREE
-- no Drive contribution that tick
-- **clear/cancel drive action for both participants**
-- releaser(s) → Grip Recovery
-- non-releaser → idle
-- shared externalVelocity is NOT hard-cleared
-- FREE decay handles remaining motion
-
-Never allow FREE participant with action.kind === drive.
-
-TURNING Shift:
-- ignored
-- no queue
-- no Recovery
-
-## Drive / Orientation
-
-Drive translation must not alter pair bearing.
-
-Therefore:
-- TURNING continues during Drive
-- Drive does not reset facing error
-- no pair rotation
-- no orbit
-
-READY participant can Drive while opponent TURNING.
-
-Opponent begins contributing automatically once READY if it is already holding ↑.
-
-## Dummy Mode 2
-
-Existing validation harness, not real AI.
-
-Mode 2:
-- while FREE: existing approach + discrete Push behavior unchanged
-- while GRAPPLED:
-  - move zero
-  - FREE action edges false
-  - `driveHeld = true`
-  - hold/reset Push cooldown as current grapple behavior
-
-Simulation readiness decides:
-- Dummy TURNING → action idle / no contribution
-- Dummy READY → action drive / contributes
-
-Mode 1:
-- always passive; `driveHeld=false`
-
-Dummy does not Grip/Release.
-
-## Presentation
-
-Keep:
-- ENGAGE
-- READY/TURNING
-- Morozashi line
-
-Add:
-- `DRIVE` phase label while participant action.kind === drive
-- optional compact pair external speed debug text, if useful
-
-No final animation.
-
-Do not hide TURNING with DRIVE because TURNING participant cannot be drive.
-
-## Ring / Arena
-
-No Ring-out semantics.
-
-Do not:
-- declare winner
-- stop pair at ring
-- clamp
-- bounce
-- add invisible wall
-
-Automated Drive tests should use large arena fixture where edge does not matter.
-
-Browser PlayTest may cross the visible ring; User can R restart.
-
-## Scope
-
-Allowed:
-- BoutTypes intent/action additions
-- BoutSimulation Drive integration
-- small Pure Drive helper/module if useful
-- Scene ArrowUp held integration / presentation
-- Dummy Mode 2 Drive extension
-- focused Drive tests
-- helper adaptation adding driveHeld:false
-- ARCHITECTURE sync
-- Completion Report
-
-No dependency.
-
-## Scope Out
-
-Do NOT implement:
-- Ring-out / BoutOutcome
-- Yorikiri victory
-- Throw
-- Lift
-- stamina
-- Power/Weight/LowerBody/Grapple stat formulas
-- mass / traction framework
-- discrete/gaburi Drive pulse
-- pair rotation
-- directional FREE Push advantage
-- AI
-- final animation/audio
-- whole-game speed tuning
-
-## Required Automated Verification
-
-All existing 163 tests must remain PASS, except harmless intent helper adaptation for `driveHeld:false`.
-
-Add focused tests at minimum:
-
-T131 FREE ignores driveHeld:
-- FREE held ArrowUp semantic does not create Drive action
-- FREE Push edge behavior unchanged
-
-T132 one-sided neutral Drive:
-- READY A only
-- action A=drive, B=idle
-- shared pair velocity accelerates monotonically toward +0.6m/s
-- reaches/settles at target without stalling near one-tick velocity
-- bond distance R
-
-T133 mirrored one-sided Drive:
-- B only gives exact mirrored result
-
-T134 TURNING gate:
-- TURNING participant holding driveHeld does not contribute/action idle
-- READY opponent may Drive unopposed
-
-T135 held-before-READY:
-- participant holds ↑ while TURNING
-- first actionable tick after READY begins Drive automatically
-- no earlier contribution
-
-T136 equal neutral contest:
-- both READY, both held
-- both actions=drive
-- net contribution zero
-- no jitter
-- pre-existing shared momentum decays rather than being forcibly zeroed
-
-T137 Morozashi holder solo:
-- target speed / acceleration scale by 1.5 vs neutral
-
-T138 Morozashi contest:
-- holder vs disadvantaged both held
-- net = 0.5 toward holder side
-- disadvantaged participant remains strength 1.0
-
-T139 external target-speed rule:
-- 4m/s² acceleration reaches ~0.6m/s target despite EXTERNAL_DECELERATION=8
-- proves no pre-decay-on-axis bug
-
-T140 opposite momentum:
-- start shared external velocity opposite Drive
-- Drive cancels/reverses deterministically
-- finite/no overshoot beyond target
-
-T141 perpendicular momentum:
-- Drive continues on axis
-- perpendicular component decays toward zero
-
-T142 release during Drive:
-- READY Shift release wins
-- no Drive contribution on release tick
-- Engagement FREE
-- releaser Recovery
-- non-releaser idle
-- no participant remains action=drive
-- external velocity preserved then FREE decay
-
-T143 TURNING release while held Drive:
-- Shift ignored
-- Drive blocked
-- no queue / no Recovery
-
-T144 bond/orientation:
-- many Drive ticks keep exact R
-- pair bearing stable
-- TURNING continues normally
-- facing finite
-
-T145 Drive stop:
-- releasing ↑ converts drive→idle
-- shared momentum decays using existing rule
-- no extra Drive recovery
-
-T146 Dummy Mode 2:
-- FREE behavior unchanged
-- GRAPPLED TURNING → driveHeld emitted but no contribution
-- READY → Dummy contributes Drive
-- cooldown remains held/reset
-
-T147 deterministic contest:
-- mirrored/order-independent results
-- equal contests symmetric
-
-T148 Ring-out absent:
-- large/normal arena crossing does not declare outcome or clamp
-- no Ring-out code/semantic introduced
-
-T149 regression:
-- existing 163 tests PASS
-- FREE Push/Counter/Grip/Orientation unchanged when driveHeld false
-
-T150 mixed replay:
-- Counter→Kuzushi→Morozashi→TURNING→Drive→contest→Release
-- deterministic replay
-- finite position/velocity/facing
-- Engagement invariants
-
-## Verification Level
-
-Heavy / Core Grappled Drive.
-
-Required:
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`
-- T131–T150 evidence
-- existing 163 regressions
-- no dependency
-- Simulation/helper Phaser-free
-- Scope Out absent
-
-Browser Smoke if available:
-- normal Grip → hold ↑ moves pair
-- Mode 2 normal grapple → CPU pushes back after READY
-- equal neutral contest visibly stalls/contests
-- Counter→Morozashi → ↑ moves pair while CPU TURNING
-- CPU starts resisting after READY
-- Morozashi holder visibly stronger
-- releasing ↑ stops new Drive pressure
-- Shift releases while READY
-- no jitter/runtime errors
-
-If browser unavailable, report NOT RUN honestly.
-
-## User Play Test — REQUIRED
+Previous suggestion was about 0.5, but it was not accepted.
 
 Evaluate:
+- 0 = center criterion
+- 0.5 = support area smaller than body collision circle
+- 1 = body edge criterion
 
-1. ↑ hold feels like sustained pair pressure, not repeated Push.
-2. one-sided Drive moves the pair clearly but does not feel like skating.
-3. neutral vs neutral simultaneous Drive feels like stalemate.
-4. Morozashi holder clearly overpowers neutral resistance.
-5. Side/Rear Orientation gives a meaningful first-move Drive window.
-6. CPU resistance begins naturally when it reaches READY.
-7. releasing ↑ stops pressure cleanly.
-8. Shift release during Drive is understandable.
-9. bond remains stable.
-10. Drive direction is readable.
-11. current global game speed may still feel too fast; do NOT retune unless it blocks mechanic readability.
-12. leaving the ring does not yet end the bout; this is expected.
+Recommend a Prototype value and explain expected visual feel.
 
-Technical PASS != Drive Feel accepted.
+All values remain balance/tuning.
 
-## Acceptance Criteria
+## Q3 — Exact boundary semantics
 
-- driveHeld semantic exists
-- FREE Push meaning preserved
-- continuous hold Drive
-- timerless drive action
-- READY gate
-- pair-axis direction
-- signed symmetric net
-- neutral equal contest cancels new Drive contribution
-- Morozashi holder factor 1.5
-- shared pair external Model B
-- corrected Drive-axis acceleration/decay semantics
-- target speed 0.6m/s, acceleration 4m/s² provisional
-- opposite/perpendicular momentum handled deterministically
-- bond/orientation preserved
-- READY Release wins over Drive
-- release clears all drive actions
-- Dummy Mode 2 contested Drive
-- no Ring-out semantics
-- T131–T150 + regressions PASS
-- build PASS
-- User Play Test REQUIRED
-- no scope creep
+Decide whether:
+```
+distance + supportRadius === arena.radius
+```
+is:
+- still IN
+or
+- OUT
 
-## Stop Conditions
+Preferred convention to evaluate:
+- exact touching = IN
+- strictly greater = OUT
 
-STOP if:
-- Drive cannot reach target speed without modifying FREE Push/decay
-- GRAPPLED shared external update requires a generic physics system
-- release can leave drive action in FREE state
-- pair-axis contest cannot be made symmetric
-- Dummy extension requires real AI
-- Ring-out becomes technically mandatory
-- Current Source/Handoff materially conflict
-- unrelated divergence exists
+Need deterministic tests around:
+- exact boundary
+- +epsilon
+- -epsilon
 
-## Completion Report
+Do not add arbitrary gameplay epsilon unless technically required.
+
+## Q4 — Ring-out depth
+
+Define a deterministic measure for simultaneous resolution.
+
+Candidate:
+```
+depth = distanceFromCenter + supportRadius - arena.radius
+```
+
+Positive = out.
+
+Evaluate future unequal radii:
+- raw distance beyond support boundary
+- normalized depth / supportRadius
+
+Recommend one.
+
+Avoid body-size bias unless justified.
+
+## Q5 — Simultaneous Ring-out
+
+Push and especially Grappled Drive can move both participants in the same tick.
+
+Compare:
+A. deeper-out participant loses
+B. any both-out = redo
+C. first participant by array/order loses
+D. random
+
+Recommend deterministic behavior.
+
+Preferred direction to evaluate:
+- one out → that participant loses
+- both out → deeper-out participant loses
+- effectively equal depth → redo
+
+No participant-order or random tie-break.
+
+## Q6 — Exact / near tie
+
+If deeper-out is used, define a technical tie rule.
+
+Need decide:
+- exact floating equality only
+- small named `RING_OUT_TIE_EPSILON`
+
+Recommend a small technical epsilon only if needed for deterministic mirror symmetry.
+
+Tie must not be decided by participant order.
+
+## Q7 — Redo representation
+
+If simultaneous equal Ring-out yields no winner, how should Outcome represent it?
+
+Candidate:
+
+```ts
+type BoutOutcome =
+  | { kind: 'ongoing' }
+  | {
+      kind: 'win'
+      winnerId: ParticipantId
+      loserId: ParticipantId
+      reason: 'ring-out'
+    }
+  | {
+      kind: 'redo'
+      reason: 'simultaneous-ring-out'
+    }
+```
+
+Evaluate:
+- explicit `redo` vs draw
+- whether reason should already be a union for future loss types
+- avoid speculative full kimarite system
+
+Recommend minimal type.
+
+## Q8 — Outcome Source of Truth
+
+Recommend where Outcome lives.
+
+Preferred:
+- `BoutSimulation` owns canonical `outcome`
+- constructor starts `ongoing`
+- `BoutSnapshot` exposes a copied top-level outcome
+
+Do not put winner state in Scene.
+Do not duplicate winner/loser flags on participants.
+
+Confirm whether this is sufficient.
+
+## Q9 — Snapshot compatibility
+
+Adding `outcome` changes the top-level Snapshot shape.
+
+Identify current tests that intentionally assert exact Snapshot keys and will need scoped adaptation.
+
+This is an intentional API extension, not regression.
+
+Do not hide Outcome in a second Scene-only API merely to keep old key tests unchanged.
+
+## Q10 — Evaluation tick order
+
+Determine exactly when Ring-out is checked.
+
+Need account for:
+- position integration
+- ordinary Contact correction
+- Counter relocation
+- Counter overshoot movement (overshoot is velocity, not same-tick relocation beyond integration)
+- Grip attachment
+- Grapple bond
+- Drive pair translation
+- action timers
+- facing update
+
+Preferred direction to evaluate:
+**after all positional resolution for the tick (Contact / Counter relocation / Grip attachment / Grapple bond), before or at the end of tick state publication.**
+
+Recommend exact order.
+
+## Q11 — Counter relocation interaction
+
+Current `counterRelocationTarget()` only places defender where its whole body fits inside ring:
+```
+|target| <= arena.radius - defender.bodyRadius
+```
+
+This predates actual Ring-out.
+
+Investigate whether this validity constraint should:
+- remain unchanged for now
+- use future support radius instead
+- be removed so Counter can relocate near/outside the ring
+
+Important:
+Do not silently redesign accepted Counter geometry in Ring-out implementation.
+
+If changing it is required for coherent Ring-out, mark User Decision / separate task.
+
+## Q12 — Push interaction
+
+Define expected:
+- FREE Push moves pair/external momentum
+- at end of tick, if one crosses criterion → outcome win
+- Push action state may still be active in final Snapshot
+
+Decide whether Ring-out should cancel actions immediately or freeze final tick as-is.
+
+Prefer smallest rule.
+
+## Q13 — Grappled Drive interaction
+
+Define expected:
+- pair can translate while bonded
+- after spatial resolution, Ring-out checks both independently
+- one may be deeper out than the other even with constant bond distance
+
+Ensure Drive itself does not need special Ring-out logic.
+
+## Q14 — Outcome after win
+
+Once Outcome is not ongoing, what does `step()` do?
+
+Compare:
+A. strict no-op forever
+B. continue physics but ignore input
+C. continue presentation-only timer in Simulation
+
+Preferred:
+**A — Simulation step is no-op after outcome.**
+
+This creates a stable final Snapshot for Result transition.
+
+Recommend exact semantics:
+- positions/velocities/actions/posture/facing/outcome stay unchanged
+- no timers continue
+- no Drive/Push decay after result
+
+## Q15 — Final action cleanup
+
+If step freezes immediately after deciding outcome, final Snapshot may contain:
+- `action: push`
+- `action: drive`
+- Grip state
+- nonzero velocity
+
+Is that acceptable as the last physical instant?
+
+Compare:
+- preserve final state exactly
+- normalize all actions/velocities to idle/zero
+
+Preferred direction:
+preserve final physical state; Outcome is what says Bout ended.
+Presentation/Result transition decides what to show later.
+
+Do not mutate unrelated state solely for cleanliness unless required.
+
+## Q16 — Scene behavior
+
+For first Ring-out implementation, recommend minimum presentation:
+
+- show outcome text:
+  - PLAYER WIN
+  - CPU WIN
+  - REDO
+- current bodies stay at final positions
+- input can still be collected, but Simulation no-op makes it harmless
+- R restart starts new Bout
+
+Decide whether Scene must suppress input itself.
+Preferred: not necessary for correctness.
+
+No Result Scene yet.
+
+## Q17 — Redo UX
+
+If Outcome = redo:
+- should R remain manual restart in this Foundation?
+- auto restart?
+- timer?
+
+Recommend minimal Prototype behavior.
+
+Preferred:
+- show REDO
+- manual R restart
+- no auto timer
+
+## Q18 — Arena boundary / rendering
+
+Confirm no wall/clamp/bounce is added.
+
+When Ring-out occurs:
+- body can visually be partly/outside ring
+- state freezes at the crossing tick
+
+This should preserve the feeling of being pushed out.
+
+## Q19 — Body size future compatibility
+
+Future rikishi may have different bodyRadius.
+
+If support criterion uses:
+```
+supportRadius = bodyRadius * ratio
+```
+does larger body lose earlier geometrically?
+
+Discuss whether that is acceptable as a Prototype proxy or whether support radius should eventually become a separate physical parameter.
+
+Do not add a new persistent stat now unless necessary.
+
+## Q20 — Ring-out helper boundary
+
+Recommend small Pure helper(s), for example:
+
+```ts
+ringOutDepth(position, bodyRadius, arenaRadius): number
+resolveRingOut(...): BoutOutcome
+```
+
+Should these live:
+- in BoutSimulation.ts
+- or small `ringOut.ts` Pure module
+
+Prefer small explicit design.
+
+No generic Rule Engine.
+
+## Q21 — Outcome reason extensibility
+
+Future losses may include:
+- touching ground
+- Throw/fall
+- maybe other finish
+
+Do not implement them now.
+
+Decide whether `reason:'ring-out'` should be a string literal union now so future reasons can extend without changing architecture.
+
+Avoid building full kimarite classification.
+
+## Q22 — Result / Reward boundary
+
+The tiny loop eventually needs:
+Stable → Training → Bout → Result/Reward → Stable.
+
+Define only the boundary:
+- BoutSimulation produces final Outcome
+- a future higher-level game state reads it and transitions to Result
+
+Do not implement Result/Reward in this task.
+
+Confirm no Management state should enter BoutSimulation.
+
+## Q23 — Determinism / frame rate
+
+Confirm Ring-out checks once per fixed Simulation tick after spatial resolution.
+
+No render delta.
+No continuous collision detection is needed under current speeds/geometry unless investigation proves otherwise.
+
+Assess tunneling risk:
+- MAX external speed
+- body/ring scale
+- 60Hz
+
+If current discrete tick can skip from clearly inside to clearly outside, that is still okay if criterion checks final position, unless first-crossing precision is necessary.
+
+Do not add CCD unless required.
+
+## Q24 — Automated test matrix
+
+Specify tests for later implementation, including at minimum:
+
+- initial outcome ongoing
+- Snapshot outcome copy isolation
+- exact inside boundary
+- exact boundary
+- epsilon outside
+- A out / B in
+- B out / A in
+- both out, A deeper
+- both out, B deeper
+- mirrored equality → redo
+- near tie around technical epsilon
+- unequal bodyRadius behavior if test setup allows
+- Push causes Ring-out
+- Grappled Drive causes Ring-out
+- Counter relocation near edge interaction
+- no wall/clamp
+- final state freezes
+- repeated step after outcome exact no-op
+- R/new Bout returns ongoing at Scene/harness level if practical
+- deterministic replay
+- finite values
+- existing 182 regression tests with intentional Snapshot-shape updates only
+
+Do not sample one participant only; both directions required.
+
+## Q25 — User Play Test plan
+
+First Ring-out implementation should require User Play Test.
+
+Define checks:
+- being pushed over edge feels like loss at visually understandable point
+- Drive produces a believable Yorikiri-style finish
+- body is not called out too early/late
+- simultaneous edge cases do not look arbitrary
+- outcome freeze is clear
+- R restart works
+- no invisible wall
+- current overall speed remains Deferred
+
+## Q26 — User Decisions Required
+
+List only material decisions before implementation.
+
+At minimum evaluate:
+- Ring-out criterion
+- support ratio if used
+- exact boundary IN/OUT
+- simultaneous deeper-out vs redo
+- tie handling
+- Outcome type including redo
+- step freeze after outcome
+
+Give one recommended default for each.
+
+## Q27 — Next Implementation Sequence
+
+Recommend smallest safe sequence.
+
+Likely:
+1. ACTION-06A Ring-out / BoutOutcome Foundation
+2. User Play Test
+3. minimal Result/Reward transition investigation
+4. Throw / Lift can proceed in parallel only if they do not require new finish semantics
+
+Do not bundle Result/Reward into Ring-out Foundation.
+
+# Architecture Constraints
+
+Maintain:
+
+```
+Pure TS BoutSimulation
+  positions / geometry
+  engagement / actions
+  outcome
+      ↓
+BoutSnapshot
+      ↓
+Phaser presentation
+      ↓
+future higher-level Result transition
+```
+
+Outcome is gameplay state, not Scene state.
+
+Do not:
+- add Phaser rules
+- add Physics
+- add wall/clamp
+- add ECS/rule engine
+- add generic event bus
+- add random tie-break
+- add Management state to BoutSimulation
+
+# Scope Out
+
+Do NOT implement:
+- Production Ring-out
+- BoutOutcome code
+- Result screen
+- Reward
+- Training/Stable loop
+- Throw
+- Lift
+- hand-touch/fall detection
+- full kimarite
+- stamina
+- stats
+- whole-game tempo tuning
+- directional FREE Push advantage
+- final art/audio
+
+Investigation Only.
+
+# Required Reading
+
+Inspect at minimum:
+
+- `AGENTS.md`
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- `src/game/sumo/BoutDrive.test.ts`
+- `src/game/sumo/BoutPush.test.ts`
+- `src/game/sumo/BoutCounterPosition.test.ts`
+- `src/game/scenes/BoutScene.ts`
+- `docs/ARCHITECTURE.md`
+- `docs/GAME_CONCEPT.md`
+- Current Task Final Review + User Drive Play Test acceptance
+
+# Stop Conditions
+
+Return BLOCKED if:
+- coherent Ring-out requires changing accepted Contact/Drive/Counter architecture
+- Counter edge validity materially conflicts with Ring-out and cannot be deferred
+- simultaneous Ring-out cannot be resolved without a new unaccepted gameplay rule
+- Outcome ownership requires Management state inside BoutSimulation
+- current discrete timestep creates unacceptable tunneling requiring a new collision approach
+- Current Source materially conflicts with Handoff
+
+Do not make Production changes.
+
+# Verification
+
+Investigation / Design Review.
+
+Required:
+- Q1–Q27 answered or explicit BLOCKED
+- Current Fact / Recommendation / User Decision / Deferred separated
+- Production Source unchanged
+- package/lockfile unchanged
+- repository change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `git diff --check` PASS
+
+Tests/build not required because Source must not change.
+
+# Completion Report
 
 Minimum:
-- Result / Preflight / Changed Files
-- User Decisions
-- driveHeld input implementation
-- Drive action
-- pair-axis/net
-- shared external Drive update
-- correction C-1 evidence
-- Morozashi factor
-- readiness
-- release
-- Dummy
-- T131–T150 + regressions
-- Browser Smoke
-- Implementation Evidence
+- Result
+- Preflight
+- Current Source Findings
+- Q1–Q27
+- recommended Ring-out criterion
+- support geometry
+- simultaneous/tie rule
+- BoutOutcome type
+- tick order
+- Counter/Push/Drive interaction
+- post-outcome freeze semantics
+- Scene boundary
+- Result/Reward boundary
+- automated test matrix
+- User Play Test plan
+- User Decisions Required
+- Rejected / Deferred
+- Next Implementation Sequence
 - Design Deviations
 - Unexpected Scope
-- Known Untested
-- User Play Test REQUIRED / NOT RUN
+- Verification
 - Git delivery
 
-## Git Delivery
+# User Play Test
 
-Follow AGENTS.md.
-1 Task ≈ 1 commit.
-Task-owned files only.
-Push origin/develop.
-Do not change main.
+NOT REQUIRED for Investigation.
+
+Identify first implementation Task where Ring-out Feel becomes REQUIRED.
+
+# Git Delivery
+
+Investigation-only Report Commit Exception:
+- change only CURRENT_COMPLETION_REPORT.md
+- explicit stage
+- git diff --check
+- one Report-only commit
+- push origin/develop
+- verify remote SHA / clean tree
 
 Example:
-`feat: add grappled drive foundation`
+`docs(agent): investigate ring-out bout outcome`
 
-## Final Instruction
+# Final Instruction
 
-Stop after Grappled Drive Foundation.
+Stop after Investigation.
 
-Do not continue to Ring-out, Throw, Lift, stamina, stats, or global balance.
+Do not implement Ring-out, Outcome, Result/Reward, Throw, Lift, stats, or balance changes.
 
-After commit/push/report:
-「ACTION-05C1-GRAPPLED-DRIVE-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `7a28a211cf718a15e29cc7b15817b55e38be6bbf`
-- Agent-Start-Head:
-  `f752a9f06c16df5801a72ba26e8aafce991e468a`
-- Task diff is exactly one implementation commit.
-- `main` remains unchanged.
-- No new dependency.
-- Scope is limited to Grappled Drive Foundation, Dummy validation support, presentation, focused tests, and docs.
-
-## Reported Implementation vs Design
-
-PASS.
-
-Direct Source review confirmed:
-
-### Semantic input
-
-- `ParticipantIntent.driveHeld` is a held semantic input.
-- ArrowUp key-down still feeds the existing FREE Push PressLatch.
-- the same ArrowUp Key's `isDown` supplies `driveHeld`.
-- Scene does not choose FREE-vs-GRAPPLED gameplay meaning.
-- Simulation ignores `driveHeld` while FREE.
-
-### Drive action
-
-- timerless `{kind:'drive'}` exists.
-- it is used only while GRAPPLED and actually contributing.
-- TURNING + held input stays idle.
-- held input can begin Drive on the first tick that starts READY.
-- no duplicate `isDriving` state exists.
-
-### Pair-axis Drive
-
-- Drive direction uses current pair axis, not participant facing.
-- signed net is:
-  strength(A) * ADriving - strength(B) * BDriving.
-- equal neutral contest contributes net zero.
-- mirrored participant order is tested.
-
-### Morozashi
-
-- holder strength is provisional 1.5.
-- disadvantaged participant remains 1.0.
-- Morozashi remains Engagement data rather than a Drive-specific state.
-
-### Shared external Model B
-
-- one shared GRAPPLED external update is computed per tick.
-- both participants receive the exact same resulting externalVelocity.
-- Drive does not use selfVelocity or direct position teleport.
-- Grapple bond remains unchanged.
-
-## Critical C-1 Review — PASS
-
-The mandatory correction from ACTION-05C Review is implemented correctly.
-
-With:
-- `GRAPPLE_DRIVE_ACCELERATION = 4 m/s²`
-- `EXTERNAL_DECELERATION = 8 m/s²`
-
-the implementation does **not** pre-decay the axial Drive component before applying Drive acceleration.
-
-For `net != 0`:
-
-- axial component approaches the signed target using Drive acceleration.
-- target overspeed bleeds back using existing EXTERNAL_DECELERATION.
-- opposite axial momentum is canceled/reversed by Drive acceleration.
-- perpendicular momentum uses existing decay.
-- MAX_EXTERNAL_SPEED remains the global safety clamp.
-
-Direct tests verify one-sided neutral Drive reaches 0.6 m/s rather than stalling at a one-tick crawl.
-
-FREE:
-- existing `decayExternal()` behavior is preserved.
-- existing Push formula is preserved.
-
-## Step / Tick Semantics
-
-PASS.
-
-- readiness is from tick-start state.
-- READY held Drive affects that same tick's motion.
-- orientation becoming READY at tick end only enables Drive next tick.
-- self velocity update and position integration are now separated into two loops.
-- existing FREE regressions confirm the refactor did not change prior behavior.
-
-## Release Review
-
-PASS.
-
-READY Shift release:
-
-- happens before Drive contribution.
-- clears every existing Drive action.
-- releaser enters Grip Recovery.
-- non-releaser becomes/stays idle.
-- Engagement becomes FREE.
-- no participant remains `drive` in FREE.
-- pair external momentum is not hard-cleared; FREE decay applies.
-
-TURNING Shift remains ignored/no queue/no Recovery.
-
-## Dummy Review
-
-PASS as validation harness, not AI.
-
-Mode 2:
-
-- FREE: previous Push behavior remains.
-- GRAPPLED: emits only `driveHeld=true` with FREE edges off.
-- TURNING: Simulation prevents contribution.
-- READY: Dummy contributes Drive.
-- Push cooldown remains held during grapple.
-
-This is sufficient for contested Drive User Play Test without introducing real CPU AI.
-
-## Ring-out Boundary
-
-PASS.
-
-No Ring-out / BoutOutcome behavior was added.
-
-Pair may cross the arena boundary:
-- no winner
-- no clamp
-- no bounce
-- no invisible wall.
-
-This is intentional for ACTION-05C1.
-
-## Verification Review
-
-Reported:
-
-- `pnpm test`: 182/182 PASS
-- `pnpm build`: PASS
-- `git diff --check`: PASS
-- existing 163 regressions PASS
-- new Drive coverage T131–T148 and T150
-
-Direct source/test inspection confirms coverage for:
-
-- FREE ignoring driveHeld
-- one-sided neutral acceleration to 0.6
-- mirrored Drive
-- TURNING gate / READY first-move reward
-- held-before-READY semantics
-- equal neutral contest
-- existing momentum decay under net zero
-- Morozashi solo and contested advantage
-- C-1 no-decay-stall behavior
-- opposite momentum reversal
-- perpendicular decay
-- Drive release
-- TURNING release block
-- bond/orientation stability
-- Drive stop/no Recovery
-- Dummy contested Drive
-- participant-order symmetry
-- no Ring-out semantics
-- deterministic mixed replay.
-
-### Non-blocking verification note
-
-There is no literal test named `T149`.
-
-The Task's T149 requirement was:
-"existing 163 tests PASS / FREE Push-Counter-Grip-Orientation unchanged when driveHeld=false."
-
-That requirement is substantively satisfied by:
-- all existing 163 tests passing
-- helper-only `driveHeld:false` adaptations
-- only T110 assertion intentionally updated for the accepted Dummy behavior change.
-
-No correction task is required solely to add a meta-test label.
-
-## Non-Blocking Documentation Note
-
-Some older type/comments still describe `externalVelocity` narrowly as Push momentum.
-
-After ACTION-05C1 it also represents shared Grappled Drive pair momentum.
-
-Canonical implementation semantics are correct, but future documentation cleanup should describe it consistently as:
-"external / pair momentum not produced by grounded footwork."
-
-Do not reopen Gameplay code only for this wording.
-
-## Browser Smoke
-
-NOT RUN due Agent environment limitation.
-
-This is a Known Untested runtime item.
-
-## Accepted Technical Baseline Pending User Play Test
-
-If User Play Test passes:
-
-- ArrowUp hold = Grappled Drive
-- `driveHeld` semantic input
-- timerless Drive action
-- Drive requires READY
-- Drive direction = pair axis
-- neutral equal contest = no new Drive acceleration
-- target speed = 0.6 m/s provisional
-- acceleration = 4 m/s² provisional
-- Morozashi holder factor = 1.5 provisional
-- shared external Model B Drive
-- Drive-axis dedicated acceleration/decay semantics
-- READY release wins over Drive
-- Dummy Mode 2 contests Drive when READY
-- Ring-out remains unimplemented.
-
-All numerical values remain Prototype tuning and are subject to the later whole-game tempo/balance pass.
-
-## User Play Test — REQUIRED / READY
-
-Run `pnpm dev`.
-
-### Neutral Drive
-
-1. Use Mode 1 and establish a normal frontal grapple.
-2. Hold ArrowUp.
-3. Confirm:
-   - Player shows DRIVE.
-   - pair moves together toward CPU side.
-   - movement looks like pair pressure rather than one circle sliding away.
-   - releasing ArrowUp stops new pressure and residual motion dies quickly.
-
-### Neutral contest
-
-4. Switch/use Mode 2 and establish a normal grapple.
-5. Hold ArrowUp.
-6. Once both are READY, confirm:
-   - both show DRIVE.
-   - pair approximately stalls rather than either side steadily winning.
-   - bond remains stable/no jitter.
-
-### Morozashi + Orientation
-
-7. Mode 2: Counter the CPU Push successfully.
-8. Grip CPU while Kuzushi to obtain Morozashi.
-9. Immediately hold ArrowUp.
-10. Confirm:
-    - Player DRIVE works while CPU is still TURNING.
-    - pair moves toward CPU side during this uncontested window.
-    - CPU begins resisting only after it reaches READY.
-    - even after CPU resists, Morozashi holder still slowly wins the contest.
-
-### Release / stability
-
-11. While READY and Driving, press Shift.
-12. Confirm release occurs immediately and no DRIVE label remains in FREE.
-13. Confirm remaining pair momentum decays rather than snapping to zero.
-14. Confirm no bond/facing jitter during sustained Drive.
-15. Confirm FREE Push / Counter / Movement / Grip still feel unchanged.
-16. Confirm no console/runtime errors.
-
-### Expected current limitations
-
-- crossing the ring does not end the bout.
-- neutral equal Drive can remain an indefinite stalemate while both hold ↑.
-- final overall game speed is still intentionally untuned.
-- current 0.6 / 4 / 1.5 values are only Prototype values.
-
-## Acceptance State
-
-Technical implementation: PASS.
-
-Drive Feel: PENDING USER PLAY TEST.
-
-Do not start Ring-out / BoutOutcome investigation until this focused Drive Play Test is reviewed.
-
-If accepted:
-- ACTION-05C1 becomes the current Grappled Drive baseline.
-- next task should be Minimal Ring-out / BoutOutcome Investigation.
-
-If rejected:
-classify narrowly:
-- Drive speed/acceleration
-- pair-pressure feel
-- neutral contest
-- Morozashi advantage
-- READY/Orientation interaction
-- release
-- Dummy behavior
-- runtime bug.
-
-Do not fold the deferred whole-game tempo pass into a local Drive correction unless the mechanic cannot be evaluated otherwise.
-
-## Do Not Reopen
-
-Unless concrete Play Test feedback requires it:
-
-- Model B shared external structure
-- pair-axis Drive direction
-- Orientation readiness
-- pair-level Engagement / Morozashi ownership
-- FREE Push formula
-- Grapple bond
-- TURNING/READY rules.
-
-## Deferred
-
-- Ring-out / BoutOutcome
-- Yorikiri victory
-- whole-game tempo rebalance
-- stamina
-- Power / Weight / LowerBody / Grapple formulas
-- mass/traction
-- discrete/gaburi Drive
-- pair rotation
-- Throw / Lift
-- directional FREE Push advantage
-- final animation/audio
+After Report Commit / Push:
+「ACTION-06-RINGOUT-BOUTOUTCOME-INVESTIGATION が完了し、ChatGPT Review待ちです」
