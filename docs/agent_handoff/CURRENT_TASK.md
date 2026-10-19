@@ -1256,3 +1256,99 @@ Unless explicit User change:
 - Save.
 - formal wrestler names.
 - global tempo tuning.
+
+
+# User Direction Update — Action-First Priority
+
+This update supersedes the previously recommended immediate LOOP-01A1 implementation sequence.
+
+## Confirmed Finish Presentation Decisions
+
+- Normal win/loss:
+  Gyoji presentation → Win/Lose hold → automatically proceed.
+  No button/keypress wait.
+- Rematch user-visible text:
+  `Rematch` only.
+  Do not use `Draw Rematch` in the future Finish Presentation.
+- Gyoji remains post-decision only and placeholder-first when implemented.
+
+These are Accepted User Decisions, but their implementation is Deferred until Action visual work reaches an appropriate point.
+
+## Basho / Opponent Record Decision — DEFERRED
+
+Do not implement a canonical record policy yet for:
+- owned wrestlers only
+- opponents as well
+- complete global wrestler records
+
+Reason:
+future real-sumo-inspired bout scheduling may use records for later-round pairings, and championship/playoff handling may require a broader authoritative tournament record model.
+
+Therefore:
+- do not implement LOOP-01A1 MatchDayFlow/BashoRecord now.
+- do not treat "owned records only" or "record both wrestlers" as Accepted.
+- revisit when Basho scheduling / tournament simulation becomes Current Scope.
+
+## Development Priority Correction
+
+Current development remains Action-first.
+
+Do NOT proceed next into:
+- Simulation / Management screen
+- MatchDayFlow implementation
+- BashoRecord implementation
+- daily queue implementation
+- Banzuke calculation
+- tournament scheduling
+
+The user considers current visuals "placeholder of a placeholder" and wants to test whether the accepted Action rules actually read and feel like a game once provisional game graphics/presentation are applied.
+
+## Next Recommended Work Area
+
+Return to Action / Presentation development.
+
+Goal:
+apply provisional but game-readable graphics/presentation to the current accepted Bout Core so User can evaluate:
+
+- whether the player can visually read both wrestlers
+- facing / orientation
+- Push
+- Counter / Kuzushi
+- Grip / Morozashi
+- Grappled turning
+- Drive
+- Ring-out / finish
+- impact / momentum / advantage
+- whether side/rear advantage is visually understandable
+- whether the game speed feels appropriate once animation exists
+- whether the overall bout feels like an actual Action Game rather than debug circles
+
+This should preserve:
+Pure TS gameplay state/results → Phaser rendering/animation.
+
+Do not change gameplay formulas merely to compensate for weak placeholder presentation unless a concrete gameplay issue is proven.
+
+## Deferred LOOP-01 Findings
+
+Keep the reviewed LOOP-01 investigation as future design reference, especially:
+- no Result screen
+- no per-bout reward
+- Gyoji post-decision presentation
+- Win/Lose from owned wrestler perspective
+- Rematch does not count as a result
+- day's scheduled owned bouts eventually lead back to Simulation
+- input/latch transition risk
+
+But do not implement these flow systems now.
+
+## Next Task Constraint
+
+Before Production implementation of provisional graphics, inspect Current Source/assets and determine:
+- whether any usable art assets already exist
+- current rendering primitives
+- minimum animation state mapping from Simulation state
+- whether spritesheet/placeholder assets need to be introduced
+- how to keep animation presentation-only
+- what visual pass is small enough for User Play Test without prematurely building final art pipeline.
+
+Prefer an Action Visual Prototype Investigation first if asset direction or animation mapping is not already unambiguous.
