@@ -1,5 +1,5 @@
 Task-ID: ACTION-05C1-GRAPPLED-DRIVE-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE GRAPPLED DRIVE FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -652,3 +652,325 @@ Do not continue to Ring-out, Throw, Lift, stamina, stats, or global balance.
 
 After commit/push/report:
 「ACTION-05C1-GRAPPLED-DRIVE-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `7a28a211cf718a15e29cc7b15817b55e38be6bbf`
+- Agent-Start-Head:
+  `f752a9f06c16df5801a72ba26e8aafce991e468a`
+- Task diff is exactly one implementation commit.
+- `main` remains unchanged.
+- No new dependency.
+- Scope is limited to Grappled Drive Foundation, Dummy validation support, presentation, focused tests, and docs.
+
+## Reported Implementation vs Design
+
+PASS.
+
+Direct Source review confirmed:
+
+### Semantic input
+
+- `ParticipantIntent.driveHeld` is a held semantic input.
+- ArrowUp key-down still feeds the existing FREE Push PressLatch.
+- the same ArrowUp Key's `isDown` supplies `driveHeld`.
+- Scene does not choose FREE-vs-GRAPPLED gameplay meaning.
+- Simulation ignores `driveHeld` while FREE.
+
+### Drive action
+
+- timerless `{kind:'drive'}` exists.
+- it is used only while GRAPPLED and actually contributing.
+- TURNING + held input stays idle.
+- held input can begin Drive on the first tick that starts READY.
+- no duplicate `isDriving` state exists.
+
+### Pair-axis Drive
+
+- Drive direction uses current pair axis, not participant facing.
+- signed net is:
+  strength(A) * ADriving - strength(B) * BDriving.
+- equal neutral contest contributes net zero.
+- mirrored participant order is tested.
+
+### Morozashi
+
+- holder strength is provisional 1.5.
+- disadvantaged participant remains 1.0.
+- Morozashi remains Engagement data rather than a Drive-specific state.
+
+### Shared external Model B
+
+- one shared GRAPPLED external update is computed per tick.
+- both participants receive the exact same resulting externalVelocity.
+- Drive does not use selfVelocity or direct position teleport.
+- Grapple bond remains unchanged.
+
+## Critical C-1 Review — PASS
+
+The mandatory correction from ACTION-05C Review is implemented correctly.
+
+With:
+- `GRAPPLE_DRIVE_ACCELERATION = 4 m/s²`
+- `EXTERNAL_DECELERATION = 8 m/s²`
+
+the implementation does **not** pre-decay the axial Drive component before applying Drive acceleration.
+
+For `net != 0`:
+
+- axial component approaches the signed target using Drive acceleration.
+- target overspeed bleeds back using existing EXTERNAL_DECELERATION.
+- opposite axial momentum is canceled/reversed by Drive acceleration.
+- perpendicular momentum uses existing decay.
+- MAX_EXTERNAL_SPEED remains the global safety clamp.
+
+Direct tests verify one-sided neutral Drive reaches 0.6 m/s rather than stalling at a one-tick crawl.
+
+FREE:
+- existing `decayExternal()` behavior is preserved.
+- existing Push formula is preserved.
+
+## Step / Tick Semantics
+
+PASS.
+
+- readiness is from tick-start state.
+- READY held Drive affects that same tick's motion.
+- orientation becoming READY at tick end only enables Drive next tick.
+- self velocity update and position integration are now separated into two loops.
+- existing FREE regressions confirm the refactor did not change prior behavior.
+
+## Release Review
+
+PASS.
+
+READY Shift release:
+
+- happens before Drive contribution.
+- clears every existing Drive action.
+- releaser enters Grip Recovery.
+- non-releaser becomes/stays idle.
+- Engagement becomes FREE.
+- no participant remains `drive` in FREE.
+- pair external momentum is not hard-cleared; FREE decay applies.
+
+TURNING Shift remains ignored/no queue/no Recovery.
+
+## Dummy Review
+
+PASS as validation harness, not AI.
+
+Mode 2:
+
+- FREE: previous Push behavior remains.
+- GRAPPLED: emits only `driveHeld=true` with FREE edges off.
+- TURNING: Simulation prevents contribution.
+- READY: Dummy contributes Drive.
+- Push cooldown remains held during grapple.
+
+This is sufficient for contested Drive User Play Test without introducing real CPU AI.
+
+## Ring-out Boundary
+
+PASS.
+
+No Ring-out / BoutOutcome behavior was added.
+
+Pair may cross the arena boundary:
+- no winner
+- no clamp
+- no bounce
+- no invisible wall.
+
+This is intentional for ACTION-05C1.
+
+## Verification Review
+
+Reported:
+
+- `pnpm test`: 182/182 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+- existing 163 regressions PASS
+- new Drive coverage T131–T148 and T150
+
+Direct source/test inspection confirms coverage for:
+
+- FREE ignoring driveHeld
+- one-sided neutral acceleration to 0.6
+- mirrored Drive
+- TURNING gate / READY first-move reward
+- held-before-READY semantics
+- equal neutral contest
+- existing momentum decay under net zero
+- Morozashi solo and contested advantage
+- C-1 no-decay-stall behavior
+- opposite momentum reversal
+- perpendicular decay
+- Drive release
+- TURNING release block
+- bond/orientation stability
+- Drive stop/no Recovery
+- Dummy contested Drive
+- participant-order symmetry
+- no Ring-out semantics
+- deterministic mixed replay.
+
+### Non-blocking verification note
+
+There is no literal test named `T149`.
+
+The Task's T149 requirement was:
+"existing 163 tests PASS / FREE Push-Counter-Grip-Orientation unchanged when driveHeld=false."
+
+That requirement is substantively satisfied by:
+- all existing 163 tests passing
+- helper-only `driveHeld:false` adaptations
+- only T110 assertion intentionally updated for the accepted Dummy behavior change.
+
+No correction task is required solely to add a meta-test label.
+
+## Non-Blocking Documentation Note
+
+Some older type/comments still describe `externalVelocity` narrowly as Push momentum.
+
+After ACTION-05C1 it also represents shared Grappled Drive pair momentum.
+
+Canonical implementation semantics are correct, but future documentation cleanup should describe it consistently as:
+"external / pair momentum not produced by grounded footwork."
+
+Do not reopen Gameplay code only for this wording.
+
+## Browser Smoke
+
+NOT RUN due Agent environment limitation.
+
+This is a Known Untested runtime item.
+
+## Accepted Technical Baseline Pending User Play Test
+
+If User Play Test passes:
+
+- ArrowUp hold = Grappled Drive
+- `driveHeld` semantic input
+- timerless Drive action
+- Drive requires READY
+- Drive direction = pair axis
+- neutral equal contest = no new Drive acceleration
+- target speed = 0.6 m/s provisional
+- acceleration = 4 m/s² provisional
+- Morozashi holder factor = 1.5 provisional
+- shared external Model B Drive
+- Drive-axis dedicated acceleration/decay semantics
+- READY release wins over Drive
+- Dummy Mode 2 contests Drive when READY
+- Ring-out remains unimplemented.
+
+All numerical values remain Prototype tuning and are subject to the later whole-game tempo/balance pass.
+
+## User Play Test — REQUIRED / READY
+
+Run `pnpm dev`.
+
+### Neutral Drive
+
+1. Use Mode 1 and establish a normal frontal grapple.
+2. Hold ArrowUp.
+3. Confirm:
+   - Player shows DRIVE.
+   - pair moves together toward CPU side.
+   - movement looks like pair pressure rather than one circle sliding away.
+   - releasing ArrowUp stops new pressure and residual motion dies quickly.
+
+### Neutral contest
+
+4. Switch/use Mode 2 and establish a normal grapple.
+5. Hold ArrowUp.
+6. Once both are READY, confirm:
+   - both show DRIVE.
+   - pair approximately stalls rather than either side steadily winning.
+   - bond remains stable/no jitter.
+
+### Morozashi + Orientation
+
+7. Mode 2: Counter the CPU Push successfully.
+8. Grip CPU while Kuzushi to obtain Morozashi.
+9. Immediately hold ArrowUp.
+10. Confirm:
+    - Player DRIVE works while CPU is still TURNING.
+    - pair moves toward CPU side during this uncontested window.
+    - CPU begins resisting only after it reaches READY.
+    - even after CPU resists, Morozashi holder still slowly wins the contest.
+
+### Release / stability
+
+11. While READY and Driving, press Shift.
+12. Confirm release occurs immediately and no DRIVE label remains in FREE.
+13. Confirm remaining pair momentum decays rather than snapping to zero.
+14. Confirm no bond/facing jitter during sustained Drive.
+15. Confirm FREE Push / Counter / Movement / Grip still feel unchanged.
+16. Confirm no console/runtime errors.
+
+### Expected current limitations
+
+- crossing the ring does not end the bout.
+- neutral equal Drive can remain an indefinite stalemate while both hold ↑.
+- final overall game speed is still intentionally untuned.
+- current 0.6 / 4 / 1.5 values are only Prototype values.
+
+## Acceptance State
+
+Technical implementation: PASS.
+
+Drive Feel: PENDING USER PLAY TEST.
+
+Do not start Ring-out / BoutOutcome investigation until this focused Drive Play Test is reviewed.
+
+If accepted:
+- ACTION-05C1 becomes the current Grappled Drive baseline.
+- next task should be Minimal Ring-out / BoutOutcome Investigation.
+
+If rejected:
+classify narrowly:
+- Drive speed/acceleration
+- pair-pressure feel
+- neutral contest
+- Morozashi advantage
+- READY/Orientation interaction
+- release
+- Dummy behavior
+- runtime bug.
+
+Do not fold the deferred whole-game tempo pass into a local Drive correction unless the mechanic cannot be evaluated otherwise.
+
+## Do Not Reopen
+
+Unless concrete Play Test feedback requires it:
+
+- Model B shared external structure
+- pair-axis Drive direction
+- Orientation readiness
+- pair-level Engagement / Morozashi ownership
+- FREE Push formula
+- Grapple bond
+- TURNING/READY rules.
+
+## Deferred
+
+- Ring-out / BoutOutcome
+- Yorikiri victory
+- whole-game tempo rebalance
+- stamina
+- Power / Weight / LowerBody / Grapple formulas
+- mass/traction
+- discrete/gaburi Drive
+- pair rotation
+- Throw / Lift
+- directional FREE Push advantage
+- final animation/audio
