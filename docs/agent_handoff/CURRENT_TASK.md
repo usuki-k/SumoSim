@@ -1,791 +1,558 @@
-Task-ID: ACTION-05A-GRIP-ENGAGEMENT-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / CORE GRIP ENGAGEMENT FOUNDATION
+Task-ID: ACTION-05B-GRAPPLED-ORIENTATION-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / GRAPPLED FACING & ACTION ELIGIBILITY
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: d72f43b0887203095eebe3f1c7efb1d1193a188d
+Source-Baseline: 61a1a493a54a02cc7d171f3c70d722a6640f871f
 Handoff-Mode: GITHUB
 
-# ACTION-05A — Grip / Engagement Foundation
+# ACTION-05B — Grappled Orientation / Facing Advantage Investigation
 
 ## Purpose
 
-Grip / 組み / Morozashiの最小Foundationを実装する。
+ACTION-05A Grip / Engagement FoundationはTechnical Review + User Play TestでAcceptされた。
 
-今回:
-- Shift = Grip / Release
-- FREE → neutral GRAPPLED
-- Kuzushi targetへの有効Grip → MOROZASHI
-- Kuzushi消費
-- Grip reach / whiff recovery
-- pair-level Engagement
-- Grapple bond
-- GRAPPLED中WASD抑制
-- release
-- DummyのEngagement対応
-- 最小debug表示
+User Play Testで新しい不足が見つかった。
 
-今回は未実装:
-- Grappled Drive / Yorikiri
-- Morozashi Drive bonus
-- Throw / Throw bonus
-- Lift
-- stats / RNG / Ring-out
+Current behavior:
+- Counter Success → side
+- Counter Best → rear
+- target Kuzushi
+- Shift Grip → Morozashi
+- Morozashi成立時にKuzushiを消費
+- その後Current `updateFacing()` がstable participantを即座に相手へ向ける
+- 結果、Grip後はside / rearの向き差がほぼ消える
 
-## Accepted User Decisions
+Userが将来実現したいGameplay:
 
-1. stable + idle targetへのvalid GripはFoundationでは決定的に成功 → neutral grapple。
-2. Kuzushi + idle targetへのvalid Gripは確定成功 → Morozashi。target Kuzushiは即消費してstable。
-3. unilateral Gripはaction-idle targetにだけ成立。Push / Counter / Grip中のtargetをinterruptしない。
-4. GRAPPLED中は両者ともShiftでrelease可能。releaseした側だけGrip Recovery。両者同時releaseなら両者Recovery。
-5. ACTION-05AではGRAPPLED中の通常WASDは抑制。
-6. Grip rangeは combined radius + margin。初期値 `GRIP_RANGE_MARGIN = 0.09 m`。
-7. Prototype Grip key = **Shift**。左右Shiftは同じ意味。hold auto-repeatなし。
+- 側面・背後からGripされたparticipantは、相手を正面に捉えるまで攻撃/防御Actionを使えない
+- その間、向きを取っている側は一方的にActionできる
+- sideは短いopening
+- rearはより長いopening
+- 正面まで旋回すれば通常の組みActionへ戻る
 
-## Current Baseline
+このTaskでは、Grappled Drive / Throw / Liftを実装する前に、
+**Grappled中のfacing、旋回、Action eligibilityの最小設計を確定する。**
 
-Preserve:
-- Movement / Contact
-- ArrowUp Push
-- ArrowDown Counter
-- Push > Counter priority
+Investigation Only / No Production Changes.
+
+Repository変更は
+`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+のみ。
+
+## Accepted Baseline
+
+Accepted Production Source:
+`61a1a493a54a02cc7d171f3c70d722a6640f871f`
+
+Preserve unless this Investigation identifies an explicit conflict:
+
+- FREE Movement / Contact
+- Push / Counter
 - Kuzushi
-- Best→rear / Success→side
+- Best→rear / Success→side relocation
 - Counter overshoot
-- current provisional tuning
+- pair-level Engagement SoT
+- stable valid Grip → neutral GRAPPLED
+- Kuzushi valid Grip → Morozashi
+- Morozashi establishment consumes Kuzushi
+- Grip range/reach/recovery
+- Grapple bond
+- ACTION-05A release semantics
+- GRAPPLED normal WASD suppression
+- Shift temporary Grip / Release key
 
-Source-Baselineは`d72f43b...`。
-Current developとの差分がcoordination-onlyであることをPreflightで確認する。
+Do not implement Drive / Throw / Lift in this Task.
 
-## Pair-Level Engagement
+## New User Requirement
 
-Add one Bout-level canonical state:
+Treat as Current design intent:
+
+1. Grapple established from side/rear must preserve the victim's facing disadvantage.
+2. Disadvantaged participant must rotate toward the opponent before normal grapple Actions are available.
+3. Until aligned, advantaged participant may act while disadvantaged participant cannot.
+4. Rear should naturally create a longer advantage window than side.
+5. This must be gameplay-owned by Pure TypeScript Simulation, not presentation-only animation.
+
+Exact:
+- rotation speed
+- alignment threshold
+- allowed/blocked action list
+- release behavior while misaligned
+are not yet decided.
+
+## Architecture Principle To Investigate
+
+Strong preferred direction:
+
+- Do NOT store `side`, `rear`, `orientationAdvantage`, `stunnedByRear` as duplicated persistent state if the same meaning can be derived.
+- canonical Source remains:
+  - participant position
+  - participant facing
+  - pair Engagement
+- derive each participant's current facing error from:
+  - their `facing`
+  - bearing from them toward opponent
+- Grappled action eligibility is derived from this error.
+- gradual facing update reduces the error over fixed Simulation ticks.
+
+This should naturally make:
+- frontal ≈ immediately ready
+- side ≈ ~90° turn
+- rear ≈ ~180° turn
+
+without separate side/rear timers.
+
+If Current Source requires explicit additional state for correctness, explain why before recommending it.
+
+## Investigation Questions
+
+### Q1 — Exact Current Source conflict
+
+Inspect Current Source and explain exactly where side/rear advantage disappears.
+
+Confirm:
+- when Kuzushi is consumed
+- when `updateFacing()` runs
+- how Grapple bond changes positions
+- whether Grip establishment currently preserves the target's pre-Grip facing for any part of the tick
+
+### Q2 — Alignment definition
+
+Recommend a pure, deterministic definition of "participant is facing opponent enough to act".
+
+Candidate:
 
 ```ts
-type GrappleAdvantage =
-  | { kind: 'neutral' }
-  | { kind: 'morozashi'; holderId: ParticipantId }
-
-type BoutEngagement =
-  | { kind: 'free' }
-  | { kind: 'grappled'; advantage: GrappleAdvantage }
+targetAngle = atan2(opponent.y - self.y, opponent.x - self.x)
+error = shortestSignedAngle(targetAngle - self.facing)
+aligned = abs(error) <= GRAPPLE_FACING_TOLERANCE
 ```
 
-- constructor/reset = free
-- Snapshot top-level `engagement` as isolated copy
-- participant stateへduplicate grapple flagsを持たせない
-- Morozashi holderはexactly one participant
+Decide:
+- radians helper semantics
+- exact tie / ±π behavior
+- whether tolerance should be one named provisional constant
 
-Do not add LIFTED yet.
+Do not choose a final balance value without labeling it provisional.
 
-## Grip Intent / Action
+### Q3 — Gradual Grappled turning
 
-Extend `ParticipantIntent`:
+Recommend the smallest rule for GRAPPLED facing.
 
-```ts
-gripPressed: boolean
+Preferred direction to evaluate:
+- while FREE: preserve current instant auto-facing baseline
+- while GRAPPLED: each participant rotates toward opponent by at most
+  `GRAPPLE_TURN_RATE * TICK_SECONDS`
+  per tick
+- shortest deterministic angular path
+- snap to target when remaining error <= one step
+
+Compare against:
+- fixed timer stun
+- stored side/rear category
+- player-controlled turn input
+
+Recommend one.
+
+### Q4 — Automatic vs manual turn
+
+User wants simple action gameplay.
+
+Determine whether disadvantaged participant should:
+- auto-turn while grappled, or
+- require input to rotate.
+
+Preferred direction to evaluate:
+**automatic fixed-rate turn**, because ACTION-05A suppresses ordinary WASD and no rotation input exists.
+
+Explain Game Feel consequences.
+
+### Q5 — Action eligibility model
+
+Future GRAPPLED actions are expected to include:
+- ↑ Drive / Yorikiri
+- ←/→ Throw
+- ↓ Lift
+- Shift Release
+
+Define the smallest rule for action eligibility.
+
+Candidate:
+- participant whose facing is aligned may use grapple actions
+- participant still turning cannot use grapple offensive/defensive actions
+- each participant evaluated independently
+
+This allows:
+- gripper aligned + target misaligned → gripper acts alone
+- both aligned → both normal
+- both misaligned → neither acts until individually aligned
+
+Determine whether an explicit `canActInGrapple(participant)` pure helper is appropriate.
+
+### Q6 — Release conflict
+
+This is the most important User Decision.
+
+ACTION-05A currently allows either participant to Shift-release immediately.
+
+But if a rear/side-disadvantaged participant can release immediately:
+- it can escape before turning
+- FREE auto-facing then snaps toward opponent
+- the new orientation advantage may be largely bypassed
+
+Compare:
+
+A. Release is also blocked until participant is aligned.
+B. Release remains always allowed, but Recovery/other penalty preserves advantage.
+C. Release remains allowed and FREE facing is also made gradual after release.
+D. another minimal rule.
+
+Recommend one, but mark it **User Decision Required** if it changes accepted ACTION-05A release semantics.
+
+Do not silently change release behavior.
+
+### Q7 — What does "何も出来ない" block?
+
+Clarify design options for the disadvantaged turning participant.
+
+Potential future actions:
+- Drive
+- Throw
+- Lift
+- Release
+- future hand fighting/regrip
+- passive turning itself
+
+Recommend which are blocked in the first Orientation implementation.
+
+Do not implement future actions; define only eligibility boundary.
+
+### Q8 — Advantaged participant while target turns
+
+Confirm what "一方的に攻撃Action出来る" should mean architecturally.
+
+Preferred direction:
+- advantaged participant uses the normal future Grapple action system
+- no separate "free attack" state
+- opponent action eligibility is simply false until aligned
+
+Determine whether any action by advantaged participant should interrupt/reset the target's turn.
+
+Default preference:
+- no hidden reset unless the future action explicitly changes geometry/facing.
+
+### Q9 — Morozashi vs Orientation advantage
+
+Keep separate concepts:
+
+- Morozashi = persistent Engagement advantage
+- Orientation = derived current facing readiness
+
+Investigate how future Drive / Throw resolver should read both without creating combined states such as:
+- rear-morozashi
+- side-morozashi
+
+Recommend explicit inputs/boundaries.
+
+### Q10 — Counter Best vs Success integration
+
+Using Current Counter geometry, reason through:
+
+- Success side → target facing error after Grip
+- Best rear → target facing error after Grip
+
+Confirm whether the proposed angle-based rule naturally makes Best's opening longer than Success at the same turn rate.
+
+If Current geometry or facing state makes this unreliable, report it.
+
+### Q11 — Neutral/front Grip
+
+Normal frontal Grip should not create an artificial helpless period.
+
+Define expected behavior:
+- if already within facing tolerance on establishment, both immediately ready
+- no mandatory startup stun solely because grapple began
+
+Confirm whether Current auto-facing before normal Grip means this usually holds.
+
+### Q12 — Bond / rotation interaction
+
+Current Grapple bond fixes center distance but does not rotate positions around the pair.
+
+Determine whether turning should:
+- change facing only, leaving positions fixed
+or
+- orbit bodies around one another.
+
+Preferred first Prototype:
+**facing-only turn**.
+
+Explain whether this is sufficient for action eligibility and visual readability.
+
+Do not introduce orbit/constraint mechanics unless necessary.
+
+### Q13 — Tick order
+
+Recommend exact step ownership.
+
+Need to decide whether GRAPPLED orientation update happens:
+- before action eligibility checks
+- after action resolution
+- at end-of-tick replacing current instant `updateFacing`
+
+Define off-by-one semantics:
+- when participant crosses tolerance on a tick, may it act that same tick or next tick?
+
+Prefer one deterministic rule and explain why.
+
+### Q14 — Snapshot / presentation
+
+Determine whether Snapshot needs new stored orientation state.
+
+Preferred:
+- no new canonical state if readiness can be derived
+- optionally expose/use a shared pure helper for presentation
+
+Minimum later debug presentation should make visible:
+- TURNING / READY per participant
+- current facing marker already exists
+- maybe alignment error in debug text only if useful
+
+Avoid duplicating core formula in Scene.
+
+### Q15 — Future stats boundary
+
+Do not implement stats.
+
+Define how future:
+- agility
+- technique
+- balance
+or another decided stat
+could later modify turn rate.
+
+Do not choose a stat now.
+Do not make turn rate part of ParticipantSetup yet unless required.
+
+### Q16 — Directional Push advantage interaction
+
+A separate Deferred requirement exists:
+- side/rear Push should be stronger than frontal Push.
+
+Explain how Grappled orientation rule coexists with it.
+
+Preferred separation:
+- FREE Push directional advantage derives from relative geometry/facing at Push resolution.
+- GRAPPLED action readiness derives from each participant's facing alignment.
+- no shared stored side/rear flag.
+
+### Q17 — First implementation scope
+
+Recommend whether next implementation should be:
+
+**ACTION-05B1 Grappled Orientation Foundation**
+only:
+- gradual GRAPPLED facing
+- derived readiness
+- action gate boundary
+- debug TURNING/READY
+- Counter side/rear integration tests
+
+then:
+
+**ACTION-05C Grappled Drive**
+- ↑ Drive
+- normal vs Morozashi force difference
+- orientation readiness gates who can Drive
+
+Do not bundle Drive into Orientation Foundation unless there is no meaningful way to test orientation without one minimal action.
+
+### Q18 — Automated test matrix
+
+Specify focused tests for later Orientation implementation, including at minimum:
+
+- frontal Grip → immediately ready
+- side Grip → victim turning, gripper ready
+- rear Grip → victim turning longer than side
+- deterministic shortest-angle turn in both signs
+- exact tolerance boundary
+- exact turn-rate / no overshoot
+- action readiness flips only at defined tick
+- no stored side/rear duplicate state
+- Morozashi remains separate from orientation readiness
+- release behavior according to User Decision
+- FREE auto-facing regression unchanged
+- Counter Success→Grip and Best→Grip integration
+- replay determinism / finite facing
+- existing 148 tests remain PASS when new grapple actions unused
+
+### Q19 — User Play Test plan
+
+Define the later Orientation implementation Play Test:
+
+- side feels like a short opening
+- rear feels like a longer opening
+- victim visibly turns instead of snapping
+- holder can act first
+- front Grip has no unnecessary delay
+- turn speed is readable and not frustrating
+- release rule is understandable
+- neutral vs Morozashi remains distinct
+- no jitter in bond/facing markers
+
+### Q20 — User Decisions Required
+
+List only decisions genuinely needed before implementation.
+
+At minimum evaluate:
+- provisional turn rate
+- facing tolerance
+- release while misaligned
+- whether "cannot act" includes all future grapple actions
+
+Give one recommended default for each.
+
+## Constraints
+
+Maintain:
+
+```
+Pure TS Simulation
+  participant position/facing
+  participant action/posture
+  pair engagement
+  derived grapple readiness
+      ↓
+Snapshot / shared pure helpers
+      ↓
+Phaser presentation
 ```
 
-Scene:
-- Shift → third `PressLatch`
-- first subsequent Simulation tick only true
-- hold does not repeat
-- release + new press gives next edge
-
-FREE same-tick action priority:
-
-```
-Push > Counter > Grip
-```
-
-Extend action union:
-
-```ts
-| { kind: 'grip'; phase: 'reach' | 'recovery'; ticksRemaining: number }
-```
-
-Provisional:
-- `GRIP_REACH_TICKS = 6`
-- `GRIP_RECOVERY_TICKS = 12`
-
-Reach:
-- starts only FREE + idle + stable
-- WASD suppressed / grounded brake
-- first eligible resolution tick succeeds
-
-Whiff:
-- Reach expiry → Grip Recovery
-- no Kuzushi penalty
-
-Recovery:
-- steering suppressed
-- no new Push / Counter / Grip
-- no queue
-- then idle
-
-## Grip Resolution
-
-Range:
-
-```
-distance <= radiusA + radiusB + GRIP_RANGE_MARGIN
-```
-
-Unilateral A→B succeeds only if:
-- Engagement free
-- A = Grip Reach
-- A posture stable
-- B action idle
-- in range
-
-Result:
-- B stable → neutral grapple
-- B Kuzushi → Morozashi(holder=A), B posture→stable
-
-Kuzushi does not bypass range.
-
-Use target posture at actual resolution tick after tick-start posture update.
-If pre-step snapshot says Kuzushi ticksRemaining 0, it recovers at tick start and a later Grip that tick is neutral.
-
-### Simultaneous Grip
-
-If both participants are stable, both in Grip Reach, and in range on the same resolution tick:
-- neutral grapple
-- symmetric
-- no participant-array-order winner
-
-One participant Kuzushi:
-- Kuzushi participant cannot initiate
-- stable participant may Grip it → Morozashi
-
-Both Kuzushi:
-- neither initiates
-
-## Enter Grapple
-
-Use one explicit Simulation-owned path.
-
-On success:
-1. Engagement → grappled
-2. both actions → idle
-3. Morozashi case consumes target Kuzushi → stable
-4. normalize pair externalVelocity
-5. attach centers to exact combined radius
-
-### External normalization
-
-Current equal-body Prototype only:
-
-```
-avg = (A.externalVelocity + B.externalVelocity) / 2
-A.externalVelocity = avg
-B.externalVelocity = avg
-```
-
-per component.
-
-This is pair external-velocity normalization, not final mass physics.
-Do not zero momentum. Do not add mass.
-
-## Attachment / Grapple Bond
-
-On establishment, move pair symmetrically along center axis so center distance = combined radius exactly.
-
-While GRAPPLED:
-- resolve smallest deterministic radial bond each tick
-- keep distance at combined radius
-- ordinary WASD effective move = zero for both
-- existing selfVelocity brakes
-- shared external motion may carry pair
-- no generic constraint solver / Physics engine
-
-Run bond after ordinary Contact correction.
-
-Use deterministic facing fallback only if center direction is undefined.
-
-## GRAPPLED Actions / Facing
-
-While GRAPPLED:
-- no FREE Push / Counter / new Grip Reach
-- Grip edge means Release
-- ordinary WASD suppressed
-- current simple auto-facing remains
-- Morozashi does not change facing in this Task
-
-## Release
-
-If tick begins GRAPPLED:
-
-- no Grip edge → remain GRAPPLED
-- one participant Grip edge:
-  - Engagement → FREE
-  - releaser → Grip Recovery
-  - other remains idle
-- both Grip edge:
-  - Engagement → FREE
-  - both → Grip Recovery
-
-Release:
-- clears Morozashi
-- no teleport
-- no forced velocity/facing change
-- same-tick Push/Counter edges are discarded, not queued
-- non-releasing idle participant may use normal movement after release
-- participant in Recovery cannot steer
-
-## Step Order
-
-Keep explicit small order:
-
-1. advance posture timers
-2. sanitize intents
-3. handle GRAPPLED release if engagement began tick GRAPPLED
-4. if FREE and not release-transition: start Push / Counter / Grip by priority
-5. derive effective move
-6. update selfVelocity
-7. decay externalVelocity
-8. integrate positions
-9. ordinary Contact
-10. if GRAPPLED: Grapple bond
-11. if FREE: existing Counter resolution
-12. if still FREE: Grip resolution
-13. if still FREE + Contact: existing Push resolution
-14. advance action timers
-15. update facing
-
-Equivalent deterministic order allowed only if semantics remain the same and reported.
-
-## Dummy
-
-If Snapshot engagement is GRAPPLED:
-- move 0
-- pushPressed false
-- counterPressed false
-- gripPressed false
-- hold/reset cooldown
-
-Dummy does not initiate Grip.
-
-## Presentation
-
-Controls:
-- WASD movement
-- ArrowUp Push
-- ArrowDown Counter
-- Shift Grip / Release
-- 1/2 Dummy modes
-- R restart
-
-Minimal debug presentation must distinguish:
-- FREE
-- GRAPPLED
-- MOROZASHI + holder
-- GRIP
-- GRIP REC
-- existing KUZUSHI
-
-Recommended top text:
-- ENGAGE: FREE
-- ENGAGE: GRAPPLED
-- ENGAGE: MOROZASHI (PLAYER/CPU)
-
-Simple presentation-only line between grappled participants is allowed/recommended.
+Do not:
+- make Scene authoritative
+- create a side/rear persistent state unless proven necessary
+- create a stun timer as substitute for actual turning
+- add general state machine/rule engine
+- add Physics
+- add new dependency
 
 ## Scope Out
 
-Do not implement:
-- Grappled Drive
-- Morozashi force bonus
+Do NOT implement:
+
+- production facing changes
+- Drive / Yorikiri
+- Morozashi Drive multiplier
 - Throw
 - Lift
-- stats / probability / RNG
-- hand fighting / regrip
-- GRAPPLED WASD movement/rotation
-- facing-based Grip quality
-- directional side/rear Push advantage
+- release behavior change
+- directional Push advantage
+- stats
 - Ring-out / BoutOutcome
-- final graphics/animation
-- Physics / generic relationship framework
-- Push/Counter/Kuzushi retuning
+- AI
+- final animation
+- Push/Counter/Grip tuning
 
-## Required Tests
-
-All existing 124 tests remain PASS, except helper adaptation adding `gripPressed:false`.
-
-Add focused coverage at minimum:
-
-T92 default FREE + Snapshot isolation  
-T93 stable valid Grip → neutral grapple  
-T94 Kuzushi valid Grip → Morozashi, correct holder, Kuzushi consumed; mirrored case  
-T95 exact range boundary / outside range / Kuzushi cannot bypass range / whiff→recovery  
-T96 one-edge Grip + hold no-repeat + Push>Counter>Grip priority  
-T97 target action eligibility: Push/Counter/Grip cannot be interrupted; reach may wait for idle  
-T98 Kuzushi timing boundary including ticksRemaining 0  
-T99 simultaneous stable Grip → symmetric neutral  
-T100 one/both Kuzushi initiation cases  
-T101 externalVelocity component-average normalization  
-T102 attachment from margin distance → exact combined radius, symmetric  
-T103 bond keeps exact distance under opposing WASD attempts; finite/no jitter  
-T104 GRAPPLED suppresses Push/Counter/WASD/new Grip Reach  
-T105 one-sided release from neutral/Morozashi; releaser Recovery; no same-tick FREE action  
-T106 simultaneous release symmetric  
-T107 release preserves position/velocity/facing and clears advantage  
-T108 Best and Success Counter → Kuzushi → Shift within margin → Morozashi  
-T109 Morozashi holder invariant / neutral has no holder / release clears holder  
-T110 Dummy is inactive while GRAPPLED and cooldown resumes deterministically  
-T111 Shift latch 0/N tick behavior, hold no-repeat, priority integration  
-T112 exact Reach / Recovery timing  
-T113 all prior 124 regressions PASS when Grip unused  
-T114 mixed deterministic finite replay / valid Engagement invariants
-
-## Verification
-
-Heavy.
-
-Required:
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`
-- T92–T114 evidence
-- existing regressions
-- no dependency
-- Simulation Phaser-free
-- Scope Out absent
-
-Browser Smoke if available:
-- Shift one Grip
-- hold no-repeat
-- stable → GRAPPLED
-- Counter→KUZUSHI→Shift→MOROZASHI
-- pair cannot walk apart
-- Push/Counter suppressed while GRAPPLED
-- Shift release + Recovery
-- R → FREE
-- no runtime errors
-
-If unavailable, report NOT RUN honestly.
-
-## User Play Test — REQUIRED
-
-Check:
-
-1. Shift feels like one deliberate Grip attempt.
-2. Whiff / Recovery is understandable.
-3. stable Grip clearly becomes normal GRAPPLED.
-4. Counter→KUZUSHI→Grip→MOROZASHI feels rewarding.
-5. 0.09m margin does not feel like grabbing from far away.
-6. pair attachment/bond does not jitter.
-7. suppressing WASD while GRAPPLED is acceptable for Foundation.
-8. neutral vs Morozashi and holder are readable.
-9. either participant may release; release Recovery prevents obvious spam.
-10. disadvantaged participant being able to release does not make Morozashi feel pointless.
-11. Push / Counter / Movement outside Grapple remain unchanged.
-12. Morozashi strength itself is intentionally deferred to Drive/Throw tasks.
-
-Agent report:
-`User Play Test: REQUIRED / NOT RUN`
-
-## Acceptance Criteria
-
-- single pair-level Engagement SoT
-- default FREE
-- Shift semantic edge
-- Push>Counter>Grip
-- deterministic Reach/Recovery
-- stable→neutral
-- Kuzushi→Morozashi + consume Kuzushi
-- range margin 0.09m
-- no target action interrupt
-- simultaneous Grip symmetric
-- external normalization
-- exact attachment/bond
-- GRAPPLED movement/FREE action suppression
-- either participant release + Recovery
-- Dummy Engagement-aware
-- minimal debug presentation
-- Counter→Kuzushi→Morozashi integration
-- no Drive/Throw/Lift/stats/RNG scope creep
-- T92–T114 + existing tests PASS
-- build PASS
-- User Play Test REQUIRED / NOT RUN
-- no unexpected scope
+This is Investigation Only.
 
 ## Stop Conditions
 
-STOP if:
-- Preflight fails
-- Engagement requires duplicate participant relationship state
-- bond needs a general constraint/Physics system
-- 0.09m range cannot support Counter→Grip without changing accepted Counter semantics
-- Grip Foundation requires interrupting Push/Counter
-- Morozashi requires Drive/Throw bonus now
-- Ring-out/BoutOutcome becomes prerequisite
-- task-external divergence/WIP exists
+Return BLOCKED if:
+
+- Current facing semantics cannot preserve side/rear advantage without changing FREE facing baseline
+- release semantics make the User requirement impossible without an explicit User choice
+- derived facing alignment is insufficient and requires persistent orientation state
+- Grapple bond must be redesigned materially
+- a Drive implementation is technically required just to validate orientation
+- Current Source / Handoff materially conflict
+
+Do not make Production changes to work around a design issue.
+
+## Required Reading
+
+Inspect at minimum:
+
+- `AGENTS.md`
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- `src/game/sumo/BoutGrip.test.ts`
+- `src/game/sumo/BoutCounter.test.ts`
+- `src/game/sumo/BoutCounterPosition.test.ts`
+- `src/game/scenes/BoutScene.ts`
+- `docs/ARCHITECTURE.md`
+- Current Task Final Review + User Play Test acceptance
+
+## Verification
+
+Investigation / Design Review.
+
+Required:
+- Q1–Q20 answered or explicit BLOCKED point
+- Current Fact / Recommendation / User Decision / Deferred separated
+- Production Source unchanged
+- package / lockfile unchanged
+- repository change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `git diff --check` PASS
+
+`pnpm test` / `pnpm build` not required because Source must not change.
+
+## Completion Report
+
+Minimum:
+
+- Result
+- Preflight
+- Current Source Findings
+- Q1–Q20
+- Recommended alignment formula
+- recommended turn rule
+- recommended action-readiness rule
+- release conflict analysis
+- Morozashi vs Orientation separation
+- Counter Success/Best integration
+- tick-order recommendation
+- Snapshot/presentation boundary
+- required automated tests
+- User Play Test plan
+- User Decisions Required
+- Rejected / Deferred
+- Next Implementation Sequence
+- Design Deviations
+- Unexpected Scope
+- Verification
+- Git delivery
+
+Result:
+- PASS if safe design exists and explicit User choices remain
+- BLOCKED if a material prerequisite/design conflict prevents a safe implementation plan
+
+## User Play Test
+
+NOT REQUIRED for Investigation.
+
+The report must identify the first implementation Task where Orientation Feel becomes REQUIRED.
 
 ## Git Delivery
 
-Follow AGENTS.md.
-One successful Task ≈ one commit.
-Task-owned files only.
-Push origin/develop.
-Do not change main.
+Investigation-only Report Commit Exception:
 
-Example:
-`feat: add grip engagement foundation`
+- change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- explicit stage
+- `git diff --check`
+- one Report-only commit
+- push `origin/develop`
+- verify remote SHA / clean working tree
+
+Commit message example:
+`docs(agent): investigate grappled orientation advantage`
 
 ## Final Instruction
 
-Stop after Grip / Engagement Foundation.
+Stop after Investigation.
 
-Do not continue to Drive, Throw, Lift, Ring-out, stats.
+Do not implement Orientation, Drive, Throw, Lift, directional Push advantage, or stats.
 
-After commit/push/report:
-「ACTION-05A-GRIP-ENGAGEMENT-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+After Report Commit / Push, report:
 
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `61a1a493a54a02cc7d171f3c70d722a6640f871f`
-- Agent-Start-Head:
-  `2108e0029279007d6f574e630c3cf3b772be5a1d`
-- Agent Task Diff is exactly one implementation commit.
-- `main` remains unchanged.
-- No new dependency.
-- Scope is limited to Grip / Engagement Foundation, focused tests, Dummy/Scene integration, and Current-State docs.
-
-## Reported Implementation vs Design
-
-PASS.
-
-Direct Source review confirmed:
-
-### Engagement Source of Truth
-
-- BoutSimulation owns exactly one pair-level `engagement`.
-- participant state contains no duplicate grapple flags.
-- Snapshot exposes an isolated top-level Engagement copy.
-- default constructor/reset state is FREE.
-- neutral grapple is symmetric.
-- Morozashi identifies one holderId.
-
-### Grip input / action
-
-- `gripPressed` is a semantic edge.
-- Shift uses a third PressLatch.
-- FREE priority is Push > Counter > Grip.
-- Grip is explicit `reach / recovery`.
-- reach/recovery suppress normal steering.
-- inputs during Grip are ignored/not queued.
-
-### Grip eligibility
-
-- valid range is combined body radius + `GRIP_RANGE_MARGIN = 0.09 m`.
-- unilateral Grip only resolves against action-idle target.
-- Grip does not interrupt Push / Counter / Grip actions.
-- reach may wait until the target becomes idle.
-- target posture at actual resolution tick decides neutral vs Morozashi.
-
-### Kuzushi → Morozashi
-
-- in-range Kuzushi target resolves to Morozashi.
-- holder is the gripping participant.
-- target Kuzushi is consumed immediately to stable.
-- Kuzushi does not bypass range.
-- mirrored holder case is tested.
-
-### Simultaneous Grip
-
-- both stable / both reaching / in range resolves to neutral grapple.
-- resolution is symmetric rather than participant-array first.
-- Kuzushi participant cannot initiate Grip.
-
-### Establishment / pair state
-
-- successful Grip cancels both current actions.
-- externalVelocity is normalized to the component-wise pair average under the current equal-body Prototype.
-- this is correctly treated as Prototype normalization, not permanent mass physics.
-- initial attachment puts the centers at exact combined body-radius distance.
-- Grapple bond keeps that distance without a generic constraint solver.
-
-### GRAPPLED behavior
-
-- ordinary WASD is suppressed.
-- FREE Push / Counter starts are suppressed.
-- Grip edge is interpreted as release.
-- current auto-facing remains; no turn-rate/facing redesign.
-- no Drive / Throw / Lift advantage was added.
-
-### Release
-
-- either participant may release.
-- one-sided release returns FREE immediately and puts only releaser in Grip Recovery.
-- simultaneous release puts both in Recovery.
-- Morozashi clears on release.
-- no same-tick Push/Counter starts are allowed on the relationship-transition tick.
-- position/velocity/facing are not artificially reset by release.
-
-### Dummy / presentation
-
-- Dummy is inactive while GRAPPLED and holds cooldown.
-- Dummy does not initiate Grip.
-- FREE / GRAPPLED / MOROZASHI and holder identity have minimal debug presentation.
-- GRIP / GRIP REC presentation exists.
-
-## Verification Review
-
-Reported:
-
-- `pnpm test`: 148/148 PASS
-- `pnpm build`: PASS
-- `git diff --check`: PASS
-- prior 124 regressions PASS with only required intent-helper adaptation
-- T92–T114 covered
-
-Direct source/test inspection confirms focused coverage for:
-
-- default FREE / Snapshot isolation
-- stable → neutral
-- Kuzushi → Morozashi, mirrored holder
-- exact Grip range boundary
-- one-edge / action priority
-- target-action protection and reach waiting
-- Kuzushi timer boundary
-- simultaneous Grip
-- one/both Kuzushi cases
-- Counter → Kuzushi → Morozashi integration
-- pair external normalization
-- attachment / bond
-- GRAPPLED action/movement suppression
-- one-sided/simultaneous release
-- release state preservation
-- holder invariant
-- exact Reach/Recovery timing
-- deterministic mixed replay
-
-## Browser Smoke
-
-NOT RUN due Agent environment limitation.
-
-This is a Known Untested runtime item, not a Source failure.
-
-## Non-Blocking Notes
-
-### N-1 — Disadvantaged-side release Feel is not interactively testable yet
-
-The Foundation correctly allows either participant to release, including the Morozashi-disadvantaged participant.
-
-However, the current Push Dummy:
-- never initiates Grip
-- never issues Release
-
-Therefore the current single-player harness cannot directly let the User experience:
-- CPU holding Morozashi on Player
-- disadvantaged Player/CPU choosing release under pressure
-- whether this makes Morozashi feel too easy to escape
-
-The rule is technically tested, but this particular **Feel question remains Deferred** until a harness/CPU path can exercise opponent Grip/Release.
-
-Do not build real AI solely to solve this now.
-
-### N-2 — Successful in-range Grip can resolve on the press tick
-
-Because Grip Reach opens before resolution and the target is already eligible/in range, a valid Grip may become GRAPPLED in the same fixed tick as Shift.
-
-This is consistent with the Task. User Play Test should judge responsiveness; do not add artificial Startup unless it feels too instantaneous.
-
-### N-3 — Bond is intentionally minimal
-
-The bond corrects only radial distance.
-It does not implement:
-- grapple rotation
-- free pair footwork
-- hand fighting
-- traction/mass physics
-
-Those remain later systems.
-
-## Accepted Technical Baseline Pending Play Test
-
-If User Play Test passes:
-
-- Shift = temporary Grip / Release key
-- pair-level Engagement is canonical
-- stable idle valid Grip → neutral GRAPPLED
-- Kuzushi idle valid Grip → Morozashi, Kuzushi consumed
-- Grip range margin 0.09 m provisional
-- Grip Reach 6 ticks / Recovery 12 ticks provisional
-- Push > Counter > Grip
-- unilateral Grip does not interrupt target actions
-- simultaneous stable Grip → neutral
-- GRAPPLED ordinary WASD / FREE actions suppressed
-- bond keeps exact body contact distance
-- either participant may release; releaser pays Recovery
-- Morozashi is a distinct persistent advantage state with no Drive/Throw bonus yet
-
-All numerical values remain Prototype tuning.
-
-## User Play Test — REQUIRED / READY
-
-Run `pnpm dev`.
-
-### Normal Grip
-
-1. Use Mode 1 or approach the stationary CPU.
-2. Press Shift while in range.
-3. Confirm `ENGAGE: GRAPPLED`.
-4. Confirm pair does not separate when WASD is pressed.
-5. Confirm ArrowUp / ArrowDown do not start FREE Push/Counter while GRAPPLED.
-6. Press Shift again and confirm release to FREE.
-7. Confirm releaser shows `GRIP REC` briefly.
-
-### Whiff / range
-
-8. Press Shift clearly too far away.
-9. Confirm Grip does not occur and `GRIP → GRIP REC` is readable.
-10. Approach closer and verify the 0.09 m margin does not feel like grabbing from an obviously excessive distance.
-
-### Counter → Morozashi reward
-
-11. Mode 2: Counter a Dummy Push successfully so CPU enters KUZUSHI.
-12. Press Shift while CPU is still Kuzushi and in range.
-13. Confirm:
-    - `ENGAGE: MOROZASHI (PLAYER)`
-    - CPU KUZUSHI label disappears because Kuzushi was consumed
-    - Morozashi line/display clearly differs from neutral grapple.
-14. Confirm the pair stays attached and does not jitter.
-
-### Release / regressions
-
-15. Release Morozashi with Shift.
-16. Confirm Morozashi advantage disappears and Player enters Grip Recovery.
-17. Confirm normal Push / Counter / Movement still feel unchanged while FREE.
-18. Confirm R resets Engagement to FREE.
-19. Check for browser/console/runtime errors.
-
-Important:
-- Morozashi is **not supposed to be stronger yet** in movement/Throw.
-- its gameplay strength is deliberately deferred to the Grappled Drive / Throw tasks.
-
-### Known Play-Test limitation
-
-The current Dummy cannot Grip or Release, so the User cannot yet fairly judge:
-- Morozashi held by CPU against Player
-- disadvantaged-side voluntary release Feel
-
-Do not treat that missing Feel check as a failure of this Foundation Task.
-
-## Acceptance State
-
-Technical implementation: PASS.
-
-Grip / Engagement Feel: PENDING USER PLAY TEST.
-
-Do not start Grappled Drive until this focused Play Test is reviewed.
-
-If accepted:
-- ACTION-05A becomes current Engagement baseline.
-- next design choice should be whether minimal Ring-out/BoutOutcome is needed before Grappled Drive testing.
-
-If rejected:
-- classify feedback narrowly:
-  - Shift input
-  - Grip reach/range
-  - whiff/recovery
-  - bond/attachment
-  - release
-  - Morozashi readability
-  - runtime bug
-
-and correct only that area.
-
-## Do Not Reopen
-
-Unless User feedback provides a concrete reason:
-
-- pair-level Engagement SoT
-- Kuzushi → Morozashi conversion
-- Kuzushi consumption on Morozashi
-- action-idle target rule
-- automatic Counter side/rear baseline
-- accepted Push / Counter / Contact baseline
-
-## Deferred
-
-- Grappled Drive / Yorikiri
-- Morozashi Drive advantage
-- Throw / Morozashi Throw advantage
-- Lift
-- opponent Grip/Release harness or AI
-- hand fighting / regrip
-- GRAPPLED WASD/rotation
-- stats / RNG
-- directional side/rear Push advantage
-- Ring-out / BoutOutcome
-- final graphics / grapple animation
-
-
-# User Play Test Result — 2026-10-20
-
-ACTION-05A Grip / Engagement Foundation: ACCEPTED AS CURRENT FUNCTIONAL BASELINE
-
-User feedback:
-- Focused Play Test is OK.
-- Shift Grip / neutral grapple / Kuzushi→Morozashi / release / bond are functioning.
-- User identified a missing future distinction:
-  - Grip after taking the side
-  - Grip after taking the rear
-  currently lose most of their positional meaning once grapple establishes.
-
-## New Future Gameplay Requirement — Orientation Advantage
-
-User wants future behavior:
-
-- If a participant is gripped from the side or rear, that disadvantaged participant cannot immediately act.
-- The disadvantaged participant must first rotate / realign to face the opponent.
-- Until frontal alignment is restored:
-  - disadvantaged participant cannot use offensive/defensive grapple Actions
-  - advantaged participant may act unopposed
-- Rear should therefore create a stronger/longer positional opening than side.
-- This should make Counter Success(side) and Counter Best(rear) remain meaningfully different even after Grip.
-
-## Review Classification
-
-This is NOT a simple balance tweak.
-
-Current Source:
-- stable participants auto-face the opponent instantly every tick
-- ACTION-05A consumes Kuzushi on Morozashi establishment
-- therefore current auto-facing erases side/rear facing disadvantage immediately after Grip
-
-To support the new requirement, a future task must explicitly redesign Grappled facing/alignment semantics.
-
-Do not silently implement this as:
-- an arbitrary fixed stun timer
-- a hidden side/rear bonus flag duplicated from geometry
-- a presentation-only animation
-
-Preferred architecture direction to investigate:
-- facing remains Simulation-owned canonical state
-- GRAPPLED facing should no longer snap instantly when there is meaningful misalignment
-- action eligibility should be derived from current relative alignment/facing state
-- side/rear advantage should persist only until the disadvantaged participant has actually reoriented enough
-- avoid storing duplicate "side/rear" state if the same meaning can be derived from canonical positions/facing
-- exact turn speed / alignment threshold / whether holder can also rotate the pair are undecided
-
-## Deferred / Next-Task Constraint
-
-Before Grappled Drive / Throw implementation, investigate the minimum Grappled Orientation rule because it directly affects:
-- when each participant may Drive / Throw / Lift
-- whether Morozashi holder can act first
-- how Counter Best(rear) differs from Success(side)
-- future directional Push advantage
-- visual/gameplay readability of side/rear control
-
-Do not implement Drive/Throw on top of instant grapple auto-facing without reviewing this requirement.
-
-ACTION-05A itself remains accepted; do not reopen Grip Foundation unless the orientation design requires a material prerequisite.
+「ACTION-05B-GRAPPLED-ORIENTATION-INVESTIGATION が完了し、ChatGPT Review待ちです」
