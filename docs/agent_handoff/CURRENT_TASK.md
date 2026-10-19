@@ -1,5 +1,5 @@
 Task-ID: ACTION-05B-GRAPPLED-ORIENTATION-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / GRAPPLED FACING & ACTION ELIGIBILITY
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -556,3 +556,282 @@ Do not implement Orientation, Drive, Throw, Lift, directional Push advantage, or
 After Report Commit / Push, report:
 
 「ACTION-05B-GRAPPLED-ORIENTATION-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS / USER DECISIONS REQUIRED BEFORE IMPLEMENTATION
+
+## Reviewed Investigation
+
+- Investigation report commit:
+  `4a8422d01ea11403ccd583e2c51af228e133f393`
+- Agent-Start-Head:
+  `191b79e152bf28aa0c28cf9c8ec42e83b6229170`
+- Diff is exactly one Report-only commit:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / package / lockfile unchanged.
+- `main` unchanged.
+
+## Current Source Review
+
+PASS.
+
+Direct Source and prior accepted baseline support the Report's central diagnosis:
+
+- Counter Success relocates defender to attacker side.
+- Counter Best relocates defender to attacker rear.
+- Countered attacker enters Kuzushi, which freezes its existing facing.
+- stable Counter defender continues auto-facing the attacker.
+- Grip on Kuzushi consumes Kuzushi and establishes Morozashi.
+- Current `updateFacing()` then sees both participants stable and snaps both to face each other at the end of the Grip-establishment tick.
+- therefore current side/rear orientation advantage disappears before the resulting Snapshot is presented.
+
+Grapple bond is radial-only and does not itself erase the angular disadvantage.
+
+## Accepted Architecture Direction
+
+### A-1 — Do not store Side / Rear as new canonical state
+
+Accept.
+
+Use existing canonical:
+- position
+- facing
+- Engagement
+
+Derive orientation readiness from current facing error.
+
+Do not add persistent:
+- side
+- rear
+- orientationAdvantage
+- rearStun
+unless a later task proves derived geometry insufficient.
+
+### A-2 — Derived facing error
+
+Accept the proposed form:
+
+```ts
+bearing = atan2(opponent.y - self.y, opponent.x - self.x)
+error = normalizeAngle(bearing - self.facing)
+ready = abs(error) <= GRAPPLE_FACING_TOLERANCE
+```
+
+A small Pure TypeScript helper/module shared by Simulation and presentation is appropriate.
+
+### A-3 — GRAPPLED-only gradual facing
+
+Accept.
+
+- FREE keeps current immediate auto-facing baseline.
+- GRAPPLED participants rotate toward opponent by a fixed maximum angle per Simulation tick.
+- use shortest angular path.
+- no overshoot; snap when remaining error is smaller than one turn step.
+- exact ±π tie must be deterministic.
+
+This is smaller and clearer than:
+- hidden stun timer
+- saved side/rear categories
+- new manual rotation input
+- orbit/path mechanics.
+
+### A-4 — Automatic turning
+
+Accept as first Prototype direction.
+
+ACTION-05A already suppresses normal GRAPPLED WASD and there is no rotation input.
+Automatic fixed-rate reorientation keeps controls simple and makes opening length proportional to actual angular disadvantage.
+
+### A-5 — Independent action readiness
+
+Accept.
+
+Each participant independently derives:
+- TURNING
+- READY
+
+Future Grapple Actions should use one readiness boundary rather than bespoke checks.
+
+Expected:
+- gripper READY + target TURNING → gripper may act alone
+- both READY → normal contested grapple
+- both TURNING → each becomes eligible independently when aligned
+
+### A-6 — Morozashi and Orientation are separate axes
+
+Accept.
+
+- Morozashi = persistent Engagement advantage.
+- Orientation readiness = derived transient facing relationship.
+
+Do not create combined states such as:
+- sideMorozashi
+- rearMorozashi.
+
+Future Drive/Throw may read both independently.
+
+## Counter Integration Review
+
+Accepted.
+
+With current geometry:
+
+- Success side is approximately 90° target-facing error.
+- Best rear is approximately 180° target-facing error.
+- same turn rate naturally makes rear opening longer than side.
+
+With the Report's provisional values:
+- turn rate = 180°/s
+- tolerance = 15°
+- side opening ≈ 25 ticks / 0.42s
+- rear opening ≈ 55 ticks / 0.92s
+
+These are correct Prototype-scale values, not final balance.
+
+## Tick Ownership
+
+Accept the Report recommendation:
+
+- readiness used for an input tick is derived from the state visible at the start of that tick.
+- GRAPPLED turning happens at the end-of-tick facing update.
+- if turning enters tolerance at tick t end, Grapple action eligibility begins at tick t+1.
+
+This matches Snapshot-visible state and avoids same-tick hidden eligibility changes.
+
+## Release Conflict
+
+The Report correctly identifies a material conflict with ACTION-05A.
+
+If the disadvantaged participant may always Shift-release while facing away:
+
+- Engagement becomes FREE immediately.
+- FREE auto-facing restores front-facing at tick end.
+- only Grip Recovery remains.
+- rear/side orientation advantage can be bypassed much more cheaply than actually turning.
+
+Recommended change:
+
+**While GRAPPLED and TURNING, that participant cannot Release.**
+
+A READY participant may still Release normally.
+
+This is the cleanest interpretation of User's stated future rule:
+"相手は正面に旋回するまで何も出来ない。"
+
+However, because this changes accepted ACTION-05A Release semantics, record it as explicit User Decision before production implementation.
+
+## User Decisions Required
+
+Recommended all as one coherent Prototype baseline:
+
+### UD-1 — GRAPPLED turn rate
+
+Recommended:
+`GRAPPLE_TURN_RATE = π rad/s`
+= 180°/s.
+
+This yields approximately:
+- side opening: 0.42s
+- rear opening: 0.92s
+with 15° tolerance.
+
+### UD-2 — READY tolerance
+
+Recommended:
+`GRAPPLE_FACING_TOLERANCE = π/12`
+= 15°.
+
+### UD-3 — Release while TURNING
+
+Recommended:
+
+**Not allowed.**
+
+Shift release is accepted only when that participant is READY.
+
+Input while TURNING is ignored, not queued.
+
+### UD-4 — Meaning of "cannot act"
+
+Recommended:
+
+Until READY, block all participant-initiated GRAPPLED actions:
+- Release
+- future Drive
+- future Throw
+- future Lift
+- future regrip / hand-fighting
+
+Automatic reorientation continues because it is not an Action.
+
+## Technical Decisions Accepted Without Further User Choice
+
+- angle normalization range `(-π, π]`
+- exact rear ±π tie uses one fixed deterministic turn direction
+- no randomness
+- facing-only rotation; positions stay fixed by current bond
+- no new canonical Orientation state
+- presentation uses the same Pure helper rather than duplicating formulas
+- normal frontal Grip does not receive a mandatory stun
+- FREE instant auto-facing stays unchanged in this task
+
+## Implementation Sequence
+
+After UD-1–UD-4 are confirmed:
+
+1. **ACTION-05B1 Grappled Orientation Foundation**
+   - Pure angle/readiness helpers
+   - GRAPPLED gradual facing
+   - TURNING / READY derivation
+   - release gate according to UD-3
+   - debug presentation
+   - Success-side / Best-rear integration tests
+   - User Play Test REQUIRED
+
+2. **ACTION-05C Grappled Drive / Yorikiri**
+   - ↑ Drive
+   - orientation READY gates action availability
+   - neutral vs Morozashi strength difference
+   - decide whether minimal Ring-out/BoutOutcome is prerequisite for meaningful testing
+
+3. Throw / Lift only after Drive is accepted.
+
+## Orientation Foundation User Play Test Goal
+
+The first implementation should verify only:
+
+- front Grip has essentially no extra delay
+- side Grip visibly creates a shorter TURNING period
+- rear Grip visibly creates a longer TURNING period
+- target rotates rather than snaps
+- release while TURNING follows accepted rule
+- no facing/bond jitter
+- neutral vs Morozashi state remains distinct
+
+"Advantaged participant can attack while target cannot" will become fully playable when ACTION-05C adds Drive.
+
+## Do Not Reopen
+
+Unless later Play Test exposes a concrete issue:
+
+- pair-level Engagement SoT
+- Kuzushi → Morozashi
+- Kuzushi consumption
+- Counter Success side / Best rear geometry
+- GRAPPLED bond
+- FREE instant auto-facing
+- Shift as temporary Grip/Release binding
+
+## Deferred
+
+- Grappled Drive / Morozashi Drive bonus
+- Throw
+- Lift
+- turn-rate stat scaling
+- manual grapple rotation
+- pair orbit mechanics
+- directional FREE Push advantage
+- Ring-out / BoutOutcome
+- final animation
