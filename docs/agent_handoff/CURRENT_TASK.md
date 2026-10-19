@@ -93,6 +93,208 @@ It must NOT become:
 
 The goal is readable action/reaction built from timing, contact, direction, momentum, and later parameters.
 
+
+## User Design Update — Kuzushi / Counter Outcome / Automatic Side Selection
+
+The following User intent is now part of the Investigation input.
+
+### Kuzushi concept
+
+User wants a Bout Runtime concept of **Kuzushi / 崩し**.
+
+While a participant is in Kuzushi:
+
+- they are vulnerable / effectively unguarded
+- they should be easier than normal to Push
+- a valid Grip attempt should be guaranteed to succeed
+  - this guarantee applies only when the attacker is actually in a valid Grip/contact position
+  - it must not allow gripping from arbitrary distance
+
+Do not decide the exact duration, recovery rule, resistance multiplier, or final stat formula yet.
+
+Investigation must determine:
+
+- whether Kuzushi should be a separate runtime posture/state from the current action union
+- how it coexists with `idle / push / future counter`
+- whether Kuzushi suppresses or limits auto-facing so that side/back positional advantage remains meaningful
+- how later Weight / LowerBody / Balance / Stamina can affect entry/recovery without being implemented now
+
+### Desired Counter outcome hierarchy
+
+#### Against Push
+
+If Down Counter succeeds with **Best timing**:
+
+- future target behavior: either
+  1. the pull-down immediately decides the bout, or
+  2. if the finish check does not decide the bout, the opponent enters Kuzushi and the defender gains the opponent's rear position
+- the immediate finish is intended to become parameter-dependent / probabilistic later
+- exact probability formula and relevant stats are Deferred
+
+If Down Counter succeeds but is **not Best timing**:
+
+- resolve as a lateral deflection / sabaki
+- opponent enters Kuzushi
+- defender gains the opponent's side position
+
+#### Against future Harite / slap attack
+
+Harite itself is not implemented in this Task, but Counter architecture must preserve this future result mapping:
+
+- Best success:
+  - opponent enters Kuzushi
+  - defender gains the opponent's side position
+- normal Success:
+  - opponent enters Kuzushi
+  - no forced positional relocation
+
+Do not implement or fully design Harite production behavior here.
+Use this only as an extensibility requirement for Counter result representation.
+
+#### Failed Down Counter
+
+- the Counter user enters Kuzushi
+
+This is intended to make Down a real risk/reward action and prevent safe mashing.
+
+### Timing tiers
+
+Investigation must evaluate an explicit result tier:
+
+- Best
+- Success
+- Fail
+
+The first implementation should avoid a single-frame / frame-perfect Best window unless there is a strong reason.
+
+Recommend how Best and Success windows relate to the current Push Startup / Active / Recovery phases.
+
+### Automatic side selection — USER DECISION
+
+Manual left/right selection is **not wanted**.
+
+Do not require A/D, another action button, or a follow-up choice to select which side is gained after a successful lateral Counter.
+
+Preferred robust/simple design to investigate:
+
+1. Use the opponent's relevant committed direction basis:
+   - for Push, prefer the locked Push direction when resolving the Counter
+   - otherwise use a clearly defined facing/direction basis appropriate to that attack
+2. Construct deterministic left-side and right-side target positions relative to that basis.
+3. Choose whichever candidate is closer to the Counter user's current position at resolution time.
+4. If distances are effectively equal, use a deterministic fallback; never randomness.
+
+This is the preferred implementation direction because it:
+
+- requires no extra Player input
+- naturally tends to move the defender to the side they were already closer to
+- avoids manually encoding “always left” / “always right”
+- can remain deterministic and testable
+- can generalize later without changing controls
+
+Investigation must compare this with any even simpler automatic geometry rule only if materially useful.
+
+**Do not** choose side based on random chance.
+
+### Rear-position selection
+
+For Best Push Counter that does not immediately finish:
+
+- defender should gain a rear positional advantage automatically
+- no manual side/direction choice
+
+Investigation must define a deterministic rear target using the attacker's locked Push direction / appropriate opponent direction basis.
+
+### Positional result safety
+
+For automatic side/rear relocation, Investigation must address:
+
+- target distance from opponent center
+- avoiding overlap
+- avoiding instant teleport into an invalid ring/contact position
+- what to do if the preferred target is outside/invalid near the ring edge
+- whether Prototype should:
+  - resolve position instantly as gameplay state, or
+  - use a short deterministic resolution movement
+- how to keep Simulation as the gameplay Source of Truth
+- how later presentation/animation can visualize the result without owning the rule
+
+Do not add a generic nav/pathfinding system.
+
+### Finish chance boundary
+
+For Best Push Counter, User wants a future parameter-dependent chance to win by pull-down.
+
+This Investigation must define only the boundary/ownership:
+
+- Simulation owns whether the bout is decided
+- outcome must remain deterministic/testable
+- do not use uncontrolled `Math.random()`
+- if probability is introduced later, recommend a seeded/deterministic random boundary or another explicit deterministic input
+- do not choose stat ranges or finish probability formula in this Task
+
+### Counter vs auto-facing
+
+Current auto-facing instantly turns each participant toward the opponent every tick.
+
+Investigation must explicitly solve the conflict:
+
+- if successful Counter puts the defender at the opponent's side/rear,
+- the advantage must not disappear one tick later because the Kuzushi opponent instantly auto-faces them.
+
+Compare minimal options such as:
+
+- Kuzushi temporarily suppresses auto-facing
+- Kuzushi limits turn rate / delays facing recovery
+- another small explicit state rule
+
+Recommend the smallest rule that preserves readable side/rear advantage without redesigning the full facing system.
+
+### Additional required Investigation questions
+
+In addition to Q1–Q14, the Completion Report must answer:
+
+**Q15 — Kuzushi State Boundary**
+- separate posture/runtime state vs action state
+- entry / exit ownership
+- interaction with Push susceptibility and guaranteed valid-range Grip
+
+**Q16 — Best / Success / Fail Result Model**
+- how timing tier is represented
+- Push result mapping above
+- future Harite result mapping without implementing Harite
+
+**Q17 — Side / Rear Position Resolution**
+- deterministic automatic side choice
+- deterministic rear target
+- invalid target / ring-edge handling
+- instant vs short deterministic reposition
+
+**Q18 — Kuzushi Facing Rule**
+- how side/rear advantage survives current auto-facing
+- recovery boundary
+
+**Q19 — Future Finish Chance Boundary**
+- deterministic/probabilistic architecture boundary
+- no formula/range implementation now
+
+### Additional User Decisions
+
+Already decided:
+
+- side selection is automatic, not manual
+- no A/D or extra input for choosing left/right
+- preferred initial rule is nearest valid side candidate relative to opponent committed direction, with deterministic tie-break
+
+Still potentially requiring User decision after Investigation:
+
+- first Prototype Counter should be primarily pull-first, deflection-first, or one shared Down Counter result model
+- ArrowDown as temporary binding
+- exact visible behavior of a whiffed Counter
+- whether Best Push Counter Prototype should initially omit the probabilistic instant finish and always produce Kuzushi + rear until parameters/outcome systems exist
+
+Do not invent these remaining preferences.
+
 ## 4. Core Investigation Questions
 
 Inspect Current Source directly before answering.
@@ -342,12 +544,15 @@ At minimum:
 
 Identify decisions that must be made by User before Implementation.
 
-Likely candidates:
+Already decided:
+- lateral side selection after a successful Counter is automatic, not manually selected
+- preferred automatic rule is nearest valid left/right candidate relative to the opponent's committed direction, with deterministic tie-break
 
-- Prototype Counter meaning: pull-first vs deflection-first vs generic
+Likely remaining candidates:
+- Prototype Counter meaning: pull-first vs deflection-first vs a shared Down Counter result model
 - temporary key (ArrowDown)
-- whether successful Counter primarily creates backward disengagement or lateral redirection
-- whether whiff should have visible backward motion or only Recovery
+- exact whiff presentation / commitment
+- whether the first Best-Push Prototype should defer instant-finish probability and always resolve to Kuzushi + rear until parameter/outcome systems exist
 
 Do not invent User preference.
 
@@ -450,7 +655,7 @@ Investigation / Design Review.
 
 Required:
 
-- Q1–Q14 answered, or explicit BLOCKED point
+- Q1–Q19 answered, or explicit BLOCKED point
 - Recommendation / Rejected / Deferred separated
 - User Decisions Required explicit
 - accepted baseline vs proposed semantics separated
@@ -470,10 +675,14 @@ Minimum sections:
 - Result
 - Preflight
 - Current Source Findings
-- Q1–Q14
+- Q1–Q19
 - Recommended Counter Semantics
 - Recommended Timing Model
 - Recommended Success Resolution
+- Kuzushi Runtime State / Facing Rule
+- Best / Success / Fail result mapping
+- Automatic side / rear position resolution
+- Future finish-chance boundary
 - Failure / Whiff behavior
 - Interaction with lateral evade
 - Runtime State extension
