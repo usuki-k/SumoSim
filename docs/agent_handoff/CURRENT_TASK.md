@@ -931,3 +931,54 @@ Unless User feedback identifies a concrete problem:
 - relocation visual interpolation / animation
 - Push distance tuning
 - final Counter/Kuzushi balance tuning
+
+
+# User Play Test Result — 2026-10-20
+
+ACTION-04A2 Counter Position Resolution: ACCEPTED AS CURRENT FUNCTIONAL BASELINE WITH DEFERRED FEEL WORK
+
+User feedback:
+- Core behavior is basically working.
+- Best / Success position results are functioning.
+- Attacker overshoot is NOT visually readable as “the opponent flowing forward” with the current placeholder graphics.
+- User wants the final/production graphics phase to add an explicit forward-flow / stumble animation so the overshoot reads clearly.
+- Side/rear positional advantage does not currently feel strong enough.
+- User wants future game-speed/balance work to be slower/more readable overall.
+- User also wants pushes from the opponent's side/rear to produce a larger displacement than front-on pushes.
+
+Review classification:
+- Overshoot visual readability is a Presentation / Animation Deferred item. Do not change Simulation solely to fake visual motion while placeholder graphics are in use.
+- General game speed, Counter/Kuzushi duration, and numerical tuning remain Deferred balance work.
+- “Side/rear push is stronger” is NOT merely a numeric retune of current behavior: Current Push Core does not apply any angle/relative-position multiplier. Treat it as a future explicit Gameplay Rule / interaction task.
+- Do not silently add that angle-based rule during unrelated balance cleanup.
+- When implemented later, it should remain Simulation-owned and be derived from canonical relative geometry/facing, with focused tests and User Play Test.
+
+Accepted current baseline:
+- Best → rear position
+- Success → automatic side position
+- Fail → self Kuzushi
+- deterministic side selection / fallback
+- attacker-only overshoot exists in Simulation
+- ACTION-04A1 Counter/Kuzushi foundation
+- existing Push / Contact / Movement baseline
+
+Deferred Presentation:
+- forward-flow / stumble animation for successful Counter overshoot
+- visual transition/interpolation for instantaneous side/rear relocation if needed
+
+Deferred Balance/Tuning:
+- overall game speed
+- Counter timing width
+- Kuzushi duration
+- Push susceptibility numerical values
+- overshoot numerical amount
+- Push distance
+
+Deferred Gameplay Rule Candidate:
+- side/rear directional Push advantage:
+  - side/back contact should produce more effective displacement than frontal Push
+  - exact front/side/rear angle bands or continuous multiplier are undecided
+  - interaction with Kuzushi / Weight / LowerBody is undecided
+  - investigate/design before implementation; do not assume formula now
+
+Do not reopen ACTION-04A2 position geometry unless a concrete regression or later rule conflict appears.
