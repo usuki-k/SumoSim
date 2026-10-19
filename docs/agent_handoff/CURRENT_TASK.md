@@ -1,920 +1,776 @@
-Task-ID: VISUAL-01A-WRESTLER-VISUAL-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / ACTION VISUAL FOUNDATION
+Task-ID: ACTION-ART-01-BACKGROUND-SPEC
+Status: READY
+Task-Type: INVESTIGATION / PRODUCT ART SPEC / BOUT BACKGROUND + DOHYO
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 43efaef5aa2bab5eeb6fa2fc8eceec1bf1fd3105
+Source-Baseline: 1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6
 Handoff-Mode: GITHUB
 
-# VISUAL-01A — Wrestler Visual Foundation
+# ACTION-ART-01 — Product Background / Dohyo Asset Specification
 
 ## Purpose
 
-Replace the current debug-circle wrestler rendering with a validation-quality provisional top-down wrestler presentation so the User can judge whether the current Sumo Action actually reads and feels like a game.
+The project is moving away from throwaway visual prototypes.
 
-This is NOT final art.
+User direction:
 
-The immediate goal is:
-- make the wrestlers look like articulated top-down sumo figures
-- make facing readable without the facing-dot
-- make core states readable without relying on debug labels
-- preserve the Pure TS gameplay → Snapshot → Phaser presentation architecture
-- prepare for a focused User Play Test that may later lead to either Presentation changes OR Gameplay changes
+- For Action art, do not plan on repeatedly recreating temporary assets.
+- Create assets with the intent that they can remain in the Product version.
+- Wrestlers will ultimately use a **part-based image composition** approach rather than runtime primitive graphics.
+- Art production order is now:
+  1. Background / Dohyo
+  2. HUD
+  3. Wrestler character assets
 
-## Important User Direction — Gameplay Is Not Permanently Frozen
+This Task is the first Product-art specification step.
 
-Previous wording that implied "Gameplay must not be reopened" is superseded.
+The goal is to define a production-ready specification for the Bout background and dohyo BEFORE generating or integrating final image files.
 
-Current rule:
+Investigation / Specification Only.
 
-- Do not silently change Gameplay formulas/rules inside this Visual implementation.
-- First implement the provisional visual layer and run the focused User Play Test.
-- If the visualized game still feels wrong, unreadable, too fast, too weak, too strong, or otherwise unnatural, Gameplay changes may be considered in a follow-up task.
-- Accepted Gameplay is the current baseline, not an immutable final design.
+Do not create image assets or Production implementation in this Task.
 
-Therefore:
-- VISUAL-01A scope itself is presentation-only.
-- But User Play Test may explicitly reopen:
-  - movement feel
-  - Push timing/force/distance
-  - Counter window/position feel
-  - Kuzushi duration
-  - grapple orientation speed
-  - Drive pressure
-  - other accepted Action tuning
-  if the visual pass reveals a real Gameplay problem.
+## Accepted Product-Art Direction
 
-If implementation discovers that a Gameplay change is a hard prerequisite to make the visual system function correctly, STOP and report it. Do not silently expand scope.
+The User prefers the visual direction of the previously supplied reference:
 
-## Accepted Visual Direction
+- polished top-down / high-angle sumo game presentation
+- strong central dohyo
+- warm Japanese/traditional atmosphere
+- readable tawara / ring edge
+- surrounding environment that makes the screen look like a real game rather than a technical prototype
+- illustrative / hand-painted / stylized game-art quality rather than debug geometry
+- sufficiently polished that the art is intended for Product use, not a disposable prototype
 
-Use runtime-generated articulated wrestler parts in Phaser.
+Do not mechanically copy any external/reference artwork.
 
-No external image files are required for this first Prototype.
+Treat the reference as:
+- composition / quality / mood direction
+not:
+- an exact asset to reproduce
+- an exact UI layout
+- an exact copyrighted design to imitate
 
-Conceptual parts:
-- shadow
-- left/right feet
-- broad torso
-- mawashi / rear knot cue
-- left/right arms
-- head
-- mage / rear-head cue
+## Development Priority
 
-Use separate parts so pose changes can be expressed through transform/rotation/offset without requiring a full spritesheet.
+Still Action-first.
 
-Player and CPU may keep the current blue/red palette for Prototype readability.
+Do NOT expand into:
+- Simulation / Management
+- MatchDayFlow
+- BashoRecord
+- Banzuke
+- tournament scheduling
 
-This is a validation visual, not a final art style decision.
-
-## Architecture
-
-Maintain:
-
-```
-BoutSimulation / Snapshot
-        ↓
-Pure presentation mapping
-        ↓
-Phaser WrestlerView / DohyoView
-```
-
-Canonical gameplay remains in Pure TS.
-
-Presentation may own only:
-- current visual pose
-- walk-cycle phase
-- local tween/lerp state
-- presentation-only smoothing
-- debug visibility
-
-Presentation must not:
-- own gameplay position/facing/action/posture/engagement/outcome
-- decide when Push/Counter/Grip phases end
-- alter canonical participant positions
-- use Phaser Physics for gameplay
-
-## Explicit Directory Permission
-
-AGENTS.md §5 requires Task authorization for new directories.
-
-This Task explicitly permits:
-
-`src/game/presentation/`
-
-Use it only for small Phaser-free presentation mapping helpers.
-
-Recommended files:
-- `src/game/presentation/wrestlerVisualState.ts`
-- focused tests for that helper
-
-Phaser-specific view code may be added under:
-- `src/game/scenes/WrestlerView.ts`
-
-Optional:
-- `src/game/scenes/DohyoView.ts`
-if it materially keeps BoutScene smaller.
-
-Do not create broader framework directories.
-
-## Scope
-
-Implement:
-
-1. Pure visual-state resolver
-2. Runtime-generated wrestler part textures / shapes
-3. Articulated WrestlerView
-4. Exact-facing rotation
-5. Basic pose mapping for current accepted mechanics
-6. Basic movement/foot cycle
-7. Grapple / Morozashi / Turning visual modifiers
-8. Drive visual pose
-9. Minimal dohyo readability pass
-10. Debug display toggle using `0`
-11. Replace current circle body rendering with WrestlerView
-12. Keep existing debug visuals available when debug mode is ON
-13. Focused unit tests for Pure presentation mapping
-14. Build/test verification
-15. User Play Test preparation
-
-## Scope Out
-
-Do NOT implement in VISUAL-01A:
-
-- Action Feel FX layer from VISUAL-01B
-- camera shake
-- dust particles
-- impact ring/flash polish
-- Counter afterimage polish
-- Gyoji finish presentation
-- MatchDayFlow / BashoRecord
-- Simulation / Management UI
-- audio
-- external art files
-- spritesheet pipeline
-- Aseprite/Tiled installation
-- 8-direction final sprite frames
-- final pixel-art style
-- gameplay tuning/formula changes
-- Throw/Lift
-- ground-touch/fall
-- Tachiai
+The purpose of Product background art is to make the current Action game evaluable in a realistic visual context.
 
 ## Current Source Baseline
 
-Production Source baseline:
-`43efaef5aa2bab5eeb6fa2fc8eceec1bf1fd3105`
+Production source baseline:
+`1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6`
 
-Current develop may contain later Handoff/Review documentation commits only.
+Current implementation still contains the VISUAL-01A runtime-generated wrestler visuals and Graphics-based dohyo.
 
-Preserve:
-- fixed-step Simulation
-- all existing gameplay state semantics
-- Ring-out / BoutOutcome behavior
-- current controls
-- current Dummy modes
+These remain Current Source for now.
 
-## Required Reading
+Do not remove or redesign them in this Specification Task.
+
+## Central Goal
+
+Produce a background/dohyo asset specification that can be handed directly to:
+
+- an image-generation workflow,
+- an artist,
+- or a later asset-generation task,
+
+without repeatedly rediscovering:
+
+- what images are needed,
+- what each layer contains,
+- how big they are,
+- where the dohyo center/radius live,
+- how images align with Simulation coordinates,
+- where HUD may later sit,
+- how character scale relates to the background,
+- how responsive browser layouts should crop/scale.
+
+The spec should minimize later redraws.
+
+# Required Source Inspection
 
 Inspect at minimum:
 
 - `AGENTS.md`
 - `package.json`
 - `src/main.ts`
+- `src/style.css`
 - `src/game/scenes/BoutScene.ts`
+- `src/game/scenes/DohyoView.ts`
+- `src/game/scenes/WrestlerView.ts`
 - `src/game/sumo/BoutTypes.ts`
 - `src/game/sumo/BoutSimulation.ts`
-- `src/game/sumo/grappleOrientation.ts`
 - `docs/ARCHITECTURE.md`
 - `docs/GAME_CONCEPT.md`
-- CURRENT_TASK Investigation review notes
+- current Review Handoff
 
-## Runtime Texture / Shape Strategy
+Confirm current:
+- logical game size
+- dohyo radius in Simulation meters
+- meter→pixel mapping
+- current ring fill ratio
+- initial wrestler positions
+- current UI/debug occupied areas
+- current center-based Ring-out rule
 
-Preferred:
-- use supported Phaser 4.2.1 runtime texture or generated graphics mechanisms
-- verify actual API in the installed version before implementing
+Do not treat current 640×640 as final merely because it exists.
 
-Acceptable:
-- Graphics-generated textures
-- DynamicTexture / RenderTexture if that is the cleaner supported Phaser 4 path
+# Scope
+
+Investigate and specify:
+
+1. Product Action-screen composition
+2. Recommended final/as-authored aspect ratio strategy
+3. Background layer decomposition
+4. Dohyo layer decomposition
+5. Exact simulation-to-art alignment rules
+6. Asset filenames
+7. Pixel dimensions / working dimensions
+8. Transparent vs opaque files
+9. Safe areas for future HUD
+10. Safe/action area for wrestlers and Gyoji
+11. Character scale assumptions
+12. Art-style constraints
+13. Color/contrast requirements
+14. responsive/cropping strategy
+15. file format
+16. Vite/Phaser asset path recommendation
+17. implementation handoff requirements
+18. acceptance checklist for generated artwork
+
+Do not generate images in this Task.
+
+# Scope Out
 
 Do NOT:
-- add image-generation dependency
-- add canvas library
-- add external runtime asset generator
 
-If Phaser runtime texture APIs differ from expectation, use the smallest supported mechanism and report it as a non-semantic implementation detail.
-
-## Pure Visual State
-
-Create a Phaser-free resolver that derives presentation state from canonical Snapshot state.
-
-Example shape — exact naming may differ:
-
-```ts
-type WrestlerVisualPose =
-  | 'idle'
-  | 'move'
-  | 'push'
-  | 'counter'
-  | 'kuzushi'
-  | 'grip'
-  | 'grapple'
-  | 'drive'
-
-type GrappleVisualRole =
-  | 'none'
-  | 'neutral'
-  | 'morozashi-holder'
-  | 'morozashi-disadvantaged'
-
-interface WrestlerVisualState {
-  pose: WrestlerVisualPose
-  pushPhase?: PushPhase
-  gripPhase?: GripPhase
-  grappleRole: GrappleVisualRole
-  turning: boolean
-  frozen: boolean
-  locomotionSpeed: number
-}
-```
-
-This is only an example.
-
-The helper may use:
-- participant action/posture
-- engagement
-- outcome
-- participant/opponent relationship
-- existing `canActInGrapple`
-
-Do not duplicate gameplay formulas.
-
-## Visual Priority
-
-Use one deterministic priority so the body does not flicker between poses.
-
-Required semantics:
-
-1. final outcome freezes visual progression, but does not force a generic finish pose
-2. kuzushi
-3. FREE explicit actions: push / counter / grip
-4. GRAPPLED drive
-5. GRAPPLED turning / ready role
-6. locomotion
-7. idle
-
-Outcome is a freeze modifier.
-
-Walk/idle smoothing may use simple presentation-only hysteresis if required.
-
-## Wrestler Shape
-
-Top-down articulated silhouette should clearly show front/back.
-
-Required cues:
-- head toward the front
-- mage / rear-head cue toward the back
-- mawashi/rear knot cue
-- shoulders/arms
-- two feet
-
-Old facing-marker dot must not be required in default game view.
-
-Debug mode may still show it.
-
-## Facing
-
-Rotate the full WrestlerView according to exact `participant.facing`.
-
-Do not quantize to 4/8 directions.
-
-This must make GRAPPLED turning visually continuous.
-
-## Pose Requirements
-
-### Idle
-- readable stance
-- subtle breathing/sway acceptable
-- no excessive motion
-
-### Movement
-- feet visibly step/shuffle
-- motion should look grounded
-- avoid obvious foot skating where possible
-- canonical position still comes directly from Snapshot
-
-### Push
-One parametric pose family driven by gameplay phase:
-- startup: anticipation / arms pulled in / feet planted
-- active: forward lean + arms extended
-- recovery: return to stance
-
-Do not change Push phase durations.
-
-### Counter
-- visually distinct from Push startup
-- lower/open waiting stance
-
-Do not attempt Counter-success one-shot FX yet; that belongs in VISUAL-01B.
-
-### Kuzushi
-- off-balance body
-- disrupted feet
-- open arms
-- small instability motion
-
-Must read as loss of balance, not stun/dizziness.
-
-No stars/dizzy symbol.
-
-### Grip
-- arms reaching forward
-- grip recovery returns arms
-
-### Grapple
-Ordinary neutral grapple must visibly look like an established clinch.
-
-Use arm placement/body relation rather than relying on the current white line.
-
-### Morozashi
-Must materially differ from neutral grapple.
-
-Holder:
-- both arms visually inside/deep
-- stronger established position
-
-Disadvantaged:
-- arms visibly outside/up
-
-Do not use text as the primary cue.
-
-### Turning
-While not READY:
-- wrestler visibly rotates using exact Simulation facing
-- grapple arms are not fully established
-- feet show a turning/shuffle motion
-
-READY:
-- established grapple arms return
-
-Rear should naturally take longer than side because the Simulation rotation distance is larger.
-
-Do not change GRAPPLE_TURN_RATE.
-
-### Drive
-- forward lean
-- shuffling feet
-- bracing opponent
-
-In equal Drive stalemate:
-- both wrestlers should visibly show effort even if position barely changes
-
-Do not add dust/compression polish beyond minimal pose adjustment; stronger FX belong in VISUAL-01B.
-
-## Dohyo Readability Pass
-
-Improve the existing Graphics-based dohyo enough to support Action readability.
-
-Allowed:
-- clearer clay shading
-- stronger tawara/ring edge
-- light outside-sand band
-- shikiri lines
-- darker background contrast
-
-Do not create arena/crowd/background art.
-
-Ring boundary must remain easy to see.
-
-## Debug UI
-
-Add a provisional `0` key toggle.
-
-Default:
-- game-readable presentation
-- hide most phase/debug labels and debug grapple line/facing marker
-- keep necessary prototype controls/hints minimal
-- result text remains visible
-
-Debug ON:
-preserve/show useful diagnostics such as:
-- existing phase text
-- engagement
-- pair velocity
-- facing marker
-- grapple line
-- other already useful debug information
-
-Do not delete diagnostic functionality.
-
-## BoutScene Integration
-
-Replace the old circle participant body view with WrestlerView.
-
-BoutScene should remain responsible for:
-- reading input
-- fixed-step stepping
-- snapshot retrieval
-- one-way sync into views
-
-Do not move Gameplay formulas into WrestlerView.
-
-Avoid turning BoutScene into a large animation framework.
-
-## Tests
-
-At minimum add focused tests for Pure presentation mapping.
-
-Cover:
-- idle
-- locomotion
-- push startup / active / recovery
-- counter
-- kuzushi priority
-- grip/recovery
-- grapple neutral
-- Morozashi holder
-- Morozashi disadvantaged
-- turning/not-ready
-- drive
-- outcome frozen modifier
-- participant-order/mirrored roles where relevant
-- deterministic output
-- Phaser-free module
-
-Existing gameplay tests must continue to pass.
-
-Do not add brittle pixel-coordinate tests for Phaser visuals unless a small pure calculation genuinely benefits from them.
-
-## Verification Level
-
-Standard + focused visual runtime verification.
-
-Required:
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`
-- no new dependency
-- Pure presentation helper has no Phaser import
-- no Gameplay Source changes unless STOP condition triggered
-- Browser Smoke if environment permits
-
-Browser Smoke should verify:
-- no runtime errors
-- wrestler bodies render
-- exact facing rotates
-- actions visually switch
-- debug toggle works
-- ring boundary remains visible
-
-## User Play Test — REQUIRED
-
-Run `pnpm dev`.
-
-First test with debug OFF.
+- create background image files
+- integrate image assets
+- remove current Graphics background
+- create HUD art
+- create wrestler art
+- create Gyoji art
+- install Aseprite/Tiled
+- add art dependencies
+- change Gameplay
+- change canvas/resolution in Production
+- change camera
+- add crowd animation
+- add audio
+- add Result/Management screen
+
+# Product Background Design Questions
+
+## Q1 — Target Screen Composition
+
+Recommend the Product Bout screen composition.
 
 Evaluate:
 
-1. Do the two wrestlers now read as top-down sumo wrestlers rather than debug objects?
-2. Can facing be understood without the facing dot?
-3. Does movement look grounded enough to judge?
-4. Does Push read as startup → strike → recovery?
-5. Is Counter stance distinct from Push?
-6. Does Kuzushi look like unstable footing?
-7. Can Grip be understood without the white line?
-8. Is Morozashi clearly different from neutral grapple?
-9. Can you see which wrestler is disadvantaged while turning?
-10. Does rear exposure feel longer/more dangerous than side exposure?
-11. Does Drive look like sustained pressure rather than ordinary movement?
-12. Does neutral Drive stalemate show visible effort?
-13. Is Ring-out boundary visually readable?
-14. Does the game now begin to feel like an Action Game?
+A. current near-square composition
+B. 16:9 landscape composition similar to the User's reference direction
+C. another responsive composition
 
-Then debug ON may be used to diagnose discrepancies.
+The target platform is web/CrazyGames.
 
-### Gameplay Re-evaluation Gate
+Discuss:
+- desktop browser presentation
+- common landscape play area
+- whether Action readability benefits from more space around the ring
+- future HUD placement
+- mobile is NOT the current final target decision
 
-After the visual test, explicitly classify each negative feeling as one of:
+Recommend one primary authored composition.
 
-- Presentation issue
-- Gameplay issue
-- both / unclear
+## Q2 — Logical Resolution vs Asset Resolution
 
-Gameplay changes are allowed as a future follow-up.
+Do not confuse:
+- Phaser logical game size
+- authored image pixel dimensions
+- CSS/browser display dimensions
 
-Examples:
-- Orientation still feels too fast after the turning animation is readable
-- Kuzushi still ends too quickly to exploit
-- Push still travels too little
-- Counter advantage still feels too weak
-- movement still feels too fast/slow
+Recommend:
+- Product art working resolution
+- whether background should be authored at 1920×1080, 1600×900, 1280×720, or another size
+- whether the runtime logical resolution should eventually match or scale independently
 
-Do NOT dismiss these solely because the underlying rule was previously Accepted.
+Goal:
+avoid redrawing assets later.
 
-Technical PASS != Gameplay Accepted.
+Do not change source in this Task.
 
-## Stop Conditions
+## Q3 — Dohyo Size in the Product Composition
 
-STOP and report instead of broadening scope if:
+Current Simulation:
+- arena radius is 2.275 m
+- ring center is logical origin
+- Ring-out uses participant center > arena radius
 
-- runtime-generated articulated visuals cannot be implemented cleanly with installed Phaser
-- a new asset/dependency/tool becomes necessary
-- current Snapshot truly lacks required state for a basic accepted mechanic
-- a Gameplay rule change is required as a hard prerequisite
-- significant unrelated refactor is required
-- Current Source materially conflicts with this Task
+Define how the Product art must represent the simulation ring.
 
-## Implementation Evidence
+Critical rule:
+**the visible gameplay boundary must align unambiguously with the Simulation radius.**
 
-Completion Report should include concise evidence for:
+Specify:
+- art-space center coordinate
+- art-space gameplay radius
+- tawara thickness treatment
+- whether the exact Simulation boundary runs:
+  - center of the tawara,
+  - inner edge,
+  - outer edge,
+  - another clearly defined art line
 
-- Pure visual resolver
-- WrestlerView
-- exact facing
-- Push/Counter/Kuzushi/Grip/Grapple/Morozashi/Turning/Drive mapping
-- Dohyo pass
-- debug toggle
-- architecture preservation
-- tests/build/browser
+Current implementation draws the tawara centered on the rule radius.
+Do not assume this is final without analyzing visual consistency.
 
-## Design Deviations
+Recommend one mapping.
 
-Required.
+## Q4 — Center-Based Ring-out Visual Compatibility
 
-If none:
-`Design Deviations: NONE`
+Current accepted Prototype Ring-out rule:
+participant center crosses the gameplay radius.
 
-If runtime texture mechanism differs from the plan:
-report:
-- Planned
-- Implemented
-- Reason
-- Semantics changed? NO
+Because Product art will be more realistic, assess:
+- whether the boundary representation should visually support this rule
+- how much body may appear outside before losing
+- whether the art should avoid implying a foot/contact-based rule that conflicts with center-based detection
 
-Any Gameplay semantic change is NOT an acceptable deviation in this task; STOP first.
+Do NOT change Ring-out in this Task.
 
-## Git Delivery
+Flag future visual/gameplay mismatch risk for User Play Test.
 
-Follow AGENTS.md.
+## Q5 — Background Layer Decomposition
 
-One successful Task ≈ one commit.
+Compare one flattened background image versus layered assets.
 
-Task-owned files only.
-Push origin/develop.
-Do not change main.
+Recommend the minimum Product-ready layers.
 
-Suggested commit:
-`feat: add provisional wrestler visuals`
+Candidate structure:
 
-## Final Instruction
+1. outer arena/environment background
+2. dohyo platform / clay base
+3. tawara / ring-edge overlay
+4. shikiri lines
+5. foreground/edge decoration
+6. optional ambient shadow/light overlay
 
-Stop after VISUAL-01A.
+Decide which layers should be separate and why.
 
-Do not continue into VISUAL-01B FX or Gameplay tuning.
+Prioritize:
+- redraw minimization
+- later HUD integration
+- Ring-out readability
+- character occlusion correctness
+- small implementation complexity
 
-After commit/push/report:
-「VISUAL-01A-WRESTLER-VISUAL-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+## Q6 — Required Background Asset List
 
+Produce an exact table with at minimum:
 
-# Final ChatGPT Review
+- filename
+- purpose
+- dimensions
+- alpha/transparency
+- anchor/alignment
+- runtime layer/depth
+- whether required for v1 Product Action screen
 
-Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6`
-- Agent-Start-Head:
-  `dff973d27a890240868fbaba26c39c1cee5715a1`
-- Task diff is exactly one implementation commit.
-- `main` remains unchanged.
-- No new dependency.
-- No image/spritesheet asset was added.
-
-## Scope / Architecture Review
-
-PASS.
-
-Direct source review confirms:
-
-- Gameplay source files were not changed:
-  - BoutSimulation
-  - BoutTypes
-  - grappleOrientation
-  - ringOut
-  - input
-  - Dummy
-- new Pure presentation mapping lives under the explicitly approved:
-  `src/game/presentation/`
-- Pure presentation mapping has no Phaser import.
-- Phaser-specific articulated view remains in Scene-side code.
-- canonical position/facing/action/posture/engagement/outcome stay Simulation-owned.
-- no Phaser Physics or animation callback controls gameplay.
-
-The direction remains:
-
+Example naming only:
 ```
-Simulation Snapshot
-→ Pure WrestlerVisualState
-→ Phaser WrestlerView
+arena_background.png
+dohyo_base.png
+tawara_overlay.png
+shikiri_overlay.png
+arena_foreground.png
 ```
 
-## Pure Visual Resolver Review
+Do not invent unnecessary layers.
 
-PASS.
+## Q7 — Full-Screen Background vs Isolated Dohyo
 
-`resolveWrestlerVisualState` derives:
+Decide whether:
+- arena_background contains the entire screen including the clay platform
+- dohyo is a separate transparent overlay
+- or another split is preferable
 
-- pose
-- Push / Grip phase progress
-- grapple role
-- turning readiness
-- frozen modifier
-- own locomotion speed
-- Kuzushi strength
+Consider:
+- responsive scaling
+- exact ring alignment
+- future alternate venues/themes
+- implementation simplicity
 
-from canonical state.
+## Q8 — Safe Area for Future HUD
 
-Important:
-- locomotion uses `velocity - externalVelocity`, so being externally pushed is not misclassified as walking.
-- grapple turning uses existing `canActInGrapple`.
-- Morozashi holder/disadvantaged roles come from canonical Engagement.
-- outcome is a freeze modifier, not a duplicate finish-state machine.
-- move/idle hysteresis is presentation-only memory.
+HUD is the next Product-art phase.
 
-No duplicate gameplay Source of Truth was introduced.
+Background must reserve appropriate visual space.
 
-## WrestlerView Review
+Specify safe zones for:
+- top-left wrestler/HUD
+- top-right wrestler/HUD
+- center/top title or match info if used
+- bottom corners / match metadata if later used
 
-PASS for a validation Prototype.
+Do NOT design the HUD itself.
 
-The view is articulated from runtime-generated parts:
+Goal:
+background details should not fight future HUD readability.
 
-- shadow
-- feet
-- torso
-- mawashi/rear knot cue
-- arms
-- head/mage cue
+## Q9 — Gameplay Safe Area
 
-The root is positioned from the canonical Snapshot position and rotated using exact Simulation facing.
+Specify where critical gameplay must remain visible:
+- full dohyo edge
+- both wrestlers
+- future Gyoji result presentation
+- potential effects/particles
 
-This preserves the accepted gradual grapple orientation rather than quantizing it to directional frames.
+Avoid decorative foreground elements covering:
+- tawara
+- ring-out region
+- wrestlers
 
-### Runtime texture note
+## Q10 — Gyoji / Officials / Crowd in Background
 
-The implementation uses Phaser `Graphics.generateTexture`.
+User previously decided Gyoji does NOT need to remain visible during fighting.
 
-The TypeScript build verifies the API surface, but actual browser rendering was NOT RUN by the Agent.
+Therefore:
+- do not bake the result Gyoji into the permanent background.
 
-This remains a mandatory User/runtime check.
+Evaluate what can be baked:
+- spectators
+- officials seated outside ring
+- banners
+- lanterns
+- seating
 
-## Pose Coverage
+and what should stay separate:
+- future animated Gyoji
+- characters
+- active FX
 
-PASS structurally.
+Avoid background art that later prevents moving/animating Gyoji.
 
-Current implementation has visual treatment for:
+## Q11 — Venue Scope
 
-- idle
-- move
-- Push startup / active / recovery
-- Counter
-- Kuzushi
-- Grip reach / recovery
-- neutral grapple
-- Morozashi holder
-- Morozashi disadvantaged
-- turning/not-ready
-- Drive
+Recommend the smallest Product-quality venue.
 
-No VISUAL-01B one-shot impact FX were pulled into scope.
+User reference contains substantial arena detail.
 
-## Gameplay Re-evaluation Policy
+Determine whether Product v1 background should include:
+- dohyo
+- surrounding wooden/clay platform
+- limited audience/official silhouettes
+- banners/lanterns
+- architectural trim
 
-Important User direction remains:
+without turning this into a large environment-production project.
 
-The current Gameplay baseline is NOT immutable.
+Provide Required / Optional / Deferred environment details.
 
-VISUAL-01A itself correctly does not alter gameplay.
+## Q12 — Art Style Specification
 
-After User Play Test, any negative result must be classified as:
+Define a concise Product art brief.
 
-- Presentation issue
-- Gameplay issue
-- both / unclear
+Include:
+- top-down/high-angle degree
+- stylization level
+- line quality
+- texture/detail
+- lighting
+- palette
+- Japanese/sumo atmosphere
+- material readability
+- avoidance of overly photoreal / overly chibi if appropriate
 
-If the visualized game still feels wrong, a follow-up task may reopen:
-- Movement
-- Push
-- Counter
-- Kuzushi
-- grapple orientation
-- Drive
-- other Action tuning/rules.
+Do not overfit to a single reference image.
 
-Do not reject Gameplay feedback merely because those rules were previously accepted in circle-debug form.
+The background style must later support part-based wrestler artwork in the same visual language.
 
-## Dohyo / Debug Review
+## Q13 — Perspective Consistency
 
-PASS.
+Because wrestlers will later be constructed from body-part images, background perspective must be compatible.
 
-Dohyo now has:
-- stronger clay contrast
-- visible tawara/ring edge
-- outside sand band
-- shikiri lines
-- darker surrounding background
+Specify:
+- pure orthographic top-down vs lightly angled top-down
+- expected visible vertical faces of platform/objects
+- whether wrestler images should be top-down with slight 3/4 volume
 
-The ring-out criterion itself remains Simulation-owned and unchanged.
+Choose a direction that will not make future character assets look pasted on.
 
-Debug:
-- default OFF
-- `0` toggles diagnostic overlays
-- existing labels / phase / engagement / grapple line / facing marker remain available for diagnosis.
+## Q14 — Lighting Direction
 
-This is appropriate because User Play Test should first judge readability without debug labels.
+Specify one stable global lighting direction for:
+- background painting
+- wrestler shadows
+- UI-independent character rendering
+- future Gyoji
 
-## Verification Review
+Avoid ambiguous multi-direction lighting that complicates part-based characters.
 
-Reported:
-- `pnpm test`: 209/209 PASS
-- `pnpm build`: PASS
-- `git diff --check`: PASS
+Recommend a light direction and softness.
 
-New Pure resolver tests cover:
-- idle / move / hysteresis
-- external momentum not walking
-- Push phases
-- Counter / Grip
-- Kuzushi priority
-- neutral / Morozashi roles
-- rear turning → READY → Drive
-- outcome frozen modifier
-- deterministic / Phaser-free mapping.
+## Q15 — Character Shadow Grounding
 
-Existing 200 gameplay tests remain unchanged and PASS.
+Define background assumptions for later wrestler shadows:
+- shadow direction
+- softness
+- opacity range
+- whether shadows should be separate character layers
 
-## Non-Blocking Technical Notes
+Do not bake wrestler shadows into the background.
 
-### N1 — Runtime visuals remain unverified
+## Q16 — Color Contrast
 
-Because Browser Smoke was not available, the following are still unknown until User Play Test:
+Specify contrast requirements:
+- wrestlers must stand out from the clay
+- blue/red mawashi or other palette variants must remain readable
+- tawara must be visible at a glance
+- HUD will later need contrast zones
 
-- whether all generated textures render correctly in Phaser runtime
-- whether part origins/scales visually align
-- whether layered limbs look coherent during overlap/grapple
-- whether exact-facing rotation reads naturally
-- whether the improved tawara remains visually consistent with the center-based Ring-out criterion
+Recommend avoiding background colors too close to skin/mawashi.
 
-These are expected Visual Task unknowns, not reasons to add speculative fixes before viewing the result.
+## Q17 — Texture Density
 
-### N2 — Outcome freezes presentation interpolation immediately
+Recommend a texture/detail density that:
+- feels Product-quality
+- does not visually compete with Action
+- remains legible when browser-scaled down
 
-When Outcome becomes final, `WrestlerView` stops its presentation-time interpolation.
+Define where detail should be concentrated:
+- outside gameplay area
+- around ring
+- center clay
 
-This is consistent with the requested "freeze final visual state" direction, but it means the body can freeze part-way between presentation pose targets.
+## Q18 — Ring/Clay Wear Marks
 
-Do not change this preemptively.
+Decide whether to include:
+- footprints
+- sweep marks
+- clay scuffs
 
-If it looks awkward at Ring-out, classify it as Presentation feedback and adjust in a focused visual task.
+as baked details.
 
-### N3 — Current wrestler draw ordering is Prototype-level
+Ensure they do not look like gameplay trails/events.
 
-Both wrestler bodies share the same body depth, so overlapping limb/body ordering is not a full character-to-character occlusion system.
+Recommend subtle static texture only.
 
-This is acceptable for the validation pass.
+## Q19 — Responsive Scaling Strategy
 
-If grappling becomes visually confusing because one whole wrestler consistently layers over the other, fix presentation ordering after seeing the actual runtime result; do not add a complex z/limb interleaving system now.
+CrazyGames/browser windows vary.
 
-## Browser Smoke
+Recommend a Product strategy such as:
+- fixed 16:9 authored composition + FIT/letterbox
+- cover/crop with protected center region
+- another method
 
-NOT RUN due Agent environment limitation.
+Specify which portions may safely crop and which may not.
 
-For this task Browser/User visual verification is mandatory before acceptance.
+Do not implement now.
 
-## User Play Test — REQUIRED / READY
+## Q20 — Asset Format
 
-Run:
+Recommend:
+- PNG
+- WebP
+- or combination
 
-`pnpm dev`
+Consider:
+- alpha
+- source/master file vs runtime delivery file
+- compression
+- browser support
 
-### First pass: debug OFF
+Since these are Product assets, distinguish:
+- source/master art
+- runtime exported file
 
-Do NOT press `0` initially.
+Do not introduce source-art tools yet.
 
-Check:
+## Q21 — Repository Asset Path
 
-1. **Basic silhouette**
-   - Do they look like two top-down wrestlers rather than circles?
-   - Can Player/CPU be distinguished?
-   - Is front/back readable from head/mage/mawashi/arms?
+Recommend exact runtime path for Product art.
 
-2. **Facing**
-   - Move around the opponent.
-   - Can you understand which way each wrestler faces without the old white facing dot?
-   - During side/rear grapple, can you actually see the disadvantaged wrestler rotate?
+Candidate:
+`public/assets/action/background/`
 
-3. **Movement**
-   - Does foot movement look grounded?
-   - Does it look like walking/shuffling rather than the character image sliding over the dohyo?
+If accepted later:
+- Phaser loader can read stable URLs.
+- AGENTS.md directory rule requires explicit permission in the Implementation Task.
 
-4. **Push**
-   - One ArrowUp press should visually read:
-     anticipation → arm extension/drive → recovery.
-   - Is it obviously different from ordinary movement?
+Do not create directories in this Spec Task.
 
-5. **Counter**
-   - ArrowDown stance must look different from Push startup.
-   - Current 01A does NOT yet add successful-Counter afterimage/stumble polish.
-   - Judge whether the base stance/position change is understandable enough to proceed to 01B.
+Also recommend where non-runtime source/master art should live, if anywhere.
+Avoid placing editor/source files in runtime folders.
 
-6. **Kuzushi**
-   - Does it look like disrupted balance/footing?
-   - Does it look vulnerable rather than stunned/dizzy?
+## Q22 — Master Asset Ownership
 
-7. **Grip / Grapple**
-   - Can ordinary grapple be understood without the debug white line?
-   - Do arms/body visibly establish a clinch?
+Since repeated redraw is expensive, specify how Product art should be versioned.
 
-8. **Morozashi**
-   - Is it visually obvious which wrestler has the inside-arm advantage?
-   - Can you distinguish it from neutral grapple without text?
+Recommend whether repository should store:
+- only exported runtime PNG/WebP
+- source PSD/Krita/Aseprite files
+- both
 
-9. **Side / Rear advantage**
-   - Is the disadvantaged wrestler visibly not yet established while turning?
-   - Does rear exposure clearly last/read longer than side exposure?
+No tool is currently confirmed.
 
-10. **Drive**
-    - Does Drive look like sustained pressure?
-    - When both drive equally, does the stalemate still show visible effort?
+Do not assume proprietary source formats or tools.
 
-11. **Ring-out**
-    - Is the tawara/edge easy to understand?
-    - Does the frozen final state look acceptable?
+If master-art tool choice is required, mark it as a User Decision instead of inventing one.
 
-12. **Overall**
-    - Does this finally begin to read as an Action Game?
-    - Or does it still look mainly like a technical prototype?
+## Q23 — Asset Generation Workflow
 
-### Second pass: debug ON
+User wants Product-quality assets, not throwaway prototype art.
 
-Press `0`.
+Recommend a workflow such as:
 
-Use labels/facing/grapple diagnostics to identify any mismatch between:
-- what the Simulation says
-- what the visual appears to show.
+1. lock composition/spec
+2. generate/create one background concept
+3. review
+4. make targeted revisions
+5. lock Product background
+6. export runtime layers
+7. integrate
+8. User visual check in Browser
 
-## Feedback Classification
+The goal is to avoid repeatedly generating complete backgrounds.
 
-For each problem, please classify if possible:
+Recommend how to separate:
+- composition approval
+- final rendering approval
+- integration/crop approval
 
-- Presentation
-- Gameplay
-- Both / unsure
+## Q24 — AI/Image Generation Considerations
 
-Especially re-evaluate the previously deferred issues:
+If image generation is used later, specify what must be controlled in the prompt/spec:
 
-- overall speed
-- Push distance/strength
-- Counter readability/advantage
-- Kuzushi duration
-- grapple orientation speed
-- side/rear advantage
-- Drive pressure.
+- exact camera/perspective
+- empty dohyo (no wrestlers)
+- no baked HUD/text/logo
+- no permanent Gyoji in the fighting background
+- exact center/ring placement
+- safe areas
+- layer separation limitations
 
-It is explicitly acceptable for this Play Test to conclude that the Gameplay itself should change.
+Identify which elements may need separate generation or manual masking because generative images may not provide exact geometry.
 
-## Acceptance State
+Do not generate images in this Task.
 
-Technical implementation: PASS.
+## Q25 — Exact Geometry vs Painted Art
 
-Runtime rendering: NOT YET VERIFIED.
-Visual readability: PENDING USER PLAY TEST.
-Game Feel: PENDING USER PLAY TEST.
+A critical Product issue:
 
-Do not start VISUAL-01B automatically.
+Generated/painted background art may not place the tawara at mathematically exact geometry.
 
-First review the User's actual visual/gameplay feedback from VISUAL-01A.
+Recommend a solution:
+- use painted base but keep the gameplay tawara/shikiri as separate exact overlay
+- post-process/mask to exact geometry
+- or another approach
 
-## Next Task Decision
+Prioritize avoiding visual mismatch between art and Simulation.
 
-After Play Test:
+## Q26 — Product Background Acceptance Criteria
 
-### If base wrestler presentation is readable
-Proceed to VISUAL-01B for:
-- Push impact
-- Counter forward-flow/stumble/afterimage
-- dust
-- Morozashi highlight
-- Ring-out FX
-- optional small camera impact.
+Define an approval checklist before the background is considered locked.
 
-### If base presentation is not readable
-Fix VISUAL-01A presentation first.
+Must include:
+- looks Product-quality
+- style compatible with later wrestlers
+- dohyo unmistakable
+- exact gameplay boundary alignment
+- enough contrast
+- no embedded characters/HUD
+- HUD safe area
+- responsive crop safety
+- no illegible details
+- browser-scale readability
 
-### If Gameplay itself now feels wrong
-Create a focused Gameplay investigation/correction before or alongside later visual polish, depending on severity.
+## Q27 — Integration Requirements for Later Task
 
-Do not force the old Gameplay baseline merely to stay on the visual roadmap.
+Define what the later background implementation Task will need:
+- preload asset paths
+- image/layer creation
+- transform based on logical resolution
+- exact Simulation-to-art alignment
+- fallback/debug overlay for geometry verification
+- browser visual check
+
+Do not implement.
+
+## Q28 — Geometry Verification Overlay
+
+Recommend a temporary developer-only overlay for the Integration Task:
+- simulation center
+- exact arena radius
+- initial participant positions
+- shikiri reference positions
+
+This would allow checking whether Product art aligns pixel-perfectly.
+
+The overlay should not ship visible by default.
+
+## Q29 — HUD Handoff
+
+At the end of this Spec, define the exact information that HUD design will inherit:
+- authored screen dimensions/aspect ratio
+- safe areas
+- ring bounding box
+- reserved zones
+- primary visual hierarchy
+
+Do not specify final HUD elements beyond these boundaries.
+
+## Q30 — Wrestler Handoff
+
+Define what later part-based character design will inherit:
+- expected on-screen body diameter/height
+- perspective
+- lighting
+- shadow direction
+- palette contrast requirements
+- available gameplay/action area
+
+Do not create wrestler asset specs yet beyond these interface requirements.
+
+## Q31 — User Decisions Required
+
+List only material decisions that truly require User confirmation before Product background generation.
+
+At minimum consider:
+- primary aspect ratio
+- perspective (true top-down vs slight high-angle)
+- environment richness
+- whether spectators/officials are baked into background
+- runtime background decomposition
+- art source/master workflow if necessary
+
+Give a recommended default for each.
+
+## Q32 — Next Task Sequence
+
+Recommend a minimal Product-art sequence.
+
+Expected direction:
+
+1. ACTION-ART-01 Background Spec Review / User decisions
+2. ACTION-ART-01A Background concept/generation
+3. User visual approval
+4. ACTION-ART-01B exact Product layer export/integration
+5. Browser visual verification
+6. ACTION-ART-02 HUD Spec
+7. HUD generation/integration
+8. ACTION-ART-03 Wrestler part asset spec
+9. Wrestler Product art production/integration
+
+Do not mix HUD or wrestler production into the background task.
+
+# Key Product Constraint — Avoid Redraws
+
+This Task should actively minimize full redraw cycles.
+
+Prefer:
+- exact geometry defined before art creation
+- safe zones defined before painting
+- layer split defined before generation
+- one approved composition before high-detail rendering
+
+Do not recommend "just generate several different backgrounds and see what works" as the main workflow.
+
+# Stop Conditions
+
+Return BLOCKED if:
+
+- Product background geometry cannot be specified without first changing the Gameplay camera/ring layout
+- Current 640×640 implementation materially prevents choosing a Product aspect ratio without User decision
+- exact Simulation/ring alignment cannot be reconciled with the desired painted style
+- a specific paid/proprietary art tool becomes a prerequisite and User has not chosen it
+- Current Source materially conflicts with the requested art direction
+
+Do not make Production changes.
+
+# Verification
+
+Investigation / Product Art Specification.
+
+Required:
+- Q1–Q32 answered or explicit BLOCKED
+- Current Source directly inspected
+- Current Fact / Recommendation / User Decision / Deferred clearly separated
+- exact asset table included
+- exact geometry/alignment section included
+- Production Source unchanged
+- package/lockfile unchanged
+- repository change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `git diff --check` PASS
+
+Tests/build not required because Source must not change.
+
+# Completion Report
+
+Minimum:
+- Result
+- Preflight
+- Current Rendering Facts
+- Recommended Product composition
+- logical vs authored resolution
+- exact dohyo geometry mapping
+- background layer model
+- exact background asset list/table
+- art brief
+- perspective
+- lighting/shadows
+- safe areas
+- responsive strategy
+- format/export strategy
+- repository paths
+- master-art/source recommendation
+- generation/revision workflow
+- exact-geometry strategy
+- Product acceptance checklist
+- integration handoff
+- HUD handoff
+- wrestler handoff
+- User Decisions Required
+- Deferred
+- Next Product-art Task Sequence
+- Design Deviations
+- Unexpected Scope
+- Verification
+- Git delivery
+
+# User Play Test
+
+NOT REQUIRED for Specification.
+
+User visual approval is REQUIRED in the later Background concept/generation Task.
+
+# Git Delivery
+
+Investigation-only Report Commit Exception:
+- change only CURRENT_COMPLETION_REPORT.md
+- explicit stage
+- git diff --check
+- one Report-only commit
+- push origin/develop
+- verify remote SHA / clean tree
+
+Example:
+`docs(agent): specify product bout background`
+
+# Final Instruction
+
+Stop after Product Background / Dohyo specification.
+
+Do not generate or integrate images.
+
+After Report Commit / Push:
+「ACTION-ART-01-BACKGROUND-SPEC が完了し、ChatGPT ReviewとUser Decision待ちです」
