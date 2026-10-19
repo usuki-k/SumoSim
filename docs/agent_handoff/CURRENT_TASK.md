@@ -1,819 +1,523 @@
-Task-ID: ACTION-05B1-GRAPPLED-ORIENTATION-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / CORE GRAPPLED ORIENTATION FOUNDATION
+Task-ID: ACTION-05C-GRAPPLED-DRIVE-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / GRAPPLED DRIVE & YORIKIRI DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 61a1a493a54a02cc7d171f3c70d722a6640f871f
+Source-Baseline: f28542fce7b5996916a7769b9690905c41ca0608
 Handoff-Mode: GITHUB
 
-# ACTION-05B1 — Grappled Orientation Foundation
+# ACTION-05C — Grappled Drive / Yorikiri Investigation
 
 ## Purpose
 
-ACTION-05A Grip / Engagement FoundationはUser Play TestでAccept済み。
-ACTION-05B Investigation / ChatGPT Review / User Decisionsに基づき、
-GRAPPLED中のSide / Rear advantageを「実際のFacing差」としてGameplayに残す。
+ACTION-05A Grip / EngagementとACTION-05B1 Grappled OrientationはUser Play TestでAccept済み。
 
-今回実装するもの:
-- GRAPPLED中だけ段階的auto-turn
-- canonical position + facingからTURNING / READYを導出
-- Side Gripは短いTURNING
-- Rear Gripは長いTURNING
-- TURNING中はRelease不可
-- 将来のGrapple Actions用の共通readiness境界
-- 最小TURNING / READY debug表示
+次に、GRAPPLED中の「↑ = Drive / 寄り」を実装する前に、DriveのGameplay Ruleを確定する。
 
-今回は実装しない:
-- Grappled Drive / Yorikiri
-- Throw
-- Lift
-- Morozashiの力補正
-- directional Push advantage
-- stats
+Userの既存意図:
+- GRAPPLED中の↑はDrive / Yorikiri
+- Morozashi holderは通常組みより大きく寄れる
+- TURNING participantは何もできず、READY participantだけがgrapple actionを使える
+- 将来的には全体のGame Speedを遅く調整したいが、今は既存速度を個別にretuneしない
 
-## Accepted User Decisions
-
-UD-1:
-`GRAPPLE_TURN_RATE = Math.PI` rad/s
-= 180°/s（暫定）。
-
-UD-2:
-`GRAPPLE_FACING_TOLERANCE = Math.PI / 12`
-= 15°（暫定）。
-誤差が15°以内ならREADY。
-
-UD-3:
-GRAPPLEDでTURNING中のparticipantはShift Release不可。
-Grip edgeは無視し、queueしない。
-READY participantだけRelease可能。
-
-UD-4:
-TURNING中は将来のparticipant-initiated GRAPPLED actionsをすべて禁止する。
-対象:
-- Release
-- Drive
-- Throw
-- Lift
-- regrip / hand-fighting
-受動的なauto-turnだけは継続する。
+このTaskは Investigation Only。
+Production Sourceは変更しない。
 
 ## Accepted Baseline
 
+Accepted Production Source:
+`f28542fce7b5996916a7769b9690905c41ca0608`
+
+Current developの以降はPlay Test / coordination only。
+
 Preserve:
-- FREEの即時auto-facing
-- Movement / Contact
+- FREE Movement / Contact
 - Push / Counter / Kuzushi
 - Counter Success→side / Best→rear
-- Counter overshoot
-- pair-level Engagement SoT
-- Grip / Morozashi
-- Kuzushi→Morozashi時のKuzushi消費
+- Grip / pair-level Engagement
+- Morozashi holder
 - Grapple bond
-- GRAPPLED WASD抑制
+- GRAPPLED WASD suppression
+- GRAPPLED gradual orientation
+- `canActInGrapple` READY gate
+- TURNING中Release不可
 - Shift Grip / Release
-- Grip Reach / Recovery
-- current tuning values
+- existing provisional timing/force values
 
-Do not retune existing systems.
+Do not retune current systems.
 
-## Core Architecture
+## Central Design Goal
 
-Do NOT add persistent:
-- side
-- rear
-- orientationAdvantage
-- rearStun
-- turningTicks
-
-Canonical state remains:
-- participant position
-- participant facing
-- pair Engagement
-
-Orientation readiness is derived each tick from geometry.
-
-Preferred Pure TS module:
-`src/game/sumo/grappleOrientation.ts`
-
-It must be Phaser-free.
-
-Minimal helpers may include:
-
-```ts
-normalizeAngle(angle): number
-grappleFacingError(selfPosition, selfFacing, opponentPosition): number
-isGrappleReady(selfPosition, selfFacing, opponentPosition): boolean
-turnFacingTowardGrapple(selfPosition, selfFacing, opponentPosition): number
-```
-
-Equivalent small naming is allowed.
-
-Scene must reuse the same Pure helper for TURNING / READY presentation.
-Do not duplicate the formula in Phaser code.
-
-## Angle Semantics
-
-Coordinate convention remains current +y-down canvas coordinates.
-
-Define normalized signed error in:
-`(-Math.PI, Math.PI]`
+Drive should make GRAPPLED feel like a two-person contest while preserving:
 
 ```
-bearing = atan2(opponent.y - self.y, opponent.x - self.x)
-error = normalizeAngle(bearing - self.facing)
+Pure TypeScript Simulation
+  engagement
+  participant action/readiness
+  pair velocity/position
+      ↓
+Snapshot
+      ↓
+Phaser presentation
 ```
 
-READY:
+Do not put Drive force/formulas in BoutScene.
+
+## Questions to Investigate
+
+### Q1 — Input semantic
+
+Current ArrowUp produces `pushPressed`, whose semantic meaning is specifically FREE Push.
+
+GRAPPLED also wants ArrowUp for Drive.
+
+Compare small options:
+A. add `drivePressed` / `driveHeld` semantic field and let Scene map the same raw ArrowUp according to current Engagement
+B. replace context-specific intent fields with a generic primary action semantic
+C. reuse `pushPressed` as Drive while GRAPPLED
+
+Recommend the smallest change that preserves:
+- semantic, source-agnostic Simulation input
+- current FREE Push tests/meaning
+- future CPU/touch mapping
+
+Avoid broad input redesign.
+
+### Q2 — Continuous vs discrete Drive
+
+Compare:
+- hold ↑ = continuous Drive effort
+- one press = discrete Drive pulse/action
+- short action phases similar to Push
+
+Consider:
+- action-game readability
+- contested Drive
+- User preference for somewhat broad/simple action timing
+- future stamina
+- fixed-step determinism
+- touch controls
+
+Recommend one for first Prototype.
+
+### Q3 — Drive direction
+
+Define the canonical direction of one participant's Drive.
+
+Candidate:
+- from driver center toward opponent center / current grapple axis
+
+Compare against:
+- participant facing vector
+- stored direction at action start
+
+Because READY tolerance allows up to 15° error, explain whether Drive should follow exact pair axis or current facing.
+
+### Q4 — Pair movement model
+
+Investigate how Drive should move the grappled pair.
+
+Preferred direction to assess:
+- reuse Model B / shared external velocity
+- compute a net grapple Drive acceleration along pair axis
+- apply same external delta to both participants so bond moves as one pair
+
+Compare with:
+- selfVelocity drive
+- moving only target
+- positional teleport/correction
+
+Recommend smallest deterministic rule.
+
+### Q5 — One-sided neutral Drive
+
+For neutral grapple, define what happens when only A Drives:
+- pair moves toward B's side
+- B is pushed backward while bond remains R
+
+Specify which canonical velocities change and how existing external decay interacts.
+
+### Q6 — Simultaneous Drive
+
+Define deterministic behavior when both READY participants Drive simultaneously.
+
+Candidate:
+- each contributes signed strength along common pair axis
+- equal neutral strengths cancel
+- unequal strengths produce net movement
+
+Avoid participant-array priority.
+
+### Q7 — Morozashi advantage
+
+User intent:
+Morozashi holder should Drive more strongly than ordinary neutral grapple.
+
+Investigate first Prototype rule.
+
+Candidate:
 ```
-abs(error) <= GRAPPLE_FACING_TOLERANCE
-```
-
-### Exact rear tie
-
-Best/rear commonly produces approximately ±π error.
-
-Use a small technical epsilon, e.g. `1e-9`.
-
-If error is effectively exactly π in magnitude:
-- choose a fixed +angular direction
-- no random
-- no participant-order choice
-
-This is a deterministic technical tie-break, not balance.
-
-If centers are effectively coincident and bearing is undefined:
-- treat facing error as 0 / READY
-- use existing deterministic conventions
-- do not create a new state
-
-## Facing Update Rule
-
-### FREE
-
-Preserve current behavior exactly:
-- stable participant instantly faces opponent at tick end
-- Kuzushi participant keeps facing frozen
-
-### GRAPPLED
-
-Replace instant auto-facing with fixed-rate turning.
-
-Per tick:
-```
-maxTurn = GRAPPLE_TURN_RATE * TICK_SECONDS
-```
-
-For each participant:
-- compute current signed error
-- rotate by at most maxTurn toward zero
-- shortest path
-- exact π tie uses fixed +direction
-- if remaining abs(error) <= maxTurn, snap exactly to opponent bearing
-- never overshoot
-- keep facing finite
-
-Only facing changes.
-Do not orbit positions or rotate bodies around the pair.
-
-Grapple bond remains radial-only and unchanged.
-
-## Readiness / Tick Ownership
-
-Readiness for input at tick t is derived from the state visible at the **start of tick t**.
-
-Turning occurs at tick end in the facing-update stage.
-
-Therefore:
-- if tick t end enters the 15° tolerance
-- participant becomes action-eligible starting tick t+1
-
-This is required for Snapshot/input consistency.
-
-No stored READY flag.
-
-## Release Gate
-
-At the current GRAPPLED release-processing stage:
-
-For each participant with `gripPressed=true`:
-- if READY at tick start → may request release
-- if TURNING → edge ignored, not queued, no Recovery
-
-If one READY participant requests release:
-- preserve ACTION-05A release semantics
-- Engagement → FREE
-- releaser → Grip Recovery
-- other participant no Recovery
-
-If both READY and both press:
-- both Recovery
-
-If one READY and one TURNING both press:
-- READY participant can release
-- TURNING participant's edge is ignored
-
-Once released:
-- existing FREE semantics resume
-- no same-tick Push/Counter start, as in ACTION-05A
-- do not change FREE auto-facing behavior
-
-## Future Grapple Action Boundary
-
-No Drive/Throw/Lift is added now.
-
-Add/keep one small Simulation-owned readiness boundary suitable for later use, e.g.:
-
-```ts
-canActInGrapple(participant, opponent, engagement)
+driveStrength(driver) =
+  BASE_DRIVE *
+  (driver is Morozashi holder ? MOROZASHI_DRIVE_FACTOR : 1)
 ```
 
-Semantics:
-- false unless engagement is GRAPPLED
-- true only when that participant is READY
+Questions:
+- should disadvantaged participant remain base 1.0, or also receive a penalty?
+- is holder bonus alone sufficient and simpler?
+- how does simultaneous Drive contest resolve?
 
-Do not add placeholder Drive/Throw action types.
+Do not invent final numbers without marking them provisional.
+Recommend an initial factor suitable for Play Test.
 
-Morozashi and Orientation stay independent:
-- Morozashi = persistent Engagement advantage
-- READY/TURNING = derived facing readiness
+### Q8 — Action readiness
 
-Do not create combined states.
+Drive must use accepted `canActInGrapple`.
 
-## Counter Integration
+Confirm:
+- TURNING participant cannot initiate/continue Drive
+- READY participant may Drive while opponent TURNING
+- when opponent becomes READY it may begin contesting
 
-Required expected results after Counter→Grip:
+If continuous hold input is recommended, define what happens when held before READY:
+- ignored until a new edge?
+- automatically begins when READY?
+- semantic held state active while READY?
 
-### Success / side
-- gripper should be READY or effectively READY
-- previously Kuzushi target should be TURNING
-- target initial error approximately 90°
-- with 180°/s and 15° tolerance, READY after approximately 25 turn updates
+Avoid hidden input queueing unless deliberate.
 
-### Best / rear
-- gripper READY
-- target TURNING
-- target initial error approximately 180°
-- READY after approximately 55 turn updates
+### Q9 — Drive commitment / recovery
 
-Rear must remain TURNING longer than Side without stored side/rear state.
+If Drive is continuous:
+- does releasing ↑ stop immediately?
+- is there startup/recovery?
 
-Use actual geometry/facing in tests; do not special-case Counter tier.
+If discrete:
+- define provisional startup/active/recovery structure.
 
-## Front Grip
+Keep first Prototype small.
+Do not add stamina yet.
 
-Normal frontal Grip must not create an artificial helpless period.
+### Q10 — Release interaction
 
-If participant error is already within 15°:
-- READY immediately
-- no mandatory Grapple startup stun
+While one/both participants Drive:
+- can READY participant Shift-release immediately?
+- does active Drive block Release?
+- does release cancel Drive?
+- what happens to pair external velocity after release?
 
-Normal ACTION-05A release behavior remains available because participants are READY.
+Preserve ACTION-05A/B1 release semantics unless a material conflict requires User decision.
 
-## Presentation
+### Q11 — Facing / orientation while Drive moves pair
 
-Keep existing:
-- facing markers
-- ENGAGE: FREE / GRAPPLED / MOROZASHI
+If both bodies translate together, pair bearing stays constant.
 
-Add minimal GRAPPLED readiness display using shared Pure helper.
+Confirm:
+- TURNING continues normally during Drive
+- Drive does not secretly reset facing error
+- Drive does not rotate pair in first Prototype
 
-Recommended:
-- participant phase/debug text shows `TURNING` or `READY` while GRAPPLED and no higher-priority existing label is needed
-- KUZUSHI existing priority remains where applicable
-- optional angle text only if useful for debugging
+### Q12 — Bond interaction
 
-Do not build final animation/UI.
+Current bond fixes radial distance R.
 
-User must visibly see the disadvantaged marker rotating rather than snapping.
+Determine whether applying shared external Drive velocity before/after bond is enough.
+Identify exact recommended step order.
 
-## Scope
+Do not add a general constraint solver.
 
-Allowed:
-- new Pure TS orientation helper module
-- BoutSimulation facing/release integration
-- focused orientation tests
-- BoutScene minimal debug presentation
-- docs/ARCHITECTURE.md
-- existing test adaptation only if required
-- CURRENT_COMPLETION_REPORT.md
+### Q13 — Existing external momentum
 
-BoutTypes.ts should not need new canonical fields.
-If new canonical orientation state seems necessary, STOP and report instead.
+Define how pre-existing shared external velocity interacts with Drive.
 
-No dependency.
+Recommended principles:
+- do not clear momentum on Drive start
+- add Drive acceleration
+- existing external decay remains one source of decay
+
+Check whether current `MAX_EXTERNAL_SPEED = 3` is suitable to reuse or whether Drive needs a separate cap.
+Do not silently change Push behavior.
+
+### Q14 — Drive as participant action/state
+
+Determine whether Drive needs a new `ParticipantActionState` variant or can be derived directly from held intent while GRAPPLED.
+
+Consider future:
+- Throw / Lift mutual exclusion
+- release
+- presentation
+- startup/recovery if any
+
+Prefer explicit state only when necessary.
+
+### Q15 — Action priority in GRAPPLED
+
+Future conceptual controls:
+- ↑ Drive
+- ← Throw left
+- → Throw right
+- ↓ Lift
+- Shift Release
+
+Drive is first implemented, others are absent.
+
+Define future-compatible priority/conflict rules without building them now.
+
+At minimum decide:
+- Drive vs Release same tick
+- two participants' Drive independent
+- TURNING gate first
+
+### Q16 — Minimal debug presentation
+
+Recommend what User must see in first Drive implementation:
+- DRIVE label
+- net pair movement direction/strength if useful
+- neutral vs Morozashi
+- TURNING/READY remains visible
+
+Do not create final animation/UI.
+
+### Q17 — Ring-out / BoutOutcome prerequisite
+
+Ring-out is currently unimplemented.
+
+Determine whether:
+A. Drive can first be implemented/tested as displacement-only, with ring-out afterward
+B. minimal Ring-out/BoutOutcome is required before Drive implementation because otherwise Yorikiri cannot be meaningfully evaluated
+
+Separate:
+- technical implementation feasibility
+- Game Feel acceptance
+
+Do not invent ring-out criterion here.
+Existing deferred ring-out decisions remain unresolved unless Current SPEC says otherwise.
+
+### Q18 — Arena edge behavior before Ring-out
+
+If Drive implementation precedes Ring-out, pair can currently move beyond the ring.
+
+Recommend a minimal test fixture/Play Test approach that does not accidentally define ring-out:
+- large arena test fixture
+- restart before edge
+- or another small harness convention
+
+Do not add invisible wall/clamp unless explicitly decided.
+
+### Q19 — Morozashi + Orientation combined scenario
+
+Define expected behavior:
+
+Rear/Side Counter
+→ Kuzushi
+→ Grip
+→ Morozashi
+→ holder READY, target TURNING
+→ holder Drive works unopposed
+→ target reaches READY
+→ target may contest Drive
+
+Confirm this is achieved by independent:
+- Engagement advantage
+- Orientation readiness
+- Drive strength
+
+No combined rear-Morozashi state.
+
+### Q20 — Future stats boundary
+
+Do not implement stats.
+
+Define where future:
+- Power
+- LowerBody
+- Weight
+- Grapple skill
+could enter Drive strength/resistance without changing the basic architecture.
+
+Do not choose exact stat formulas now.
+
+### Q21 — Automated test matrix for first Drive implementation
+
+Specify focused tests for:
+- READY one-sided neutral Drive
+- TURNING Drive blocked
+- Drive while target TURNING
+- simultaneous equal neutral Drive cancels
+- Morozashi holder > neutral
+- Morozashi holder vs disadvantaged simultaneous contest
+- mirrored participant symmetry
+- Drive stops according to chosen input semantics
+- external momentum preserved
+- external decay/cap
+- bond distance maintained
+- facing/orientation continues correctly
+- Release interaction
+- deterministic replay/finite values
+- FREE Push/Counter/Grip regressions when Drive unused
+- no Ring-out semantics accidentally added
+
+### Q22 — User Play Test plan
+
+Define what to evaluate:
+- one-sided Drive feels like pair pressure, not skating
+- equal contested Drive feels like stalemate
+- Morozashi clearly moves pair more strongly
+- Drive while opponent TURNING gives meaningful first-move reward
+- release behavior is understandable
+- bond remains stable
+- Drive direction is readable
+- current overall speed may still be too fast and should remain Deferred unless blocking
+
+### Q23 — User Decisions Required
+
+List only material decisions required before implementation.
+
+Likely:
+- continuous vs discrete Drive
+- semantic input form
+- provisional base acceleration/force
+- provisional Morozashi factor
+- release during Drive
+- whether Ring-out precedes Drive
+
+Give a recommended default for each.
+
+### Q24 — Next Implementation Sequence
+
+Recommend the smallest safe sequence.
+
+Candidate:
+1. ACTION-05C1 Grappled Drive Foundation
+2. minimal Ring-out/BoutOutcome if needed
+3. Drive refinement / Yorikiri Feel
+4. Throw / Lift later
+
+Or, if Ring-out is prerequisite:
+1. minimal Ring-out/BoutOutcome investigation/implementation
+2. ACTION-05C1 Drive
+
+Do not bundle Drive + Ring-out + Throw + Lift into one Task.
+
+## Important Design Constraints
+
+- Simulation remains Phaser-free.
+- Same meaning must not have multiple Sources of Truth.
+- Drive must not alter accepted FREE Push formula unless explicitly required.
+- Morozashi is Engagement advantage, not a new action type.
+- Orientation readiness remains derived, not stored.
+- no mass/traction framework yet.
+- no ECS/DI/event bus/generic rule engine.
+- no uncontrolled Math.random.
 
 ## Scope Out
 
 Do NOT implement:
-- Drive / Yorikiri
-- Morozashi Drive bonus
+- Drive production code
+- Ring-out production code
+- BoutOutcome
 - Throw
 - Lift
-- manual turn controls
-- GRAPPLED WASD movement/rotation
-- pair orbit
-- side/rear persistent flags
-- stun timers
+- stamina
+- stats
 - directional FREE Push advantage
-- stats / turn-rate stats
-- Ring-out / BoutOutcome
 - AI
-- final animation
-- Physics / generic state machine
-- existing Grip/Push/Counter tuning
+- final animation/audio
+- global speed rebalance
+- turn-rate rebalance
+- Push/Counter/Grip retuning
 
-## Required Automated Verification
+Investigation Only.
 
-All existing 148 tests must remain PASS, except only assertions that intentionally change accepted GRAPPLED instant-facing/release-during-TURNING semantics.
+## Required Reading
 
-Add focused tests at minimum:
-
-T115 normalizeAngle:
-- output in (-π, π]
-- -π maps to +π
-- finite inputs remain finite
-
-T116 frontal Grip:
-- both participants READY immediately / by resulting Snapshot
-- no artificial delay
-
-T117 side Counter→Grip:
-- gripper READY
-- target TURNING
-- target does not snap
-- target reaches tolerance after exact expected fixed-turn progression
-
-T118 rear Counter→Grip:
-- gripper READY
-- target TURNING
-- rear TURNING duration > side
-- expected progression approximately 55 turns with current constants
-
-T119 turn direction:
-- positive/negative errors use shortest path
-- exact ±π tie uses deterministic +direction
-
-T120 turn step:
-- per tick facing change <= GRAPPLE_TURN_RATE*TICK_SECONDS
-- no overshoot
-- final snap to bearing
-- facing finite
-
-T121 tolerance:
-- exactly 15° is READY
-- just outside is TURNING
-
-T122 tick boundary:
-- enters tolerance at tick t end
-- release/action eligibility is only available starting tick t+1
-
-T123 release blocked while TURNING:
-- Shift ignored
-- no Recovery
-- no queue
-- engagement stays GRAPPLED
-
-T124 READY release:
-- one-sided release preserves ACTION-05A semantics
-- simultaneous READY release remains symmetric
-
-T125 mixed release:
-- READY participant + TURNING participant both press
-- READY participant releases
-- TURNING edge has no separate effect
-
-T126 Morozashi separation:
-- holderId persists while orientation changes
-- READY/TURNING is not stored in Engagement
-- no side/rear fields in Snapshot/participant
-
-T127 bond interaction:
-- turning changes facing only
-- positions/bond distance remain stable
-- no jitter/NaN
-
-T128 FREE regression:
-- FREE stable instant auto-facing unchanged
-- Kuzushi facing freeze unchanged
-- existing Counter orientation before Grip unchanged
-
-T129 deterministic replay:
-- side/rear/front sequences reproduce exactly
-- finite facing/state
-
-T130 prior regression:
-- existing Grip / Push / Counter / Contact / Movement tests PASS after intentional orientation expectation updates
-
-Do not sample Side vs Rear: both are required.
-
-## Verification Level
-
-Heavy / Core Facing & Action Eligibility.
-
-Required:
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`
-- T115–T130 evidence
-- prior regressions
-- Simulation + helper Phaser-free
-- no new dependency
-- no Scope Out code
-
-Browser Smoke if environment supports it:
-- normal front Grip does not visibly hesitate
-- Success→Grip: target visibly turns from side
-- Best→Grip: target visibly turns from rear for longer
-- no snap
-- Shift while target TURNING does not release if controlling that participant is testable
-- READY Shift releases normally
-- no jitter/console errors
-
-If browser unavailable, report NOT RUN honestly.
-
-## User Play Test — REQUIRED
-
-Run after technical review.
-
-Evaluate:
-1. front Grip feels immediate, not artificially delayed.
-2. Side Grip creates a readable short opening.
-3. Rear Grip creates a clearly longer opening.
-4. target visibly rotates rather than snaps.
-5. 180°/s feels readable and not too fast/slow.
-6. 15° READY threshold does not look obviously premature.
-7. TURNING/READY display matches what facing marker shows.
-8. bond does not jitter while facing changes.
-9. Morozashi display remains distinct from orientation readiness.
-10. normal FREE Push/Counter/Movement/Grip feel unchanged.
-11. current task need not yet make the advantaged side attack; that is ACTION-05C Drive.
-
-Technical PASS != Orientation Feel accepted.
-
-## Acceptance Criteria
-
-- no persistent side/rear/orientation state
-- shared Pure angle/readiness helper
-- FREE instant auto-facing preserved
-- GRAPPLED gradual turn = π rad/s
-- tolerance = π/12
-- deterministic exact-rear tie
-- Side TURNING shorter than Rear
-- front Grip immediately READY
-- readiness derived, not stored
-- TURNING participant cannot Release
-- ignored TURNING Shift is not queued
-- READY Release preserves ACTION-05A semantics
-- future Grapple action gate boundary exists without implementing actions
-- Morozashi remains independent
-- presentation shows TURNING/READY
-- T115–T130 + regressions PASS
-- build PASS
-- User Play Test REQUIRED
-- no scope creep
+Inspect:
+- AGENTS.md
+- BoutTypes.ts
+- BoutSimulation.ts
+- grappleOrientation.ts
+- BoutGrip.test.ts
+- BoutOrientation.test.ts
+- BoutPush.test.ts
+- BoutScene.ts
+- ARCHITECTURE.md
+- GAME_CONCEPT.md
+- Current Task Review / User Play Test acceptance
 
 ## Stop Conditions
 
-STOP if:
-- derived orientation requires new canonical side/rear state
-- FREE facing baseline must change
-- Grapple bond requires material redesign
-- release gate cannot be implemented from start-of-tick readiness
-- Drive/Throw must be implemented to make readiness technically meaningful
-- new dependency/Physics required
-- Current Source / Handoff materially conflict
-- task-external divergence exists
+Return BLOCKED if:
+- Drive requires replacing Model B
+- Drive cannot coexist with bond without a generic physics solver
+- semantic input requires a broad input architecture redesign
+- Ring-out is a mandatory prerequisite but its unresolved decisions block safe sequencing
+- Morozashi advantage cannot be represented without duplicating state
+- Current Source materially conflicts with accepted Handoff
+
+Do not make Production changes.
+
+## Verification
+
+Investigation / Design Review.
+
+Required:
+- Q1–Q24 answered or explicit BLOCKED point
+- Current Fact / Recommendation / User Decision / Deferred separated
+- Production Source unchanged
+- package / lockfile unchanged
+- repository change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `git diff --check` PASS
+
+Tests/build are not required because Source must not change.
 
 ## Completion Report
 
 Minimum:
-- Result / Preflight / Changed Files
-- User Decisions implementation
-- angle normalization / exact π tie
-- turn-rate/tolerance
-- tick ownership
-- release gate
-- Side/Rear integration
-- front Grip behavior
-- Morozashi separation
-- T115–T130 + regressions
-- Browser Smoke
-- Implementation Evidence
+- Result
+- Preflight
+- Current Source Findings
+- Q1–Q24
+- recommended input semantics
+- recommended continuous/discrete model
+- Drive direction / pair acceleration model
+- simultaneous Drive
+- Morozashi advantage
+- readiness/release interaction
+- external momentum/cap
+- Ring-out prerequisite analysis
+- test matrix
+- User Play Test plan
+- User Decisions Required
+- Rejected / Deferred
+- Next Implementation Sequence
 - Design Deviations
 - Unexpected Scope
-- Known Untested
-- User Play Test REQUIRED / NOT RUN
+- Verification
 - Git delivery
+
+## User Play Test
+
+NOT REQUIRED for Investigation.
+
+Identify first implementation task where Drive Feel becomes REQUIRED.
 
 ## Git Delivery
 
-Follow AGENTS.md.
-1 Task ≈ 1 commit.
-Task-owned files only.
-Push origin/develop.
-Do not change main.
+Investigation-only Report Commit Exception:
+- change only CURRENT_COMPLETION_REPORT.md
+- explicit stage
+- git diff --check
+- one Report-only commit
+- push origin/develop
+- verify remote SHA / clean tree
 
-Example:
-`feat: add grappled orientation readiness`
+Example commit:
+`docs(agent): investigate grappled drive design`
 
 ## Final Instruction
 
-Stop after Grappled Orientation Foundation.
-
-Do not continue to Drive, Throw, Lift, directional Push advantage, Ring-out, or stats.
-
-After commit/push/report:
-「ACTION-05B1-GRAPPLED-ORIENTATION-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `f28542fce7b5996916a7769b9690905c41ca0608`
-- Agent-Start-Head:
-  `02e3aa652d8f0b1c9368b6559ee341a640155da5`
-- Agent Task Diff is exactly one implementation commit.
-- `main` remains unchanged.
-- No new dependency.
-- Scope is limited to Grappled Orientation helpers, Simulation integration, focused tests, debug presentation, and Current-State docs.
-
-## Reported Implementation vs Design
-
-PASS.
-
-Direct Source review confirmed:
-
-### Canonical state / derived readiness
-
-- no persistent side/rear/orientation/timer state was added.
-- readiness is derived from canonical:
-  - participant position
-  - participant facing
-  - pair Engagement.
-- `BoutTypes.ts` required no new canonical field.
-
-### Shared Pure helper
-
-`src/game/sumo/grappleOrientation.ts` is Phaser-free and owns:
-
-- `normalizeAngle`
-- `grappleFacingError`
-- `isGrappleReady`
-- `turnFacingTowardGrapple`
-- `canActInGrapple`
-
-Simulation and Scene both reuse this boundary; the facing formula is not duplicated in Phaser.
-
-### Accepted provisional values
-
-- `GRAPPLE_TURN_RATE = Math.PI` rad/s = 180°/s
-- `GRAPPLE_FACING_TOLERANCE = Math.PI / 12` = 15°
-
-### FREE vs GRAPPLED facing
-
-- FREE stable auto-facing remains immediate.
-- FREE Kuzushi facing freeze remains unchanged.
-- GRAPPLED facing rotates by at most 3° per 60Hz tick.
-- positions are not orbited by the orientation rule.
-- Grapple bond remains radial-only.
-
-### Rear tie
-
-- exact/effectively ±π error takes one fixed +angular direction.
-- no randomness or participant-array tie winner.
-
-### Tick ownership
-
-- release/action readiness is checked from the state at tick start.
-- orientation turning occurs at tick end.
-- entering tolerance at tick t end permits action only from tick t+1.
-
-### Release gate
-
-- TURNING participant Shift edge is ignored.
-- no Grip Recovery is created.
-- input is not queued.
-- READY participant can release with existing ACTION-05A semantics.
-- READY + TURNING simultaneous Shift lets only READY participant release.
-
-### Morozashi separation
-
-- Morozashi holder remains persistent in Engagement.
-- orientation READY/TURNING remains derived.
-- no combined side/rear-Morozashi state.
-
-### Counter integration
-
-- Success→Grip produces a side-facing disadvantage.
-- Best→Grip produces a rear-facing disadvantage.
-- same orientation rule is used for both; Counter tier is not special-cased.
-- rear takes materially longer to become READY than side.
-
-## Verification Review
-
-Reported:
-
-- `pnpm test`: 163/163 PASS
-- `pnpm build`: PASS
-- `git diff --check`: PASS
-- prior 148 tests PASS with zero modifications
-- T115–T129 added
-
-Direct test inspection confirms:
-
-- normalizeAngle / -π→+π
-- front Grip immediate READY
-- side gradual turning
-- rear longer turning
-- shortest signed turn
-- exact rear deterministic tie
-- max turn / snap / no overshoot
-- inclusive tolerance helper boundary
-- next-tick action eligibility
-- TURNING release ignored/no queue
-- READY release regression
-- mixed READY/TURNING release
-- Morozashi persistence / no duplicate orientation state
-- bond/position stability
-- FREE/Kuzushi facing regressions
-- deterministic replay / finite facing
-
-## Non-Blocking Note — Floating-point boundary
-
-The nominal geometry gives:
-
-- side: 90° → 15° at 3°/tick
-- rear: 180° → 15° at 3°/tick
-
-which suggests 25 / 55 turn steps.
-
-In current integrated floating-point arithmetic, the Report observes 26 / 56 updates because a mathematically boundary-equal value can remain microscopically outside the tolerance.
-
-This is non-blocking:
-- deterministic
-- one tick = ~16.7 ms
-- side remains clearly shorter than rear
-- direct tolerance-boundary helper tests are correct.
-
-Do not change the helper solely for theoretical tick-count purity before User Play Test.
-
-If a later exact-timing requirement needs it, add the smallest explicit numerical tolerance with focused boundary tests rather than changing Gameplay constants.
-
-## Browser Smoke
-
-NOT RUN due Agent environment limitation.
-
-This is a Known Untested runtime item, not a Source failure.
-
-## Accepted Technical Baseline Pending Play Test
-
-If User Play Test passes:
-
-- FREE instant auto-facing remains baseline
-- GRAPPLED auto-turn = 180°/s provisional
-- READY tolerance = 15° provisional
-- readiness is derived, not stored
-- frontal Grip is immediately READY
-- side Grip creates shorter TURNING
-- rear Grip creates longer TURNING
-- TURNING participant cannot Release
-- ignored TURNING Shift is not queued
-- READY participant Release preserves ACTION-05A semantics
-- Morozashi and Orientation remain independent gameplay axes
-
-## User Play Test — REQUIRED / READY
-
-Run `pnpm dev`.
-
-### Front Grip
-
-1. Use stationary/normal frontal Grip.
-2. Confirm both sides show READY immediately.
-3. Confirm no artificial rotation delay was added.
-4. Shift release should still work normally.
-
-### Side orientation
-
-5. Mode 2: get a Counter Success so Player moves to CPU side.
-6. Shift Grip while CPU is Kuzushi.
-7. Confirm:
-   - Player is READY.
-   - CPU shows TURNING.
-   - CPU facing marker rotates gradually toward Player instead of snapping.
-   - TURNING lasts roughly a short fraction of a second.
-
-### Rear orientation
-
-8. Get a Counter Best so Player moves behind CPU.
-9. Shift Grip.
-10. Confirm:
-    - Player is READY.
-    - CPU starts near 180° away.
-    - CPU visibly turns for clearly longer than the side case.
-    - rear opening feels materially stronger than side opening.
-
-### Readability / regression
-
-11. Judge whether 180°/s is readable, not obviously too fast or too slow.
-12. Judge whether READY at 15° looks reasonable rather than visibly premature.
-13. Confirm TURNING/READY text agrees with the facing marker.
-14. Confirm grapple bond does not jitter while facing rotates.
-15. Confirm MOROZASHI display remains distinct from TURNING/READY.
-16. Confirm FREE Push / Counter / Movement / Grip remain unchanged.
-17. Check browser console/runtime errors.
-
-Known harness limitation:
-- Dummy does not Grip, so User cannot directly control a TURNING disadvantaged Player and test blocked Shift release interactively.
-- TURNING release blocking is technically covered by tests.
-
-Do not treat that harness limitation as a task failure.
-
-## Acceptance State
-
-Technical implementation: PASS.
-
-Orientation Feel: PENDING USER PLAY TEST.
-
-Do not start Grappled Drive until this focused Play Test is reviewed.
-
-If accepted:
-- ACTION-05B1 becomes the current Grappled Orientation baseline.
-- next candidate is ACTION-05C Grappled Drive / Yorikiri.
-
-If rejected:
-classify narrowly:
-- turn speed
-- READY tolerance
-- side/rear readability
-- facing direction/tie
-- release gate
-- presentation
-- runtime bug
-
-and correct only that area.
-
-## Do Not Reopen
-
-Unless concrete Play Test feedback requires it:
-
-- pair-level Engagement
-- Kuzushi→Morozashi
-- Counter Success side / Best rear geometry
-- no stored side/rear orientation state
-- FREE instant auto-facing
-- Grapple bond
-- Shift temporary Grip/Release binding
-
-## Deferred
-
-- Grappled Drive / Yorikiri
-- Morozashi Drive bonus
-- Throw
-- Lift
-- stat-scaled turn rate
-- manual grapple rotation
-- directional FREE Push advantage
-- Ring-out / BoutOutcome
-- final animation
-
-
-# User Play Test Result — 2026-10-20
-
-ACTION-05B1 Grappled Orientation Foundation: ACCEPTED AS CURRENT BASELINE
-
-User feedback:
-- Focused Play Test is OK.
-- Side / Rear orientation behavior is understandable.
-- Current `GRAPPLE_TURN_RATE = π rad/s` (180°/s) feels too fast.
-- However, User also feels the overall game speed is currently too fast.
-- User does NOT want an isolated turn-rate retune now.
-- Final/late gameplay balance should slow the whole action tempo together.
-
-Accepted current baseline:
-- FREE instant auto-facing
-- GRAPPLED gradual facing
-- derived TURNING / READY
-- Side opening shorter than Rear
-- TURNING participant cannot Release
-- Morozashi and Orientation remain separate axes
-- current 180°/s and 15° tolerance remain provisional technical values
-
-Deferred balance/tuning:
-- overall game speed / tempo
-- `GRAPPLE_TURN_RATE`
-- `GRAPPLE_FACING_TOLERANCE` if later readability requires it
-- Movement acceleration/speed
-- Push timing/force/distance
-- Counter timing
-- Kuzushi duration
-- Grip Reach/Recovery timing
-- Drive timing/force once implemented
-
-Do not retune Grappled Orientation in isolation unless a concrete new mechanic requires it.
-When the action systems are sufficiently complete, tune the overall tempo coherently across subsystems.
-
-ACTION-05B1 is accepted and does not need a correction task.
+Stop after investigation.
+Do not implement Drive, Ring-out, Throw, Lift, or stats.
+
+After Report Commit / Push:
+「ACTION-05C-GRAPPLED-DRIVE-INVESTIGATION が完了し、ChatGPT Review待ちです」
