@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-01-BACKGROUND-SPEC
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / PRODUCT ART SPEC / BOUT BACKGROUND + DOHYO
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -774,3 +774,419 @@ Do not generate or integrate images.
 
 After Report Commit / Push:
 「ACTION-ART-01-BACKGROUND-SPEC が完了し、ChatGPT ReviewとUser Decision待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS / USER DECISIONS REQUIRED BEFORE BACKGROUND GENERATION
+
+## Reviewed Delivery
+
+- Specification report commit:
+  `98d9da89bb74e426a06dbed2d1a4285a6eaccb9c`
+- Agent-Start-Head:
+  `dd8b5d5b49574cf483642c63d73e43df376faaad`
+- Diff is exactly one Report-only commit:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / package / lockfile unchanged.
+- `main` unchanged.
+
+## Overall Assessment
+
+PASS.
+
+The Report provides a sufficiently concrete Product-art foundation for the next background generation step:
+
+- 16:9 authored composition
+- explicit dohyo center/radius
+- layered base + exact-geometry overlay strategy
+- HUD/gameplay safe areas
+- art direction/perspective/lighting
+- runtime/master export concepts
+- Product acceptance checklist
+- HUD and wrestler handoff constraints.
+
+The most important redraw-minimization decision is correct:
+
+> Do not rely on generative/painted art for the exact gameplay ring geometry. Keep the visually exact tawara/shikiri geometry separable from the painted venue/base.
+
+This materially reduces the risk of regenerating the full background when geometry changes.
+
+## Accepted Product Art Coordinate Space
+
+Accept the **1920×1080 Product runtime-art coordinate space** and **3840×2160 2× master working space** as the current art-production baseline.
+
+For the 1920×1080 Product art space:
+
+- dohyo center reference: `(960, 540)`
+- proposed gameplay-radius reference: `400 px`
+- corresponding scale: about `175.82 px/m`
+- wrestler gameplay diameter at current 0.7 m: about `123 px`
+- initial participant x offset: about `123 px`.
+
+These are suitable handoff coordinates for:
+- background generation
+- later HUD layout
+- later part-based wrestler art.
+
+## Correction C-A1 — Do NOT lock Phaser logical resolution to 1920×1080 yet
+
+The Report recommends:
+
+> Phaser logical size = 1920×1080
+
+Do not accept that as a Product gameplay/runtime decision in this Art Spec.
+
+Separate:
+
+1. **Product art coordinate space / runtime exported background**
+   - 1920×1080: ACCEPTED baseline for art production.
+
+2. **Phaser logical rendering resolution**
+   - remains a later Integration/performance decision.
+
+The artwork can be scaled/mapped to whatever 16:9 logical resolution is selected later.
+
+Reason:
+- choosing 1920×1080 logical rendering may be perfectly viable,
+- but it affects rendering workload, text sizing, debug UI, effects and device performance,
+- none of those need to be decided in order to create a 1920×1080 background asset.
+
+Therefore the background must NOT need to be redrawn if the eventual logical resolution becomes, for example, 1280×720.
+
+ACTION-ART-01B should implement one explicit art-space→logical-space transform rather than assuming permanent 1:1 pixels.
+
+## Accepted Composition
+
+Accept as the current recommendation:
+
+- primary authored aspect ratio: **16:9 landscape**
+- dohyo centered in the composition
+- enough lateral area for future HUD and venue atmosphere
+- FIT/letterbox as the initial web strategy
+- no crop of gameplay-critical geometry in Product v1.
+
+This is compatible with the User's Action-first direction and future CrazyGames presentation.
+
+## Perspective — USER DECISION REQUIRED
+
+The Report recommends strict top-down orthographic presentation.
+
+This is technically the safest option because:
+- the Simulation ring is circular,
+- facing rotates continuously,
+- participant collision geometry is isotropic.
+
+However, the User's visual reference has a more illustrated/game-art feel, and strict orthographic art may feel flatter than desired.
+
+Before image generation, User must choose between:
+
+### A. Strict top-down orthographic — recommended for lowest technical risk
+- ring remains a true circle
+- all directions visually symmetric
+- part-based wrestler rotation is simplest
+- vertical faces shown only through narrow edge/shadow cues.
+
+### B. Stylized near-top-down while gameplay plane remains circular
+- allows slightly more volume/depth in painted environment,
+- but the playable ring itself must still remain a geometrically circular top-plane,
+- characters must still be designed to rotate without perspective contradiction.
+
+Do NOT use a perspective that visibly turns the playable circle into an ellipse while Simulation remains circular.
+
+## Correction C-A2 — Tawara boundary mapping is a Gameplay/Presentation contract, not a cosmetic choice
+
+The Report recommends:
+
+> Simulation radius 400 px = tawara outer edge.
+
+This is visually attractive because it communicates "on the tawara is still in."
+
+However, Current Source also documents the 2.275 m radius as half of the approximately 4.55 m inner dohyo diameter.
+
+Those two interpretations are not identical:
+
+- if 2.275 m maps to the **inner edge**, it preserves the current real-dimension interpretation;
+- if 2.275 m maps to the **outer edge**, it changes what the 2.275 m circle visually represents.
+
+Because the User already stated that the center-based Ring-out rule may be revisited after representative graphics, do not silently resolve this inconsistency as presentation-only.
+
+### Required strategy
+
+Keep the Product background base independent of the exact tawara boundary.
+
+The exact tawara/shikiri overlay must remain separately replaceable.
+
+Before final overlay export/integration, User chooses:
+
+- **inner edge = gameplay radius**
+- **centerline = gameplay radius**
+- **outer edge = gameplay radius**
+
+Review recommendation for current center-based Ring-out:
+**outer edge is the best visual candidate**, but it remains a User decision.
+
+This choice must not force regeneration of `arena_base`.
+
+## Layer Model — ACCEPTED WITH REFINEMENT
+
+Accept:
+
+1. `arena_base`
+   - opaque venue/environment
+   - clay platform/base
+   - non-critical soil/sand texture
+   - no exact tawara/shikiri geometry
+
+2. `dohyo_ring_overlay`
+   - exact gameplay-critical tawara
+   - shikiri lines
+   - transparent
+
+3. `arena_ambient`
+   - optional
+   - low-frequency lighting/vignette
+   - behind characters.
+
+Do not add foreground decorations over the playable area.
+
+This split is the strongest part of the Report for preventing redraws.
+
+## Correction C-A3 — Exact-geometry overlay runtime export must be lossless
+
+For `arena_base`:
+- lossy WebP at appropriate quality is acceptable.
+
+For `dohyo_ring_overlay`:
+- require **lossless PNG or lossless WebP** for the first Product integration.
+
+Do not use lossy compression on the exact gameplay-boundary overlay.
+
+Reason:
+- the overlay is specifically responsible for 1-pixel geometry alignment,
+- compression artifacts/fringing around the tawara edge would undermine that purpose.
+
+The exact runtime format can be benchmarked later, but geometry correctness wins over a very small file-size saving here.
+
+## Safe Areas — ACCEPTED AS DESIGN GUIDES, NOT FINAL HUD DIMENSIONS
+
+The proposed HUD safe areas and 532 px protected gameplay radius are useful planning guides.
+
+Accept them as:
+- reserved/low-detail regions for background painting,
+- not final HUD panel dimensions.
+
+HUD design remains ACTION-ART-02.
+
+Important:
+- do not bake visible HUD-shaped empty boxes into the background.
+- create calm/low-detail areas instead.
+
+## Venue Scope — ACCEPTED
+
+Product v1 background should include:
+
+Required:
+- dohyo/platform
+- surrounding floor
+- clear clay/sand/tawara material separation
+- enough venue framing to look like a finished game.
+
+Optional:
+- static dark audience silhouettes
+- seated officials outside the protected gameplay region
+- restrained architectural/cloth accents.
+
+Deferred:
+- moving crowd
+- roof that occludes play
+- complex lighting animation
+- banners/text-heavy decor
+- venue variants.
+
+Gyoji must NOT be baked into the fighting background.
+
+## Art Style — ACCEPTED AS DIRECTION
+
+Use:
+- polished stylized 2D game art
+- painted/illustrative finish
+- warm traditional atmosphere
+- clear shapes over photoreal detail
+- restrained texture in the central playable area
+- stronger detail/atmosphere outside the action area.
+
+Do not copy the supplied reference image literally.
+
+The art style must support the later part-based wrestler assets in the same visual language.
+
+## Lighting — ACCEPTED
+
+Use one soft high-angle light from upper-left.
+
+Later:
+- wrestler parts
+- shadows
+- Gyoji
+- FX
+
+should follow the same direction.
+
+Do not bake wrestler shadows into the background.
+
+## Master / Source Strategy — CORRECTION C-A4
+
+The Report recommends:
+- 3840×2160 layer PNG masters,
+- optional tool-native format later.
+
+This is sufficient as a minimum interchange/master export, but for the User's explicit goal of avoiding expensive redraws, also preserve the **production recipe**.
+
+For AI-generated or edited Product background work, retain alongside the master:
+
+- approved composition reference
+- generation/edit prompt or art brief version
+- exact geometry guide/mask
+- layer separation specification
+- original generated source image before destructive edits where applicable.
+
+If a real editable source tool is later selected:
+- preserve its native layered source file as well.
+
+Do not require choosing PSD/Krita/Aseprite now.
+
+## Repository Path Direction — ACCEPTED, CREATION DEFERRED
+
+Recommended runtime path remains:
+
+`public/assets/action/background/`
+
+Recommended source/master-art path:
+
+`art-source/action/background/`
+
+Neither should be created in the Specification task.
+
+The asset generation/integration task must explicitly authorize new directories under AGENTS.md §5.
+
+Large-source Git/LFS policy remains Deferred until actual file sizes are known.
+
+## Product Background Acceptance — ACCEPTED
+
+Before background is considered locked, require:
+
+- Product-quality appearance
+- 16:9 composition
+- style compatible with future wrestler parts
+- obvious/readable dohyo
+- exact ring overlay alignment
+- visible tawara under gameplay
+- center/action contrast
+- no baked wrestler/Gyoji/HUD/text
+- future HUD low-detail safe areas
+- browser scaling readability
+- no static marks that look like gameplay trails
+- responsive FIT check.
+
+## Geometry Verification — ACCEPTED
+
+ACTION-ART-01B should include a developer-only overlay for:
+
+- art/simulation center
+- exact gameplay radius
+- initial participant centers
+- shikiri references
+- optional HUD/gameplay safe guides.
+
+This is an excellent safeguard against integrating attractive but geometrically incorrect art.
+
+## User Decisions Required Before ACTION-ART-01A Generation
+
+Only the following need to be decided now.
+
+### UD-A1 — Aspect ratio / art coordinate space
+
+Review recommendation:
+**16:9, runtime-art coordinate space 1920×1080, master 3840×2160.**
+
+Note:
+this does NOT lock Phaser logical resolution.
+
+### UD-A2 — Perspective
+
+Choose:
+- strict top-down orthographic
+- stylized near-top-down with a circular top gameplay plane.
+
+Review recommendation:
+**strict top-down orthographic for the first Product background**, unless the User strongly prefers the extra depth of the visual reference.
+
+### UD-A3 — Tawara / gameplay-radius mapping
+
+Choose:
+- inner edge
+- centerline
+- outer edge.
+
+Review recommendation:
+**outer edge**, given the current center-based Ring-out visual feel.
+
+But this is explicitly revisitable after Product-art browser Play Test.
+
+### UD-A4 — Venue richness
+
+Review recommendation:
+- finished dohyo/platform/floor = required
+- static dark spectators/officials outside gameplay region = allowed
+- no moving crowd / roof / ornate foreground.
+
+### UD-A5 — Production method for ACTION-ART-01A
+
+User previously asked for Product assets rather than repeated throwaway prototypes.
+
+Recommended workflow:
+- create one controlled composition/background direction from this spec,
+- review that composition,
+- make targeted edits,
+- then lock and export layers.
+
+Do NOT generate many unrelated full backgrounds as alternatives.
+
+Image generation can be used, but exact tawara/shikiri geometry remains a separately controlled layer.
+
+## Next Task After User Decisions
+
+Once UD-A1–A5 are confirmed:
+
+**ACTION-ART-01A — Product Background Creation**
+
+should produce:
+- the approved arena/background image direction
+- Product-quality background master
+- exact/non-destructive geometry guide
+- separated output suitable for later exact overlay creation
+- User visual approval.
+
+Do NOT integrate it into Phaser until visual approval.
+
+Then:
+
+**ACTION-ART-01B — Background Integration**
+- export runtime layers
+- implement art-space mapping
+- update presentation layout
+- geometry overlay verification
+- browser visual check.
+
+## Do Not Reopen Yet
+
+Do not start:
+- HUD production
+- wrestler Product art
+- Gyoji art
+- Management
+- gameplay tuning
+
+until Product background direction is visually approved.
+
+The center-based Ring-out rule itself may be reconsidered after representative Product graphics are visible, per User direction.
