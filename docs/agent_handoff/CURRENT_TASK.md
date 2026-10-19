@@ -1,5 +1,5 @@
 Task-ID: ACTION-03B2-CONTESTED-PUSH-DUMMY
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PUSH VALIDATION HARNESS
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -499,3 +499,155 @@ Do not continue to Counter / AI / Ring-out / attributes.
 After commit / push / Completion Report, stop and report:
 
 「ACTION-03B2-CONTESTED-PUSH-DUMMY が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PARTIAL — SOURCE / AUTOMATED VERIFICATION PASS, REQUIRED BROWSER SMOKE NOT RUN
+
+## Reviewed Implementation
+
+- Implementation commit: `730ba8f6fc1fbe8cb8dd939f61e2a67ab0180f17`
+- Coordination head before implementation: `bd616cce20c269dd7b5af0cbcde181de5a928a47`
+- Agent Task Diff is exactly one implementation commit from that coordination head.
+- Core Simulation files were not modified.
+- Push constants / phase semantics / Contact core were not modified.
+- Changed production scope is limited to:
+  - Pure PushDummyController
+  - focused tests
+  - BoutScene harness integration
+  - Current-State docs
+
+## Implementation Result
+
+SOURCE REVIEW: PASS
+
+Accepted implementation details:
+
+- PushDummyController is Pure TypeScript and Phaser-free.
+- It returns ordinary semantic `ParticipantIntent`; it does not mutate Simulation state.
+- STATIONARY and PUSH modes are explicit and minimal.
+- PUSH mode approaches using normalized world-frame movement.
+- At Contact-ready range it stops ordinary movement and emits discrete Push edges only.
+- Existing Simulation-owned startup / active / recovery phases are respected.
+- Cooldown is fixed-tick deterministic (`DUMMY_PUSH_COOLDOWN_TICKS = 30`).
+- Dummy intent is regenerated once per Simulation tick from the current Snapshot.
+- One Dummy Push edge is not reused across multiple fixed ticks in one render frame.
+- Existing accepted Push Core is used for incoming and contested Push.
+- No AI tactics, randomness, prediction, Counter, Ring-out, attributes, Physics, or new dependency were introduced.
+- Mode keys 1/2 and presentation-only mode label are appropriately scoped.
+- R restart resets Dummy timing and preserves selected mode.
+- Existing Push / Contact / Movement source semantics remain unchanged.
+
+## Automated Verification
+
+Reported and Source-consistent:
+
+- `pnpm test`: 86/86 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+- T50–T59 covered
+- existing 75 tests remain PASS
+
+## Blocking Verification Gap
+
+Browser Smoke: REQUIRED / NOT RUN.
+
+The Task explicitly required runtime verification of:
+
+- keys 1 / 2 / R
+- mode label
+- Mode 2 approach in the actual Phaser Scene
+- visible CPU Startup / Push / Recovery
+- incoming Push moving Player
+- Player ArrowUp remaining one-edge
+- contested timing being observable
+- no runtime / console errors
+
+Because the Agent environment had no browser automation capability, these checks were not executed.
+
+Per repository Verification Policy, a required verification item that is NOT RUN prevents Overall PASS.
+
+No source correction is required before performing this check.
+
+## Non-Blocking Report Correction
+
+The Completion Report lists:
+
+`Agent-Start-Head: 3c79fc18491c10d58105436b9cc424a608568558`
+
+but the Agent also reports that it then fast-forwarded the coordination commit and began work from `bd616cce...`.
+
+For review semantics, the effective Agent Task start head / diff base is:
+
+`bd616cce20c269dd7b5af0cbcde181de5a928a47`
+
+This metadata discrepancy does not affect the implementation, but future Completion Reports should use the post-preflight / post-FF head as Agent-Start-Head.
+
+## User Browser Smoke + Play Test
+
+READY for User manual verification.
+
+Run:
+
+`pnpm dev`
+
+Then verify:
+
+1. Default display says `DUMMY: STATIONARY`.
+2. In Mode 1, CPU stays stationary and current Player Push behavior remains unchanged.
+3. Press `2`: label changes to `DUMMY: PUSH`.
+4. CPU approaches Player rather than teleporting or sliding erratically.
+5. On contact, CPU visibly cycles STARTUP → PUSH → RECOVERY.
+6. CPU can push Player backward.
+7. CPU does not spam a Push every tick; there is a readable interval between actions.
+8. ArrowUp still triggers only one Player Push per physical press.
+9. Time ArrowUp against CPU STARTUP/PUSH:
+   - near-simultaneous Active windows should reduce/cancel net movement relative to taking the Push uncontested.
+10. Press `1`: CPU returns to stationary harness behavior.
+11. Press `R`: positions reset and selected Dummy mode remains active.
+12. No visible contact jitter / creep between Pushes.
+13. No runtime or console error.
+14. Ring-out remains intentionally non-functional.
+
+Feel questions:
+
+- Does being pushed feel like the same system from the receiving side?
+- Is the Dummy rhythm readable enough for timing practice?
+- Does matched Push timing feel like a believable contest/stalemate?
+- Does mistiming clearly give ground to one side?
+- Does Push-vs-Push feel too binary, slippery, or momentum-heavy?
+- Is this a good base for the future ↓ pull/deflection Counter?
+
+## Acceptance State
+
+Contested Push Harness: NOT YET ACCEPTED.
+
+If the User Browser Smoke passes and the interaction feels acceptable:
+- ACTION-03B2 may become the current validation baseline.
+- No additional Dummy tuning is required unless User feedback identifies a concrete issue.
+- Next work may move to focused design of ↓ pull / deflection Counter.
+
+If Browser Smoke reveals a functional/runtime problem:
+- do not proceed to Counter.
+- create a focused correction task for the observed issue.
+
+## Do Not Reopen
+
+- accepted ACTION-03B Push timings / constants merely because Dummy exists
+- Player one-keydown-one-Push semantics
+- accepted Contact/Movement baseline
+- Simulation Push Core unless a concrete runtime defect is reproduced
+- Dummy into a full CPU AI system
+
+## Deferred
+
+- real CPU AI
+- Counter / pull / deflection
+- dodge
+- thrust
+- Weight / Power / LowerBody
+- Ring-out
+- Stamina / Balance
+- Tachiai
+- Grapple / Throw / Lift
