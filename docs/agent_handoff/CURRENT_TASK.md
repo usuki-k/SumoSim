@@ -701,3 +701,155 @@ Do not implement Ring-out, Outcome, Result/Reward, Throw, Lift, stats, or balanc
 
 After Report Commit / Push:
 「ACTION-06-RINGOUT-BOUTOUTCOME-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Current User Decisions — 2026-10-20
+
+These decisions override earlier recommendation-only alternatives in this Task.
+
+## UD-R1 — Ring-out criterion: CENTER
+
+For this Prototype, Ring-out is based on participant center only.
+
+```ts
+distanceFromRingCenter > arena.radius
+```
+
+means OUT.
+
+Do NOT use:
+- bodyRadius
+- support-circle proxy
+- support ratio
+
+in ACTION-06A.
+
+Reason:
+User wants to start with the simplest center criterion and may revise it later after final/representative graphics make the visual feel easier to judge.
+
+Therefore:
+- Q1 is decided: use center criterion.
+- Q2 support ratio is NOT APPLICABLE / Deferred.
+- future change from center criterion is allowed if later graphics/Play Test show visual mismatch.
+
+## UD-R2 — Exact boundary is IN
+
+If:
+
+```
+distanceFromRingCenter === arena.radius
+```
+
+the participant is still IN.
+
+Only strict:
+
+```
+distanceFromRingCenter > arena.radius
+```
+
+is OUT.
+
+Required later tests:
+- exact boundary → IN
+- just inside → IN
+- just outside → OUT
+
+Do not add gameplay epsilon to the single-participant boundary unless a concrete numerical issue is demonstrated.
+
+## UD-R3 — Both OUT in same Simulation tick
+
+User wants near-simultaneous resolution to be a **Rematch**.
+
+Preferred interpretation for this Investigation:
+
+- one participant OUT → that participant loses.
+- both OUT in the same fixed Simulation tick:
+  - if one is materially deeper outside → deeper participant loses.
+  - if outside depths are effectively the same / near-tied → Rematch.
+
+Because fixed-step Simulation cannot know sub-tick real-world crossing order without introducing continuous-time crossing logic, do NOT infer a hidden first-out order.
+
+The Investigation must still recommend:
+- exact depth definition under center criterion:
+  `depth = distanceFromCenter - arena.radius`
+- technical near-tie epsilon for deciding "effectively the same"
+- tests for mirrored symmetry.
+
+Terminology:
+Use **Rematch**, not Redo, in user-visible naming.
+
+## UD-R4 — User-visible result text
+
+Target result wording:
+
+- `EAST XXX Win`
+- `WEST XXX Win`
+- `Draw Rematch`
+
+where XXX is the wrestler's name.
+
+Do NOT hard-code `PLAYER WIN` / `CPU WIN` as the target UX.
+
+### Current Source gap
+
+Current Production Source has participant:
+- id
+- position
+
+and Scene presentation currently has PLAYER/CPU labels.
+
+It does NOT yet have canonical wrestler:
+- display name
+- EAST/WEST side assignment
+
+Therefore ACTION-06 Investigation must explicitly decide the minimum boundary for result presentation without inventing names or side assignments.
+
+Preferred architecture to evaluate:
+
+- `BoutOutcome` remains gameplay-semantic and stores participant IDs, not formatted text:
+  - winnerId
+  - loserId
+  - reason
+- EAST/WEST and display name are presentation/setup metadata outside the outcome rule.
+- Scene formats the User-facing text from that mapping.
+
+Do not put strings like `"EAST Foo Win"` inside BoutSimulation as canonical gameplay state.
+
+### Stop / User Decision rule
+
+If ACTION-06A implementation requires concrete wrestler names or an EAST/WEST assignment that Current Source does not provide:
+- do not invent them.
+- report the smallest required setup/presentation extension for User decision before implementation, or use an already-existing presentation mapping only if it can represent the requested semantics without pretending PLAYER/CPU are EAST/WEST.
+
+## Terminology update for Investigation
+
+Where the original Task says:
+- `redo`
+- `REDO`
+- `simultaneous-ring-out redo`
+
+the report should evaluate/express the accepted user-facing concept as:
+- `rematch`
+- `Draw Rematch`
+
+Internal type naming may be `rematch` or another precise semantic name, but do not retain `redo` merely from the earlier recommendation if `rematch` is clearer.
+
+## Questions now resolved vs still open
+
+Resolved by User:
+- Q1: center criterion.
+- Q2: support ratio not used.
+- Q3: exact boundary IN.
+- Q5 direction: deeper-out loses unless near-tied.
+- Q7 concept: near-tie result is Rematch, not winner.
+- Q16 target visible result wording: EAST/WEST + wrestler name / Draw Rematch.
+
+Still Investigation-required:
+- exact near-tie epsilon.
+- exact BoutOutcome type naming.
+- outcome tick order.
+- post-outcome freeze.
+- Counter edge interaction.
+- East/West + wrestler-name metadata boundary.
+- whether current Source needs a small setup/presentation extension in ACTION-06A.
