@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { movementVectorFromKeys } from '../input/movementVector.ts'
 import { PressLatch } from '../input/pressLatch.ts'
+import { PushDummyController, type DummyMode } from '../input/pushDummyController.ts'
 import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import type {
@@ -23,7 +24,7 @@ const PROTOTYPE_SETUP: BoutSetup = {
 
 // Outside the simulation: which controller drives which participant, and how it is presented.
 // Simulation participant ids are plain identities; roles live only here.
-type Controller = 'keyboard' | 'stationary'
+type Controller = 'keyboard' | 'dummy'
 interface ParticipantPresentation {
   readonly id: ParticipantId
   readonly controller: Controller
@@ -32,7 +33,7 @@ interface ParticipantPresentation {
 }
 const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
   { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER' },
-  { id: 'wrestler-b', controller: 'stationary', color: 0xd93f3f, label: 'CPU' },
+  { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU' },
 ]
 
 // Provisional presentation values.
@@ -72,6 +73,9 @@ export class BoutScene extends Phaser.Scene {
   private keys: MovementKeys | null = null
   // Prototype binding: ArrowUp = Push (temporary, not the final control scheme).
   private readonly pushLatch = new PressLatch()
+  // Prototype test harness (not CPU AI): drives the CPU participant; mode keys 1 / 2.
+  private readonly dummy = new PushDummyController('wrestler-b', 'wrestler-a')
+  private modeText: Phaser.GameObjects.Text | null = null
   private views = new Map<ParticipantId, ParticipantView>()
   private pixelsPerMeter = 1
   private origin: Vec2 = { x: 0, y: 0 }
@@ -100,6 +104,8 @@ export class BoutScene extends Phaser.Scene {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => this.pushLatch.press())
       // Prototype convenience: R restarts from the prototype setup.
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R).on('down', () => this.restart())
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO).on('down', () => this.setDummyMode('push'))
     }
 
     const snapshot = this.simulation.getSnapshot()
@@ -129,6 +135,8 @@ export class BoutScene extends Phaser.Scene {
         .setOrigin(0.5)
       this.views.set(style.id, { body, facingMarker, label, phaseText })
     }
+    this.modeText = this.add.text(12, 10, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
+    this.setDummyMode('stationary')
     this.syncViews()
   }
 
@@ -137,6 +145,7 @@ export class BoutScene extends Phaser.Scene {
     if (ticks > 0) {
       // A latched press goes to the first tick of this frame only; a frame with 0 ticks keeps it.
       const pushPressed = this.pushLatch.consume()
+      // Intents (incl. the dummy's) are built per tick from the current Snapshot, never reused per frame.
       for (let i = 0; i < ticks; i++) this.simulation.step(this.collectIntents(i === 0 && pushPressed))
     }
     this.syncViews()
@@ -145,11 +154,18 @@ export class BoutScene extends Phaser.Scene {
   private restart(): void {
     this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
     this.pushLatch.clear()
+    this.dummy.reset() // keeps the selected dummy mode
     this.syncViews()
+  }
+
+  private setDummyMode(mode: DummyMode): void {
+    this.dummy.setMode(mode)
+    this.modeText?.setText(mode === 'push' ? 'DUMMY: PUSH  (1: stationary / 2: push / R: restart)' : 'DUMMY: STATIONARY  (1: stationary / 2: push / R: restart)')
   }
 
   private collectIntents(pushPressed: boolean): Map<ParticipantId, ParticipantIntent> {
     const intents = new Map<ParticipantId, ParticipantIntent>()
+    const snapshot = this.simulation.getSnapshot()
     for (const style of PARTICIPANT_PRESENTATION) {
       if (style.controller === 'keyboard' && this.keys) {
         intents.set(style.id, {
@@ -161,6 +177,8 @@ export class BoutScene extends Phaser.Scene {
           }),
           pushPressed,
         })
+      } else if (style.controller === 'dummy') {
+        intents.set(style.id, this.dummy.nextIntent(snapshot))
       }
     }
     return intents

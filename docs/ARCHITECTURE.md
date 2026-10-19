@@ -49,7 +49,8 @@ Small explicit designを優先し、過剰なFramework、ECS、DI Framework、Gl
   - `FixedStepAccumulator`: frame deltaを整数tick数へ変換（Phaser非依存）。1 frameのdelta上限とtick数上限を持ち、超過分は破棄。
 - `src/game/input/movementVector.ts`: キー状態 → world-frame vector（画面基準: W=-y, S=+y, A=-x, D=+x。逆方向は相殺、斜めは正規化）。
 - `src/game/input/pressLatch.ts`: key-downで1つの押下edgeを保持し、次のsimulation tickが1回だけ消費する（tick 0のframeでも失われず、1 frame内の複数tickへ重複しない）。SceneはArrowUp（暫定binding）のPhaser key `down`（auto-repeatなし）をこれへ接続する。
-- `BoutScene`: Phaser keyboardを読んでIntentを作り、accumulatorで0..N tick進め、Snapshotを永続GameObjectへ一方向同期する。canonical stateは持たない。participant identityとcontroller / 見た目の対応（`PARTICIPANT_PRESENTATION`）はSimulation外のScene側にある。OpponentはACTION-02では静止。
+- `src/game/input/pushDummyController.ts`: Contested Push検証用のPrototype harness（CPU AIではない）。Snapshot幾何だけを読み、毎Simulation tickに通常の`ParticipantIntent`を返す。mode `stationary`（零入力）/ `push`（離れていれば相手へmove、Contactなら移動せず、idleかつcooldown（`DUMMY_PUSH_COOLDOWN_TICKS`=30 tick、action終了後のidle tickから数える）明けに`pushPressed`を1回）。Simulation stateへ直接触れず、Push phaseも迂回しない。SceneはキーをMode切替（`1`=STATIONARY / `2`=PUSH、既定STATIONARY）に接続し、`R`はModeを保持してcontroller timingをresetする。
+- `BoutScene`: Phaser keyboardを読んでIntentを作り、accumulatorで0..N tick進め、Snapshotを永続GameObjectへ一方向同期する。canonical stateは持たない。participant identityとcontroller / 見た目の対応（`PARTICIPANT_PRESENTATION`）はSimulation外のScene側にある。Opponentの駆動は`PushDummyController`（上記）。
 - 単位: simulationはmeter、m/s、radian。meter→pixelのscale + translateはScene側（presentation）。
 - Vitest導入済み（`pnpm test`）。
 - 速度・加速度・減速度・tick rate・ring半径・spawn位置・body半径・色・logical sizeはPrototype / 暫定値でありFinal値ではない（User Play Testで調整する）。
