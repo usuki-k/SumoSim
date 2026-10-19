@@ -1001,3 +1001,42 @@ Unless explicit User change:
 - touchdown/fall/Throw finish.
 - kimarite.
 - whole-game tempo rebalance.
+
+
+# User Play Test Result — 2026-10-20
+
+ACTION-06A Ring-out / BoutOutcome Foundation: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- Focused Play Test is OK.
+
+Accepted current baseline:
+- Ring-out criterion = participant center strictly beyond arena radius
+- exact boundary = IN
+- first participant to cross loses
+- simultaneous crossing = Rematch
+- outside depth is not used
+- same-tick ordering uses resolved-state P0→P1 interpolation
+- BoutOutcome is Simulation-owned
+- outcome finalizes once and later step() is exact no-op
+- no wall / clamp / bounce
+- Push and Grappled Drive can finish the Bout through the common Ring-out rule
+- Counter relocation baseline remains unchanged
+- Prototype presentation:
+  - wrestler-a / Player = EAST
+  - wrestler-b / CPU = WEST
+  - temporary fallback result names are PLAYER / CPU
+  - user-facing forms are EAST <name> Win / WEST <name> Win / Draw Rematch
+
+Deferred:
+- revisit center-based Ring-out after representative/final graphics if visual mismatch appears
+- formal wrestler names / richer presentation metadata
+- support/foot-based Ring-out
+- touchdown/fall/Throw finish
+- kimarite
+- whole-game tempo rebalance
+
+Next recommended step:
+- Minimal Result / Reward Transition Investigation for the tiny gameplay loop.
+- Do not implement full Management/Training expansion yet.
+- Keep BoutSimulation outcome as the boundary; future higher-level game state should consume it rather than moving Result/Reward concerns into BoutSimulation.
