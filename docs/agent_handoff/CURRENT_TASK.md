@@ -1,5 +1,5 @@
 Task-ID: ACTION-05-GRIP-ENGAGEMENT-MOROZASHI-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / GRAPPLE STATE DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -693,3 +693,356 @@ Do not implement Grip, Drive, Throw, Lift, stats, or directional Push advantage.
 After Report Commit / Push, stop and report:
 
 「ACTION-05-GRIP-ENGAGEMENT-MOROZASHI-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS / USER DECISIONS REQUIRED BEFORE IMPLEMENTATION
+
+## Reviewed Investigation
+
+- Investigation report commit:
+  `41b380c0975d0d5e54448ad3c6b875022d77db7c`
+- Agent-Start-Head:
+  `771e3e7628c38c20e912eaeb9bd2606f877f8463`
+- Investigation diff is Report-only:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / package / lockfile / AGENTS / ARCHITECTURE / GAME_CONCEPT are unchanged.
+- `main` remains unchanged.
+
+## Current Source Findings Review
+
+Accepted as source-grounded:
+
+- Current runtime has participant-level action/posture but no pair relationship state.
+- Current Contact is circle-based and does not bind the pair.
+- Current stable participants auto-face each other; Kuzushi freezes facing.
+- Existing action input is edge-triggered and non-queued.
+- PushDummyController knows action/posture only and will require Engagement-awareness once GRAPPLED exists.
+- Counter positional reward plus overshoot can create a small gap on subsequent ticks, so exact Contact-only Grip range would make Counter → Kuzushi → Grip unnecessarily timing-sensitive.
+
+### C-1 — Counter overshoot distance calculation correction
+
+The Report states the Best-case eventual separation from `COUNTER_OVERSHOOT_SPEED = 1.0` and `EXTERNAL_DECELERATION = 8` as approximately:
+
+`1.0² / (2 × 8) = 0.0625 m`
+
+That is the continuous-motion approximation.
+
+Current Simulation decays externalVelocity **before** integrating each subsequent tick, so the actual discrete additional forward travel from a fresh 1.0 m/s overshoot is approximately **0.0544 m** over 8 ticks.
+
+This does not change the design conclusion:
+- Contact-only (2 mm slop) is still too strict for an intended follow-up Grip.
+- a small explicit Grip range margin remains justified.
+
+Do not use the 0.0625 m value as an exact Current Source fact.
+
+## Accepted Architecture Direction
+
+### Pair-level Engagement Source of Truth
+
+Accept the direction:
+
+```ts
+type GrappleAdvantage =
+  | { kind: 'neutral' }
+  | { kind: 'morozashi'; holderId: ParticipantId }
+
+type BoutEngagement =
+  | { kind: 'free' }
+  | { kind: 'grappled'; advantage: GrappleAdvantage }
+  // future lifted variant
+```
+
+Key accepted principles:
+
+- Engagement is one Bout-level pair relationship state.
+- Do not duplicate "grappled" state independently on both participants.
+- ordinary grapple is symmetric / neutral.
+- Morozashi identifies exactly one holder.
+- Snapshot exposes a copy of the pair-level Engagement.
+- constructor/reset begins FREE.
+- no generic relationship framework.
+
+### Kuzushi → Morozashi
+
+Accept the User-intended transition:
+
+- Grip must first satisfy valid Grip geometry/range.
+- if target is Kuzushi at the actual Grip **resolution tick**, the result is guaranteed Morozashi with the gripping participant as holder.
+- Kuzushi does not allow Grip from arbitrary distance.
+- side/rear position alone does not automatically grant Morozashi.
+- current Counter reward connects naturally into this because successful Counter creates Kuzushi.
+
+### Morozashi is persistent engagement advantage
+
+Accept:
+
+- Morozashi is not a short action.
+- it belongs in Engagement state.
+- future Grappled Drive and Throw resolvers may read that advantage.
+- no multiplier / probability is chosen now.
+
+### Stable-target normal Grip
+
+Accept as the recommended first Prototype direction, subject to User Decision:
+
+- valid eligible stable target + valid Grip timing/range → deterministic neutral grapple.
+- do not invent temporary RNG or stats before the stat system exists.
+
+### Grip range
+
+Accept the need for a named small Simulation-owned range margin rather than exact Contact-only.
+
+For ACTION-05A:
+- choose one provisional named `GRIP_RANGE_MARGIN`
+- around 0.08–0.10 m is a reasonable initial test range
+- the exact number is Prototype tuning
+- no arm hitboxes / reach framework
+
+User confirmation is still required.
+
+### Kuzushi consumption
+
+Accept Recommendation A as the preferred architecture, subject to User Decision:
+
+- successful Kuzushi → Morozashi converts the temporary posture reward into persistent engagement advantage.
+- target posture becomes stable when Morozashi is established.
+- do not keep both Kuzushi vulnerability and Morozashi advantage stacked by default.
+
+This preserves:
+- posture = stability
+- engagement advantage = grappling relationship advantage
+
+### GRAPPLED spatial ownership
+
+Accept the small first Prototype direction:
+
+- GRAPPLED pair must not freely walk apart.
+- a small Simulation-owned bond keeps centers at the combined body-radius Contact distance.
+- no general constraint solver.
+- normal WASD is suppressed during the first Foundation Prototype.
+- future Drive owns deliberate pair movement.
+- existing auto-facing can keep the pair facing each other for now.
+
+### Morozashi Drive / Throw boundary
+
+Accept only the architecture boundary:
+
+- future Grappled Drive reads Engagement advantage as one input to its force/drive resolver.
+- future Throw resolver reads Engagement advantage as one input to success resolution.
+- do not hard-code a separate Morozashi physics system.
+- do not choose numeric Drive multiplier / Throw success chance now.
+- deterministic probability boundary remains Deferred.
+
+## Corrections
+
+### C-2 — Do not let Grip Foundation silently become an action-interrupt system
+
+The Investigation recommends that Grip may resolve against a target that is:
+
+- Countering
+- Push Startup
+- Push Recovery
+- another Grip attempt
+
+and cancel that target action, while only Push Active is protected.
+
+That is a material new combat-priority rule and has not been decided by User.
+
+For the first ACTION-05A Foundation, the recommended smaller rule is:
+
+**Grip may resolve only when the target is action-idle.**
+
+Therefore:
+
+- target idle + stable → neutral grapple
+- target idle + Kuzushi → Morozashi
+- target Push / Counter / Grip action → Grip does not resolve on that tick
+- the gripping participant's reach window may continue waiting
+- if target becomes eligible before reach expires, Grip may resolve then
+- otherwise Grip whiffs into recovery
+
+Benefits:
+
+- avoids silently making Grip a Counter/Push-startup interrupt
+- keeps Push / Counter accepted action semantics unchanged
+- still fully tests ordinary Grip and Kuzushi → Morozashi
+- interaction priority can be expanded later from play evidence
+
+If User explicitly wants Grip to interrupt Startup / Recovery / Counter, make that a later explicit decision/task.
+
+This replaces the Report's proposed Q16 target-action cancellation behavior for the Foundation implementation.
+
+### C-3 — Do not require Lift decisions before Grip Foundation
+
+The Report lists UD-8 (whether Morozashi survives a future Lift cycle).
+
+This is valid Deferred design, but it is **not required before ACTION-05A**.
+
+Do not add:
+- LIFTED production state
+- resumeAdvantage
+- Lift preservation semantics
+in ACTION-05A.
+
+Decide it when Lift becomes the Current Task.
+
+### C-4 — Keep Momentum normalization narrowly scoped and explicit
+
+The Investigation proposes setting both participants' `externalVelocity` to their pair average when Grapple establishes.
+
+This is acceptable as a first Prototype method to prevent the new bond from immediately fighting unequal existing external velocities.
+
+However:
+- current `externalVelocity` is a gameplay velocity component, not yet mass-weighted physical momentum
+- therefore do not document this as physically exact momentum conservation.
+
+For ACTION-05A, describe it as:
+
+**pair external-velocity normalization for stable Grapple attachment under the current equal-body Prototype**
+
+rather than a permanent momentum formula.
+
+No mass system should be introduced.
+
+## User Decisions Required Before ACTION-05A
+
+### UD-1 — Stable normal Grip
+
+Recommended:
+
+**valid idle+stable target → deterministic neutral grapple**
+
+No stat/RNG success check yet.
+
+### UD-2 — Kuzushi after Morozashi establishment
+
+Recommended:
+
+**consume Kuzushi immediately**
+
+- target posture → stable
+- Morozashi advantage remains in Engagement.
+
+### UD-3 — Foundation target action eligibility
+
+Recommended correction:
+
+**Grip resolves only against an action-idle target in ACTION-05A.**
+
+It does not interrupt Push / Counter / Grip actions.
+
+A reach attempt may wait for target eligibility until its reach window expires.
+
+### UD-4 — Release rights
+
+Recommended:
+
+**either participant may release**
+
+- Grip button while GRAPPLED immediately returns pair to FREE.
+- releasing participant pays Grip Recovery.
+- if both release same tick, both pay Recovery.
+- Morozashi ends on release.
+
+### UD-5 — GRAPPLED WASD
+
+Recommended:
+
+**suppress ordinary WASD during ACTION-05A**
+
+The pair remains attached and stationary except for residual shared/normalized external motion.
+
+Deliberate Grappled movement is introduced with the later Drive Task.
+
+### UD-6 — Grip range
+
+Recommended:
+
+**Contact distance + small explicit range margin**
+
+Initial Prototype range margin:
+approximately **0.08–0.10 m**.
+
+Exact value remains tuning.
+
+### UD-7 — Temporary Grip key
+
+Still requires User selection.
+
+Suggested Prototype candidates:
+- `Space`: easy dedicated action key, but may later compete with Custom action.
+- `G`: explicit Grapple mnemonic and leaves Space available.
+
+No final control scheme is implied.
+
+## Accepted Simultaneous Grip Rule
+
+No further User decision required unless User objects:
+
+- both stable, both valid Grip on same resolution tick → neutral grapple
+- one participant Kuzushi → Kuzushi participant cannot initiate; stable participant may gain Morozashi
+- both Kuzushi → neither can initiate
+
+Implementation must evaluate simultaneous eligibility symmetrically, not participant-array first.
+
+## Accepted Release / Bond Direction Pending User Confirmation
+
+If UD-4/UD-5 are accepted:
+
+- GRAPPLED Grip edge means release rather than new Grip attempt.
+- release does not teleport or alter facing.
+- pair returns to normal FREE Contact state.
+- GRAPPLED bond keeps distance coherent without a generic solver.
+- exact bond correction must be deterministic and symmetric.
+
+## Do Not Reopen
+
+- Kuzushi as participant posture
+- Morozashi as distinct advantageous Engagement state
+- Morozashi holder identity
+- automatic side/rear Counter baseline
+- Push / Counter / Contact accepted baselines
+- probability/stat formulas now
+- directional side/rear Push advantage in this task
+
+## Deferred
+
+- Morozashi Drive multiplier
+- Throw success formula
+- Grapple stats / Weight / LowerBody interaction
+- GRAPPLED free WASD / rotation mechanics
+- hand fighting / regrip / advantage switching
+- LIFTED state and Morozashi preservation after Lift
+- RNG / probability
+- directional Push advantage
+- final graphics / grapple animation
+- Ring-out / BoutOutcome
+
+## Next Implementation Sequence
+
+After UD-1 through UD-7 are confirmed:
+
+1. **ACTION-05A Grip / Engagement Foundation**
+   - pair-level FREE / GRAPPLED neutral / Morozashi
+   - Grip edge with reach / recovery
+   - idle-target eligibility
+   - normal Grip
+   - Kuzushi → Morozashi and Kuzushi consumption
+   - small range margin
+   - simultaneous Grip symmetry
+   - minimum Grapple bond
+   - ordinary WASD suppression
+   - release
+   - Dummy Engagement-awareness
+   - minimal debug presentation
+   - User Play Test REQUIRED
+
+2. Review ACTION-05A before any Drive implementation.
+
+3. Then choose whether:
+   - minimal Ring-out/BoutOutcome must precede Drive testing, or
+   - Grappled Drive can first be tested as displacement-only.
+
+Do not automatically proceed to Throw/Lift.
