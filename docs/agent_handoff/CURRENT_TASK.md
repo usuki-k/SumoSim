@@ -986,3 +986,36 @@ and create only the smallest focused correction.
 - Weight / Power / LowerBody / Balance / Stamina formulas
 - Ring-out
 - Push distance tuning
+
+
+# User Play Test Result — 2026-10-19
+
+ACTION-04A1 Counter + Kuzushi Foundation: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- Focused Play Test is OK.
+- Counter/Kuzushi foundation is acceptable.
+- As an action game, timings may ultimately need to be broader / more forgiving.
+- Kuzushi lock duration may be longer than the current provisional value.
+- These are not blockers now and should be handled later as gameplay/balance tuning rather than reopening the foundation.
+
+Accepted baseline:
+- ArrowDown one-press Counter attempt
+- Counter window / Best-Success-Fail foundation
+- Fail → self Kuzushi
+- Best / Success → attacker Kuzushi
+- Kuzushi as separate posture
+- Kuzushi action lock / grounded brake / facing freeze
+- Kuzushi Push susceptibility concept
+- Dummy Kuzushi-awareness
+- existing Push / Contact / Movement remain accepted
+
+Deferred tuning:
+- COUNTER_WINDOW_TICKS
+- COUNTER_BEST_TICKS
+- KUZUSHI_TICKS
+- KUZUSHI_PUSH_SUSCEPTIBILITY
+- exact reaction forgiveness / action-game timing width
+
+Do not reopen these values preemptively without concrete later gameplay interaction evidence.
+ACTION-04A2 may proceed with side/rear positional resolution and attacker overshoot while preserving this foundation.
