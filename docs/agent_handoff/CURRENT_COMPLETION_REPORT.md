@@ -1,206 +1,278 @@
-Task-ID: ACTION-05A-GRIP-ENGAGEMENT-FOUNDATION
-Result: PASS WITH KNOWN UNTESTED ITEMS
+Task-ID: ACTION-05B-GRAPPLED-ORIENTATION-INVESTIGATION
+Result: PASS
 Branch: develop
-Source-Baseline: d72f43b0887203095eebe3f1c7efb1d1193a188d
-Agent-Start-Head: 2108e0029279007d6f574e630c3cf3b772be5a1d
+Source-Baseline: 61a1a493a54a02cc7d171f3c70d722a6640f871f
+Agent-Start-Head: 191b79e152bf28aa0c28cf9c8ec42e83b6229170
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-Technical Gateはすべて PASS（`pnpm test` 148/148、`pnpm build`、`git diff --check`）。
+PASS（Investigation only）。
 
-- Browser Smoke: **NOT RUN（environment limitation）**
-- User Play Test: **REQUIRED / NOT RUN**
+- 側面・背後の優位は、新しいstateを保存せずに表現できる。canonicalな`position` / `facing` / `engagement`だけから導ける
+- 必要なのは「GRAPPLED中のfacingを即時ではなく一定速度の旋回にする」ことと「準備完了を角度誤差から導く」ことだけ
+- FREEのfacingの既存挙動もGrapple bondも変更不要
+- ACTION-05Aのrelease semanticsとの衝突が1点ある。これはUser Decision（UD-3）として明示し、推奨既定値を付けた。それ以外にBLOCKEDになる点はない
+
+Production Source / package / lockfileは未変更。Repository変更は本Reportのみ。
 
 # Preflight
 
-- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 2`）
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `d72f43b`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `d72f43b..origin/develop` の変更は `docs/agent_handoff/` 配下のみ（CURRENT_TASK.md、CURRENT_COMPLETION_REPORT.md）→ `merge --ff-only` 成功
-- Agent-Start-Head: FF後のHEAD `2108e00`
+- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 3`）
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `61a1a49`（`origin/develop`のancestor）、Handoff-Mode GITHUB
+- `61a1a49..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
+- Agent-Start-Head: FF後のHEAD `191b79e`
+- 読んだもの: AGENTS.md、`BoutTypes.ts`、`BoutSimulation.ts`、`BoutGrip.test.ts`、`BoutCounter*.test.ts`、`BoutScene.ts`、ARCHITECTURE.md、Review / Play Testの記録（`1da33cc`、`7b7adfc`）
 
-# Changed Files
+# 用語の区別
 
-- `src/game/sumo/BoutTypes.ts`: `gripPressed`、`GripPhase`、`grip` action、`GrappleAdvantage`、`BoutEngagement`、`BoutSnapshot.engagement`
-- `src/game/sumo/BoutSimulation.ts`: engagementの正本、Grip / release / bond、定数3つ
-- `src/game/sumo/BoutGrip.test.ts`（新規）: T92〜T109、T112、T114
-- `src/game/input/pushDummyController.ts`: GRAPPLEDを尊重し、intentに`gripPressed: false`を追加
-- `src/game/input/pushDummyController.test.ts`: helperの追加とT110
-- `src/game/input/pressLatch.test.ts`: T111（Shift latchの統合確認）
-- `src/game/scenes/BoutScene.ts`: Shift latch、ENGAGE表示、組みの線、`GRIP` / `GRIP REC`表示
-- `src/game/sumo/BoutSimulation.test.ts` / `BoutPush.test.ts` / `BoutCounter.test.ts` / `BoutCounterPosition.test.ts`: helperに`gripPressed: false`を追加しただけ（assertionは不変）
-- `docs/ARCHITECTURE.md`: Current Stateを同期
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- **Current Fact**: Current Sourceの事実
+- **Recommendation**: 本Reportの推奨（未実装）
+- **User Decision**: 実装前にUserが決める事項
+- **Deferred**: 後続Task
 
-AGENTS.mdは変更なし。新規dependencyはなし。
+角度は画面座標（+y下）で、正の回転は**画面上で時計回り**。
 
-# User Decisions Implemented
+# Current Source Findings / Q1（Current Fact）
 
-1. stableかつidleなtargetへの有効なGrip → 決定的にneutral
-2. Kuzushiかつidleなtarget → Morozashi（holder = 掴んだ側）。targetのKuzushiは即座に消費してstable
-3. 片側だけのGripは、action idleのtargetにだけ成立する（Push / Counter / Gripを中断しない）
-4. GRAPPLED中は両者ともShiftでrelease可能。releaseした側だけがGrip Recovery、同時なら両者
-5. GRAPPLED中はWASDを抑制
-6. `GRIP_RANGE_MARGIN = 0.09` m
-7. Shift（左右どちらでも同じ。Phaser `KeyCodes.SHIFT`）、hold時のauto-repeatなし
+`step()`の順序: posture timer → release → FREE action開始 → move / 積分 → contact → bond（GRAPPLED）またはCounter → Grip → Push（FREE）→ action timer → `updateFacing()`。
 
-# Engagement（single SoT）
+- **Kuzushiのfacing**: Counter成功tickの末尾から、`updateFacing`がKuzushiの攻撃側をskipする。そのため攻撃側のfacingは、成功の直前のtick末尾の値（防御側の移動前の位置を向いた値で、ほぼlocked `d`）で固定され、Kuzushiの間（30 tick）は側面・背後のずれが見える
+- **Kuzushiの消費**: Grip成立tickの`resolveGrip()`内（FREE時の解決段階）で、targetのpostureをstableにしてから`enterGrapple()`を呼ぶ
+- **bond**: `enterGrapple()`の中の`resolveGrappleBond()`は、2人を**中心軸に沿って**対称に動かすだけ。そのため互いへの方位（bearing）は変わらない。GRAPPLED中の外力は両者で同じなので平行移動になり、ここでも方位は変わらない
+- **優位が消える箇所**: Grip成立tickの**末尾の`updateFacing()`**。この時点でtargetはもうstableなので、即座に相手を向く
+  - Grip成立tickのSnapshotの時点で、側面・背後のずれはすでに0
+  - tick内では`resolveGrip`から`updateFacing`までの間だけ元のfacingが残るが、外からは観測できない
+- **FREEのfacing**: stableな者は毎tick末に即座に相手を向く。正面からのGrip直前の誤差は、1 tick分の相対移動による小さな角度だけ（最大でも約0.14 rad）
 
-- `BoutSimulation.engagement: BoutEngagement`（`free` | `grappled{advantage}`）。constructorで`free`
-- Snapshotのtopレベル`engagement`は独立したcopy
-- participant stateには組みのflagを一切持たせない（T92でkeyの集合を確認）
-- 入口は`enterGrapple()`だけで、releaseはtickの先頭でだけ起こる
-- LIFTEDは追加していない
+# Recommended Alignment Formula（Q2）
 
-# Grip Action / Resolution
+```ts
+// Pure helpers (Simulation-owned module, Phaser-free), shared by Simulation and Scene.
+function normalizeAngle(a: number): number // -> (-π, π]
+function grappleFacingError(self: Vec2, facing: number, opponent: Vec2): number {
+  const bearing = Math.atan2(opponent.y - self.y, opponent.x - self.x)
+  return normalizeAngle(bearing - facing) // signed, (-π, π]
+}
+isGrappleReady = Math.abs(error) <= GRAPPLE_FACING_TOLERANCE
+```
 
-- `grip{phase: 'reach' | 'recovery', ticksRemaining}`
-  - `GRIP_REACH_TICKS = 6`、`GRIP_RECOVERY_TICKS = 12`
-  - 押したtickがreachの1 tick目
-  - phase中は実効move 0（grounded brake）
-- 開始条件: FREEかつidleかつstable。同じtickの優先順は Push > Counter > Grip
-- `resolveGrip()`（FREEのときだけ、Counter解決の後、Push解決の前）:
-  - 範囲 = `distance <= rA + rB + GRIP_RANGE_MARGIN`（範囲外なら何もしない）
-  - 両者がreach中かつstable → neutral（配列順に依存しない）
-  - それ以外: reach中かつstableな側が、action idleの相手を掴む。相手がKuzushiならpostureをstableにしてMorozashi、それ以外はneutral。成立し得る向きは常に1つ
-- whiff: reachが切れたらrecovery（Kuzushiにはならない）
+- `normalizeAngle`は結果を`(-π, π]`に正規化する（ちょうど−πは+πにする）
+- **±πのtie（重要）**: Best（背後）では、誤差が**ちょうど±π**になるのが標準の状況（例: 対称配置でBのfacing = π、背後のAへの方位 = 0）。浮動小数の誤差で旋回方向が変わらないよう、`|error| >= π − GRAPPLE_TIE_EPSILON`（例 1e-9）のときは**固定で+方向（画面時計回り）**に回る。決定的で、randomは使わない
+- tolerance: 名前付きの1定数`GRAPPLE_FACING_TOLERANCE`。暫定π/12（15°）（UD-2）
+- 同一中心（方位が定義できない）: 誤差0、つまり準備完了とする（`facingToward`のfallbackと同じ考え方）
 
-# Enter Grapple / Bond
+# Recommended Turn Rule（Q3、Q4、Q12）
 
-`enterGrapple(advantage)`の処理:
-1. engagementをset
-2. 両者のactionをidle
-3. 両者の`externalVelocity`を成分ごとの平均にそろえる（暫定の正規化。質量は扱わない）
-4. `resolveGrappleBond()`で中心距離を`R`ちょうどへ対称に寄せる
+**Recommendation**: FREEは現行の即時auto-facingを維持する。**GRAPPLED中だけ**、各参加者は相手への方位へ1 tickあたり最大`GRAPPLE_TURN_RATE × TICK_SECONDS`だけ、最短方向（tieは+方向）へ回る。残りの誤差が1 step以下ならsnapする（行き過ぎない）。
 
-`resolveGrappleBond()`: 中心軸に沿って両者を`(distance − R) / 2`ずつ動かす。同一中心ならAのfacingをfallbackにする。GRAPPLED中は毎tick、通常のcontactの後に呼ぶ。
+- **自動旋回**を推奨: ACTION-05AでWASDは抑制済みで、回転の入力もない。操作は単純なまま「回り込まれた側は向き直るまで待つ」という読みやすい開きになる
+  - Game Feel: 不利側は数百msのあいだ無力になり、この時間がそのまま優位の大きさになる。時間は方位差に比例するので、側面は短く、背後は長い
+- 比較:
+  - 固定timerによる硬直: 実際の向きと無関係な隠れた時間になる。Review方針で不採用
+  - 側面・背後の分類を保存: 位置とfacingから導ける内容の重複になる。不採用
+  - 手動の旋回入力: 新しい入力が必要で、Userの「単純な操作」と食い違う。Deferred
+- **facingだけを回す**（位置は動かさない）。準備完了の判定には十分で、表示も既存のfacing markerが体の周りを回るので読める。回り込む軌道（orbit）は導入しない
+- `GRAPPLE_TURN_RATE`は暫定π rad/s（180°/s）（UD-1）
 
-GRAPPLED中:
-- 両者のWASDは0（制動）
-- FREE用のaction開始なし
-- facingは既存のauto-facing
+# Action Readiness Rule（Q5、Q7、Q8）
 
-# Release
+- `canActInGrapple(snapshotOrState, id) = engagement.kind === 'grappled' && isGrappleReady(...)`（pure helper）
+- 参加者ごとに独立に評価する:
+  - 掴んだ側が準備完了でtargetが旋回中 → 掴んだ側だけが行動できる
+  - 両者準備完了 → 通常
+  - 両者旋回中 → 準備完了になった側から行動できる
+- **封じるもの**（推奨）: 将来のGRAPPLED actionすべて（Drive、Throw、Lift、差し手争い）と、**release（UD-3）**
+- **封じないもの**: 自動旋回そのもの（受動的に進む）
+- 優位側の行動: 将来の通常のGrapple action systemをそのまま使う。「一方的な攻撃」用の別stateは作らない（不利側の準備が整っていないだけ）
+- 優位側の行動が相手の旋回をresetすることはない
+  - Drive（pairの平行移動）では方位が変わらないので、旋回はそのまま続く
+  - 幾何を変えるThrowなどは、そのTaskで明示的に扱う
 
-- tickの先頭（posture timerの直後）で処理する。engagementがgrappledで、誰かのGrip edgeがあれば:
-  - FREEへ戻す
-  - 押した側をGrip recovery（12）にする。release tickが1 tick目
-  - 同時なら両者
-- release tickは誰もFREE actionを開始しない（そのedgeは捨てる）
-- releaseしなかったidleの側は、同じtickから通常の移動ができる
-- 位置・速度・facingは変えない
-- Morozashiは消える
+# Release Conflict Analysis（Q6）— User Decision Required
 
-# Step Order（実装どおり）
+ACTION-05Aでは、どちらの参加者もいつでも即座にreleaseできる。背後を取られた側がreleaseすると、次のようになる:
 
-1. posture timer
-2. release（tickがGRAPPLEDで始まった場合）
-3. FREE action開始（優先順）
-4. 実効move（GRAPPLED中は0）
-5. self velocity
-6. external減衰
-7. 積分
-8. contact
-9. GRAPPLEDならbond / FREEならCounter → Grip → Push（Contactがあり、まだFREEの場合）
-10. action timer
-11. facing
+1. FREEに戻る
+2. FREEのauto-facingで即座に相手を向く
+3. releaseした側はGrip recovery（12 tick）に入る
+4. 失う時間は12 tickだけ。背後からの旋回には約55 tickかかる（暫定値の場合）ので、優位をほとんど**安く回避できてしまう**
 
-Task §Step Orderと同じ意味。intentのsanitizeはparticipantごとのloop内で行う（従来どおり）。
+| 案 | 内容 | 評価 |
+|---|---|---|
+| **A（推奨）** | releaseもgrapple actionとして準備完了を条件にする（旋回中はreleaseできない） | 1つのruleで「何もできない」が成り立つ。正面の組みは成立した瞬間から両者準備完了なので、ACTION-05Aの挙動はそのまま。変わるのは「旋回中のrelease」だけ |
+| B | releaseは常に可能で、旋回中ならrecoveryを延ばすなどの罰を付ける | 新しい罰の調整が必要。FREEで即座に向き直れるので、優位は結局罰の長さに置き換わる |
+| C | release後もFREEのfacingを段階的にする | Accepted FREEのfacing（Push lock、Contactのfallback、Kuzushiの固定）に広く影響する。変更が大きい |
+| D | 旋回中のreleaseはKuzushiになる | 罰が強すぎ、意味も混ざる |
 
-# Dummy
+推奨はAとする。ただしAccepted 05Aのrelease semanticsを（旋回中に限って）変更するので、**User Decision（UD-3）**。
 
-Snapshotの`engagement.kind === 'grappled'`の間、Dummyは`NO_INPUT`（move 0、edgeはすべてfalse）を返し、cooldownを30に保持する。Dummy自身がGripを出すことはない。release後、最初のFREE tickからちょうど30 tick後に次のPushを出す（T110）。
+- 既存test T105の「Morozashiの不利側がreleaseする」は、正面で成立したMorozashi（誤差ほぼ0）なのでAでもPASSする（確認済み）
+- 優位側（準備完了）は、いつでも自分の意思でreleaseできる
 
-# Presentation
+# Morozashi vs Orientation Separation（Q9）
 
-- 画面上部の2行目に`ENGAGE: FREE` / `ENGAGE: GRAPPLED` / `ENGAGE: MOROZASHI (PLAYER|CPU)`
-- 組み中は2人の中心を線で結ぶ（neutralは白い4 px、Morozashiはholder色の8 px）
-- phase textは`GRIP` / `GRIP REC`を追加。`KUZUSHI`の優先は維持
-- mode行に`Shift: grip`を追記
+- **Morozashi** = engagementに保存される持続的な優位（`advantage.holderId`）
+- **Orientation** = 毎回導出する準備状態（`isGrappleReady`）。保存しない
+- 将来の解決関数は、これらを**独立した入力**として読む:
+  - Drive: 開始の可否 = `canActInGrapple`、大きさ = `advantageFactor(engagement, driver)` × 将来のstat
+  - Throw: 開始の可否 = `canActInGrapple`、成功率の入力 = advantage（+ Deferredで相手の向きの誤差）
+- 「背後のMorozashi」「側面のMorozashi」のような組み合わせstateは作らない
 
-# Tests（148/148 PASS）
+# Counter Success / Best Integration（Q10）
 
-既存124件はhelperに`gripPressed: false`を追加しただけでPASS（T113）。新規24件:
+Current Fact: 攻撃側のKuzushi中のfacing `f`はほぼlocked `d`（側面へ動いた場合などは小さくずれる）。移動先は`d`を基準に決まる。
 
-- T92 既定FREE、Snapshotの分離、participantに重複flagなし
-- T93 stable → neutral
-- T94 Kuzushi → Morozashi（holder a）、Kuzushi消費。B側の鏡像（holder b）
-- T95 範囲境界（ちょうどの距離で成立、+1e-6でwhiff → recovery、Kuzushiでも範囲は省略しない）
-- T96 1 edge = 1回、連打は無視、Push > Counter > Grip
-- T97 targetのPush / Counter / Grip recoveryは中断しない。reachはtargetがidleになるまで待てる（tick 24で成立）
-- T98 Kuzushi最後の1 tickならMorozashi、`ticksRemaining 0`ならneutral
-- T99 同時Gripはneutral（participantの順序を入れ替えても同じ）
-- T100 Kuzushi側は開始できない（相手がholderになる）。両者Kuzushiなら何も起きない
-- T101 / T108 Best → 背後 → Grip → Morozashi、externalVelocityの平均
-- T108 Success → 側面 → Morozashi。overshootで離れた10 tick後（隙間3 cm超）でもmargin内なのでMorozashi
-- T102 margin距離から対称に吸着（中点は不変）
-- T103 反対方向のWASDを180 tick入れても距離は`R`、位置・速度は不変
-- T104 GRAPPLED中はPush / Counter / WASDが効かない
-- T105 片側release（neutral / Morozashiの不利側）。同じtickのFREE edgeは捨てる。releaseしなかった側は移動できる
-- T106 同時releaseは対称
-- T107 releaseで位置・速度・facingは不変、advantageは消える
-- T109 holderの不変条件
-- T110 Dummyの挙動
-- T111 Shift latch（0 tickのframe、holdでrepeatしない、再押下、Up / Down / Shiftの優先）
-- T112 reach 6 / recovery 12 tickちょうど（whiffとreleaseの両方）
-- T114 混在sequenceのreplay一致・finite・engagementの不変条件（GRAPPLED中は距離R、両者stable / idle、holderは実在するid）
+- **Success（側面）**: 防御側は`P ± perp·R`にいる → 攻撃側から見た方位は`d ± 90°` → 誤差 ≈ **±90°**
+- **Best（背後）**: 防御側は`P − d·R`にいる → 方位は`d + 180°` → 誤差 ≈ **180°**（上記のtie ruleで+方向に回る）
+- Grip成立とbondは方位を変えない（中心軸に沿った対称な移動だけ）。Kuzushi中に防御側が回り込んでから組んだ場合も、その時点の幾何から導ける
 
-# Browser Smoke
+同じ旋回速度なら、旋回時間は`(|誤差| − tol) / rate`に比例する。暫定値（π rad/s、15°）の場合:
+- 側面: (90° − 15°) / 180°/s ≈ 0.42 s（約25 tick）
+- 背後: (180° − 15°) / 180°/s ≈ 0.92 s（約55 tick）
 
-**NOT RUN（environment limitation）**。`pnpm build`は成功。
+**背後が自然に約2倍長くなる**。保存する分類や個別のtimerは不要。
 
-# Acceptance Criteria
+注意: Kuzushi中の攻撃側はovershootで前方へ流れる。その間に防御側が歩いて回り込めば、組む時点の誤差は変わる。これは導出の性質として正しい振る舞い（実際の幾何に従う）。
 
-| AC | 状態 / 根拠 |
-|---|---|
-| single SoT / default FREE | PASS（T92） |
-| Shift edge | PASS（T111） |
-| Push > Counter > Grip | PASS（T96 / T111） |
-| Reach / Recovery | PASS（T112） |
-| stable → neutral | PASS（T93） |
-| Kuzushi → Morozashi + 消費 | PASS（T94 / T98） |
-| margin 0.09 m | PASS（T95） |
-| targetのactionを中断しない | PASS（T97） |
-| 同時Gripの対称性 | PASS（T99 / T100） |
-| external正規化 | PASS（T101） |
-| 吸着 / bond | PASS（T102 / T103） |
-| GRAPPLED中の抑制 | PASS（T104） |
-| release + recovery | PASS（T105〜T107） |
-| DummyのEngagement対応 | PASS（T110） |
-| debug表示 | 実装済み（ブラウザで未確認） |
-| Counter → Kuzushi → Morozashi | PASS（T101 / T108） |
-| Drive / Throw / Lift / stats / RNGのscope creepなし | PASS |
-| test / build | PASS |
-| User Play Test | REQUIRED / NOT RUN |
-| Unexpected Scope | なし |
+# Neutral / Front Grip（Q11）
 
-# Implementation Evidence
+- FREEのauto-facingのため、通常のGrip直前の両者の誤差は1 tick分の小さな角度（最大でも約0.14 rad ≈ 8° < 15°）
+- 成立tickの末尾の旋回では、誤差が1 step（3°）を超えていても許容範囲内なので、**成立した瞬間から両者準備完了**になる
+- 組んだことだけを理由にした強制の硬直はない
+- 正面で成立したMorozashi（例: 失敗Counterで崩れた正面の相手）も即座に準備完了。Morozashi自体が優位になる
 
-上記Testsの対応どおり。Drive、Throw、Lift、stat、RNG、Ring-out、方向による優位、GRAPPLED中の移動のcodeはない。
+# Tick Order（Q13）
+
+**Recommendation**:
+
+1. **準備完了の判定はtickの先頭の状態で行う**（前のtick末のfacingと、tick開始時の位置）。release判定とGRAPPLED action開始で使う。これは直前のSnapshotと一致するので、「画面にREADYと出ていれば、その次の入力が通る」
+2. **旋回は`updateFacing()`（tickの末尾）で行う**。FREE（Kuzushiでなければ）は即時、GRAPPLEDは一定速度。Grip成立tickでもGRAPPLED側の規則で回る（成立tickの末尾から旋回を始める）
+3. **off-by-one**: tick `t`の末尾で許容範囲に入った参加者は、**tick `t+1`から**行動できる。同じtickで行動できるようにしないのは、Snapshotとの一貫性、決定性、判定位置を1か所に保つため
+
+# Snapshot / Presentation Boundary（Q14）
+
+- **新しいcanonical stateは不要**。`position` / `facing` / `engagement`はすでにSnapshotにある
+- Simulation側のpure module（例: `sumo/grappleOrientation.ts`。Phaser非依存）に`normalizeAngle` / `grappleFacingError` / `isGrappleReady`を置き、Simulationと**Sceneの両方が同じ関数を使う**。Sceneで式を複製しない
+- debug表示: GRAPPLED中、各参加者のphase textに`TURNING` / `READY`（必要なら`TURNING 87°`）。既存のfacing markerが回る様子で旋回が見える
+
+# Future Stats Boundary（Q15）
+
+`grappleTurnRate(participant)`という単一の関数を経由させ、今は定数を返すだけにする。将来、能力値（例: 敏捷・技術・バランスのどれか。未決）が決まったら、この関数がそれを読む。`ParticipantSetup`への追加は能力値のsystemができてからにする（今は不要）。
+
+# Directional Push Advantage（Q16）
+
+- FREE Pushの方向による優位（Deferred）は、`resolvePush`の時点の幾何（Contact normalと受け手のfacing）から導く
+- GRAPPLEDの準備状態は、各参加者自身の角度誤差から導く
+- 共通の「側面・背後flag」は保存しない
+- **所見（Current Fact）**: FREEのstableな参加者は常に即座に相手を向く。そのため、方向による優位が実際に効くのは、受け手がKuzushi中（facing固定）のときだけになる。方向によるPush優位のTaskでは、この点を前提として扱う必要がある（本Taskでは変えない）
+
+# First Implementation Scope（Q17）
+
+**Recommendation: ACTION-05B1 Grappled Orientation Foundation**だけを先に実装する。
+
+- 内容: pure helper、GRAPPLED中の一定速度旋回、tie rule、準備完了の導出、行動の可否の境界（`canActInGrapple`）、UD-3に従ったreleaseの可否、TURNING / READY表示、Counter側面・背後との統合test
+- Driveなしでも検証できる: 旋回の見え方、側面と背後の時間差、release可否（UD-3がAの場合）
+- 限界: 「優位側だけが一方的に動ける」の実感はDrive（05C）で初めて得られる。05B1のPlay Testは旋回の読みやすさと時間差に絞る
+- その後に**ACTION-05C Grappled Drive**: ↑ Drive、neutralとMorozashiの差、`canActInGrapple`による開始の可否
+
+# Required Automated Tests（Q18、05B1用）
+
+1. `normalizeAngle`: 範囲`(-π, π]`、−π → +π、±πのtieは+方向
+2. 正面Grip → 成立tickの時点で両者準備完了
+3. 側面Grip（Counter Success → Grip）→ 被害側は旋回中、掴んだ側は準備完了
+4. 背後Grip（Best → Grip）→ 被害側の旋回tick数が側面より長い（およそ2倍で、式どおりのtick数ちょうど）
+5. 最短方向の旋回（両方の符号）と、±πで固定の+方向
+6. toleranceの境界ちょうど（`<=`）
+7. 旋回速度ちょうど（1 tickあたりの変化量）、行き過ぎなし、最後のsnap
+8. 準備完了はtick末尾で切り替わり、行動は次のtickから可能
+9. side / rearを表すfieldが存在しない（Snapshotのkey集合の検査）
+10. Morozashiのholderは旋回と無関係に維持される
+11. UD-3に従ったrelease（Aの場合: 旋回中のreleaseは無視されqueueしない。準備完了なら可能。優位側はいつでも可能）
+12. FREEのauto-facingは不変（既存test）。Kuzushiのfacing固定も不変
+13. bondと旋回が干渉しない（距離R、位置不変）
+14. 混在sequenceのreplay一致・facingがfinite
+15. 既存148件は、Grappled actionを使わない範囲でPASS（UD-3がAでもT105は正面なのでPASS）
+
+# User Play Test Plan（Q19）
+
+最初にOrientation FeelがREQUIREDになるのはACTION-05B1。
+
+確認項目:
+1. 側面は短い隙、背後は長い隙として感じられるか
+2. 被害側がsnapせず、目に見えて旋回するか
+3. 正面の組みに不要な遅れがないか
+4. 旋回速度が読みやすく、理不尽でないか
+5. releaseのruleが分かりやすいか
+6. neutralとMorozashiの区別が残っているか
+7. bondやfacing markerがjitterしないか
+
+「優位側が先に動ける」実感は05C（Drive）で確認する。
+
+# User Decisions Required（Q20）
+
+| # | 決定事項 | 推奨既定値 |
+|---|---|---|
+| UD-1 | 暫定の旋回速度 | π rad/s（180°/s。側面約0.42 s、背後約0.92 s） |
+| UD-2 | facing tolerance | π/12（15°） |
+| UD-3 | 旋回中のrelease | **A: 不可**（05Aのsemanticsを、旋回中に限って変更する） |
+| UD-4 | 「何もできない」の範囲 | 将来のすべてのgrapple action（Drive / Throw / Lift / 差し手）とrelease。受動的な旋回は継続する |
+
+技術的な決め事（User決定は不要）: ±πのtieは固定で+方向、準備完了はtickの先頭の状態で判定、facingだけを回す。
+
+# Rejected / Deferred
+
+Rejected:
+- 固定timerによる硬直
+- 側面・背後の分類やorientationAdvantageの保存
+- Presentationだけの旋回
+- FREEのfacingを段階的にする案（Q6 C）
+- release失敗時のKuzushi（Q6 D）
+- 回り込む軌道（orbit）
+- 汎用state machine
+
+Deferred:
+- 手動の旋回入力
+- turn-rateの能力値依存
+- 優位側がpairを回す（相手の向きを崩す）技
+- 旋回中の相手への投げ成功率補正
+- 方向によるPush優位（FREEのfacingの扱いを含む）
+- Drive / Throw / Lift
+- 旋回のアニメーション
+
+# Next Implementation Sequence
+
+1. **ACTION-05B1 Grappled Orientation Foundation**: User Play Test REQUIRED（Orientationの最初のgate）
+2. **ACTION-05C Grappled Drive / Yorikiri**: `canActInGrapple`による開始の可否、Morozashiの係数。Ring-out / BoutOutcomeの要否はReviewで判断
+3. Throw / Lift: Driveが受理された後
 
 # Design Deviations
 
-なし。
+なし（Investigationのみ）。
 
 # Unexpected Scope
 
 なし。
 
-Play Test向けの所見:
-- 組み中は両者が動けず、外力も平均化されて止まる。releaseするまで状況は変わらない（Driveが未実装のため。仕様どおり）
-- Morozashiとneutralの差は、現時点では表示だけ（Morozashiの効果はDrive / Throw Taskで付ける）
+参考の所見（修正はしていない）:
+- Bestでは誤差がちょうど±πになるので、tie ruleは実装の必須項目
+- FREEのfacingが即時なので、方向によるPush優位はKuzushi中にしか効かない（Q16）
 
-# Known Untested
+# Verification
 
-- Browser Smoke全項目（Shiftの実入力と左右、hold、表示、組みの線、R、console error）
-- Grip / Engagement Feel（User Play Test）
+- Q1〜Q20に回答済み。BLOCKEDになる点はない
+- Current Fact / Recommendation / User Decision / Deferredを分けて記載
+- Production Source / package / lockfileは未変更
+- Repository変更は`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`のみ
+- `git diff --check`: PASS（commit前に実行）
+- `pnpm test` / `pnpm build`: 不要（Source変更なし）。実行していない
 
 # User Play Test
 
-REQUIRED / NOT RUN（Task §User Play Testの12項目）。
+NOT REQUIRED（Investigation）。最初にREQUIREDになるのはACTION-05B1。
 
 # Git delivery
 
-Task-owned filesだけを明示的にstageし、`feat: add grip engagement foundation`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
+Investigation-only Report Commit Exceptionを適用。本Reportだけをstageし、`docs(agent): investigate grappled orientation advantage`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
