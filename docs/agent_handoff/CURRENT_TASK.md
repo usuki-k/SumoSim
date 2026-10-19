@@ -1,5 +1,5 @@
 Task-ID: ACTION-05C-GRAPPLED-DRIVE-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / GRAPPLED DRIVE & YORIKIRI DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -521,3 +521,378 @@ Do not implement Drive, Ring-out, Throw, Lift, or stats.
 
 After Report Commit / Push:
 「ACTION-05C-GRAPPLED-DRIVE-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS / USER DECISIONS REQUIRED BEFORE IMPLEMENTATION
+
+## Reviewed Investigation
+
+- Investigation report commit:
+  `a03a0e39e6e86b392d0cea5ab3921a5a6c874401`
+- Agent-Start-Head:
+  `cf5e8153c173c5214ed590702d3af2c8a365540a`
+- Diff is exactly one Report-only commit:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / package / lockfile unchanged.
+- `main` unchanged.
+
+## Current Source Review
+
+PASS.
+
+Source confirms:
+
+- ArrowUp currently provides only the FREE Push edge; no held semantic exists.
+- GRAPPLED pair externalVelocity is equalized on Grip establishment.
+- both participants receive identical external decay afterward.
+- Grapple bond only corrects radial separation and is compatible with shared pair translation.
+- GRAPPLED orientation is independent of pair translation.
+- current Dummy intentionally outputs no grapple action while GRAPPLED.
+
+The Report correctly identifies that a naive continuous acceleration using the existing Push-style external update is not sufficient for Drive.
+
+## Accepted Design Direction
+
+### A-1 — Dedicated held semantic
+
+Accept:
+
+```ts
+ParticipantIntent.driveHeld: boolean
+```
+
+- ArrowUp remains the existing `pushPressed` edge for FREE Push.
+- the same physical ArrowUp also supplies held state for `driveHeld`.
+- Scene should not decide FREE vs GRAPPLED gameplay meaning.
+- Simulation ignores `driveHeld` while FREE and ignores FREE Push start while GRAPPLED.
+
+Do not replace the semantic intent model with a generic primary-action abstraction.
+
+### A-2 — Continuous Drive
+
+Accept.
+
+First Prototype:
+- hold ↑ = continuous Drive effort
+- release ↑ = Drive contribution stops
+- no startup/recovery
+- future stamina can later consume per Drive tick.
+
+A held ↑ before READY may begin contributing automatically once READY.
+This is held-state behavior, not queued edge behavior.
+
+### A-3 — Drive direction
+
+Accept pair axis:
+- driver center → opponent center.
+
+Do not use facing direction, because READY still allows angular error and that would create lateral skating / imperfect cancellation.
+
+### A-4 — Shared pair external velocity / Model B
+
+Accept.
+
+Drive moves the GRAPPLED pair through shared `externalVelocity`.
+Do not:
+- drive via selfVelocity
+- move only the target
+- teleport pair positions
+- replace the Grapple bond.
+
+### A-5 — Signed simultaneous contest
+
+Accept the symmetric net concept:
+
+```
+net = strength(A) * ADriving - strength(B) * BDriving
+```
+
+on one common A→B axis.
+
+Consequences:
+- equal neutral vs neutral → no new Drive contribution
+- one-sided → pair translates toward defender side
+- unequal → stronger side wins by the difference
+- no participant-array priority.
+
+Existing momentum may still continue/decay when net is zero; "stalemate" means no new Drive contribution, not mandatory zero velocity.
+
+### A-6 — Morozashi strength
+
+Accept first Prototype direction:
+
+- neutral participant strength = 1.0
+- Morozashi holder = provisional 1.5
+- disadvantaged participant remains 1.0
+- no extra penalty.
+
+Morozashi remains Engagement data, not a Drive state.
+
+### A-7 — READY gate
+
+Accept.
+
+A participant contributes to Drive only when:
+
+```
+driveHeld && canActInGrapple(...)
+```
+
+Therefore:
+- READY holder can Drive while opponent TURNING.
+- TURNING participant cannot contribute.
+- a held input automatically starts contributing once that participant becomes READY.
+
+### A-8 — Release
+
+Accept existing semantics:
+
+- READY participant may Shift-release even while Driving.
+- Release has higher priority than continuous Drive.
+- release cancels Drive contribution on that tick.
+- TURNING participant still cannot Release.
+- retained external pair motion is not hard-cleared; FREE decay handles it afterward.
+
+### A-9 — Ring-out sequence
+
+Accept Drive-before-Ring-out.
+
+ACTION-05C1 can test:
+- pair pressure
+- neutral stalemate
+- Morozashi advantage
+- orientation first-move reward
+without defining victory yet.
+
+Do not add:
+- invisible arena walls
+- clamp
+- provisional ring-out rule.
+
+Automated Drive tests should use a large arena where appropriate.
+User Play Test may restart before/after leaving the visible ring.
+
+## Correction C-1 — Drive decay/update order
+
+The Report's F3 diagnosis is useful, but Q4 / step-order wording is internally inconsistent.
+
+It proposes:
+
+```
+external decay
+→ Drive apply
+```
+
+while also saying that during acceleration toward Drive target speed the axial decay should not be subtracted again.
+
+With:
+- `GRAPPLE_DRIVE_ACCELERATION = 4 m/s²`
+- `EXTERNAL_DECELERATION = 8 m/s²`
+
+pre-decaying the Drive-axis component every tick and then adding only 4m/s² does **not** accelerate toward 0.6m/s. It collapses into a small tick-sized speed.
+
+### Correct implementation direction for ACTION-05C1
+
+FREE remains exactly as today:
+- existing `decayExternal()`
+- existing Push behavior
+- no formula changes.
+
+GRAPPLED gets a small Drive-specific shared-external update.
+
+Conceptually:
+
+1. update/brake selfVelocity as already required.
+2. derive pair axis and Drive net from tick-start readiness + `driveHeld`.
+3. update the **single shared pair external velocity once**:
+   - if `net === 0`: use existing external decay behavior.
+   - if `net !== 0`:
+     - decompose shared external velocity into pair-axis parallel + perpendicular components.
+     - perpendicular component decays toward zero using `EXTERNAL_DECELERATION`.
+     - parallel component approaches the signed Drive target speed:
+       - while below/toward target, approach by `GRAPPLE_DRIVE_ACCELERATION * |net| * dt` **without first subtracting axial EXTERNAL_DECELERATION**.
+       - if already beyond the target in the same direction, bleed back toward target using `EXTERNAL_DECELERATION`.
+       - if moving opposite the requested target, Drive acceleration first cancels/reverses it deterministically.
+     - reconstruct shared external velocity.
+     - preserve the existing global `MAX_EXTERNAL_SPEED` safety clamp.
+4. copy the resulting shared external velocity to both participants.
+5. integrate both participants.
+6. Contact/Bond etc.
+
+Equivalent small math is allowed if these semantics are preserved.
+
+Important:
+- do not run current full-vector `decayExternal()` first and then add 4m/s² on the Drive axis.
+- do not alter FREE Push decay semantics.
+- do not introduce a second arbitrary friction constant; `EXTERNAL_DECELERATION` remains the decay source.
+
+This correction is required before implementation.
+
+## Accepted provisional Drive constants, pending User confirmation
+
+Recommended:
+- `GRAPPLE_DRIVE_SPEED = 0.6 m/s`
+- `GRAPPLE_DRIVE_ACCELERATION = 4 m/s²`
+- `MOROZASHI_DRIVE_FACTOR = 1.5`
+
+All are Prototype tuning and will be revisited with the later whole-game tempo pass.
+
+## Review Decision — Drive action state
+
+Accept adding a minimal timerless action variant:
+
+```ts
+{ kind: 'drive' }
+```
+
+Reason:
+- Snapshot/presentation can show actual Drive contribution.
+- future Throw/Lift can share the existing action exclusivity boundary.
+- future stamina can inspect actual Drive state.
+- no duplicate separate `isDriving` flag is needed.
+
+Semantics:
+- participant action is `drive` only while it is actually contributing this tick.
+- held but TURNING participant remains idle.
+- releasing ↑ returns to idle.
+- equal simultaneous contest may have both participants in `drive` even though net=0; both are exerting effort.
+
+### Critical release invariant
+
+If Engagement is released while either participant is in `drive`:
+- **clear/cancel Drive action for both participants before returning to FREE**.
+- releaser(s) then enter Grip Recovery.
+- non-releaser becomes idle.
+
+Never leave a `drive` action in FREE state.
+
+This must be explicitly tested because current FREE action/effective-move logic does not know how to carry a GRAPPLED Drive state.
+
+## Review Decision — Dummy Mode 2
+
+Accept extending the existing validation harness, not real AI.
+
+Mode 2:
+- while FREE: current Push behavior unchanged.
+- while GRAPPLED: emit `driveHeld = true` and no FREE-action edges.
+- Simulation readiness decides whether the Dummy actually contributes:
+  - TURNING → no Drive action/contribution
+  - READY → Drive.
+
+Mode 1 remains passive.
+
+While GRAPPLED, keep existing Push cooldown held/reset so releasing the grapple does not produce an immediate stale Push.
+
+## Input implementation constraint
+
+Current Scene does not retain the ArrowUp Key object; it only wires its down event to `pushLatch`.
+
+ACTION-05C1 should keep one ArrowUp key reference so each render frame/tick intent can supply:
+- edge → existing Push latch
+- held state → `driveHeld`.
+
+Do not infer `driveHeld` from repeated keydown events.
+
+## Ring-out / arena boundary
+
+Drive Foundation must not silently define ring-out.
+
+Do not:
+- stop at ring edge
+- bounce
+- clamp
+- declare winner.
+
+Leaving the ring remains possible until the dedicated Ring-out/BoutOutcome task.
+
+## User Decisions Required
+
+Recommended as one coherent Prototype baseline:
+
+### UD-1 — Drive mode
+Continuous hold.
+
+### UD-2 — semantic input
+Add `driveHeld`.
+
+### UD-3 — provisional Drive tuning
+- target speed: 0.6 m/s
+- acceleration: 4 m/s²
+
+### UD-4 — Morozashi Drive factor
+Holder = 1.5.
+Disadvantaged side = 1.0.
+
+### UD-5 — Release during Drive
+READY participant may release immediately; Release wins over Drive.
+
+### UD-6 — sequencing with Ring-out
+Implement/test Drive displacement first.
+Ring-out/BoutOutcome remains the next separate investigation.
+
+## Required implementation constraints after User confirmation
+
+ACTION-05C1 should include:
+
+- `driveHeld` semantic input
+- timerless `drive` action
+- pair-axis signed net
+- corrected GRAPPLED shared-external velocity update from C-1
+- READY gating
+- Morozashi factor
+- release cancellation of both Drive actions
+- Dummy Mode 2 contested Drive
+- minimal DRIVE/pair-speed debug presentation
+- large-arena focused tests where ring edge is irrelevant
+- no Ring-out semantics.
+
+## Tests that must explicitly cover the correction
+
+In addition to the Investigation matrix:
+
+- neutral one-sided Drive reaches ~0.6m/s under continuous hold rather than stalling near one-tick velocity.
+- acceleration progression is independent of the pre-existing `EXTERNAL_DECELERATION = 8` subtraction because axial Drive update owns that component while active.
+- Drive at 4m/s² does not require changing `EXTERNAL_DECELERATION`.
+- opposite pre-existing axial momentum is canceled and reverses deterministically.
+- perpendicular pre-existing momentum decays while Drive continues.
+- releasing Engagement clears every `drive` action before FREE state.
+- FREE Push regression remains bit-for-bit/test equivalent.
+
+## Next Sequence
+
+After UD-1–UD-6 confirmation:
+
+1. **ACTION-05C1 Grappled Drive Foundation**
+   - User Play Test REQUIRED.
+2. **Minimal Ring-out / BoutOutcome Investigation**
+3. Ring-out implementation / Yorikiri win-loop integration
+4. later Throw / Lift.
+
+Do not bundle these tasks.
+
+## Do Not Reopen
+
+Unless Drive implementation exposes a concrete conflict:
+- pair-level Engagement
+- Grapple bond
+- Orientation readiness
+- TURNING/READY rules
+- Counter side/rear geometry
+- Kuzushi→Morozashi
+- FREE Push formula.
+
+## Deferred
+
+- whole-game tempo rebalance
+- stamina
+- Power / Weight / LowerBody formulas
+- mass/traction
+- discrete/gaburi Drive pulses
+- pair rotation
+- Ring-out/BoutOutcome
+- Throw
+- Lift
+- directional FREE Push advantage
+- final animation/audio
