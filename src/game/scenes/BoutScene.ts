@@ -4,6 +4,7 @@ import { PressLatch } from '../input/pressLatch.ts'
 import { PushDummyController, type DummyMode } from '../input/pushDummyController.ts'
 import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
+import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import type {
   BoutEngagement,
   BoutSetup,
@@ -11,6 +12,7 @@ import type {
   ParticipantId,
   ParticipantIntent,
   ParticipantPosture,
+  ParticipantState,
   Vec2,
 } from '../sumo/BoutTypes.ts'
 
@@ -71,6 +73,14 @@ function engagementLabel(engagement: BoutEngagement): string {
   const holderId = engagement.advantage.holderId
   const holder = PARTICIPANT_PRESENTATION.find((style) => style.id === holderId)?.label ?? holderId
   return `ENGAGE: MOROZASHI (${holder})`
+}
+
+// Presentation-only grappled readiness via the shared Simulation helper (no formula duplicated here).
+function grappleLabel(self: ParticipantState, opponent: ParticipantState, engagement: BoutEngagement): string {
+  if (engagement.kind !== 'grappled') return ''
+  if (canActInGrapple(self, opponent, engagement)) return 'READY'
+  const degrees = Math.round((Math.abs(grappleFacingError(self.position, self.facing, opponent.position)) * 180) / Math.PI)
+  return `TURNING ${degrees}°`
 }
 
 interface MovementKeys {
@@ -257,7 +267,9 @@ export class BoutScene extends Phaser.Scene {
         pos.y + Math.sin(participant.facing) * bodyPixels * 0.8,
       )
       view.label.setPosition(pos.x, pos.y - bodyPixels - 18)
-      view.phaseText.setText(phaseLabel(participant.action, participant.posture))
+      const opponent = snapshot.participants.find((q) => q.id !== participant.id)
+      const label = phaseLabel(participant.action, participant.posture)
+      view.phaseText.setText(label !== '' || !opponent ? label : grappleLabel(participant, opponent, snapshot.engagement))
       view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 38)
     }
   }

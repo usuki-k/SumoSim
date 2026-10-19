@@ -15,6 +15,7 @@ import type {
   PushPhase,
   Vec2,
 } from './BoutTypes.ts'
+import { GRAPPLE_TURN_RATE, canActInGrapple, turnFacingTowardGrapple } from './grappleOrientation.ts'
 
 // Provisional technical values for the movement foundation; NOT final balance. Subject to User Play Test.
 export const SIMULATION_HZ = 60
@@ -351,11 +352,16 @@ export class BoutSimulation {
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     for (const p of this.participants) advancePosture(p)
 
-    // While grappled a Grip edge releases. Releasing participants enter Grip Recovery; nobody starts a
-    // FREE action on the release tick (those edges are dropped, not queued).
+    // While grappled a Grip edge releases, but only from a participant READY at tick start
+    // (canActInGrapple); a TURNING participant's edge is ignored, not queued. Releasing participants
+    // enter Grip Recovery; nobody starts a FREE action on the release tick (those edges are dropped).
     let released = false
     if (this.engagement.kind === 'grappled') {
-      const releasers = this.participants.filter((p) => intents.get(p.id)?.gripPressed === true)
+      const [a, b] = this.participants
+      const engagement = this.engagement
+      const releasers = this.participants.filter(
+        (p) => intents.get(p.id)?.gripPressed === true && canActInGrapple(p, p === a ? b : a, engagement),
+      )
       if (releasers.length > 0) {
         this.engagement = { kind: 'free' }
         for (const p of releasers) p.action = { kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS }
@@ -642,10 +648,20 @@ export class BoutSimulation {
     }
   }
 
-  // Each participant faces the other; keeps the previous facing if positions coincide.
+  // FREE: each participant faces the other instantly; keeps the previous facing if positions coincide.
   // A participant in Kuzushi keeps its facing fixed (side / back exposure stays readable).
+  // GRAPPLED: each turns toward the other at GRAPPLE_TURN_RATE (facing only; positions untouched), so
+  // a side / rear grip leaves the victim TURNING until it actually faces its opponent.
   private updateFacing(): void {
     const [a, b] = this.participants
+    if (this.engagement.kind === 'grappled') {
+      const maxTurn = GRAPPLE_TURN_RATE * TICK_SECONDS
+      const nextA = turnFacingTowardGrapple(a.position, a.facing, b.position, maxTurn)
+      const nextB = turnFacingTowardGrapple(b.position, b.facing, a.position, maxTurn)
+      a.facing = nextA
+      b.facing = nextB
+      return
+    }
     if (a.posture.kind !== 'kuzushi') a.facing = facingToward(a.position, b.position, a.facing)
     if (b.posture.kind !== 'kuzushi') b.facing = facingToward(b.position, a.position, b.facing)
   }
