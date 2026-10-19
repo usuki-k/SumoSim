@@ -1,715 +1,644 @@
-Task-ID: ACTION-04A1-COUNTER-KUZUSHI-FOUNDATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / CORE COUNTER FOUNDATION
+Task-ID: ACTION-04A2-COUNTER-POSITION-RESOLUTION
+Status: READY
+Task-Type: IMPLEMENTATION / CORE COUNTER POSITION RESOLUTION
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 730ba8f6fc1fbe8cb8dd939f61e2a67ab0180f17
+Source-Baseline: 0dede47770b664f9fd01b99597403ad7bd92b55a
 Handoff-Mode: GITHUB
 
-# ACTION-04A1 — Counter + Kuzushi Foundation
+# ACTION-04A2 — Counter Position Resolution
 
 ## 1. Purpose
 
-ACTION-04 Investigation / ChatGPT Review / User Decisionに基づき、
-Down CounterとKuzushiの**Gameplay foundationだけ**を実装する。
+ACTION-04A1 Counter + Kuzushi FoundationはTechnical ReviewおよびUser Play TestでAcceptされた。
 
-このTaskでは：
+次に、既に決定済みのCounter結果差を実装する。
 
-- ArrowDown = 1押下1回のCounter attempt
-- Counter window
-- Push Active + Contactとのtiming判定
-- Best / Success / Fail tier判定
-- Kuzushi posture
-- Counter成功 → Push attackerがKuzushi
-- Counter失敗 → Counter userがKuzushi
-- Kuzushi中の行動不能 / movement brake / facing freeze
-- Kuzushi中はPushされやすい
-- Push DummyがKuzushiを尊重
-- 最小presentation
+- Push Counter Best
+  - attackerはKuzushi
+  - defenderはattackerの背後へ自動配置
+  - attackerはPush方向へ少しovershootする
+- Push Counter Success
+  - attackerはKuzushi
+  - defenderはattackerの側面へ自動配置
+  - sideは手動選択せず、現在位置とgeometryから自動決定
+  - attackerはPush方向へ少しovershootする
+- Fail
+  - ACTION-04A1どおりCounter userがKuzushi
+  - relocationなし
 
-までを成立させる。
+このTaskで、Userが意図する
 
-**まだ実装しない：**
-- Bestの背後移動
-- Successの側面移動
-- attacker overshoot
-- 即決着 / 確率
-- Grip
-- Harite
+```
+Best → 引き / 背後
+Success → 捌き / 側面
+Fail → 自分が崩れる
+```
 
-これらはACTION-04A2以降。
+を最初にinteractiveに成立させる。
 
-## 2. Accepted User Decisions
+Full Counter FeelのUser Play Testが必須。
 
-### UD-1 — Counter meaning
-
-ACCEPTED:
-
-**1つの共有Down Counter**
-
-- Best = pull-style result
-- Success = deflection-style result
-- Fail = Counter user Kuzushi
-
-ACTION-04A1ではBest/Successとも「相手をKuzushi」にするところまで。
-位置差はACTION-04A2で付ける。
-
-### UD-2 — Prototype key
-
-ACCEPTED:
-
-`ArrowDown`
-
-Temporary Prototype binding only。
-
-### UD-3 — Failed Counter presentation
-
-ACCEPTED:
-
-- forced backward stepなし
-- Counter window終了
-- Counter userがKuzushi
-- presentationは `COUNTER → KUZUSHI`
-
-Gameplay penaltyはKuzushiそのもの。
-
-### UD-4 — Best Push instant finish
-
-ACCEPTED:
-
-**最初のPrototypeでは省略。**
-
-- PRNGなし
-- BoutOutcomeなし
-- 即決着なし
-- Best成功はこのTaskでは相手Kuzushiまで
-
-ACTION-04A2でrear positional rewardを追加する。
-確率決着は将来のBoutOutcome / Parameters / deterministic RNG設計後。
-
-## 3. Accepted Production Baseline
+## 2. Accepted Production Baseline
 
 Accepted Production Source:
 
-`730ba8f6fc1fbe8cb8dd939f61e2a67ab0180f17`
+`0dede47770b664f9fd01b99597403ad7bd92b55a`
 
-Current developにはReport / Review / User Decision等のcoordination-only commitsがある。
+Current develop上のそれ以降はReview / User Play Test等のcoordination-only commits。
 
-AGENTS.md Remote-Task-First Preflightに従い、
-Source-Baseline..origin/developが`docs/agent_handoff/`だけであることを確認してFF-onlyする。
+PreflightはAGENTS.mdに従う。
 
-Preserve:
+Preserve without retuning:
 
 - screen/world-relative WASD
-- ACTION-02B grounded Movement
-- ACTION-03A2 Contact / Separation
-- ArrowUp = discrete Push
+- ACTION-02B Movement
+- ACTION-03A2 Contact
+- ArrowUp discrete Push
 - Push Startup / Active / Recovery
-- Push direction lock
-- Push steering lock
 - selfVelocity / externalVelocity Model B
-- accepted incoming / contested Push
-- Push Dummy validation harness
-- current provisional Push values
-- current Push distance is Deferred tuning; do not change
+- contested Push baseline
+- ArrowDown discrete Counter
+- same-tick Push priority
+- Counter window = 12 ticks provisional
+- Best = first 3 Push Active ticks provisional
+- Fail → self Kuzushi
+- Best / Success → attacker Kuzushi
+- Kuzushi = separate posture
+- Kuzushi action/movement lock
+- Kuzushi facing freeze
+- Kuzushi Push susceptibility = 1.5 provisional
+- Push Dummy Kuzushi-awareness
 
-## 4. Counter Input
+User has explicitly accepted ACTION-04A1 and stated that wider Counter/Kuzushi timing may be desirable later, but **do not tune those values in this Task**.
 
-Extend semantic intent minimally:
+## 3. Accepted Positional Semantics
 
-```ts
-interface ParticipantIntent {
-  readonly move: Vec2
-  readonly pushPressed: boolean
-  readonly counterPressed: boolean
-}
-```
+### Best
 
-`counterPressed` means one new semantic edge for one Simulation tick.
+Against Push, Best result:
 
-Scene:
+1. capture attacker locked Push direction before its Push action is cancelled
+2. attacker enters Kuzushi
+3. defender attempts to move to a valid rear target
+4. attacker receives one explicit forward overshoot along its locked Push direction
+5. no instant bout finish yet
 
-- existing ArrowUp PressLatch remains
-- add a second `PressLatch` instance for ArrowDown
-- first subsequent Simulation tick consumes the pending Down edge
-- later ticks receive false
-- holding ArrowDown does not repeat
-- release + new physical press can produce another edge
-- no generic Input framework
+### Success
 
-### Same-tick Player Push + Counter edge
+Against Push, Success result:
 
-If the same participant receives:
+1. capture attacker locked Push direction
+2. attacker enters Kuzushi
+3. defender moves to one automatically selected valid side target
+4. attacker receives one explicit forward overshoot along its locked Push direction
 
-- `pushPressed: true`
-- `counterPressed: true`
+### Fail
 
-on the same tick:
+Unchanged from ACTION-04A1:
 
-**Push wins; Counter edge is discarded.**
-
-Do not queue Counter.
-
-This is an explicit fixed rule.
-
-## 5. Runtime State
-
-### Action
-
-Extend the existing small discriminated union:
-
-```ts
-type ParticipantActionState =
-  | { kind: 'idle' }
-  | { kind: 'push'; ...existing }
-  | {
-      kind: 'counter'
-      ticksRemaining: number
-    }
-```
-
-Do not add generic action framework.
-
-Counter has one phase/window only in ACTION-04A1.
-
-### Posture
-
-Add a separate canonical runtime posture:
-
-```ts
-type ParticipantPosture =
-  | { kind: 'stable' }
-  | {
-      kind: 'kuzushi'
-      ticksRemaining: number
-    }
-```
-
-Semantics:
-
-- action = chosen commitment
-- posture = current physical stability
-
-This separation is accepted architecture.
-
-Snapshot exposes an isolated copy of posture.
-
-## 6. Counter Window
-
-Provisional tuning:
-
-- `COUNTER_WINDOW_TICKS = 12` (~200 ms)
-
-Counter can start only when:
-
-- participant posture is stable
-- participant action is idle
-- Counter edge is true
-- no same-tick Push edge won priority
-
-On Counter start:
-
-- action becomes `counter`
-- WASD steering is suppressed
-- effective self movement = zero
-- grounded self velocity brakes normally
-- Counter can begin without Contact
-
-During Push / Counter / Kuzushi:
-- new Counter edge is ignored
-- not queued
-
-## 7. Counter Resolution Conditions
-
-A Counter succeeds on the **first tick** where all are true:
-
-1. defender action = Counter window
-2. opponent action = Push Active
-3. actual Simulation Contact exists on that tick
-
-Use existing Simulation Contact result.
-Do not create a separate near-contact gameplay rule.
-
-Resolution must happen:
-
-**after Contact resolution and before Push force resolution**
-
-so a successful Counter can cancel the attacker's current Push before that tick adds new Push external acceleration.
-
-If the window expires without a qualifying tick:
-- Counter fails
 - Counter user enters Kuzushi
+- no relocation
+- no overshoot
 
-## 8. Best / Success / Fail Tier
+## 4. Direction Basis
 
-Use an exact unambiguous tick count.
+The Counter position result is based on the **attacker's locked Push direction**, not its current auto-facing and not the current Contact normal.
 
-Provisional:
+Let:
 
-- `COUNTER_BEST_TICKS = 3`
-
-For an opponent currently in Push Active:
-
-```
-activeElapsed = PUSH_ACTIVE_TICKS - attacker.action.ticksRemaining
-
-if activeElapsed < COUNTER_BEST_TICKS:
-    Best
-else:
-    Success
+```ts
+d = attacker Push locked direction // unit Vec2
+perp = { x: -d.y, y: d.x }
+P = attacker center position at Counter resolution
+R = attacker.bodyRadius + defender.bodyRadius
 ```
 
-Thus Best covers exactly:
+Important:
 
-- Active elapsed 0
-- Active elapsed 1
-- Active elapsed 2
+- capture/copy `d` **before** `enterKuzushi(attacker)` cancels the Push action
+- do not recompute from facing after cancellation
+- do not use random side selection
+- do not add manual A/D side selection
 
-No frame-perfect one-tick rule.
+Current Kuzushi facing freeze remains unchanged.
+Do not add a new facing/turning system in this Task.
 
-Fail means the Counter window ends without a qualifying Push Active + Contact tick.
+## 5. Rear Target — Best
 
-### ACTION-04A1 gameplay result
+Preferred rear target:
 
-- Best → attacker Kuzushi
-- Success → attacker Kuzushi
-- Fail → Counter user Kuzushi
+```
+rear = P - d * R
+```
 
-The tier calculation must still be implemented/tested because ACTION-04A2 will attach different positional outcomes.
+This represents the defender gaining the attacker's rear at non-overlapping Contact distance.
 
-Do **not** add persistent event/history framework.
+Validity:
 
-If direct testing of the tier classifier needs a small explicit Pure helper, keep it local/small and testable.
-Do not add `lastCounter.seq` in this Task.
+```
+|rear| <= arena.radius - defender.bodyRadius
+```
 
-## 9. Entering Kuzushi
+or mathematically equivalent finite check.
 
-Use one explicit Simulation-owned entry path, e.g. `enterKuzushi()`.
+Do not clamp an invalid target back inside the ring.
 
-Entering Kuzushi must:
+Best fallback order:
 
-- set posture to Kuzushi
-- set its timer
-- cancel current action → idle
-- not queue previous inputs
+1. valid rear
+2. preferred valid side
+3. opposite valid side
+4. no relocation
 
-Provisional tuning:
+Even if relocation falls back or fails:
+- attacker still enters Kuzushi
+- Best classification remains Best
+- overshoot still applies
 
-- `COUNTER_FAIL_KUZUSHI_TICKS = 30` (~500 ms)
-- successful Counter may use the same initial `KUZUSHI_TICKS = 30` in this first Prototype
+Do not convert Best into Success because rear was invalid.
 
-Prefer one provisional `KUZUSHI_TICKS = 30` unless a code reason clearly requires separate constants.
+## 6. Automatic Side Selection — Success
 
-All values remain User Play Test tuning.
+Manual side choice is rejected by User.
 
-## 10. Kuzushi Tick Ownership / Off-by-One Rule
+Side candidates:
 
-Make duration semantics exact.
+```
+sidePlus  = P + perp * R
+sideMinus = P - perp * R
+```
 
-Recommended tick order:
+Both are exact non-overlap Contact-distance targets.
 
-1. advance/decrement **existing** posture timers at the beginning of the Simulation tick
-2. if timer expires, posture becomes stable before accepting new actions
-3. process new input/actions
-4. movement / contact / Counter / Push resolution
-5. a Kuzushi entered during this tick starts with the full `KUZUSHI_TICKS` and is not decremented until the next tick
+### Preferred side rule
 
-This prevents newly-entered Kuzushi from losing one tick immediately.
+Use defender's current pre-relocation position at Counter resolution.
 
-If implementation uses an equivalent deterministic scheme, document it and test exact duration.
+```
+lateralOffset = dot(perp, defender.position - P)
+```
 
-## 11. Kuzushi Behavior
+Provisional epsilon:
 
-While posture = Kuzushi:
+- `COUNTER_SIDE_EPSILON = 1e-6` meters
 
-### Actions
+If:
 
-- Push cannot start
-- Counter cannot start
-- existing action should already be idle
-- action edges are ignored, not queued
+- `lateralOffset > epsilon` → prefer `sidePlus`
+- `lateralOffset < -epsilon` → prefer `sideMinus`
+- otherwise treat as a tie
 
-### Movement
+This is equivalent to choosing the geometrically nearer side candidate, but is simpler and deterministic.
 
-- effective self movement = zero
-- existing grounded braking applies to selfVelocity
-- do not teleport selfVelocity to zero unless existing brake naturally reaches zero
+### Tie-break
 
-### Facing
+When effectively tied:
 
-- `updateFacing` must skip a Kuzushi participant
-- its facing remains fixed
-- stable opponent continues normal auto-facing
-- once Kuzushi expires, normal auto-facing resumes
+1. among valid side candidates, prefer the candidate closer to ring center
+2. if still exactly/effectively tied, prefer fixed `sidePlus`
 
-No turn-rate system.
+No randomness.
 
-### Push susceptibility
+### Invalid preferred target
 
-Kuzushi participant must be easier to Push.
+For Success:
 
-Use one named provisional factor:
+1. preferred valid side
+2. opposite valid side
+3. no relocation
 
-- `KUZUSHI_PUSH_SUSCEPTIBILITY`
+If neither side is valid:
+- attacker still enters Kuzushi
+- Success remains Success
+- overshoot still applies
+- defender stays at its current position
 
-Initial Prototype value:
+Do not clamp through invalid geometry.
 
-- **1.5**
+## 7. Target Validity / Safety
 
-This value is provisional and subject to later tuning.
+A relocation target is valid only if:
 
-When one active Push is driving the pair:
+- x/y are finite
+- defender body remains fully inside the current arena circle:
+  `hypot(target.x, target.y) <= arena.radius - defender.bodyRadius`
 
-- determine which participant is being driven backward by the net Push direction
-- if that receiving participant is Kuzushi, multiply the Push external acceleration magnitude by `KUZUSHI_PUSH_SUSCEPTIBILITY`
-- otherwise use current Push acceleration unchanged
+Current ring-out is still unimplemented.
+This validity rule is only to prevent Counter relocation from teleporting a participant into an obviously invalid future ring state.
 
-Do not apply the factor to ordinary Movement.
-Do not derive from Weight / LowerBody yet.
+Do not implement Ring-out/BoutOutcome.
 
-Equal simultaneous Push behavior when both stable must remain unchanged.
+### Overlap
 
-## 12. Grip Guarantee Boundary — DO NOT IMPLEMENT GRIP
+Target center distance from attacker must be exactly `R` within floating-point tolerance.
 
-Only document / preserve the future boundary.
+Do not intentionally add overlap or a hidden gap.
 
-Future rule:
+Do not run pathfinding or a route around the attacker.
 
-- first pass valid Grip range/contact check
-- if valid and target is Kuzushi, Grip success may bypass the ordinary success roll/check
+## 8. Relocation Ownership
 
-Do not:
-- add Grip action
-- add Grip state
-- add Grip code
-- add Grip range beyond existing Contact mechanics
+Relocation is canonical Simulation gameplay state.
 
-## 13. Resolution Order
+On successful Counter:
 
-Extend the current explicit fixed-tick order without creating a pipeline framework.
+- Simulation writes defender `position` directly to the chosen target on the resolution tick
+- Phaser reads the Snapshot result
+- no Scene-owned gameplay position
+- no short gameplay trajectory / path
+- no movement tween that feeds back into Simulation
 
-Target high-level order:
+For ACTION-04A2, an instantaneous visual jump is acceptable and is explicitly a User Play Test item.
 
-0. advance existing posture timers / restore stable if expired
-1. sanitize intents
-2. start Push or Counter from eligible idle+stable participants
-   - same participant: Push edge priority over Counter edge
-3. derive effective self move
-   - Kuzushi → zero
-   - Counter → zero
-   - Push → existing Push semantics
-   - idle stable → normal move
-4. update selfVelocity using existing grounded rule
-5. decay externalVelocity
-6. integrate positions with self + external
-7. resolve Contact / Separation
-8. resolve Counter success against current Push Active + Contact
-   - successful Counter enters attacker Kuzushi and cancels attacker Push
-9. resolve remaining Push force
-   - includes Kuzushi susceptibility of receiving participant
-10. advance action timers
-   - Counter expiration without success → Counter user Kuzushi
-   - existing Push transitions unchanged
-11. update facing
-   - skip Kuzushi participants
+Do not build navigation/pathfinding.
 
-Do not add side/rear relocation or overshoot here.
+## 9. Attacker Overshoot
 
-## 14. Push Dummy Update
+Current Contact removes much of the attacker's closing selfVelocity, so Counter must add a small explicit attacker-only forward carry.
 
-Existing PushDummyController is a validation harness, not AI.
+Use Model B; do not create another physics system.
 
-After posture is added:
+Provisional constant:
 
-- if Dummy participant posture is Kuzushi:
-  - emit zero move
-  - emit no Push edge
-  - hold/reset cooldown at `DUMMY_PUSH_COOLDOWN_TICKS`
-- after Kuzushi ends, cooldown begins normally
-- do not Push immediately on the first stable tick unless the cooldown semantics explicitly reach ready
+- `COUNTER_OVERSHOOT_SPEED = 1.0` m/s
 
-Use Snapshot posture only.
-Do not access Simulation internals.
+On successful Best or Success:
 
-## 15. Presentation / Browser Controls
+```
+attacker.externalVelocity += d * COUNTER_OVERSHOOT_SPEED
+```
 
-Player controls:
+Then apply the existing external-speed clamp.
 
-- WASD = movement
-- ArrowUp = Push
-- ArrowDown = Counter
-- 1 / 2 = existing Dummy modes
-- R = existing restart behavior
+Requirements:
 
-Minimal presentation:
+- applies once per successful Counter
+- attacker only
+- defender does not receive the overshoot delta
+- direction = captured locked Push direction
+- existing external momentum already present on each participant is preserved
+- existing external decay handles overshoot afterward
+- no reversal / no separate decay system
+- no mass / Weight / LowerBody formula yet
 
-- Counter action: display `COUNTER`
-- Kuzushi posture: display `KUZUSHI`
+This is Prototype tuning and may change after Play Test.
 
-No BEST/SUCCESS/FAIL result history is required in ACTION-04A1.
+## 10. Counter Resolution Order
 
-If both action text and posture text could compete:
-- Kuzushi display takes visual priority, because entering Kuzushi cancels action.
+Preserve ACTION-04A1 high-level tick order.
 
-No animation framework / VFX.
+Within successful `resolveCounter`:
 
-## 16. Scope
+1. identify defender Counter + attacker Push Active
+2. capture attacker locked Push direction
+3. determine tier
+4. compute relocation preference/target from current post-Contact positions
+5. enter attacker Kuzushi (cancels Push)
+6. defender returns idle
+7. apply chosen defender relocation, if any
+8. apply attacker-only overshoot external velocity
+9. return/finish resolution
+
+Then existing `resolvePush` runs.
+
+Because attacker Push has been cancelled:
+- that tick adds no new Push acceleration
+
+Do not change accepted Counter success condition:
+- Counter window
+- opponent Push Active
+- actual Contact
+
+## 11. Best / Success Result Visibility
+
+Do not introduce a generic event bus/history framework.
+
+The positional result itself should make the difference visible:
+
+- Best → rear
+- Success → side
+- both → attacker KUZUSHI
+
+The existing `KUZUSHI` label remains.
+
+A persistent `lastCounter.seq` history field is **not required** in this Task.
+
+If Agent finds that a tiny explicit BEST/SUCCESS presentation marker is strictly necessary for Browser/User testing:
+- keep it narrowly scoped
+- report why it was necessary
+- do not create a generic event system
+
+Default direction: no new result-history state.
+
+## 12. No Facing Redesign
+
+Do not change ACTION-04A1 facing semantics.
+
+- attacker in Kuzushi keeps the facing it had when Kuzushi began
+- defender remains stable and auto-faces normally
+- side/rear geometry uses locked Push direction regardless of current facing
+
+If this makes visual side/rear readability poor, record it in User Play Test.
+Do not solve it by adding turn-rate/facing-snap logic inside this Task.
+
+## 13. Existing External Momentum
+
+Do not clear pair externalVelocity on Counter success.
+
+Reason:
+
+- existing momentum represents movement already accumulated before the successful Counter
+- Success caught later in Active may already have some incoming pair movement
+- Counter stops further Push acceleration, but does not retroactively erase prior movement
+
+Overshoot is added on top of the attacker's current external component only.
+
+Tests must distinguish:
+- preserved pre-existing pair external momentum
+- attacker-only overshoot delta
+
+## 14. Scope
 
 Allowed:
 
-- `src/game/sumo/BoutTypes.ts`
 - `src/game/sumo/BoutSimulation.ts`
-- existing tests + focused new Counter/Kuzushi tests
-- `src/game/input/pushDummyController.ts` + tests
-- reuse existing `PressLatch`
-- `src/game/scenes/BoutScene.ts`
+- `src/game/sumo/BoutTypes.ts` only if a small type is truly needed
+- focused Counter tests
+- minimal existing Scene presentation if required
 - `docs/ARCHITECTURE.md`
-- `AGENTS.md` only if Current Source responsibility wording materially requires sync
+- `AGENTS.md` only if material Current Source wording requires it
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-A small focused pure helper/module is allowed only if it makes tier/result logic materially clearer.
+Prefer keeping the positional math as small Pure TypeScript helpers inside/near BoutSimulation.
 
-No new dependency.
+No dependency.
 
-## 17. Scope Out
+## 15. Scope Out
 
 Do NOT implement:
 
-- side relocation
-- rear relocation
-- automatic side candidate selection
-- ring-edge relocation fallback
-- attacker overshoot
-- Counter relocation animation
-- persistent Counter result/event history
-- instant/probabilistic bout finish
+- probability / instant finish
 - seed / PRNG
 - BoutOutcome
 - Ring-out
-- Harite
 - Grip
+- Harite
 - dedicated Dodge
-- left/right thrust
+- thrust
 - Weight / Power / LowerBody
 - Stamina / Balance
-- Tachiai
-- Grapple / Throw / Lift
-- Push distance tuning
+- mass / traction
+- separate pull/inashi actions
+- lateral Counter impulse variant
+- relocation path/pathfinding
+- gameplay interpolation/tween
+- facing redesign / turn-rate
+- generic event/history system
 - CPU AI
-- Physics engine
-- generic action framework
+- Touch / Gamepad
+- Push distance tuning
+- Counter window / Best window / Kuzushi duration tuning
+- Kuzushi susceptibility tuning
 
-## 18. Required Automated Verification
+## 16. Required Automated Verification
 
-All existing 86 tests must remain PASS unless only helpers require adding `counterPressed: false`.
+All existing 108 tests must remain PASS.
 
 Add focused tests at minimum:
 
-T60. Counter edge
-- one edge starts exactly one Counter
-- hold/mashing during Counter does not repeat or queue
-- new edge after returning stable/idle works
+### T78 — Best rear relocation
 
-T61. Same-tick Push + Counter priority
-- same participant receives both edges
-- Push starts
-- Counter does not start / queue
+- valid Best Counter
+- defender ends at `P - d * R`
+- exact non-overlap Contact distance
+- attacker Kuzushi
+- defender stable/idle
 
-T62. Counter window duration
-- exactly `COUNTER_WINDOW_TICKS`
-- no negative timer
-- expiry without success → self Kuzushi
+### T79 — Success side selection from lateral offset
 
-T63. Best tier exact boundary
-- Push Active elapsed 0,1,2 => Best
-- elapsed 3 => Success
-- test exact `COUNTER_BEST_TICKS` meaning
+Test both signs:
 
-T64. Success timing
-- later Push Active + Contact resolves success
-- attacker Push is cancelled before current tick Push force is applied
+- positive lateral offset → sidePlus
+- negative lateral offset → sideMinus
+- uses locked Push direction basis
+- exact non-overlap Contact distance
 
-T65. No Push / early / late failure
-- no qualifying Active+Contact during window → Fail → self Kuzushi
-- opponent Recovery does not count
+### T80 — Side tie-break
 
-T66. Counter can begin before Contact
-- non-contact window waits
-- if Contact + Active occurs before expiry, success
-- otherwise Fail
+Cover:
 
-T67. Successful Counter Kuzushi
-- Best and Success both put attacker into Kuzushi in A1
-- defender returns idle/stable
-- no relocation occurs
+1. tied lateral offset, both valid, one candidate closer to ring center → choose center-nearer
+2. exact remaining tie → deterministic sidePlus
 
-T68. Kuzushi duration
-- newly-entered Kuzushi gets full exact duration
-- returns stable deterministically
-- no off-by-one
+No randomness.
 
-T69. Kuzushi action suppression
-- Push/Counter edges while Kuzushi are ignored/not queued
-- move intent does not steer
-- selfVelocity brakes via existing grounded rule
+### T81 — Invalid side fallback
 
-T70. Kuzushi facing freeze
-- Kuzushi participant does not auto-face moving opponent
-- stable participant still auto-faces
-- facing resumes after posture recovery
+- preferred side invalid, opposite valid → opposite
+- both invalid → no relocation
+- Success still produces attacker Kuzushi
 
-T71. Kuzushi Push susceptibility
-- same one-sided Push against stable vs Kuzushi defender
-- Kuzushi case receives larger external pair acceleration by exact provisional factor
-- normal stable Push baseline unchanged
+### T82 — Best invalid rear fallback
 
-T72. Simultaneous Counter
-- both Counter with no Push
-- both expire into Kuzushi symmetrically
-- deterministic / finite
+- rear invalid, preferred side valid → preferred side
+- rear + preferred side invalid, opposite valid → opposite
+- all invalid → no relocation
+- tier remains Best and attacker Kuzushi
 
-T73. Existing Push-vs-Push regression
-- equal simultaneous Push semantics unchanged when stable
+### T83 — Relocation safety
 
-T74. Dummy Kuzushi behavior
-- no move/Push during Kuzushi
-- cooldown held/reset
-- no immediate Push on Kuzushi exit before cooldown
+Across rear / side / fallback:
 
-T75. Counter unused regression
-- existing Movement / Contact / Push / Dummy behavior unchanged
-- existing 86 tests PASS
+- finite positions
+- defender body fully inside arena for any applied relocation
+- no overlap
+- no clamp-generated invalid geometry
 
-T76. Determinism / finite / no overlap
-- mixed Counter/Push sequence replay identical
-- no NaN/Infinity
-- Contact invariants preserved
+### T84 — Overshoot attacker only
 
-T77. ArrowDown edge latch integration
-- second PressLatch semantics match Push latch
-- pending edge consumed by one Simulation tick
-- multi-tick render frame cannot repeat Counter edge
+On a first-active-tick Best with no prior external momentum:
 
-Do not make tests depend on side/rear relocation; those belong to ACTION-04A2.
+- attacker externalVelocity gets exactly `COUNTER_OVERSHOOT_SPEED` along locked `d`
+- defender gets no overshoot component
+- existing MAX_EXTERNAL_SPEED clamp respected
 
-## 19. Verification Level
+### T85 — Success preserves prior pair momentum
 
-Heavy / Core Counter Foundation.
+Create a later Active Success after prior Push acceleration:
+
+- pair external momentum accumulated before Counter is preserved
+- attacker receives only the additional overshoot delta
+- defender keeps its existing external component
+- no same-tick new Push gain after Counter resolution
+
+### T86 — Overshoot decay
+
+After Counter:
+
+- attacker overshoot decays through existing EXTERNAL_DECELERATION
+- monotonic toward zero
+- no reversal / NaN
+- no new Counter-specific decay rule
+
+### T87 — Locked direction basis
+
+After Push begins, change geometry/facing before Counter success:
+
+- relocation and overshoot use original locked Push direction
+- do not retarget to current facing/contact normal
+
+### T88 — No relocation on Fail
+
+- failed Counter remains ACTION-04A1 behavior
+- self Kuzushi
+- no side/rear position jump
+- no overshoot
+
+### T89 — ACTION-04A1 regression
+
+- Counter success still cancels same-tick Push force
+- exact Best/Success classification unchanged
+- Kuzushi timer/facing/susceptibility unchanged
+
+### T90 — Push / Contact / Movement regressions
+
+- existing accepted Push-vs-Push
+- Contact no-creep
+- grounded Movement
+- Dummy harness
+- all existing 108 tests PASS unchanged apart from harmless helper adaptation
+
+### T91 — Determinism / finite
+
+Mixed Best / Success / invalid-fallback cases:
+
+- same input sequence = identical result
+- finite positions/velocities
+- no overlap
+
+Do not add brittle tests for final animation/game feel.
+
+## 17. Verification Level
+
+Heavy / Core Counter Position Resolution.
 
 Required:
 
 - `pnpm test` PASS
 - `pnpm build` PASS
 - `git diff --check` PASS
-- T60–T77 evidence
-- all existing regressions PASS
+- T78–T91 evidence
+- existing 108 tests PASS
 - no new dependency
-- Simulation / Pure input helpers Phaser-free
+- Simulation remains Phaser-free
 - Scope Out absent
 
-### Runtime Smoke
+### Browser Smoke
 
-Because ACTION-04A1 adds a new keyboard edge and visible posture:
+If real browser/runtime is available:
 
-Verify if the Agent environment supports a real browser/runtime:
-
-- ArrowDown starts COUNTER once per physical press
-- hold does not repeat
-- Mode 2 Dummy Push can trigger Counter success
-- whiffing Counter leads to KUZUSHI
-- Kuzushi participant cannot move/Push
-- Kuzushi facing remains frozen
-- after Kuzushi ends, normal control/facing returns
+- Mode 2 Dummy still approaches and Pushes
+- ArrowDown Counter still works
+- Best-looking timing places Player behind Dummy
+- later successful timing places Player at Dummy side
+- KUZUSHI remains visible
+- attacker visibly carries forward after successful Counter
+- no overlap/jitter/teleport to invalid location
+- Fail still creates self Kuzushi without relocation
+- Push/Contact/Movement baseline remains intact
 - no runtime/console errors
 
-If real browser runtime is unavailable:
-- report `Browser Smoke: NOT RUN (environment limitation)`
-- do not fabricate PASS
-- automated technical result may be `PASS WITH KNOWN UNTESTED ITEMS` if all required core tests/build/diff-check pass
-- User Play Test remains the runtime/game-feel gate
+If browser tool is unavailable:
+- report NOT RUN honestly
+- User Play Test is the required runtime/game-feel gate
 
-## 20. User Play Test
+## 18. User Play Test — REQUIRED / FULL COUNTER FEEL
 
-ACTION-04A1 User Play Test: **REQUIRED but focused**, not full Counter Feel acceptance.
+This is the first full Counter positional Feel gate.
 
-User should verify only the foundation:
+User should evaluate:
 
-1. ArrowDown feels like one committed Counter attempt, not guard/hold.
-2. Counter whiff reliably creates a vulnerable KUZUSHI state.
-3. Correct timing against Dummy Push makes the attacker enter KUZUSHI instead.
-4. Kuzushi visibly prevents immediate action/movement.
-5. Kuzushi facing freeze is understandable.
-6. Kuzushi target is noticeably easier to Push, without feeling absurd.
-7. Counter input/timing does not break accepted Push / Contact / Movement.
-8. Best vs Success positional difference is intentionally NOT visible yet.
-
-Full Counter Feel acceptance happens after ACTION-04A2 positional resolution.
+1. Best timing clearly feels stronger than normal Success.
+2. Best → rear position is understandable and rewarding.
+3. Success → side position feels like a believable sabaki/deflection.
+4. Automatic side choice feels natural; no desire for manual A/D choice.
+5. Tie situations do not feel obviously biased or strange.
+6. Instant reposition is readable enough for Prototype, or whether later presentation interpolation is needed.
+7. Attacker overshoot feels like being pulled/sent forward rather than teleporting or skating.
+8. Overshoot amount is not absurd.
+9. Kuzushi facing freeze makes side/rear advantage readable.
+10. After Best/Success, following up with Push during opponent Kuzushi feels causally understandable.
+11. Fail still feels appropriately risky.
+12. Push-vs-Push contest remains natural.
+13. Existing Movement / Contact / Push Feel remains intact.
+14. Counter + lateral movement + Push contest now feel like distinct choices.
+15. Report whether Counter feels too binary/easy/hard, but do not tune final timing unless it blocks the mechanic.
 
 Agent report:
 
 `User Play Test: REQUIRED / NOT RUN`
 
-## 21. Acceptance Criteria
+Technical PASS != Counter Feel accepted.
 
-AC-01: ArrowDown semantic edge implemented with existing latch pattern.
-AC-02: one press = one Counter attempt; no hold auto-repeat.
-AC-03: Push priority over same-tick Counter is deterministic.
-AC-04: Counter window is deterministic and exact.
-AC-05: Best boundary is exactly first `COUNTER_BEST_TICKS` Active ticks.
-AC-06: success requires Counter window + opponent Push Active + actual Contact.
-AC-07: Best/Success classification exists and is tested.
-AC-08: success cancels attacker Push before same-tick Push force.
-AC-09: Fail puts Counter user into Kuzushi.
-AC-10: Best/Success put Push attacker into Kuzushi.
-AC-11: Kuzushi is separate posture state.
-AC-12: entering Kuzushi cancels action.
-AC-13: Kuzushi suppresses actions and movement steering.
-AC-14: Kuzushi freezes auto-facing.
-AC-15: Kuzushi expires deterministically and restores normal facing/control.
-AC-16: Kuzushi increases received Push by provisional susceptibility factor only.
-AC-17: Dummy respects Kuzushi.
-AC-18: no side/rear relocation or overshoot.
-AC-19: no finish probability / PRNG / BoutOutcome.
-AC-20: accepted Push / Contact / Movement regressions PASS.
-AC-21: T60–T77 + existing tests PASS.
-AC-22: `pnpm build` PASS.
-AC-23: Current State docs materially match Source.
-AC-24: User Play Test REQUIRED / NOT RUN.
-AC-25: Scope外変更なし.
+## 19. Acceptance Criteria
 
-## 22. Stop Conditions
+AC-01: Best uses captured locked Push direction.
+AC-02: valid Best relocates defender to rear at exact non-overlap Contact distance.
+AC-03: Success side selection is automatic and deterministic.
+AC-04: side selection uses nearest-side/lateral-offset rule.
+AC-05: tie prefers ring-center-nearer valid side, then fixed sidePlus.
+AC-06: invalid preferred side falls back deterministically.
+AC-07: invalid Best rear falls back rear→preferred side→other side→none.
+AC-08: relocation never clamps through invalid geometry.
+AC-09: no relocation still preserves Counter tier/Kuzushi result.
+AC-10: successful Counter gives attacker-only overshoot.
+AC-11: overshoot uses locked Push direction.
+AC-12: overshoot preserves prior external momentum and uses existing clamp/decay.
+AC-13: successful Counter still cancels current-tick Push force.
+AC-14: Fail has no relocation/overshoot.
+AC-15: ACTION-04A1 Counter/Kuzushi semantics unchanged.
+AC-16: accepted Push/Contact/Movement/Dummy regressions PASS.
+AC-17: no probability/BoutOutcome/Ring-out/Grip/Harite scope creep.
+AC-18: no generic event/history/pathfinding/facing framework.
+AC-19: T78–T91 + existing tests PASS.
+AC-20: `pnpm build` PASS.
+AC-21: Current State docs match material Source changes.
+AC-22: User Play Test REQUIRED / NOT RUN.
+AC-23: Scope外変更なし.
+
+## 20. Stop Conditions
 
 STOP if:
 
 - Preflight fails
 - Current Source / Review Handoff conflict
-- Counter success cannot cancel Push before same-tick force without materially redesigning accepted Push semantics
-- separate posture causes a Source-of-Truth conflict
-- Kuzushi susceptibility requires introducing Weight/traction now
-- side/rear relocation becomes necessary to make Counter foundation technically valid
-- Physics/new dependency required
-- task-external User changes / divergence exist
+- relocation cannot be made deterministic without pathfinding
+- valid side/rear placement requires implementing Ring-out/BoutOutcome
+- overshoot requires replacing Model B
+- successful Counter needs changing accepted A1 timing/Kuzushi semantics
+- a facing redesign becomes necessary for technical correctness
+- new dependency/Physics required
+- task-external User changes/divergence exist
 
 Do not broaden Scope.
 
-## 23. Completion Report
+## 21. Completion Report
 
 Minimum:
 
 - Result
 - Preflight
 - Changed Files
-- User Decisions implemented
-- Counter input / window semantics
-- exact Best tick rule
-- Counter success/fail resolution
-- Kuzushi state / duration
-- Kuzushi facing rule
-- Kuzushi Push susceptibility constant
-- Dummy integration
-- T60–T77 + regression tests
-- Runtime Smoke
-- AC-01–AC-25
+- Best rear algorithm
+- automatic side algorithm
+- tie-break and invalid-target fallback
+- target validity rule
+- overshoot constant/ownership
+- external momentum preservation
+- T78–T91 + regression tests
+- Browser Smoke
+- AC-01–AC-23
 - Implementation Evidence
 - Design Deviations
 - Unexpected Scope
@@ -719,18 +648,18 @@ Minimum:
 
 Implementation Evidence minimum:
 
-1. one-edge Counter
-2. Push-vs-Counter input priority
-3. exact Best/Success boundary
-4. success cancels Push
-5. Fail → self Kuzushi
-6. success → attacker Kuzushi
-7. Kuzushi action/movement/facing behavior
-8. Push susceptibility
-9. Dummy Kuzushi-awareness
-10. no relocation/finish scope creep
+1. Best rear
+2. Success sidePlus/sideMinus
+3. tie-break
+4. invalid fallback
+5. no-overlap/arena validity
+6. attacker-only overshoot
+7. prior external preservation
+8. locked direction basis
+9. Fail unchanged
+10. A1 + Push/Contact/Movement regressions
 
-## 24. Git Delivery
+## 22. Git Delivery
 
 Follow AGENTS.md.
 
@@ -745,277 +674,22 @@ Technical success:
 
 Commit message example:
 
-`feat: add counter kuzushi foundation`
+`feat: add counter position resolution`
 
 Do not change main.
 
-## 25. Final Instruction
+## 23. Final Instruction
 
-This Task ends after Counter + Kuzushi Foundation.
+This Task ends after Counter positional resolution + overshoot.
 
 Do not continue to:
-- side/rear positioning
-- overshoot
-- finish chance
+- finish probability
 - Ring-out
 - Grip
 - Harite
+- stats
+- animation framework
 
 After commit / push / Completion Report, stop and report:
 
-「ACTION-04A1-COUNTER-KUZUSHI-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Accepted implementation commit for technical review:
-  `0dede47770b664f9fd01b99597403ad7bd92b55a`
-- Agent-Start-Head:
-  `59c34b3762c4c7b67814f820c56314cfce3ff9d6`
-- Agent Task Diff is exactly one implementation commit.
-- Production scope matches ACTION-04A1:
-  - Counter semantic edge
-  - Counter window / Best-Success classification
-  - Kuzushi posture
-  - Kuzushi facing / movement / action behavior
-  - provisional Push susceptibility
-  - Dummy Kuzushi-awareness
-  - minimal Scene input/presentation
-- No side/rear relocation, attacker overshoot, finish probability, PRNG, BoutOutcome, Grip, Harite, Ring-out, or new dependency was introduced.
-
-## Reported Implementation vs Design
-
-PASS.
-
-Direct Source review confirmed:
-
-- `ParticipantIntent.counterPressed` is a semantic per-tick edge.
-- ArrowDown uses a second existing `PressLatch`; no generic Input framework was introduced.
-- Same-tick Push + Counter uses explicit Push priority and does not queue Counter.
-- Counter is part of the canonical Simulation action union.
-- Kuzushi is a separate canonical posture state.
-- `enterKuzushi()` cancels the current action and is the explicit entry path.
-- Counter window is `COUNTER_WINDOW_TICKS = 12`.
-- Best is unambiguously the first `COUNTER_BEST_TICKS = 3` Push Active ticks:
-  - elapsed 0 / 1 / 2 = Best
-  - elapsed 3+ = Success.
-- Counter success requires:
-  - defender Counter window
-  - opponent Push Active
-  - actual Simulation Contact.
-- Resolution order is correct:
-  - Contact
-  - Counter resolution
-  - remaining Push resolution.
-- Successful Counter cancels the attacking Push before that tick can add new Push acceleration.
-- Window expiry without success causes self Kuzushi.
-- Best / Success both cause attacker Kuzushi in ACTION-04A1, with no positional difference yet.
-- Kuzushi movement uses zero effective intent and existing grounded braking rather than hard-zeroing selfVelocity.
-- Kuzushi participant does not auto-face; stable opponent still does.
-- Normal auto-facing/control resumes after Kuzushi expiry.
-- Kuzushi Push susceptibility is isolated to received Push acceleration via provisional factor `1.5`.
-- Existing stable-vs-stable Push semantics remain unchanged.
-- Push Dummy reads Snapshot posture and does not act while Kuzushi.
-
-## Verification Review
-
-Reported:
-
-- `pnpm test`: 108/108 PASS
-- `pnpm build`: PASS
-- `git diff --check`: PASS
-- T60–T77 covered
-- prior 86 tests remain PASS with only required intent-helper adaptation
-- deterministic / finite / no-overlap coverage present
-
-The focused tests directly inspected include coverage for:
-
-- one-edge Counter / no queue
-- same-tick Push priority
-- exact Counter window
-- exact Best/Success boundary
-- same-tick Push-force cancellation
-- no-Push / early / late failure
-- pre-Contact Counter
-- success / fail Kuzushi ownership
-- exact Kuzushi duration
-- Kuzushi action / movement suppression
-- facing freeze and recovery
-- exact susceptibility factor
-- simultaneous Counter symmetry
-- accepted Push-vs-Push regression
-- Dummy Kuzushi behavior
-- deterministic mixed replay
-- ArrowDown latch behavior across 0/N Simulation ticks
-
-## Runtime Verification
-
-Browser Smoke: NOT RUN due Agent environment limitation.
-
-This is a Known Untested item, not a Source failure, because ACTION-04A1 explicitly allowed this state when automated Core verification/build/diff-check passed.
-
-User manual runtime test is therefore the remaining gate.
-
-## Non-Blocking Notes
-
-### N-1 — Dummy cooldown after Kuzushi is one tick conservative
-
-Because the Dummy generates its Intent from the pre-step Snapshot, a Snapshot with:
-
-`posture = kuzushi, ticksRemaining = 0`
-
-is still seen as Kuzushi by the controller, while the Simulation will restore stable at the start of that same upcoming tick.
-
-Therefore the harness effectively holds cooldown one extra tick around Kuzushi recovery.
-
-The Completion Report disclosed this correctly.
-
-This is acceptable for the deterministic validation harness:
-- it does not change Gameplay Core
-- it prevents immediate Push after recovery
-- it is only a 1-tick conservative delay
-
-Do not add cross-layer prediction solely to remove this harness-only tick.
-
-### N-2 — Kuzushi Snapshot timer semantics are unusual but explicit
-
-`kuzushi { ticksRemaining: 0 }` means:
-- still Kuzushi in the current Snapshot
-- restores to stable at the beginning of the next Simulation tick.
-
-This is deterministic and tested. Preserve this exact meaning unless a future Task explicitly redesigns posture timers.
-
-## Accepted Technical Baseline Pending Play Test
-
-If User Play Test passes, ACTION-04A1 becomes accepted baseline with:
-
-- ArrowDown = temporary Counter binding
-- one keydown = one Counter attempt
-- Push priority on same-tick Up+Down
-- Counter window 12 ticks provisional
-- Best first 3 Push Active ticks provisional
-- Fail → self Kuzushi
-- Best / Success → attacker Kuzushi
-- Kuzushi 30 full ticks provisional
-- Kuzushi action lock / grounded brake / facing freeze
-- Kuzushi Push susceptibility 1.5 provisional
-- no positional reward yet
-
-All numerical values remain Prototype tuning, not final balance.
-
-## User Play Test — REQUIRED / READY
-
-Run `pnpm dev`.
-
-Use Mode 2 (`2`) for predictable incoming Push.
-
-Verify:
-
-1. ArrowDown produces one `COUNTER` attempt per physical press.
-2. Holding ArrowDown does not repeatedly Counter.
-3. Whiff a Counter:
-   - after the Counter window, Player becomes `KUZUSHI`.
-4. During Player Kuzushi:
-   - WASD cannot steer
-   - ArrowUp / ArrowDown do not start actions
-   - facing remains frozen.
-5. After Kuzushi ends:
-   - movement/actions return cleanly
-   - auto-facing resumes.
-6. Against Dummy Push, time ArrowDown so the Dummy becomes `KUZUSHI` instead.
-7. While Dummy is Kuzushi:
-   - it does not immediately Push again.
-8. Push a Kuzushi target:
-   - it should move more easily than a stable target.
-   - judge whether 1.5× feels noticeable but not absurd.
-9. Existing ArrowUp Push still feels like the accepted baseline.
-10. Existing Contact / movement behavior still feels unchanged outside Counter/Kuzushi.
-11. BEST vs SUCCESS positional difference is intentionally absent in A1.
-
-Also confirm no browser/console/runtime error.
-
-## Acceptance State
-
-Technical implementation: PASS.
-
-Gameplay / runtime acceptance: PENDING USER PLAY TEST.
-
-Do not create ACTION-04A2 until User reports the ACTION-04A1 focused Play Test result.
-
-If accepted:
-- ACTION-04A2 may add automatic side/rear positional resolution and attacker overshoot.
-
-If rejected:
-- record the concrete problem as:
-  - Counter timing
-  - Kuzushi duration
-  - susceptibility
-  - input feel
-  - facing behavior
-  - runtime bug
-and create only the smallest focused correction.
-
-## Do Not Reopen
-
-- accepted Push / Contact / Movement baseline
-- automatic side-selection decision (belongs to A2)
-- shared Down Counter meaning
-- ArrowDown temporary binding
-- probabilistic instant finish deferral
-- no forced backward step on Counter whiff
-
-## Deferred To ACTION-04A2
-
-- Best → rear position
-- Success → automatically selected side position
-- deterministic invalid-target fallback
-- attacker overshoot
-- minimal BEST/SUCCESS result presentation if needed
-- full Counter Feel Play Test
-
-## Still Deferred Beyond ACTION-04A2
-
-- probabilistic finish / PRNG / BoutOutcome
-- Grip production behavior
-- Harite
-- dedicated Dodge
-- Weight / Power / LowerBody / Balance / Stamina formulas
-- Ring-out
-- Push distance tuning
-
-
-# User Play Test Result — 2026-10-19
-
-ACTION-04A1 Counter + Kuzushi Foundation: ACCEPTED AS CURRENT BASELINE
-
-User feedback:
-- Focused Play Test is OK.
-- Counter/Kuzushi foundation is acceptable.
-- As an action game, timings may ultimately need to be broader / more forgiving.
-- Kuzushi lock duration may be longer than the current provisional value.
-- These are not blockers now and should be handled later as gameplay/balance tuning rather than reopening the foundation.
-
-Accepted baseline:
-- ArrowDown one-press Counter attempt
-- Counter window / Best-Success-Fail foundation
-- Fail → self Kuzushi
-- Best / Success → attacker Kuzushi
-- Kuzushi as separate posture
-- Kuzushi action lock / grounded brake / facing freeze
-- Kuzushi Push susceptibility concept
-- Dummy Kuzushi-awareness
-- existing Push / Contact / Movement remain accepted
-
-Deferred tuning:
-- COUNTER_WINDOW_TICKS
-- COUNTER_BEST_TICKS
-- KUZUSHI_TICKS
-- KUZUSHI_PUSH_SUSCEPTIBILITY
-- exact reaction forgiveness / action-game timing width
-
-Do not reopen these values preemptively without concrete later gameplay interaction evidence.
-ACTION-04A2 may proceed with side/rear positional resolution and attacker overshoot while preserving this foundation.
+「ACTION-04A2-COUNTER-POSITION-RESOLUTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
