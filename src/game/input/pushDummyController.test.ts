@@ -16,7 +16,7 @@ function setup(ax: number, bx: number): BoutSetup {
   }
 }
 
-const IDLE_INTENT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: false }
+const IDLE_INTENT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
 
 function newDummy(mode: 'stationary' | 'push' = 'push'): PushDummyController {
   const dummy = new PushDummyController('b', 'a')
@@ -29,7 +29,7 @@ function tick(sim: BoutSimulation, dummy: PushDummyController, playerPush = fals
   const dummyIntent = dummy.nextIntent(sim.getSnapshot())
   sim.step(
     new Map<ParticipantId, ParticipantIntent>([
-      ['a', { move: { x: 0, y: 0 }, pushPressed: playerPush, counterPressed: false, gripPressed: false }],
+      ['a', { move: { x: 0, y: 0 }, pushPressed: playerPush, counterPressed: false, gripPressed: false, driveHeld: false }],
       ['b', dummyIntent],
     ]),
   )
@@ -82,7 +82,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
   it('T52: in Contact, idle and ready: zero move and exactly one edge, not repeated', () => {
     const sim = new BoutSimulation(setup(-COMBINED / 2, COMBINED / 2))
     const dummy = newDummy()
-    expect(tick(sim, dummy)).toEqual({ move: { x: 0, y: 0 }, pushPressed: true, counterPressed: false, gripPressed: false })
+    expect(tick(sim, dummy)).toEqual({ move: { x: 0, y: 0 }, pushPressed: true, counterPressed: false, gripPressed: false, driveHeld: false })
     expect(b(sim.getSnapshot()).action.kind).toBe('push')
     expect(tick(sim, dummy).pushPressed).toBe(false)
   })
@@ -216,7 +216,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
       }
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
-          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: t === playerCounterAt, gripPressed: false }],
+          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: t === playerCounterAt, gripPressed: false, driveHeld: false }],
           ['b', intent],
         ]),
       )
@@ -225,7 +225,8 @@ describe('PushDummyController (ACTION-03B2)', () => {
     expect(nextEdge - firstStableIdle).toBe(DUMMY_PUSH_COOLDOWN_TICKS)
   })
 
-  it('T110: grappled dummy emits nothing; after release its cooldown runs deterministically', () => {
+  // ACTION-05C1: while grappled the Mode 2 dummy now holds Drive (was: emits nothing).
+  it('T110: grappled dummy emits only held Drive; after release its cooldown runs deterministically', () => {
     // Just outside the dummy's contact tolerance but inside Grip range: the player grips on tick 0.
     const sim = new BoutSimulation(setup(-COMBINED / 2 - 0.025, COMBINED / 2 + 0.025))
     const dummy = newDummy()
@@ -236,14 +237,14 @@ describe('PushDummyController (ACTION-03B2)', () => {
       const before = sim.getSnapshot()
       const intent = dummy.nextIntent(before)
       if (before.engagement.kind === 'grappled') {
-        expect(intent).toEqual(IDLE_INTENT)
+        expect(intent).toEqual({ ...IDLE_INTENT, driveHeld: true })
       } else if (t > releaseAt) {
         if (firstFree < 0) firstFree = t
         if (intent.pushPressed) nextEdge = t
       }
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
-          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: t === 0 || t === releaseAt }],
+          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: t === 0 || t === releaseAt, driveHeld: false }],
           ['b', intent],
         ]),
       )

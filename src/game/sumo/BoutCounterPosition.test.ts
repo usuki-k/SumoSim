@@ -39,6 +39,7 @@ function intents(a: Input = {}, b: Input = {}): Map<ParticipantId, ParticipantIn
     pushPressed: i.push ?? false,
     counterPressed: i.counter ?? false,
     gripPressed: false,
+    driveHeld: false,
   })
   return new Map([
     ['a', one(a)],

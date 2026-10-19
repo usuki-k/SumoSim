@@ -38,6 +38,9 @@ export interface ParticipantIntent {
   // A new Grip press edge for this tick: starts a Grip while free, releases while grappled.
   // Lowest same-tick priority (Push > Counter > Grip).
   readonly gripPressed: boolean
+  // Held Drive effort (the same key as Push, as a held state). Used only while grappled and READY;
+  // ignored while free (where the Push edge applies instead).
+  readonly driveHeld: boolean
 }
 
 export type PushPhase = 'startup' | 'active' | 'recovery'
@@ -64,6 +67,8 @@ export type ParticipantActionState =
       // Ticks left in the current phase, including the next tick (always >= 1).
       readonly ticksRemaining: number
     }
+  // Grappled only: actually contributing Drive this tick (timerless; re-decided every tick).
+  | { readonly kind: 'drive' }
 
 // Best / Success are decided when a Counter catches an active Push; Fail is a window that expired.
 export type CounterTier = 'best' | 'success' | 'fail'

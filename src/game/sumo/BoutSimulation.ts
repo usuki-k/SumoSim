@@ -61,6 +61,11 @@ export const GRIP_RECOVERY_TICKS = 12 // ~200 ms after a whiffed Grip or a relea
 // Grip range = combined radius + this margin (m). Kuzushi never bypasses it.
 export const GRIP_RANGE_MARGIN = 0.09
 
+// Grappled Drive (ACTION-05C1). Provisional Prototype tuning, subject to User Play Test.
+export const GRAPPLE_DRIVE_SPEED = 0.6 // m/s pair target speed per unit of net Drive strength
+export const GRAPPLE_DRIVE_ACCELERATION = 4 // m/s^2 toward that target per unit of net strength
+export const MOROZASHI_DRIVE_FACTOR = 1.5 // Morozashi holder's Drive strength (others 1)
+
 // Inward self-velocity sums at or below this (m/s) count as no contribution.
 const INWARD_EPSILON = 1e-9
 
@@ -74,6 +79,7 @@ type MutableAction =
   | { kind: 'push'; phase: PushPhase; ticksRemaining: number; direction: MutableVec2 }
   | { kind: 'counter'; ticksRemaining: number }
   | { kind: 'grip'; phase: GripPhase; ticksRemaining: number }
+  | { kind: 'drive' }
 
 type MutablePosture = { kind: 'stable' } | { kind: 'kuzushi'; ticksRemaining: number }
 
@@ -109,12 +115,51 @@ function nextPushPhase(phase: PushPhase): { phase: PushPhase; ticks: number } | 
 function effectiveMove(p: MutableParticipant, move: Vec2): Vec2 {
   if (p.posture.kind === 'kuzushi') return ZERO_MOVE
   if (p.action.kind === 'idle') return move
-  if (p.action.kind === 'counter' || p.action.kind === 'grip') return ZERO_MOVE
+  if (p.action.kind === 'counter' || p.action.kind === 'grip' || p.action.kind === 'drive') return ZERO_MOVE
   return p.action.phase === 'active' ? p.action.direction : ZERO_MOVE
 }
 
 function isGripReaching(p: MutableParticipant): boolean {
   return p.action.kind === 'grip' && p.action.phase === 'reach'
+}
+
+// Drive strength of one participant: the Morozashi holder drives harder; everyone else is 1.
+export function grappleDriveStrength(engagement: BoutEngagement, id: ParticipantId): number {
+  return engagement.kind === 'grappled' &&
+    engagement.advantage.kind === 'morozashi' &&
+    engagement.advantage.holderId === id
+    ? MOROZASHI_DRIVE_FACTOR
+    : 1
+}
+
+// One grappled update of the pair's shared external velocity `v` for signed net Drive `net` along
+// the pair axis `n` (A -> B). net = 0: the existing external decay. Otherwise the axial component
+// accelerates toward GRAPPLE_DRIVE_SPEED*|net| at GRAPPLE_DRIVE_ACCELERATION*|net| without the
+// axial decay being subtracted first (that would cancel a 4 m/s^2 Drive against the 8 m/s^2 decay);
+// beyond the target it bleeds back by EXTERNAL_DECELERATION. Opposing axial momentum is cancelled by
+// the Drive acceleration; the perpendicular part decays as usual. Then the existing MAX clamp.
+export function grappledExternalVelocity(v: Vec2, n: Vec2, net: number): Vec2 {
+  const out: MutableVec2 = { x: v.x, y: v.y }
+  if (net === 0) {
+    decayExternal(out)
+    return out
+  }
+  const strength = Math.abs(net)
+  const dirX = Math.sign(net) * n.x
+  const dirY = Math.sign(net) * n.y
+  let parallel = v.x * dirX + v.y * dirY
+  const perp: MutableVec2 = { x: v.x - parallel * dirX, y: v.y - parallel * dirY }
+  const target = GRAPPLE_DRIVE_SPEED * strength
+  if (parallel < target) {
+    parallel = Math.min(target, parallel + GRAPPLE_DRIVE_ACCELERATION * strength * TICK_SECONDS)
+  } else {
+    parallel = Math.max(target, parallel - EXTERNAL_DECELERATION * TICK_SECONDS)
+  }
+  decayExternal(perp)
+  out.x = parallel * dirX + perp.x
+  out.y = parallel * dirY + perp.y
+  clampExternal(out)
+  return out
 }
 
 function copyEngagement(engagement: BoutEngagement): BoutEngagement {
@@ -215,6 +260,7 @@ function copyAction(action: MutableAction): ParticipantActionState {
   if (action.kind === 'grip') {
     return { kind: 'grip', phase: action.phase, ticksRemaining: action.ticksRemaining }
   }
+  if (action.kind === 'drive') return { kind: 'drive' }
   return {
     kind: 'push',
     phase: action.phase,
@@ -346,29 +392,40 @@ export class BoutSimulation {
   }
 
   // Advances exactly one logical tick (TICK_SECONDS). Participants without an intent have zero move.
-  // Order: posture timers -> release (if the tick began grappled) -> FREE action start -> effective
-  // move -> grounded self velocity -> external decay -> integrate (self + external) -> contact ->
-  // grapple bond (grappled) -> Counter / Grip / Push resolution (free) -> action timers -> facing.
+  // Order: posture timers -> tick-start grapple readiness -> release (if the tick began grappled) ->
+  // FREE action start / grappled Drive decision -> effective move -> grounded self velocity ->
+  // external update (FREE decay / grappled shared Drive update) -> integrate (self + external) ->
+  // contact -> grapple bond (grappled) -> Counter / Grip / Push resolution (free) -> action timers ->
+  // facing.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     for (const p of this.participants) advancePosture(p)
+    const [a, b] = this.participants
 
-    // While grappled a Grip edge releases, but only from a participant READY at tick start
-    // (canActInGrapple); a TURNING participant's edge is ignored, not queued. Releasing participants
-    // enter Grip Recovery; nobody starts a FREE action on the release tick (those edges are dropped).
+    // Readiness from the state at tick start (the previous Snapshot), used by release and Drive.
+    const startEngagement = this.engagement
+    const ready = (p: MutableParticipant) => canActInGrapple(p, p === a ? b : a, startEngagement)
+
+    // While grappled a Grip edge releases, but only from a READY participant; a TURNING participant's
+    // edge is ignored, not queued. Release wins over Drive: every Drive action ends, releasing
+    // participants enter Grip Recovery, and nobody starts a FREE action on the release tick.
     let released = false
     if (this.engagement.kind === 'grappled') {
-      const [a, b] = this.participants
-      const engagement = this.engagement
-      const releasers = this.participants.filter(
-        (p) => intents.get(p.id)?.gripPressed === true && canActInGrapple(p, p === a ? b : a, engagement),
-      )
+      const releasers = this.participants.filter((p) => intents.get(p.id)?.gripPressed === true && ready(p))
       if (releasers.length > 0) {
         this.engagement = { kind: 'free' }
+        for (const p of this.participants) if (p.action.kind === 'drive') p.action = { kind: 'idle' }
         for (const p of releasers) p.action = { kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS }
         released = true
       }
     }
     const grappled = this.engagement.kind === 'grappled'
+
+    // Grappled Drive: a READY participant holding Drive contributes this tick (timerless action).
+    if (grappled) {
+      for (const p of this.participants) {
+        p.action = intents.get(p.id)?.driveHeld === true && ready(p) ? { kind: 'drive' } : { kind: 'idle' }
+      }
+    }
 
     for (const p of this.participants) {
       const intent = intents.get(p.id)
@@ -391,10 +448,13 @@ export class BoutSimulation {
         }
       }
 
-      // Grappled: ordinary WASD is suppressed for both (Foundation; no grappled movement yet).
+      // Grappled: ordinary WASD is suppressed for both (no grappled footwork yet).
       applyGroundedVelocity(p.selfVelocity, grappled ? ZERO_MOVE : effectiveMove(p, move))
-      decayExternal(p.externalVelocity)
+      if (!grappled) decayExternal(p.externalVelocity)
+    }
+    if (grappled) this.updateGrappledExternal()
 
+    for (const p of this.participants) {
       p.position.x += (p.selfVelocity.x + p.externalVelocity.x) * TICK_SECONDS
       p.position.y += (p.selfVelocity.y + p.externalVelocity.y) * TICK_SECONDS
     }
@@ -476,6 +536,32 @@ export class BoutSimulation {
       p.externalVelocity.y = avgY
     }
     this.resolveGrappleBond()
+  }
+
+  // Grappled pair: one shared external update per tick along the tick-start pair axis (A -> B), with
+  // the signed, order-independent net Drive strength(A)*[A drives] - strength(B)*[B drives]. Both
+  // participants end with the identical external velocity, so the bonded pair moves as one.
+  private updateGrappledExternal(): void {
+    const [a, b] = this.participants
+    const dx = b.position.x - a.position.x
+    const dy = b.position.y - a.position.y
+    const distance = Math.hypot(dx, dy)
+    const n =
+      distance > MIN_CONTACT_DISTANCE
+        ? { x: dx / distance, y: dy / distance }
+        : { x: Math.cos(a.facing), y: Math.sin(a.facing) }
+    const net =
+      (a.action.kind === 'drive' ? grappleDriveStrength(this.engagement, a.id) : 0) -
+      (b.action.kind === 'drive' ? grappleDriveStrength(this.engagement, b.id) : 0)
+    const shared = {
+      x: (a.externalVelocity.x + b.externalVelocity.x) / 2,
+      y: (a.externalVelocity.y + b.externalVelocity.y) / 2,
+    }
+    const next = grappledExternalVelocity(shared, n, net)
+    for (const p of this.participants) {
+      p.externalVelocity.x = next.x
+      p.externalVelocity.y = next.y
+    }
   }
 
   // Grapple bond: moves both centers symmetrically along their axis so the distance is exactly the

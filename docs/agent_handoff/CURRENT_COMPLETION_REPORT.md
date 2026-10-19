@@ -1,337 +1,199 @@
-Task-ID: ACTION-05C-GRAPPLED-DRIVE-INVESTIGATION
-Result: PASS
+Task-ID: ACTION-05C1-GRAPPLED-DRIVE-FOUNDATION
+Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
 Source-Baseline: f28542fce7b5996916a7769b9690905c41ca0608
-Agent-Start-Head: cf5e8153c173c5214ed590702d3af2c8a365540a
+Agent-Start-Head: f752a9f06c16df5801a72ba26e8aafce991e468a
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS（Investigation only）。
+Technical Gateはすべて PASS（`pnpm test` 182/182、`pnpm build`、`git diff --check`）。
 
-Driveは、次の範囲の小さな追加で実装できる。
-- Model Bのpair共有external velocityを使う
-- 方向はpair軸に沿わせる
-- 開始の可否は既存の`canActInGrapple`で判定する
-- Morozashiはengagementの係数として読む
-
-BLOCKEDになる点はない。
-
-設計上の重要な所見が1つある（F3: 外力の減衰と連続加速の結合）。これに対する推奨rule（Q4 / Q13）はReview判断の対象として明示した。残る事項は推奨既定値付きのUser Decisionだけで、Ring-outは前提条件ではない（Q17）。
-
-Production Source / package / lockfileは未変更。Repository変更は本Reportのみ。
+- Browser Smoke: **NOT RUN（environment limitation）**
+- User Play Test: **REQUIRED / NOT RUN**
 
 # Preflight
 
-- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 3`）
+- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 2`）
 - Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `f28542f`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `f28542f..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
-- Agent-Start-Head: FF後のHEAD `cf5e815`
-- 読んだもの: AGENTS.md、`BoutTypes.ts`、`BoutSimulation.ts`、`grappleOrientation.ts`、`BoutGrip` / `BoutOrientation` / `BoutPush`のtest、`BoutScene.ts`、ARCHITECTURE.md、GAME_CONCEPT.md、Review / Play Testの記録（`2c77829`、`fc7517c`）
+- `f28542f..origin/develop` の変更は `docs/agent_handoff/` 配下のみ → `merge --ff-only` 成功
+- Agent-Start-Head: FF後のHEAD `f752a9f`
 
-# 用語の区別
+# Changed Files
 
-- **Current Fact**: Current Sourceの事実
-- **Recommendation**: 本Reportの推奨（未実装）
-- **User Decision**: 実装前にUserが決める事項
-- **Review**: Reviewで判断する設計事項
-- **Deferred**: 後続Task
+- `src/game/sumo/BoutTypes.ts`: `ParticipantIntent.driveHeld`、`{ kind: 'drive' }` action
+- `src/game/sumo/BoutSimulation.ts`:
+  - 定数3つ
+  - `grappleDriveStrength()` / `grappledExternalVelocity()`（pure、export）
+  - `updateGrappledExternal()`
+  - `step()`をvelocity更新と積分の2段に分割
+  - releaseでDriveを解除
+- `src/game/sumo/BoutDrive.test.ts`（新規）: T131〜T148、T150
+- `src/game/input/pushDummyController.ts`: GRAPPLED中のMode 2は`driveHeld = true`だけを出す
+- `src/game/input/pushDummyController.test.ts`: T110のassertionを意図どおりに更新（後述）、helperに`driveHeld: false`を追加
+- `src/game/scenes/BoutScene.ts`: ArrowUpのKey参照（edge → Push latch、`isDown` → `driveHeld`）、`DRIVE`表示、`pair v`表示
+- 他のtestのhelperに`driveHeld: false`を追加（BoutSimulation / Push / Counter / CounterPosition / Grip / Orientation / pressLatch。assertionは不変）
+- `docs/ARCHITECTURE.md`: Current Stateを同期
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-数値はすべて暫定。
+`grappleOrientation.ts`とAGENTS.mdは変更なし。新規dependencyはなし。
 
-# Current Source Findings（Current Fact）
+# User Decisions Implemented
 
-- F1 Sceneは、ArrowUpの`down` eventを`pushLatch`（edge）にだけつないでいる。held state（`isDown`）はSimulationへ渡していない。GRAPPLED中の`pushPressed`はFREE action開始の段階で無視される
-- F2 GRAPPLED中の外力: `enterGrapple`で両者の外力を平均にそろえる。その後は両者に同じdecay（`EXTERNAL_DECELERATION = 8 m/s²`、積分の**前**）とclamp（`MAX_EXTERNAL_SPEED = 3`）が掛かるので、両者は等しいまま。bondは半径方向だけで、平行移動なら補正は0になる
-- F3 **外力の減衰と連続加速の結合（重要）**: Pushの加速は`resolvePush`（積分の**後**）で足され、次のtickの積分の前にdecayが引かれる。この順序のまま加速`a`を毎tick足し続けると、次のようになる:
-  - `a ≤ 8 m/s²`: 足した分がそのtickのdecayで消える。積分に使われる速度は常に`a·dt`以下にとどまり、**tick rateに依存した這い進み**になる
-  - `a > 8 m/s²`: 実効`(a − 8) m/s²`で加速が止まらず、`MAX_EXTERNAL_SPEED = 3 m/s`（土俵半径2.275 mを1秒未満で横断する速度）まで達する
-  - → Pushの「短い加速 + 減衰」をそのまま連続Driveに流用すると、「這う」か「暴走する」かのどちらかになる。Driveには上限速度を持つ規則が必要
-- F4 `step()`の各participant loopは「self velocity → decay → 積分」をparticipantごとに完結させている。積分は相手を参照しないので、loopを「全員のvelocity更新」と「全員の積分」の2段に分けても、FREEの結果は変わらない
-- F5 Dummyは、GRAPPLED中は`NO_INPUT`を返し、Gripもreleaseもしない。そのままでは、組み中に押し合う相手が存在しない
-- F6 GRAPPLED中、2人の方位はbondと平行移動によって一定に保たれる。旋回（05B1）はDriveと独立に進む
+- UD-1: 連続hold
+- UD-2: `driveHeld`（同じArrowUp。Sceneは文脈で分岐しない）
+- UD-3: `GRAPPLE_DRIVE_SPEED = 0.6`、`GRAPPLE_DRIVE_ACCELERATION = 4`
+- UD-4: `MOROZASHI_DRIVE_FACTOR = 1.5`（holderだけ）、それ以外は1.0
+- UD-5: READYの者のreleaseがDriveより優先
+- UD-6: Ring-outなし
 
-# Recommended Input Semantics（Q1）
+# driveHeld Input
 
-**Recommendation: A**。`ParticipantIntent`に`driveHeld: boolean`（held state）を1つだけ追加する。
+- Sceneは`upKey`を1つだけ持つ: `on('down')` → 既存のPush latch、`isDown` → 毎tickの`driveHeld`
+- key-downの連続からheld stateを合成することはしない
+- FREE: `driveHeld`は読まない（T131: driveHeldの有無でSnapshotが完全に一致）
+- GRAPPLED: `pushPressed`は従来どおり無視
 
-- Sceneは同じArrowUpから2つの値を作る: `pushPressed`（edge、既存のlatch）と`driveHeld`（`isDown`）。engagementによる分岐はSceneで**行わない**
-- **Simulationが文脈で解釈する**: FREEでは`driveHeld`を無視し、GRAPPLEDでは`pushPressed`を無視する（既存どおり）
-- FREE Pushの意味と既存testは不変。CPUやtouchも同じsemanticな値を出すだけで済む
-- 不採用:
-  - B（汎用のprimary action）: 入力の大きな再設計になる
-  - C（GRAPPLED中に`pushPressed`をDriveとして流用）: edgeでは連続Driveを表せず、意味も混ざる
+# Drive Action
 
-# Continuous vs Discrete（Q2、Q9）
+- GRAPPLED中、FREE action開始の段階で毎tick`action = driveHeld && ready(tick start) ? drive : idle`に置き換える
+- timerなし
+- `isDriving`のような重複stateはない
+- TURNING中に押していても寄与しない。READYでtickを始めた最初のtickから自動で寄与する（T135）
 
-**Recommendation: 連続（↑を押している間Drive）**。
+# Pair Axis / Net
 
-- 寄りは持続的な圧力で読みやすい。Userが好む「広く単純なtiming」に合い、touchでもhold buttonで済む
-- 将来のstaminaは、Drive中のtickごとの消費として足すだけで済む
-- 押し合いは`net`の連続値で自然に表せる
-- startup / recoveryは**なし**。↑を離したtickから寄与がなくなり、pairの外力は既存の減衰で止まる（0.6 m/sなら約0.08秒）
-- 不採用（Deferred）: 離散的なDrive pulse（がぶり寄りのような律動）。phaseとtimerが必要で、Foundationには過剰
+- `n` = tick先頭の位置でのA → B（同一中心ならAのfacingをfallback）。facingは使わない
+- `net = strength(A)·[A drive] − strength(B)·[B drive]`で、`strength`は`grappleDriveStrength(engagement, id)`
+  - Aだけ: +1
+  - Bだけ: −1
+  - neutral同士: 0
+  - holder A対B: +0.5
+  - holderだけ: +1.5
+- 符号付きの対称な式なので、participantの配列順による優先はない（T147で順序を入れ替えて検証）
 
-# Drive Direction（Q3）
+# Shared External Drive Update（必須ruleの根拠）
 
-**Recommendation**: pair軸（driverの中心 → 相手の中心）。
+`updateGrappledExternal()`が1 tickに1回、両者のexternalの平均（GRAPPLED中は等しい）を`grappledExternalVelocity(v, n, net)`で更新し、両者へ**同じ値**をcopyする。
 
-- bondにより軸は常に正確に定義される。Aの軸 = −（Bの軸）なので、同時Driveで**ちょうど相殺**する
-- facingを使うと、READYのtolerance（最大15°）だけ横成分が混ざり、等しいDrive同士で横に滑る。不採用
-- 開始時に方向を保存する方式: 連続Driveでは不要。不採用
-- 横回転させる寄り（pairを回す）はDeferred
+- `net = 0`: 既存の`decayExternal`
+- `net ≠ 0`:
+  1. 軸方向の成分 < 目標なら、`min(目標, 成分 + 4·|net|·dt)`。**軸方向の減衰は先に引かない**
+  2. 目標を超えていれば、`max(目標, 成分 − 8·dt)`（既存の減衰率）
+  3. 逆向きの成分は、Driveの加速で打ち消してから反転する
+  4. 垂直方向の成分は`decayExternal`
+  5. 最後に`clampExternal`（MAX 3 m/s）
+- FREEの`decayExternal`とPushの式は変更していない
+- **Correctionの根拠（T132 / T139）**: 加速4 < 減衰8のもとでも、k tick後の速度はちょうど`min(0.6, k·4/60)`になる（9 tick目で0.6に到達し、その後は一定）。這い進みの不具合（1 tick分の速度で止まる）は起きない
 
-# Pair Movement Model（Q4、Q5、Q12、Q13）
+# Step Order（実装どおり）
 
-**Recommendation**: Model Bのまま、**pair共有の`externalVelocity`の軸方向成分だけ**をDriveで動かす。
+1. posture timer
+2. tick先頭のreadiness（`ready()`はtick開始時のengagementとstateで評価）
+3. GRAPPLED中のrelease
+4. FREE action開始
+5. GRAPPLEDなら`drive` / `idle`を決定
+6. 全員のself velocity
+7. external（FREEは減衰、GRAPPLEDは共有のDrive更新）
+8. 全員の積分
+9. contact
+10. bond / Counter → Grip → Push
+11. action timer
+12. facing
 
-```
-n = unit(B − A)                                   // tick start (bond keeps it exact)
-net = s(A)·[A driving] − s(B)·[B driving]          // signed along n (Q6, Q7)
-if net ≠ 0:
-  dir = sign(net)·n ; target = GRAPPLE_DRIVE_SPEED·|net| ; rate = GRAPPLE_DRIVE_ACCELERATION·|net|
-  u = v·dir                                         // shared external, along drive direction
-  if u < target: u = min(target, u + rate·dt)       // accelerate toward the drive speed
-  else:          u = max(target, u − EXTERNAL_DECELERATION·dt)  // overspeed still bleeds by the existing decay
-  perpendicular part of v: existing decay
-else:
-  v: existing decay (unchanged behaviour)
-both participants' externalVelocity = v  (then existing MAX clamp)
-```
+- velocity更新と積分を分けた2段のloopになるが、FREEは「各自の更新が相手を参照しない」ので結果は同一（既存の163件が不変で、T131でも一致を確認）
+- Driveは、tick先頭でREADYの者について**そのtick**の移動に効く（Pushのような1 tickの遅れはない）。旋回でREADYになった場合は、次のtickから効く（05B1どおり）
 
-- **Review判断（F3への対処）**: 「Drive中は、軸方向の加速と減衰を合わせて1つの規則で扱う」
-  - 減速はこれまでどおり`EXTERNAL_DECELERATION`だけで行う（減衰の出どころは1つのまま）
-  - ただし、目標速度へ向けて加速しているtickでは、軸方向のdecayを重ねて引かない
-  - こうすることで、F3の這い進みと暴走が起きず、tick rateにも依存しない
-  - 代案（単純に加速を足す。Taskの推奨原則どおり）は、F3の問題がそのまま残るのでRejectedとした
-- 既存のmomentum（Counterのovershootの平均など）は消さない。Drive方向に目標速度より速ければ既存の減衰で落ち、逆向きなら加速で打ち消してから進む
-- `MAX_EXTERNAL_SPEED`は全体の上限として残す（目標速度はそれより小さい）。Driveに別のcapは不要で、目標速度がDriveの上限になる。FREE Pushは一切変えない
-- **片側だけのneutral Drive（Q5）**: AだけがDriveすると、両者の外力が`+n`方向へ目標速度0.6 m/s（暫定）まで上がり、Bは後退する
-  - 変わるのは両者の`externalVelocity`だけ
-  - `selfVelocity`はWASD抑制のため0（制動のみ）
-  - bondの補正は平行移動なので約0
-- **step順序（Q12）**: GRAPPLED中は次の順にする（F4により、FREEの結果は変わらない）:
+# Release During Drive
 
-  ```
-  posture timers → release → 全員のself velocity → 全員のexternal decay → Drive適用 → 全員の積分 → contact → bond → action timers → facing
-  ```
+- READYの者のGrip edgeでFREEに戻る
+- 両者の`drive` actionをidleにし、releaseした側はGrip recovery
+- そのtickはFREEなので、Driveの寄与はない
+- externalは消さず、FREEの減衰で止まる（T142: release tickでも`v − 8·dt`）
+- FREE中に`drive` actionは存在しない（T142 / T150で毎tick確認）
+- TURNING中のShift + ↑は無視（T143）
 
-  - Pushのような1 tickの遅れはない（入力したtickから動く）
-  - 判定（readiness / net）はtick先頭の状態で行う
-- 不採用:
-  - selfVelocityでのDrive（grounded ruleとWASD抑制に衝突し、bondと引っ張り合う）
-  - targetだけを動かす（bondの対称補正で歪む）
-  - 位置を直接書き換える
+# Drive / Orientation / Bond
 
-# Simultaneous Drive（Q6）
+- Driveでpairは平行移動するだけ。70 tickのあいだDriveしても、距離R・pair軸・旋回の単調減少は変わらない（T144）
+- 背後Morozashiの組み合わせ: holderは一方的にDriveでき（T134）、被害側はREADYになってから押し返す（T135 / T146）
 
-`net = s(A)·hA − s(B)·hB`を共通の軸`n`（A → B）上で計算する。符号付きで対称な式なので、participantの配列順による優先はない（鏡像の配置なら鏡像の結果）。
+# Dummy
 
-- 等しいneutral同士: `net = 0` → 減衰のみ → 拮抗（stalemate）
-- 一方だけ: `|net| = s`
-- 強さが違う: 差の分だけ、遅い速度で押し勝つ
+- Mode 2: FREE中は従来どおり。GRAPPLED中は`move 0`、edgeはすべてfalse、`driveHeld = true`で、Push cooldownを保持する
+- Mode 1: 常に`driveHeld = false`
+- GripもreleaseもしないAIではない
+- T146:
+  - 正面で組むと、Dummyは次のtickから押し返し、pairは−0.6 m/sで進む
+  - 背後Morozashiでは、DummyがTURNINGの間は寄与せず、READYになった最初のtickから寄与する（そのtickの直前のSnapshotがREADYであることも確認）
 
-# Morozashi Advantage（Q7）
+# Presentation
 
-```
-driveStrength(driver, engagement) = (engagement is morozashi && holderId === driver.id) ? MOROZASHI_DRIVE_FACTOR : 1
-```
+- phase text: `DRIVE`。TURNINGの者は`drive`になり得ないので、`TURNING n°`が隠れることはない
+- ENGAGE行に`pair v: x.xx m/s`（GRAPPLED中）
+- 既存のENGAGE表示、READY / TURNING表示、Morozashiの線は維持
 
-- **holderにだけ係数を掛ける**。不利側は1.0のまま（罰則は付けない）。簡単で、効果も十分読み取れる
-- 暫定`MOROZASHI_DRIVE_FACTOR = 1.5`。目標速度と加速の両方に効く:
-  - holderだけがDrive: 0.9 m/s
-  - holder対不利側の押し合い: `net = 0.5` → 0.3 m/sでholderが押し勝つ
-  - neutral同士: 拮抗
-- Morozashiはengagementのadvantageから読む。新しいaction typeや状態は作らない
+# Tests（182/182 PASS）
 
-# Readiness / Release Interaction（Q8、Q10、Q11、Q15）
+既存163件: helperに`driveHeld: false`を追加し、**意図した変更が1件**ある。
 
-- 寄与`[p driving] = driveHeld && canActInGrapple(p, opponent, engagement)`を、**tick先頭の状態**で毎tick評価する
-- TURNINGの者は寄与しない。READYの者は、相手がTURNING中でも一方的に寄れる
-- 相手は、READYになったtickから押し返せる
-- READYになる前から↑を押していた場合: **READYになったtickから自動で寄与が始まる**。held stateは「押している間は有効」という意味で、edgeを溜めているわけではない（意図的な仕様）
-- **Release（Q10）**: ACTION-05A / 05B1のsemanticsのまま
-  - READYの者のShiftは、Drive中でも即座にreleaseできる
-  - Driveはreleaseを妨げない
-  - release tickはFREEなのでDriveは適用されない（Driveがcancelされる）
-  - 共有の外力はそのまま残り、FREEの減衰で止まる
-- **同じtickの優先順（Q15、将来互換）**:
-  1. TURNINGの判定（何もできない）
-  2. Release（Shift）
-  3. 将来の離散的なgrapple action（← → Throw、↓ Lift）
-  4. 連続Drive（↑）
-  - 2人はそれぞれ独立に評価するが、releaseは両者をFREEにするので最初に処理する
-- **旋回（Q11）**: Driveはpairを平行移動させるだけなので、方位は一定のまま。TURNINGは通常どおり進み、Driveがfacingの誤差をresetすることもない。pairは回転させない
+- T110 は「GRAPPLED中のDummyは何も出さない」→「`driveHeld = true`だけを出す」に変更（Task §Dummy Mode 2の仕様どおり）
+- それ以外のassertionは不変（T149）
 
-# Drive as Action State（Q14）
+新規19件:
 
-**Recommendation**: `ParticipantActionState`に`{ kind: 'drive' }`（timerなし）を追加する。
+- T131 FREEは`driveHeld`を無視
+- T132 / T139 片側Drive（`min(0.6, k·4/60)`ちょうど、単調増加、距離R）
+- T133 B側の鏡像
+- T134 TURNINGの者は寄与しない、READYの者は一方的にDrive
+- T135 TURNING中から押していた場合の開始tick
+- T136 neutral同士は加速0。既存のmomentumは毎tick`8/60`ずつ減衰（0に強制しない）
+- T137 Morozashiのholderだけなら1.5倍（目標と加速）
+- T138 holder対不利側は`net = 0.5`
+- T139 helper: 減衰 > 加速でも目標に到達、目標超過分の戻し、MAXでのclamp
+- T140 逆向きのmomentumの打ち消しと反転（helperと統合版）
+- T141 垂直方向の成分は減衰
+- T142 / T143 release
+- T144 bond / orientation
+- T145 ↑を離すとDriveが止まる
+- T146 Dummy
+- T147 順序の入れ替え
+- T148 Ring-outなし（土俵半径2.275 mを1 m以上越えても、GRAPPLEDのまま0.6 m/s）
+- T150 混在sequenceのreplay
 
-- 毎tick、寄与がtrueなら`drive`、falseなら`idle`に置き換える
-- 理由:
-  - (1) Snapshotで見える（表示とtestに必要。intentはSnapshotに入らない）
-  - (2) 将来のThrow / Liftと排他であることをaction unionで表せる
-  - (3) 将来のstamina消費の判定点になる
-- 同じ意味のstateは1つだけ（その時点の実際の寄与）
-- ACTION-05Aの不変条件「GRAPPLED ⇒ action idle」は、「GRAPPLED ⇒ action ∈ {idle, drive}」へ広がる
-- releaseで`drive`はidleになる（releaseした側はGrip recovery）
+# Browser Smoke
 
-# Minimal Presentation（Q16）
+**NOT RUN（environment limitation）**。`pnpm build`は成功。
 
-- phase text: Drive中は`DRIVE`（READY表示を置き換える）。TURNING中は`TURNING n°`のまま
-- ENGAGE行（既存）に加えて、debug用に`pair v: 0.62 m/s`程度の数値を表示
-- neutralとMorozashiの線の区別は既存どおり
+# Implementation Evidence
 
-# Ring-out Prerequisite（Q17、Q18）
-
-**Recommendation: A**（Driveを先に、変位だけで実装・評価する）。
-
-- 技術面: Ring-outなしで完全に実装・testできる
-- Game Feel面:
-  - 「寄り切って勝つ」の手応えはRing-outが必要
-  - ただしDriveの手応え（pairを押す圧力、拮抗、Morozashiの差、先手の報酬）は変位だけで評価できる
-- Ring-outを先にすると、未決の判定基準（何をもって土俵外とするか、勝敗の流れ、restart）が全体をblockしてしまう
-- **土俵端の扱い（Q18）**:
-  - 壁やclampは**追加しない**（ring-outの判定基準を先取りしないため）
-  - Play TestではUserが土俵線を目で見て`R`でrestartする
-  - 自動testは`arena.radius = 100`のfixtureを使う
-  - 「土俵外」を示す表示もしない
-
-# Morozashi + Orientation Combined（Q19）
-
-背後・側面へのCounter → Kuzushi → Grip → Morozashi → holderはREADY、被害側はTURNINGの状況で:
-
-1. holderのDriveは`net = 1.5`で、相手の抵抗なしに通る（0.9 m/s）
-2. 被害側がREADYになると押し返しが可能になり、`net = 0.5`になる（0.3 m/s、まだholder優勢）
-3. 被害側が押さなければ`net = 1.5`のまま
-
-この3段階は、独立した3つの要素（engagementのadvantage / 導出したreadiness / driveStrength）の組み合わせだけで決まる。「背後のMorozashi」のような組み合わせstateは作らない。
-
-# Future Stats Boundary（Q20）
-
-`grappleDriveNet(a, b, engagement, aDriving, bDriving)`という単一の関数で`net`を決める。
-
-- 将来はこの関数の中で次の項を足す:
-  - `driveStrength`に力（Power）と組みの技術
-  - 不動の抵抗（Weight / LowerBody。Driveしていない側の踏ん張り）を差し引く項
-  - 目標速度と加速を質量で割る項（将来）
-- architectureは変わらない
-- 式は今は決めない
-
-# Required Automated Tests（Q21、05C1用）
-
-1. READYの片側neutral Drive: 外力が`+n·0.6`へ単調に近づく（加速率ちょうど）。超えない。Bが後退し、距離Rを保つ
-2. TURNINGの者のDriveは寄与しない（`action`はidleのまま）
-3. 相手がTURNING中でも、READYの者のDriveは通る
-4. READY前から↑を押していた場合は、READYになったtickから寄与する（tick境界ちょうど）
-5. 等しいneutral同士の同時Drive → 外力0（拮抗）、jitterなし
-6. Morozashiのholder単独 > neutral単独（目標速度1.5倍）
-7. holder対不利側の押し合い → `net = 0.5`でholder方向
-8. participantの順序を入れ替えた鏡像でも対称
-9. ↑を離したtickから寄与がなくなり、既存の減衰で止まる
-10. 既存のmomentumを保持する（目標より速ければ減衰で落ち、逆向きは打ち消してから進む）。`MAX_EXTERNAL_SPEED`は維持
-11. bondの距離とpair軸が不変
-12. Drive中もTURNINGの旋回が通常どおり進む
-13. Drive中のrelease: READYの者は即座にrelease。外力は保持され、FREEで減衰する
-14. Drive中にTURNINGの者がShiftを押す → 無視される
-15. GRAPPLED中の`pushPressed`は無視（既存）、FREE中の`driveHeld`も無視
-16. 混在sequenceのreplay一致・finite
-17. Driveを使わない場合、既存の163件が変更なしでPASS（helperへの`driveHeld: false`追加を除く）
-18. Ring-outの意味を持つcodeがない（土俵外でも何も起きないことのtest）
-19. 2段loop化してもFREEの結果が同一（既存testで担保）
-
-# User Play Test Plan（Q22）
-
-最初にDrive FeelがREQUIREDになるのはACTION-05C1。
-
-確認項目:
-1. 片側のDriveがpairへの圧力に見えるか（滑っているように見えないか）
-2. 等しい押し合いが拮抗に感じられるか
-3. Morozashiがはっきり強く寄れるか
-4. 相手のTURNING中に寄れることが先手の報酬になっているか
-5. releaseが分かりやすいか
-6. bondが安定しているか
-7. Driveの方向が読めるか
-8. 全体の速度は引き続きDeferred（blockしない限り調整しない）
-
-押し合いを試すにはDummyの拡張が必要（F5）: Mode 2で、GRAPPLED中は常に`driveHeld = true`を出す。Simulationがreadinessで判定するので、CPUがTURNING中は寄与せず、READYになると押し返してくる。これを05C1の範囲に含めることを推奨する。
-
-# User Decisions Required（Q23）
-
-| # | 決定事項 | 推奨既定値 |
-|---|---|---|
-| UD-1 | Driveの方式 | 連続（↑を押している間） |
-| UD-2 | 入力のsemantic | `driveHeld`を追加（ArrowUpの`isDown`。Simulationが文脈で解釈） |
-| UD-3 | 暫定の値 | `GRAPPLE_DRIVE_SPEED = 0.6 m/s`、`GRAPPLE_DRIVE_ACCELERATION = 4 m/s²`（約0.15秒で目標速度に達する） |
-| UD-4 | Morozashiの係数 | holderだけ`1.5`、不利側は罰則なしの`1.0` |
-| UD-5 | Drive中のrelease | 現行どおり可能（READYの者のみ） |
-| UD-6 | Ring-outとの順序 | Driveが先（変位だけ）。Ring-outは後続でInvestigation |
-
-Review判断:
-- Q4の、Drive中は軸方向の加速と減衰を1つの規則で扱う案（F3への対処）
-- `drive` action variantの追加（Q14）
-- Dummy Mode 2の拡張（F5）
-
-# Rejected / Deferred
-
-Rejected:
-- Q1 B / C
-- facing方向のDrive
-- 開始時に方向を保存する方式
-- selfVelocityでのDrive
-- targetだけを動かす方式
-- 位置の直接書き換え
-- 単純に加速を足す方式（F3の這い進みと暴走）
-- Morozashiの不利側への罰則（初期）
-- Ring-outを先にする順序
-- 見えない壁やclamp
-
-Deferred:
-- 離散Drive pulse（がぶり寄り）
-- pairを回転させる寄り
-- stamina
-- stat項（Power / Weight / LowerBody）
-- 質量
-- Throw / Lift
-- Ring-out / BoutOutcome（次の調査対象）
-- 全体のtempo調整
-
-# Next Implementation Sequence（Q24）
-
-1. **ACTION-05C1 Grappled Drive Foundation**
-   - 内容: `driveHeld`、`drive` action、pair軸のnet、軸方向の目標速度規則、Morozashi係数、readinessによる判定、2段loop、Dummy Mode 2のGRAPPLED中Drive、表示
-   - **User Play Test REQUIRED**
-2. **Minimal Ring-out / BoutOutcome Investigation**: 判定基準、勝敗、restartの決定事項を洗い出す
-3. その実装 → Yorikiri Feelの評価（必要なら05C2で調整）
-4. Throw / Lift
-
-1つのTaskに束ねない。
+上記Testsの対応どおり。Ring-out、BoutOutcome、Throw、Lift、stamina、stat、質量、離散Drive、pairの回転、方向によるPush優位、tempo調整のcodeはない。
 
 # Design Deviations
 
-なし（Investigationのみ）。
+なし。
 
-Q4の推奨は、Taskの「推奨原則」（加速を足す、既存の減衰を唯一の減衰源にする）を部分的に修正している。理由はF3で、Review判断として明示した。
+T110の更新は、Taskが指定したDummyの仕様変更に従ったもの。
 
 # Unexpected Scope
 
-なし。F3（減衰と加速の結合）とF5（DummyがGRAPPLED中に何もしない）は設計上の所見で、修正はしていない。
+なし。
 
-# Verification
+Play Test向けの所見:
+- 土俵を越えても何も起きない（Ring-outは未実装で、仕様どおり）。`R`でrestartする
+- neutral同士の押し合いは完全に拮抗する（`net = 0`）。どちらも押し勝てないので、どちらかが↑を離すかreleaseするまで状況は変わらない
 
-- Q1〜Q24に回答済み。BLOCKEDになる点はない
-- Current Fact / Recommendation / User Decision / Review / Deferredを分けて記載
-- Production Source / package / lockfileは未変更
-- Repository変更は`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`のみ
-- `git diff --check`: PASS（commit前に実行）
-- `pnpm test` / `pnpm build`: 不要（Source変更なし）。実行していない
+# Known Untested
+
+- Browser Smoke（↑のhold、CPUの押し返し、拮抗、Morozashiの差、TURNING中の一方的なDrive、release、jitter、console error）
+- Drive Feel（User Play Test）
 
 # User Play Test
 
-NOT REQUIRED（Investigation）。最初にREQUIREDになるのはACTION-05C1。
+REQUIRED / NOT RUN（Taskの12項目）。
 
 # Git delivery
 
-Investigation-only Report Commit Exceptionを適用。本Reportだけをstageし、`docs(agent): investigate grappled drive design`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
+Task-owned filesだけを明示的にstageし、`feat: add grappled drive foundation`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。

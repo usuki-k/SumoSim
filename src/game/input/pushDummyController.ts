@@ -12,7 +12,9 @@ export const DUMMY_PUSH_COOLDOWN_TICKS = 30
 // harness rather than reusing Simulation contact internals; larger than the Simulation slop.
 export const DUMMY_CONTACT_TOLERANCE = 0.02
 
-const NO_INPUT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: false }
+const NO_INPUT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
+// Grappled harness input: no movement or FREE edges, Drive held (the Simulation only lets it count while READY).
+const GRAPPLED_DRIVE: ParticipantIntent = { ...NO_INPUT, driveHeld: true }
 
 export class PushDummyController {
   private mode: DummyMode = 'stationary'
@@ -49,8 +51,12 @@ export class PushDummyController {
     const target = snapshot.participants.find((p) => p.id === this.targetId)
     if (!self || !target) return NO_INPUT
 
-    // Grappled (ACTION-05A): the harness has no grappled actions; it waits and holds its cooldown.
-    if (self.action.kind !== 'idle' || self.posture.kind === 'kuzushi' || snapshot.engagement.kind === 'grappled') {
+    // Grappled: hold Drive (ACTION-05C1) and keep the Push cooldown full; never Grip / Release.
+    if (snapshot.engagement.kind === 'grappled') {
+      this.cooldownTicks = DUMMY_PUSH_COOLDOWN_TICKS
+      return GRAPPLED_DRIVE
+    }
+    if (self.action.kind !== 'idle' || self.posture.kind === 'kuzushi') {
       this.cooldownTicks = DUMMY_PUSH_COOLDOWN_TICKS
       return NO_INPUT
     }
@@ -62,12 +68,12 @@ export class PushDummyController {
 
     if (!inContact) {
       if (this.cooldownTicks > 0) this.cooldownTicks--
-      return { move: { x: dx / distance, y: dy / distance }, pushPressed: false, counterPressed: false, gripPressed: false }
+      return { move: { x: dx / distance, y: dy / distance }, pushPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
     }
     if (this.cooldownTicks > 0) {
       this.cooldownTicks--
       return NO_INPUT
     }
-    return { move: { x: 0, y: 0 }, pushPressed: true, counterPressed: false, gripPressed: false }
+    return { move: { x: 0, y: 0 }, pushPressed: true, counterPressed: false, gripPressed: false, driveHeld: false }
   }
 }

@@ -60,6 +60,7 @@ function phaseLabel(action: ParticipantActionState, posture: ParticipantPosture)
   if (posture.kind === 'kuzushi') return 'KUZUSHI'
   if (action.kind === 'counter') return 'COUNTER'
   if (action.kind === 'grip') return action.phase === 'reach' ? 'GRIP' : 'GRIP REC'
+  if (action.kind === 'drive') return 'DRIVE'
   if (action.kind !== 'push') return ''
   if (action.phase === 'startup') return 'STARTUP'
   if (action.phase === 'active') return 'PUSH'
@@ -96,6 +97,8 @@ export class BoutScene extends Phaser.Scene {
   private simulation!: BoutSimulation
   private accumulator!: FixedStepAccumulator
   private keys: MovementKeys | null = null
+  // ArrowUp: its key-down edge feeds the Push latch; its held state is the Drive effort.
+  private upKey: Phaser.Input.Keyboard.Key | null = null
   // Prototype binding: ArrowUp = Push (temporary, not the final control scheme).
   private readonly pushLatch = new PressLatch()
   // Prototype binding: ArrowDown = Counter (temporary, not the final control scheme).
@@ -132,7 +135,8 @@ export class BoutScene extends Phaser.Scene {
         right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       }
       // Key 'down' fires once per physical press (no auto-repeat while held).
-      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => this.pushLatch.press())
+      this.upKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP)
+      this.upKey.on('down', () => this.pushLatch.press())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.counterLatch.press())
       // SHIFT matches both the left and right Shift keys.
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT).on('down', () => this.gripLatch.press())
@@ -226,6 +230,7 @@ export class BoutScene extends Phaser.Scene {
           pushPressed,
           counterPressed,
           gripPressed,
+          driveHeld: this.upKey?.isDown ?? false,
         })
       } else if (style.controller === 'dummy') {
         intents.set(style.id, this.dummy.nextIntent(snapshot))
@@ -244,7 +249,12 @@ export class BoutScene extends Phaser.Scene {
   // One-way sync: simulation snapshot -> persistent GameObjects.
   private syncViews(): void {
     const snapshot = this.simulation.getSnapshot()
-    this.engagementText?.setText(engagementLabel(snapshot.engagement))
+    const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
+    this.engagementText?.setText(
+      snapshot.engagement.kind === 'grappled'
+        ? `${engagementLabel(snapshot.engagement)}  pair v: ${pairSpeed.toFixed(2)} m/s`
+        : engagementLabel(snapshot.engagement),
+    )
     this.grappleLine?.clear()
     if (this.grappleLine && snapshot.engagement.kind === 'grappled') {
       const [p0, p1] = snapshot.participants.map((q) => this.toCanvas(q.position))
