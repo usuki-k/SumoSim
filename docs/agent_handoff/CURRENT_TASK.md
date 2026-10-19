@@ -853,3 +853,116 @@ Still Investigation-required:
 - Counter edge interaction.
 - East/West + wrestler-name metadata boundary.
 - whether current Source needs a small setup/presentation extension in ACTION-06A.
+
+
+# Correction — Simultaneous Ring-out Rule
+
+This correction overrides the earlier Current User Decision text that suggested comparing outside depth.
+
+## Correct User Rule
+
+Sumo rule intent for this project:
+
+- the participant who goes out **first** loses.
+- if both go out **at the same time**, the result is **Rematch**.
+- do **NOT** use "deeper outside loses" as a substitute rule.
+
+Therefore remove/reject:
+- deeper-out comparison as the primary outcome rule
+- raw outside depth as a winner-deciding tiebreak
+- participant-order tiebreak
+- random tiebreak
+
+## Consequence for the Investigation
+
+The Investigation must now determine the smallest deterministic way to resolve **first boundary crossing** under the fixed-step Simulation.
+
+Current center criterion remains accepted:
+
+```ts
+distanceFromRingCenter > arena.radius
+```
+
+is OUT, while exact equality is IN.
+
+### Required cases
+
+1. A crosses in an earlier Simulation tick than B
+   → A loses.
+
+2. B crosses in an earlier Simulation tick than A
+   → B loses.
+
+3. Both cross within the same Simulation tick
+   → do NOT automatically declare Rematch merely because the end-of-tick Snapshot has both OUT.
+
+   Investigate whether first-crossing time can be derived from each participant's movement over that tick using:
+   - previous center position
+   - resolved end-of-tick center position
+   - the circular arena boundary
+
+   without introducing a generic CCD / physics system.
+
+4. If both crossing times are equal or effectively equal
+   → `Rematch`.
+
+5. If one crossing time is deterministically earlier within that tick
+   → that participant loses.
+
+## Crossing-time Investigation
+
+Evaluate a small pure geometric helper for a moving point against the arena circle.
+
+Candidate conceptual input:
+
+```ts
+firstRingBoundaryCrossingFraction(
+  previousPosition,
+  currentPosition,
+  arenaRadius
+): number | null
+```
+
+where:
+- null = did not cross from IN to OUT during that tick
+- value in [0, 1] = normalized crossing time within the tick
+
+Need account for accepted boundary semantics:
+- exact boundary is IN
+- crossing means moving from distance <= radius to distance > radius
+
+The report should determine:
+- whether segment-circle intersection is sufficient for current discrete movement
+- numerical tie epsilon for comparing two crossing fractions
+- behavior when a participant begins a tick already OUT (normally Bout should already have ended, so this should be invariant / defensive handling)
+- whether Counter relocation within the tick needs special treatment because it is an instantaneous positional rewrite rather than ordinary integration
+- whether Grip attachment / bond correction can themselves cause a boundary crossing and how their intra-tick ordering should be represented
+
+## Important Architecture Constraint
+
+Do not fake "first out" by:
+- comparing final outside depth
+- comparing radial distance at tick end
+- using participant order.
+
+If current within-tick positional operations make first-crossing order impossible to define cleanly without broader redesign, report that as a Stop Condition / User Decision instead of inventing a substitute rule.
+
+## Terminology
+
+User-facing simultaneous result remains:
+
+`Draw Rematch`
+
+Internal outcome should represent Rematch explicitly.
+
+## Questions superseded
+
+Earlier Q4/Q5 language about outside depth/deeper-out winner is superseded.
+
+Reframe those questions as:
+
+- how to determine first ring-boundary crossing time
+- how to detect effectively simultaneous crossing
+- what technical epsilon is appropriate for crossing-time equality
+
+Outside depth may still be reported/debugged if useful, but must not decide winner.
