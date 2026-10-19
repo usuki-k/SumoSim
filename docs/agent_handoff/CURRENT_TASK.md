@@ -1,5 +1,5 @@
 Task-ID: VISUAL-01-ACTION-VISUAL-PROTOTYPE-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / ACTION VISUAL PROTOTYPE / PROVISIONAL SPRITES & ANIMATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -782,3 +782,463 @@ Do not implement assets/animation or tune gameplay.
 
 After Report Commit / Push:
 「VISUAL-01-ACTION-VISUAL-PROTOTYPE-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS / ONE MATERIAL USER DECISION BEFORE IMPLEMENTATION
+
+## Reviewed Investigation
+
+- Investigation report commit:
+  `7a3572fd86a17251973bfe3476a2ff7ffcb9a8a4`
+- Agent-Start-Head:
+  `89e5212434d49f861b982f7840f929eeadedba61`
+- Diff is exactly one Report-only commit:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / package / lockfile unchanged.
+- `main` unchanged.
+
+## Overall Assessment
+
+PASS.
+
+The proposed direction matches the current development priority:
+
+- remain Action-first.
+- do not expand Simulation / Management.
+- preserve accepted Pure TS gameplay rules.
+- replace debug circles with a validation-quality top-down wrestler presentation.
+- make the current mechanics readable before reopening tempo/balance.
+- avoid committing to final pixel-art/spritesheet tooling.
+
+## Accepted Core Direction
+
+Accept the recommended first Prototype approach:
+
+> Runtime-generated visual parts → articulated top-down wrestler view → pose/animation derived from Snapshot.
+
+This is preferable to committing hand-authored final-style assets now because:
+
+- no art dependency/tool is introduced.
+- no asset pipeline is locked in.
+- final art can later replace the Phaser view without changing BoutSimulation.
+- exact Simulation facing can rotate smoothly.
+- body/arms/feet can visibly communicate actions that circles cannot.
+
+This is not final art.
+
+## Accepted Visual Architecture
+
+Maintain:
+
+```
+BoutSimulation / Snapshot
+        ↓
+Pure presentation mapping
+        ↓
+Phaser WrestlerView / FX
+```
+
+Canonical participant:
+- position
+- facing
+- action
+- posture
+- engagement
+- outcome
+
+remain Simulation-owned.
+
+Presentation may own only ephemeral items such as:
+- visual pose selection
+- walk-cycle phase
+- tween progress
+- one-shot FX lifetime
+- previous Snapshot for transition detection.
+
+No Phaser animation callback may end/start gameplay actions.
+
+## Correction C-V1 — Pure presentation helper location
+
+Do not place the Phaser-free resolver/event detector in `src/game/scenes/`.
+
+For the next implementation, explicitly permit the new directory:
+
+`src/game/presentation/`
+
+Use it only for small Phaser-free presentation logic, for example:
+
+- `wrestlerVisualState.ts`
+- `boutVisualEvents.ts`
+
+Phaser-specific `WrestlerView.ts` may remain under `src/game/scenes/` for the first Prototype.
+
+Reason:
+- avoids mixing Pure mapping code with Scene implementation.
+- preserves testability.
+- keeps the Architecture direction explicit.
+- this directory is narrowly approved; do not grow it into a generic UI/animation framework.
+
+## Correction C-V2 — No position-jump heuristic for Counter success
+
+The Report lists "large one-tick position jump above a threshold" as a possible Counter relocation event detector.
+
+Reject that heuristic.
+
+Counter success can already be detected semantically from the previous/current accepted gameplay state:
+
+Previous resolved Snapshot:
+- defender action = counter
+- attacker action = push active
+
+Current resolved Snapshot:
+- attacker posture transitions stable → kuzushi
+- defender counter ends
+- positions may now reflect side/rear relocation.
+
+Use those semantics to emit a Counter-success presentation event.
+
+Then:
+- use previous/current positions only as FX geometry,
+- not as the event truth.
+
+Do not introduce a magic movement-distance threshold that could confuse:
+- fast normal movement
+- Ring-out
+- future Throws
+- future larger body/movement values.
+
+Counter fail is likewise distinguishable by:
+- own counter → own kuzushi.
+
+## Correction C-V3 — Event detection must be per Simulation tick
+
+Accept and require the Report's important detail:
+
+- call visual transition detection around each individual `simulation.step()`,
+- not only once per rendered frame.
+
+Reason:
+a frame may execute multiple fixed ticks, and one-tick transitions could otherwise disappear.
+
+No global event bus.
+
+A small local list of presentation events for that rendered frame is sufficient.
+
+## Accepted Wrestler Shape Direction
+
+For the validation Prototype, accept the proposed top-down articulated silhouette:
+
+- shadow
+- two feet
+- broad torso
+- mawashi / rear knot cue
+- two arms
+- head
+- mage/rear-head cue
+
+The exact proportions are presentation tuning, not accepted final art.
+
+The important acceptance requirement is:
+**front/back and facing must be readable without the old facing dot.**
+
+Player/CPU palette may continue using the current blue/red distinction for this Prototype.
+
+## Accepted Facing Strategy
+
+Use the exact Simulation `facing` to rotate the wrestler view.
+
+Do not quantize to 4/8 directions yet.
+
+This preserves:
+- gradual grapple turning
+- side/rear exposure
+- exact accepted orientation behavior.
+
+Later final art may replace this with directional frames behind the same view boundary.
+
+## Accepted Pose Scope for VISUAL-01A
+
+Do not require dozens of frame clips.
+
+A small articulated pose set is enough:
+
+- idle
+- locomotion
+- push (startup/active/recovery as one parametric family)
+- counter
+- kuzushi
+- grip/recovery
+- grapple
+- drive
+
+Grapple role is a modifier:
+- neutral
+- Morozashi holder
+- Morozashi disadvantaged
+- turning/not-ready.
+
+This is small enough for the first visual experiment.
+
+## Visual Resolver Priority — Accepted with clarification
+
+Recommended order:
+
+1. final outcome: freeze current visual progression, but do not replace it with a generic finish pose
+2. kuzushi
+3. FREE explicit action (push / counter / grip)
+4. GRAPPLED drive
+5. GRAPPLED turning / ready role
+6. locomotion
+7. idle
+
+Outcome is a **freeze modifier**, not a separate body pose.
+
+Use hysteresis or similarly simple presentation-only smoothing for walk/idle if necessary.
+
+Do not use animation state as gameplay state.
+
+## Push Visual — Accepted
+
+The proposed visual grammar is suitable:
+
+- startup = anticipation / arms drawn back / planted feet
+- active = forward lean + arm extension
+- recovery = return/settle
+
+Gameplay phase duration remains the only source for the phase.
+
+Impact FX may be layered separately later.
+
+Do not alter Push constants in VISUAL-01A.
+
+## Counter / Overshoot Visual — Accepted with C-V2
+
+Important prior User feedback is addressed by presentation rather than Simulation changes:
+
+- attacker visually pitches/stumbles forward
+- feet appear to scramble
+- previous→current position may be used for a brief ghost/afterimage
+- defender's side/rear relocation is visually emphasized.
+
+Canonical position must always remain the current Snapshot position.
+
+Do not visually interpolate the actual wrestler sprite through a fake intermediate path that contradicts canonical Contact.
+
+A transient ghost/trace is acceptable.
+
+## Kuzushi — Accepted
+
+Kuzushi should read as unstable footing, not stun:
+
+- off-balance torso
+- disrupted feet
+- opened arms
+- small wobble
+- no stars/dizzy symbol.
+
+Do not change Kuzushi duration in the visual implementation.
+
+## Grapple / Morozashi — Accepted
+
+Neutral grapple should be visually readable through arm placement, not primarily the old white line.
+
+Morozashi must materially change the body/arm silhouette:
+- holder's arms inside
+- disadvantaged wrestler's arms outside/up.
+
+A brief presentation-only highlight is acceptable.
+
+Do not change the Morozashi gameplay factor.
+
+## Side / Rear Turning — Accepted
+
+The strongest first-pass communication should come from:
+- exact sprite facing rotation
+- disadvantaged wrestler not yet having a completed grapple arm pose
+- visible foot-turning motion
+- advantaged wrestler already established.
+
+Do not add a "stunned" timer/overlay.
+Do not retune GRAPPLE_TURN_RATE yet.
+
+## Drive — Accepted
+
+Use presentation only:
+- forward lean
+- foot shuffle
+- opponent bracing
+- subtle compression/pressure cue
+- dust later in VISUAL-01B.
+
+Pair positions remain Snapshot-driven.
+
+Neutral stalemate should visibly show effort despite little translation.
+
+## Dohyo Pass — Accepted
+
+A minimal Graphics-only dohyo improvement belongs in VISUAL-01A because Ring-out readability depends on the edge being visually obvious.
+
+Allowed:
+- clearer clay
+- tawara/ring edge
+- light outside sand band
+- shikiri lines
+- darker background contrast.
+
+Do not add arena/crowd/background production art.
+
+## Debug UI — Accepted
+
+Default Play Test mode should hide most diagnostic labels so visual readability is genuinely tested.
+
+Keep a debug toggle.
+
+`0` is acceptable as the provisional debug key.
+
+Debug mode may show:
+- old phase labels
+- engagement
+- pair velocity
+- facing marker
+- grapple line
+- optional vectors/contact debug.
+
+Do not remove useful diagnostic UI.
+
+## Camera — Deferred to VISUAL-01B
+
+Do not add camera shake in VISUAL-01A.
+
+First establish whether the wrestler animation itself reads correctly.
+
+Small impact shake may be evaluated in VISUAL-01B after User feedback.
+
+This avoids mixing base readability with impact polish.
+
+## Sound
+
+Remain silent.
+
+Audio stays Deferred.
+
+## Runtime Texture API
+
+The runtime-generated texture recommendation is accepted conceptually, but implementation must verify the exact Phaser 4.2.1 API available in the installed version before coding.
+
+If `Graphics.generateTexture` differs or is unsuitable:
+- use the smallest supported Phaser runtime-texture mechanism,
+- do not add an external library,
+- report the implementation detail as a non-semantic deviation.
+
+STOP only if runtime texture generation cannot be done cleanly without a new dependency/tool.
+
+## Recommended Implementation Split
+
+Accept the two-step split.
+
+### VISUAL-01A — Wrestler Visual Foundation
+
+Implement:
+- runtime-generated articulated wrestler visuals
+- exact-facing rotation
+- Pure visual-state resolver
+- basic poses
+- grapple/Morozashi/turning modifiers
+- minimal dohyo pass
+- debug toggle
+- integration into BoutScene
+- tests for Pure resolver
+- no gameplay tuning
+- no camera shake / impact polish
+- User Play Test REQUIRED.
+
+Primary question:
+**Does this now read as a sumo Action Game instead of debug circles?**
+
+### VISUAL-01B — Action Feel FX
+
+Only after 01A Review/User feedback:
+- per-tick transition event detector
+- push impact FX
+- Counter afterimage/stumble polish
+- dust
+- Morozashi highlight
+- Kuzushi polish
+- Ring-out FX
+- optional tiny camera shake
+- User Play Test
+- then re-evaluate global tempo.
+
+## User Play Test Requirement for VISUAL-01A
+
+Test with debug mode OFF first.
+
+User should be able to identify, without reading state labels:
+
+- each wrestler
+- facing
+- movement vs stationary
+- Push anticipation / strike / recovery
+- Counter stance
+- Kuzushi
+- Grip
+- neutral grapple
+- Morozashi holder/disadvantaged side
+- side/rear turning disadvantage
+- Drive
+- neutral Drive stalemate
+- Ring-out.
+
+Then turn debug mode ON only to diagnose mismatches.
+
+Do not conclude "game feel accepted" from automated tests.
+
+## One Material User Decision Before Implementation
+
+### UD-V1 — Provisional visual method
+
+Recommended:
+
+**Runtime-generated articulated wrestler parts in Phaser; no image assets yet.**
+
+This is the only material choice that should be confirmed before VISUAL-01A because it determines whether we:
+- write a procedural validation view, or
+- first create/check in external image assets.
+
+The other Report recommendations are implementation/presentation details and can remain provisional.
+
+If User accepts UD-V1, create VISUAL-01A immediately.
+
+## Do Not Reopen
+
+In VISUAL-01A, do not reopen accepted gameplay because visuals feel unfamiliar:
+
+- movement formula
+- Push timings/force
+- Counter rules
+- Kuzushi timing
+- Grip/Morozashi rules
+- grapple orientation rate
+- Drive formula
+- Ring-out rule.
+
+Collect visual/game-feel feedback first.
+
+If the visual pass proves a gameplay timing is genuinely unreadable, create a separate tempo/balance task after the visual Play Test.
+
+## Deferred
+
+- file-based art / spritesheets
+- final pixel-art style
+- Aseprite/Tiled
+- 8-direction final animation
+- Action Feel FX beyond basic pose transitions
+- camera shake until VISUAL-01B
+- audio
+- Gyoji finish presentation
+- MatchDayFlow/BashoRecord
+- Simulation/Management
+- ground-touch / Throw / Lift
+- global tempo tuning.
