@@ -1,984 +1,695 @@
-Task-ID: ACTION-04A2-COUNTER-POSITION-RESOLUTION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / CORE COUNTER POSITION RESOLUTION
+Task-ID: ACTION-05-GRIP-ENGAGEMENT-MOROZASHI-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / GRAPPLE STATE DESIGN
 Executor: Codex / Claude Code
 Target-Branch: develop
-Source-Baseline: 0dede47770b664f9fd01b99597403ad7bd92b55a
+Source-Baseline: d72f43b0887203095eebe3f1c7efb1d1193a188d
 Handoff-Mode: GITHUB
 
-# ACTION-04A2 — Counter Position Resolution
+# ACTION-05 — Grip / Engagement / Morozashi Investigation
 
 ## 1. Purpose
 
-ACTION-04A1 Counter + Kuzushi FoundationはTechnical ReviewおよびUser Play TestでAcceptされた。
+ACTION-04A1 / 04A2により、CounterとKuzushi、およびBest→rear / Success→sideの位置優位がCurrent Baselineとして成立した。
 
-次に、既に決定済みのCounter結果差を実装する。
+UserはKuzushiの次のRewardとして、Grip / 組みへ接続したい。
 
-- Push Counter Best
-  - attackerはKuzushi
-  - defenderはattackerの背後へ自動配置
-  - attackerはPush方向へ少しovershootする
-- Push Counter Success
-  - attackerはKuzushi
-  - defenderはattackerの側面へ自動配置
-  - sideは手動選択せず、現在位置とgeometryから自動決定
-  - attackerはPush方向へ少しovershootする
-- Fail
-  - ACTION-04A1どおりCounter userがKuzushi
-  - relocationなし
+新しいUser intent:
 
-このTaskで、Userが意図する
+- 通常のGrip成功 → 通常の組み状態
+- **Kuzushi中の相手へ有効なGripを行った場合 → 通常の組みより一段有利な「もろ差し」状態**
+- もろ差し:
+  - 両腕を相手の腕の内側に入れた有利な組み
+  - 通常の組みより、↑の寄り切りDriveを大きくしたい
+  - 通常の組みより、投げの成功率を高くしたい
 
-```
-Best → 引き / 背後
-Success → 捌き / 側面
-Fail → 自分が崩れる
-```
+このTaskでは、Gripを実装する前に、
 
-を最初にinteractiveに成立させる。
+- Engagement stateのSource of Truth
+- normal grapple と morozashi の表現
+- Kuzushi → Morozashi transition
+- Grip input / range / conflict semantics
+- GRAPPLED時のmovement / facing / contact ownership
+- 将来のDrive / Throw / Liftとの接続
 
-Full Counter FeelのUser Play Testが必須。
+を設計する。
 
-## 2. Accepted Production Baseline
+**Investigation Only / No Production Fixes.**
+
+Production Source / package / lockfile / AGENTS / ARCHITECTURE / GAME_CONCEPTは変更しない。
+Repository変更は `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` のみ。
+
+## 2. Accepted Current Baseline
 
 Accepted Production Source:
 
-`0dede47770b664f9fd01b99597403ad7bd92b55a`
+`d72f43b0887203095eebe3f1c7efb1d1193a188d`
 
-Current develop上のそれ以降はReview / User Play Test等のcoordination-only commits。
+Current develop上のそれ以降はReview / User Play Test / coordination recordsのみ。
 
-PreflightはAGENTS.mdに従う。
-
-Preserve without retuning:
+Preserve:
 
 - screen/world-relative WASD
 - ACTION-02B Movement
 - ACTION-03A2 Contact
-- ArrowUp discrete Push
-- Push Startup / Active / Recovery
-- selfVelocity / externalVelocity Model B
-- contested Push baseline
-- ArrowDown discrete Counter
-- same-tick Push priority
-- Counter window = 12 ticks provisional
-- Best = first 3 Push Active ticks provisional
-- Fail → self Kuzushi
-- Best / Success → attacker Kuzushi
-- Kuzushi = separate posture
+- discrete Push
+- incoming / contested Push
+- ArrowDown Counter
+- Best / Success / Fail timing
+- Kuzushi as separate posture
 - Kuzushi action/movement lock
 - Kuzushi facing freeze
-- Kuzushi Push susceptibility = 1.5 provisional
-- Push Dummy Kuzushi-awareness
+- Kuzushi Push susceptibility concept
+- Best → rear relocation
+- Success → automatic side relocation
+- attacker overshoot exists in Simulation
+- automatic side choice is not manual
+- Push/Counter/Kuzushi numerical values remain provisional
 
-User has explicitly accepted ACTION-04A1 and stated that wider Counter/Kuzushi timing may be desirable later, but **do not tune those values in this Task**.
+Accepted future control direction from prior design:
 
-## 3. Accepted Positional Semantics
+### FREE
 
-### Best
+Conceptual actions:
+- ↑ Push
+- ↓ Counter / pull / deflection
+- dedicated Grip / Grapple action
+- left/right thrust and Custom are future/deferred
 
-Against Push, Best result:
+### GRAPPLED
 
-1. capture attacker locked Push direction before its Push action is cancelled
-2. attacker enters Kuzushi
-3. defender attempts to move to a valid rear target
-4. attacker receives one explicit forward overshoot along its locked Push direction
-5. no instant bout finish yet
+Conceptual actions:
+- ↑ drive / yorikiri
+- ← left throw
+- → right throw
+- ↓ lift attempt
+- Grip/Grapple button = release
+- Custom future
 
-### Success
+### LIFTED
 
-Against Push, Success result:
+Future:
+- lifter owns movement
+- lifted participant is dependent
+- WASD only during lifted
+- then return to GRAPPLED
 
-1. capture attacker locked Push direction
-2. attacker enters Kuzushi
-3. defender moves to one automatically selected valid side target
-4. attacker receives one explicit forward overshoot along its locked Push direction
+These are direction-level accepted concepts only. Exact binding / formulas are not yet implemented.
 
-### Fail
+## 3. New User Decisions / Intent
 
-Unchanged from ACTION-04A1:
+Treat the following as design input.
 
-- Counter user enters Kuzushi
-- no relocation
-- no overshoot
+### D1 — Kuzushi Grip Reward
 
-## 4. Direction Basis
+If a Grip attempt is otherwise valid in range/contact and the target is currently in Kuzushi:
 
-The Counter position result is based on the **attacker's locked Push direction**, not its current auto-facing and not the current Contact normal.
+- Grip success is guaranteed
+- result should be **Morozashi**, not ordinary grapple
 
-Let:
+Do not allow Grip from arbitrary distance.
+Kuzushi does not bypass the valid Grip geometry/range requirement.
+
+### D2 — Morozashi is a distinct advantageous grapple state
+
+Morozashi is not merely a presentation label.
+
+It must be able to influence future Gameplay rules distinctly from ordinary grapple.
+
+Future intended advantages:
+
+- ↑ drive / yorikiri is stronger than ordinary grapple
+- throw success is higher than ordinary grapple
+
+Exact multipliers, probabilities, relevant stats and formulas are **undecided**.
+
+### D3 — Do not implement the numerical advantage yet
+
+This Investigation should determine where these advantages belong architecturally.
+
+Do not invent:
+
+- Morozashi drive multiplier
+- throw probability
+- relevant Weight / Grapple / LowerBody / Throw stat formulas
+- final Grip success formula
+
+## 4. Central Architecture Question — Engagement Source of Truth
+
+Current participant runtime already has:
+
+- position / velocity / facing
+- action
+- posture
+
+Grip introduces a **relationship between the two participants**.
+
+Investigate whether the canonical Engagement state should be pair-level, for example conceptually:
 
 ```ts
-d = attacker Push locked direction // unit Vec2
-perp = { x: -d.y, y: d.x }
-P = attacker center position at Counter resolution
-R = attacker.bodyRadius + defender.bodyRadius
+type BoutEngagement =
+  | { kind: 'free' }
+  | {
+      kind: 'grappled'
+      advantage:
+        | { kind: 'neutral' }
+        | { kind: 'morozashi'; holderId: ParticipantId }
+    }
+  | {
+      kind: 'lifted'
+      lifterId: ParticipantId
+      // exact fields deferred
+    }
+```
+
+or whether another small explicit representation is safer.
+
+Strong constraint:
+
+- do not store duplicated independent "I am grappling" state on both participants if they can disagree
+- one Source of Truth for the pair relationship
+- do not introduce ECS / generic relationship framework
+
+Answer whether:
+- `FREE / GRAPPLED / LIFTED` should be a Bout-level engagement union
+- normal grapple should be neutral/symmetric
+- Morozashi should identify exactly which participant owns the advantage
+
+## 5. Core Investigation Questions
+
+Inspect Current Source directly before answering.
+
+### Q1 — Engagement state ownership
+
+Recommend the smallest canonical representation for:
+
+- free
+- ordinary grapple
+- morozashi
+- future lifted
+
+Address:
+
+- pair-level vs participant-level ownership
+- Snapshot exposure
+- setup/reset behavior
+- invariant safety
+
+### Q2 — What exactly is ordinary Grip success?
+
+The project has not yet fixed a normal Grip success rule.
+
+Compare minimal Prototype options such as:
+
+A. valid Contact + Grip input always enters ordinary grapple
+B. stable target uses a provisional success check; Kuzushi target bypasses it
+C. first Prototype makes stable Grip deterministic/guaranteed, leaving probability/stat checks Deferred
+
+Do not silently invent a probability system.
+
+Recommend the smallest first implementation that allows User to test:
+- FREE → normal grapple
+- Kuzushi → Morozashi
+
+while preserving future stat-based Grip success.
+
+Identify any User decision required.
+
+### Q3 — Valid Grip geometry / range
+
+Define the smallest valid-range rule.
+
+Investigate whether first Prototype should use:
+
+- existing Simulation Contact only
+- Contact + relative-facing condition
+- another explicit short range
+
+User has already decided that Kuzushi guarantee applies only **after** valid range/contact is satisfied.
+
+Prefer existing Contact if sufficient.
+Do not add arm reach/hitboxes unless necessary.
+
+### Q4 — Grip input semantics
+
+Recommend:
+
+- edge-triggered dedicated Grip action?
+- hold?
+- one press = one attempt?
+- behavior while already GRAPPLED (prior direction: same Grip button releases)
+- whether Grip can start during Push / Counter / Kuzushi
+- whether Grip input can be queued
+
+Exact keyboard binding is currently undecided unless a prior Current Source decision exists.
+
+Do not invent final binding.
+
+### Q5 — Kuzushi → Morozashi timing
+
+Define exact semantics when:
+
+- target is Kuzushi when Grip edge occurs
+- target has `ticksRemaining = 0` in the pre-step Snapshot but would recover at tick start
+- target recovers on the same tick the Grip is attempted
+- Grip starts just before Kuzushi expires
+
+Recommend which state at which point in `BoutSimulation.step()` is authoritative.
+
+Maintain deterministic fixed-tick behavior.
+
+### Q6 — What happens to Kuzushi after Morozashi is established?
+
+This is unresolved and important.
+
+Compare:
+
+A. entering Morozashi consumes Kuzushi immediately → target posture becomes stable, but Morozashi advantage persists
+B. Kuzushi timer continues independently while already in Morozashi
+C. Grip/Morozashi changes posture to another state
+
+Recommend one.
+
+Consider:
+- avoiding double-stacking excessive vulnerability
+- preserving the User's reward
+- clear state ownership
+- future Balance / Throw / Drive
+
+Do not assume User preference if materially subjective.
+
+### Q7 — Position / Contact relationship while GRAPPLED
+
+Current Contact is circle-based and does not bind participants together.
+
+Investigate what minimum rule is needed so "grappled" is meaningful:
+
+- must participants remain at Contact distance?
+- may they separate slightly?
+- should GRAPPLED constrain relative distance?
+- should ordinary WASD still operate for both?
+- should movement be pair-coupled only when Drive action occurs?
+
+Do not design a full constraint solver.
+
+Recommend the smallest deterministic Prototype that prevents a GRAPPLED state while bodies freely walk apart.
+
+### Q8 — Facing while GRAPPLED
+
+Current stable participants auto-face each other.
+
+Determine:
+
+- ordinary grapple facing behavior
+- Morozashi holder / disadvantaged target facing behavior
+- whether pair should share a grapple orientation
+- how this interacts with existing Kuzushi facing freeze
+
+Avoid full turn-rate redesign.
+
+### Q9 — Morozashi ownership / symmetry
+
+Morozashi must identify a holder.
+
+Specify expected invariants:
+
+- only A holds Morozashi, or only B
+- cannot both own Morozashi simultaneously
+- how holder changes, if at all
+- whether ordinary grapple is symmetric
+
+Do not design hand-fighting/regrip systems unless required.
+
+### Q10 — Morozashi ↑ Drive architecture
+
+User intent:
+
+- ordinary grapple ↑ = drive / yorikiri
+- Morozashi ↑ = stronger drive
+
+Investigate where the modifier should apply.
+
+Compare:
+- external acceleration multiplier
+- traction/resistance modifier
+- self-drive speed
+- another small explicit grapple drive rule
+
+Recommend the smallest architecture compatible with:
+- future Weight
+- LowerBody
+- Power
+- Kuzushi
+- directional side/rear advantage
+
+Do not choose final numeric multiplier.
+
+### Q11 — Morozashi Throw advantage architecture
+
+User intent:
+
+- Morozashi increases throw success.
+
+Throw itself is not implemented yet.
+
+Define only the boundary:
+
+- where throw success resolution should read engagement advantage
+- how to preserve deterministic/testable probability later
+- whether Morozashi is a modifier/input to a future throw resolver rather than a hard-coded throw branch
+
+Do not implement Throw or PRNG.
+
+### Q12 — Interaction with current side/rear Counter reward
+
+Counter currently gives:
+
+- Best → rear
+- Success → side
+- attacker Kuzushi
+
+User can then attempt Grip.
+
+Investigate:
+
+- whether ordinary Contact geometry after current relocation is sufficient for immediate Grip
+- whether side/rear position should matter independently of Kuzushi for Grip
+- whether **Kuzushi alone** is the accepted condition for guaranteed Morozashi in the first design
+
+Do not silently add:
+- rear always gives Morozashi even without Kuzushi
+- side always gives Morozashi
+
+unless explicitly recommended as a separate future rule.
+
+### Q13 — Interaction with future directional Push advantage
+
+A separate Deferred candidate already exists:
+
+- side/rear Push should be stronger than frontal Push
+
+Do not implement or merge that rule into Grip.
+
+Explain how Engagement / Morozashi should coexist with it without duplicate directional advantage Sources of Truth.
+
+### Q14 — Release semantics
+
+Prior direction:
+
+- while GRAPPLED, Grip/Grapple button releases.
+
+Investigate:
+
+- immediate return to FREE?
+- any Recovery/commitment?
+- whether Morozashi holder and disadvantaged target may both release
+- what happens to velocities / position / facing on release
+
+Keep first Prototype small.
+
+### Q15 — Simultaneous Grip conflict
+
+Define deterministic behavior when both participants press Grip on the same tick while FREE.
+
+Cases:
+
+- both stable
+- one Kuzushi
+- both Kuzushi
+
+Avoid hidden participant-array-order advantage.
+
+Recommend:
+- symmetric ordinary grapple
+- Kuzushi/Morozashi priority
+- tie rule
+or identify User decision required.
+
+### Q16 — Grip while actions are active
+
+Specify behavior if Grip edge occurs during:
+
+- Push Startup / Active / Recovery
+- Counter window
+- Kuzushi
+- existing GRAPPLED
+- future LIFTED
+
+Prefer no queue unless a concrete gameplay reason requires it.
+
+### Q17 — Future LIFTED transition
+
+Without implementing Lift, ensure the Engagement model can later support:
+
+- GRAPPLED → LIFTED
+- lifter id
+- Morozashi/normal grapple history if needed
+- return from LIFTED → GRAPPLED
+
+Determine whether return should preserve prior Morozashi ownership or default to ordinary grapple.
+If not safely decidable now, mark Deferred/User Decision.
+
+### Q18 — Presentation / debugging needs
+
+Recommend minimal Prototype presentation for later implementation:
+
+- FREE
+- GRAPPLED
+- MOROZASHI (and holder)
+- future LIFTED
+
+Do not build final animation/UI.
+
+State what User must be able to visually distinguish during Play Test.
+
+### Q19 — Automated test matrix for first Grip implementation
+
+Specify focused tests at minimum for:
+
+- FREE → ordinary grapple
+- valid Kuzushi Grip → Morozashi
+- invalid range does not Grip even if Kuzushi
+- Morozashi holder identity
+- simultaneous Grip
+- release
+- cannot remain GRAPPLED while spatially separated
+- deterministic replay / finite state
+- Counter→Kuzushi→Grip integration
+- existing Push / Counter / Contact / Movement regression when Grip unused
+- no duplicate engagement Source of Truth
+
+### Q20 — User Play Test plan
+
+Define what should be tested after first Grip implementation:
+
+- ordinary Grip readability
+- Kuzushi → Morozashi reward readability
+- release
+- pair movement/contact feel
+- whether Morozashi feels clearly advantageous once a temporary Drive difference is eventually added
+- whether GRAPPLED state is understandable before final art/animation
+
+### Q21 — User decisions required
+
+Explicitly list any decisions needed before implementation.
+
+Potential candidates:
+- normal stable Grip success semantics for first Prototype
+- whether Kuzushi is consumed when Morozashi begins
+- simultaneous Grip rule
+- release commitment
+- whether Morozashi survives future Lift cycle
+
+Do not invent preferences.
+
+### Q22 — Minimal implementation sequence
+
+Recommend the smallest next Tasks.
+
+Preferred direction to assess:
+
+1. Grip / Engagement Foundation
+   - FREE / GRAPPLED / Morozashi
+   - Grip input
+   - Kuzushi→Morozashi
+   - release
+   - minimum spatial coherence
+2. Grappled Drive / Yorikiri Prototype
+   - ↑ Drive
+   - normal vs Morozashi difference
+3. Throw / Lift only after Grappled movement is accepted
+
+Do not bundle Grip + Drive + Throw + Lift in one Task.
+
+## 6. State Model Constraints
+
+Maintain:
+
+```
+Input / Dummy
+    ↓ semantic intent
+Pure TS BoutSimulation
+    ↓
+Bout runtime:
+  participant action
+  participant posture
+  pair engagement
+    ↓
+Snapshot
+    ↓
+Phaser
 ```
 
 Important:
 
-- capture/copy `d` **before** `enterKuzushi(attacker)` cancels the Push action
-- do not recompute from facing after cancellation
-- do not use random side selection
-- do not add manual A/D side selection
-
-Current Kuzushi facing freeze remains unchanged.
-Do not add a new facing/turning system in this Task.
-
-## 5. Rear Target — Best
-
-Preferred rear target:
-
-```
-rear = P - d * R
-```
-
-This represents the defender gaining the attacker's rear at non-overlapping Contact distance.
-
-Validity:
-
-```
-|rear| <= arena.radius - defender.bodyRadius
-```
-
-or mathematically equivalent finite check.
-
-Do not clamp an invalid target back inside the ring.
-
-Best fallback order:
-
-1. valid rear
-2. preferred valid side
-3. opposite valid side
-4. no relocation
-
-Even if relocation falls back or fails:
-- attacker still enters Kuzushi
-- Best classification remains Best
-- overshoot still applies
-
-Do not convert Best into Success because rear was invalid.
-
-## 6. Automatic Side Selection — Success
-
-Manual side choice is rejected by User.
-
-Side candidates:
-
-```
-sidePlus  = P + perp * R
-sideMinus = P - perp * R
-```
-
-Both are exact non-overlap Contact-distance targets.
-
-### Preferred side rule
-
-Use defender's current pre-relocation position at Counter resolution.
-
-```
-lateralOffset = dot(perp, defender.position - P)
-```
-
-Provisional epsilon:
-
-- `COUNTER_SIDE_EPSILON = 1e-6` meters
-
-If:
-
-- `lateralOffset > epsilon` → prefer `sidePlus`
-- `lateralOffset < -epsilon` → prefer `sideMinus`
-- otherwise treat as a tie
-
-This is equivalent to choosing the geometrically nearer side candidate, but is simpler and deterministic.
-
-### Tie-break
-
-When effectively tied:
-
-1. among valid side candidates, prefer the candidate closer to ring center
-2. if still exactly/effectively tied, prefer fixed `sidePlus`
-
-No randomness.
-
-### Invalid preferred target
-
-For Success:
-
-1. preferred valid side
-2. opposite valid side
-3. no relocation
-
-If neither side is valid:
-- attacker still enters Kuzushi
-- Success remains Success
-- overshoot still applies
-- defender stays at its current position
-
-Do not clamp through invalid geometry.
-
-## 7. Target Validity / Safety
-
-A relocation target is valid only if:
-
-- x/y are finite
-- defender body remains fully inside the current arena circle:
-  `hypot(target.x, target.y) <= arena.radius - defender.bodyRadius`
-
-Current ring-out is still unimplemented.
-This validity rule is only to prevent Counter relocation from teleporting a participant into an obviously invalid future ring state.
-
-Do not implement Ring-out/BoutOutcome.
-
-### Overlap
-
-Target center distance from attacker must be exactly `R` within floating-point tolerance.
-
-Do not intentionally add overlap or a hidden gap.
-
-Do not run pathfinding or a route around the attacker.
-
-## 8. Relocation Ownership
-
-Relocation is canonical Simulation gameplay state.
-
-On successful Counter:
-
-- Simulation writes defender `position` directly to the chosen target on the resolution tick
-- Phaser reads the Snapshot result
-- no Scene-owned gameplay position
-- no short gameplay trajectory / path
-- no movement tween that feeds back into Simulation
-
-For ACTION-04A2, an instantaneous visual jump is acceptable and is explicitly a User Play Test item.
-
-Do not build navigation/pathfinding.
-
-## 9. Attacker Overshoot
-
-Current Contact removes much of the attacker's closing selfVelocity, so Counter must add a small explicit attacker-only forward carry.
-
-Use Model B; do not create another physics system.
-
-Provisional constant:
-
-- `COUNTER_OVERSHOOT_SPEED = 1.0` m/s
-
-On successful Best or Success:
-
-```
-attacker.externalVelocity += d * COUNTER_OVERSHOOT_SPEED
-```
-
-Then apply the existing external-speed clamp.
-
-Requirements:
-
-- applies once per successful Counter
-- attacker only
-- defender does not receive the overshoot delta
-- direction = captured locked Push direction
-- existing external momentum already present on each participant is preserved
-- existing external decay handles overshoot afterward
-- no reversal / no separate decay system
-- no mass / Weight / LowerBody formula yet
-
-This is Prototype tuning and may change after Play Test.
-
-## 10. Counter Resolution Order
-
-Preserve ACTION-04A1 high-level tick order.
-
-Within successful `resolveCounter`:
-
-1. identify defender Counter + attacker Push Active
-2. capture attacker locked Push direction
-3. determine tier
-4. compute relocation preference/target from current post-Contact positions
-5. enter attacker Kuzushi (cancels Push)
-6. defender returns idle
-7. apply chosen defender relocation, if any
-8. apply attacker-only overshoot external velocity
-9. return/finish resolution
-
-Then existing `resolvePush` runs.
-
-Because attacker Push has been cancelled:
-- that tick adds no new Push acceleration
-
-Do not change accepted Counter success condition:
-- Counter window
-- opponent Push Active
-- actual Contact
-
-## 11. Best / Success Result Visibility
-
-Do not introduce a generic event bus/history framework.
-
-The positional result itself should make the difference visible:
-
-- Best → rear
-- Success → side
-- both → attacker KUZUSHI
-
-The existing `KUZUSHI` label remains.
-
-A persistent `lastCounter.seq` history field is **not required** in this Task.
-
-If Agent finds that a tiny explicit BEST/SUCCESS presentation marker is strictly necessary for Browser/User testing:
-- keep it narrowly scoped
-- report why it was necessary
-- do not create a generic event system
-
-Default direction: no new result-history state.
-
-## 12. No Facing Redesign
-
-Do not change ACTION-04A1 facing semantics.
-
-- attacker in Kuzushi keeps the facing it had when Kuzushi began
-- defender remains stable and auto-faces normally
-- side/rear geometry uses locked Push direction regardless of current facing
-
-If this makes visual side/rear readability poor, record it in User Play Test.
-Do not solve it by adding turn-rate/facing-snap logic inside this Task.
-
-## 13. Existing External Momentum
-
-Do not clear pair externalVelocity on Counter success.
-
-Reason:
-
-- existing momentum represents movement already accumulated before the successful Counter
-- Success caught later in Active may already have some incoming pair movement
-- Counter stops further Push acceleration, but does not retroactively erase prior movement
-
-Overshoot is added on top of the attacker's current external component only.
-
-Tests must distinguish:
-- preserved pre-existing pair external momentum
-- attacker-only overshoot delta
-
-## 14. Scope
-
-Allowed:
-
-- `src/game/sumo/BoutSimulation.ts`
-- `src/game/sumo/BoutTypes.ts` only if a small type is truly needed
-- focused Counter tests
-- minimal existing Scene presentation if required
-- `docs/ARCHITECTURE.md`
-- `AGENTS.md` only if material Current Source wording requires it
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
-
-Prefer keeping the positional math as small Pure TypeScript helpers inside/near BoutSimulation.
-
-No dependency.
-
-## 15. Scope Out
+- `action` remains chosen short-term commitment
+- `posture` remains physical stability (stable / Kuzushi)
+- `engagement` should represent the pair relationship
+- do not overload Kuzushi to mean grapple advantage
+- do not encode Morozashi as a temporary action if it is a persistent relationship state
+- one Source of Truth for Engagement
+
+## 7. Scope Out
 
 Do NOT implement:
 
-- probability / instant finish
-- seed / PRNG
-- BoutOutcome
-- Ring-out
-- Grip
-- Harite
-- dedicated Dodge
-- thrust
-- Weight / Power / LowerBody
-- Stamina / Balance
-- mass / traction
-- separate pull/inashi actions
-- lateral Counter impulse variant
-- relocation path/pathfinding
-- gameplay interpolation/tween
-- facing redesign / turn-rate
-- generic event/history system
-- CPU AI
-- Touch / Gamepad
-- Push distance tuning
-- Counter window / Best window / Kuzushi duration tuning
-- Kuzushi susceptibility tuning
+- Grip production code
+- Engagement production types
+- keyboard binding
+- GRAPPLED movement
+- yorikiri Drive
+- Throw
+- Lift
+- Morozashi multipliers
+- Grip/Throw probability
+- RNG / seed
+- directional side/rear Push advantage
+- Ring-out / BoutOutcome
+- Weight / Power / LowerBody / Grapple / Throw stat formulas
+- animation framework
+- new dependency
+- generic action/engagement framework
 
-## 16. Required Automated Verification
+Do not retune:
+- Push
+- Counter
+- Kuzushi
+- overshoot
+- game speed
 
-All existing 108 tests must remain PASS.
+## 8. Stop Conditions
 
-Add focused tests at minimum:
+Return reportable BLOCKED if:
 
-### T78 — Best rear relocation
+- Grip cannot be represented without duplicating pair state
+- current Contact model cannot support even a minimal Grappled spatial invariant without architecture redesign
+- Kuzushi→Morozashi conflicts materially with current posture/action semantics
+- LIFTED compatibility forces premature Lift implementation
+- normal Grip success semantics require User decision before any safe implementation plan
+- Physics/new dependency appears necessary
+- source experiment is required before choosing a safe model
 
-- valid Best Counter
-- defender ends at `P - d * R`
-- exact non-overlap Contact distance
-- attacker Kuzushi
-- defender stable/idle
+Git Safety STOP follows AGENTS.md and writes nothing.
 
-### T79 — Success side selection from lateral offset
+## 9. Investigation Method
 
-Test both signs:
+Inspect at minimum:
 
-- positive lateral offset → sidePlus
-- negative lateral offset → sideMinus
-- uses locked Push direction basis
-- exact non-overlap Contact distance
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- `src/game/sumo/BoutSimulation.test.ts`
+- `src/game/sumo/BoutCounter.test.ts`
+- `src/game/sumo/BoutCounterPosition.test.ts`
+- `src/game/input/pressLatch.ts`
+- `src/game/input/pushDummyController.ts`
+- `src/game/scenes/BoutScene.ts`
+- `docs/ARCHITECTURE.md`
+- `docs/GAME_CONCEPT.md`
+- `AGENTS.md`
+- Current Final Review / User Play Test Handoff
 
-### T80 — Side tie-break
+External sumo reference is optional.
+If used, separate:
+- real sumo reference
+- proposed game abstraction
+- accepted project decision
 
-Cover:
+## 10. Verification
 
-1. tied lateral offset, both valid, one candidate closer to ring center → choose center-nearer
-2. exact remaining tie → deterministic sidePlus
-
-No randomness.
-
-### T81 — Invalid side fallback
-
-- preferred side invalid, opposite valid → opposite
-- both invalid → no relocation
-- Success still produces attacker Kuzushi
-
-### T82 — Best invalid rear fallback
-
-- rear invalid, preferred side valid → preferred side
-- rear + preferred side invalid, opposite valid → opposite
-- all invalid → no relocation
-- tier remains Best and attacker Kuzushi
-
-### T83 — Relocation safety
-
-Across rear / side / fallback:
-
-- finite positions
-- defender body fully inside arena for any applied relocation
-- no overlap
-- no clamp-generated invalid geometry
-
-### T84 — Overshoot attacker only
-
-On a first-active-tick Best with no prior external momentum:
-
-- attacker externalVelocity gets exactly `COUNTER_OVERSHOOT_SPEED` along locked `d`
-- defender gets no overshoot component
-- existing MAX_EXTERNAL_SPEED clamp respected
-
-### T85 — Success preserves prior pair momentum
-
-Create a later Active Success after prior Push acceleration:
-
-- pair external momentum accumulated before Counter is preserved
-- attacker receives only the additional overshoot delta
-- defender keeps its existing external component
-- no same-tick new Push gain after Counter resolution
-
-### T86 — Overshoot decay
-
-After Counter:
-
-- attacker overshoot decays through existing EXTERNAL_DECELERATION
-- monotonic toward zero
-- no reversal / NaN
-- no new Counter-specific decay rule
-
-### T87 — Locked direction basis
-
-After Push begins, change geometry/facing before Counter success:
-
-- relocation and overshoot use original locked Push direction
-- do not retarget to current facing/contact normal
-
-### T88 — No relocation on Fail
-
-- failed Counter remains ACTION-04A1 behavior
-- self Kuzushi
-- no side/rear position jump
-- no overshoot
-
-### T89 — ACTION-04A1 regression
-
-- Counter success still cancels same-tick Push force
-- exact Best/Success classification unchanged
-- Kuzushi timer/facing/susceptibility unchanged
-
-### T90 — Push / Contact / Movement regressions
-
-- existing accepted Push-vs-Push
-- Contact no-creep
-- grounded Movement
-- Dummy harness
-- all existing 108 tests PASS unchanged apart from harmless helper adaptation
-
-### T91 — Determinism / finite
-
-Mixed Best / Success / invalid-fallback cases:
-
-- same input sequence = identical result
-- finite positions/velocities
-- no overlap
-
-Do not add brittle tests for final animation/game feel.
-
-## 17. Verification Level
-
-Heavy / Core Counter Position Resolution.
+Investigation / Design Review.
 
 Required:
 
-- `pnpm test` PASS
-- `pnpm build` PASS
+- Q1–Q22 answered, or explicit BLOCKED point
+- Current Fact / Recommendation / User Decision / Deferred separated
+- Production Source unchanged
+- package / lockfile unchanged
+- repository change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 - `git diff --check` PASS
-- T78–T91 evidence
-- existing 108 tests PASS
-- no new dependency
-- Simulation remains Phaser-free
-- Scope Out absent
 
-### Browser Smoke
+`pnpm test` / `pnpm build` not required because Source must not change.
 
-If real browser/runtime is available:
+## 11. Completion Report
 
-- Mode 2 Dummy still approaches and Pushes
-- ArrowDown Counter still works
-- Best-looking timing places Player behind Dummy
-- later successful timing places Player at Dummy side
-- KUZUSHI remains visible
-- attacker visibly carries forward after successful Counter
-- no overlap/jitter/teleport to invalid location
-- Fail still creates self Kuzushi without relocation
-- Push/Contact/Movement baseline remains intact
-- no runtime/console errors
-
-If browser tool is unavailable:
-- report NOT RUN honestly
-- User Play Test is the required runtime/game-feel gate
-
-## 18. User Play Test — REQUIRED / FULL COUNTER FEEL
-
-This is the first full Counter positional Feel gate.
-
-User should evaluate:
-
-1. Best timing clearly feels stronger than normal Success.
-2. Best → rear position is understandable and rewarding.
-3. Success → side position feels like a believable sabaki/deflection.
-4. Automatic side choice feels natural; no desire for manual A/D choice.
-5. Tie situations do not feel obviously biased or strange.
-6. Instant reposition is readable enough for Prototype, or whether later presentation interpolation is needed.
-7. Attacker overshoot feels like being pulled/sent forward rather than teleporting or skating.
-8. Overshoot amount is not absurd.
-9. Kuzushi facing freeze makes side/rear advantage readable.
-10. After Best/Success, following up with Push during opponent Kuzushi feels causally understandable.
-11. Fail still feels appropriately risky.
-12. Push-vs-Push contest remains natural.
-13. Existing Movement / Contact / Push Feel remains intact.
-14. Counter + lateral movement + Push contest now feel like distinct choices.
-15. Report whether Counter feels too binary/easy/hard, but do not tune final timing unless it blocks the mechanic.
-
-Agent report:
-
-`User Play Test: REQUIRED / NOT RUN`
-
-Technical PASS != Counter Feel accepted.
-
-## 19. Acceptance Criteria
-
-AC-01: Best uses captured locked Push direction.
-AC-02: valid Best relocates defender to rear at exact non-overlap Contact distance.
-AC-03: Success side selection is automatic and deterministic.
-AC-04: side selection uses nearest-side/lateral-offset rule.
-AC-05: tie prefers ring-center-nearer valid side, then fixed sidePlus.
-AC-06: invalid preferred side falls back deterministically.
-AC-07: invalid Best rear falls back rear→preferred side→other side→none.
-AC-08: relocation never clamps through invalid geometry.
-AC-09: no relocation still preserves Counter tier/Kuzushi result.
-AC-10: successful Counter gives attacker-only overshoot.
-AC-11: overshoot uses locked Push direction.
-AC-12: overshoot preserves prior external momentum and uses existing clamp/decay.
-AC-13: successful Counter still cancels current-tick Push force.
-AC-14: Fail has no relocation/overshoot.
-AC-15: ACTION-04A1 Counter/Kuzushi semantics unchanged.
-AC-16: accepted Push/Contact/Movement/Dummy regressions PASS.
-AC-17: no probability/BoutOutcome/Ring-out/Grip/Harite scope creep.
-AC-18: no generic event/history/pathfinding/facing framework.
-AC-19: T78–T91 + existing tests PASS.
-AC-20: `pnpm build` PASS.
-AC-21: Current State docs match material Source changes.
-AC-22: User Play Test REQUIRED / NOT RUN.
-AC-23: Scope外変更なし.
-
-## 20. Stop Conditions
-
-STOP if:
-
-- Preflight fails
-- Current Source / Review Handoff conflict
-- relocation cannot be made deterministic without pathfinding
-- valid side/rear placement requires implementing Ring-out/BoutOutcome
-- overshoot requires replacing Model B
-- successful Counter needs changing accepted A1 timing/Kuzushi semantics
-- a facing redesign becomes necessary for technical correctness
-- new dependency/Physics required
-- task-external User changes/divergence exist
-
-Do not broaden Scope.
-
-## 21. Completion Report
+Use Investigation-only Report Commit Exception.
 
 Minimum:
 
 - Result
 - Preflight
-- Changed Files
-- Best rear algorithm
-- automatic side algorithm
-- tie-break and invalid-target fallback
-- target validity rule
-- overshoot constant/ownership
-- external momentum preservation
-- T78–T91 + regression tests
-- Browser Smoke
-- AC-01–AC-23
-- Implementation Evidence
+- Current Source Findings
+- Q1–Q22
+- Recommended Engagement State
+- Normal Grip semantics recommendation
+- Kuzushi→Morozashi transition
+- Kuzushi consumption recommendation
+- GRAPPLED spatial/facing invariant
+- Morozashi Drive boundary
+- Morozashi Throw boundary
+- simultaneous Grip rule
+- release semantics
+- future Lift compatibility
+- required automated tests
+- User Play Test plan
+- Rejected / Deferred
+- User Decisions Required
+- Next Implementation Sequence
 - Design Deviations
 - Unexpected Scope
-- Known Untested
-- User Play Test: REQUIRED / NOT RUN
+- Verification
 - Git delivery
 
-Implementation Evidence minimum:
+Result:
+- PASS if a safe implementation direction exists and only explicit User decisions remain
+- BLOCKED if a material User decision or architectural prerequisite is required first
 
-1. Best rear
-2. Success sidePlus/sideMinus
-3. tie-break
-4. invalid fallback
-5. no-overlap/arena validity
-6. attacker-only overshoot
-7. prior external preservation
-8. locked direction basis
-9. Fail unchanged
-10. A1 + Push/Contact/Movement regressions
+## 12. User Play Test
 
-## 22. Git Delivery
+NOT REQUIRED for Investigation.
 
-Follow AGENTS.md.
+The report must identify the first implementation Task where Grip / Engagement Feel becomes REQUIRED.
 
-Technical success:
+## 13. Git Delivery
 
-- Task-owned files only
-- tests / build / diff-check
-- Completion Report in same Task commit
-- 1 Agent Task ≈ 1 commit
+If Preflight succeeds and Investigation reaches a reportable conclusion:
+
+- change only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- explicit stage
+- `git diff --check`
+- one Report-only commit
 - push `origin/develop`
 - verify remote SHA / clean working tree
 
 Commit message example:
 
-`feat: add counter position resolution`
+`docs(agent): investigate grip and morozashi design`
 
-Do not change main.
+## 14. Final Instruction
 
-## 23. Final Instruction
+This Task ends at Grip / Engagement / Morozashi investigation.
 
-This Task ends after Counter positional resolution + overshoot.
+Do not implement Grip, Drive, Throw, Lift, stats, or directional Push advantage.
 
-Do not continue to:
-- finish probability
-- Ring-out
-- Grip
-- Harite
-- stats
-- animation framework
+After Report Commit / Push, stop and report:
 
-After commit / push / Completion Report, stop and report:
-
-「ACTION-04A2-COUNTER-POSITION-RESOLUTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / FULL USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Accepted implementation commit for technical review:
-  `d72f43b0887203095eebe3f1c7efb1d1193a188d`
-- Agent-Start-Head:
-  `fe80d5582bc7b6fabc615c453510a5add7d7975c`
-- Agent Task Diff is exactly one implementation commit.
-- `main` remains unchanged.
-- Production changes are limited to:
-  - Counter position resolution / overshoot
-  - focused tests
-  - Current-State documentation
-- No new dependency.
-
-## Reported Implementation vs Design
-
-PASS.
-
-Direct Source review confirmed:
-
-### Best rear
-
-- locked Push direction is copied before attacker Push is cancelled.
-- Best preferred target is:
-  `attackerPosition - lockedDirection * combinedRadius`.
-- applied target is exact non-overlap Contact distance.
-
-### Success automatic side
-
-- side basis is perpendicular to locked Push direction.
-- defender lateral offset selects sidePlus / sideMinus.
-- effectively tied positions use deterministic ring-center preference.
-- remaining tie uses fixed sidePlus.
-- no manual A/D side selection.
-- no randomness.
-
-### Invalid-target fallback
-
-- targets are finite and require the defender body to remain inside the arena circle.
-- no positional clamp is used.
-- Success:
-  preferred side → opposite side → none.
-- Best:
-  rear → preferred side → opposite side → none.
-- failure to relocate does not downgrade the Counter tier or cancel Kuzushi.
-
-### Relocation ownership
-
-- position is changed directly in BoutSimulation.
-- Phaser remains Snapshot presentation.
-- no gameplay tween, route solver, pathfinding, or Scene-owned gameplay position was added.
-
-### Attacker overshoot
-
-- `COUNTER_OVERSHOOT_SPEED = 1.0 m/s` provisional.
-- only attacker externalVelocity receives the overshoot.
-- direction is captured locked Push direction.
-- existing external momentum is preserved.
-- existing MAX_EXTERNAL_SPEED clamp and EXTERNAL_DECELERATION are reused.
-- no second physics / decay system.
-
-### Counter resolution order
-
-- current Contact resolves first.
-- Counter resolution then captures direction/tier/target, enters attacker Kuzushi, relocates defender, adds overshoot.
-- existing Push resolution runs afterward.
-- because attacker Push has been cancelled, no same-tick new Push force is added.
-
-### Fail / A1 preservation
-
-- failed Counter still has:
-  - no relocation
-  - no overshoot
-  - self Kuzushi.
-- Counter window, tier boundary, Kuzushi timer/facing/susceptibility remain ACTION-04A1 semantics.
-
-## Verification Review
-
-Reported:
-
-- `pnpm test`: 124/124 PASS
-- `pnpm build`: PASS
-- `git diff --check`: PASS
-- T78–T91 covered
-- prior regressions remain PASS.
-
-Direct test/source inspection confirmed coverage for:
-
-- Best rear target
-- both Success side signs
-- tie-break
-- preferred/alternate invalid fallback
-- Best rear fallback chain
-- finite / ring-contained / exact-contact relocation
-- attacker-only overshoot
-- prior pair external momentum preservation
-- existing decay / no reversal
-- locked Push direction vs changed facing/contact normal
-- Fail unchanged
-- A1 timing/Kuzushi regression
-- deterministic mixed scenarios
-
-## Existing Test Updates
-
-Accepted.
-
-Two ACTION-04A1 tests were updated only where A2 intentionally changes semantics:
-
-- T64 now distinguishes preserved pair momentum from attacker-only overshoot.
-- T67 no longer asserts "no relocation"; position-specific behavior is covered by T78+.
-
-This is not a regression-test weakening of unrelated behavior.
-
-## Browser Smoke
-
-NOT RUN due Agent environment limitation.
-
-No technical PASS claim is made for actual browser presentation/runtime.
-
-The remaining runtime/game-feel gate is User Play Test.
-
-## Non-Blocking Notes
-
-### N-1 — Straight-on Success often uses the deterministic tie fallback
-
-In the common symmetric case, defender lateral offset is near zero, so automatic side selection often reaches the tie rules.
-
-At the centered prototype setup, ring-center distances may also tie, producing fixed `sidePlus`.
-
-This is expected by the accepted deterministic design, not a bug.
-
-User Play Test should judge whether repeated same-side outcomes from perfectly straight attacks feel acceptable.
-
-### N-2 — Instant relocation is deliberately gameplay-first
-
-The defender position changes instantly in Simulation.
-
-No presentation interpolation was added.
-
-If this looks visually abrupt, treat that as a later presentation/Game Feel correction; do not move the gameplay rule into Phaser.
-
-### N-3 — Numerical values remain provisional
-
-Do not treat:
-- overshoot 1.0 m/s
-- Counter/Kuzushi timings
-- susceptibility
-as final balance.
-
-User already accepted that broader/longer action timing may be desirable later.
-
-## Accepted Technical Baseline Pending Play Test
-
-If User Play Test passes:
-
-- Best Push Counter → attacker Kuzushi + defender rear position
-- Success Push Counter → attacker Kuzushi + deterministic automatic side position
-- invalid target → deterministic fallback / possibly no relocation
-- successful Counter → attacker-only forward overshoot
-- prior external momentum preserved
-- Fail → self Kuzushi, no relocation/overshoot
-- ACTION-04A1 Counter/Kuzushi foundation remains accepted
-
-## Full Counter Feel User Play Test — REQUIRED / READY
-
-Run `pnpm dev` and use Mode 2 (`2`).
-
-Evaluate:
-
-1. Best timing visibly puts Player behind the Dummy.
-2. A later successful Counter visibly puts Player at a side.
-3. Best feels meaningfully stronger / more rewarding than Success.
-4. Automatic side choice feels natural without manual A/D choice.
-5. Straight-on/tie cases choosing a deterministic side do not feel obviously strange.
-6. Instant position change is readable enough for Prototype.
-7. If instant relocation is too abrupt, note it as presentation feedback rather than Gameplay-rule failure unless it causes genuine confusion.
-8. Dummy's forward overshoot looks like it was pulled/sent past the defender.
-9. Overshoot amount does not look absurdly large/small.
-10. The Kuzushi attacker keeps its facing frozen, making side/rear advantage readable.
-11. Following with ArrowUp while opponent is Kuzushi feels causally understandable.
-12. Failed Counter still gives self Kuzushi with no position reward.
-13. Push-vs-Push contest still feels like the accepted baseline.
-14. Normal Movement / Contact / Push remain unchanged outside Counter.
-15. Counter now feels like a distinct third choice alongside Push contest and lateral movement.
-16. Check for runtime/console errors.
-
-## Acceptance State
-
-Technical implementation: PASS.
-
-Full Counter positional Feel: PENDING USER PLAY TEST.
-
-Do not proceed to probabilistic finish, Grip, Harite, Ring-out, or stats until this Play Test is reviewed.
-
-If accepted:
-- ACTION-04A2 becomes current Counter positional baseline.
-- Next task should be explicitly chosen; do not automatically add the Deferred systems.
-
-If rejected:
-- classify feedback narrowly:
-  - side selection
-  - instant relocation readability
-  - overshoot amount/direction
-  - position geometry
-  - Counter timing/Kuzushi tuning
-  - runtime bug
-and correct only the relevant area.
-
-## Do Not Reopen
-
-Unless User feedback identifies a concrete problem:
-
-- shared Down Counter semantics
-- automatic, non-manual side selection
-- locked Push direction as position basis
-- deterministic tie/fallback
-- ACTION-04A1 Kuzushi architecture
-- accepted Push / Contact / Movement baseline
-- probabilistic finish deferral
-
-## Deferred
-
-- probability / deterministic RNG / BoutOutcome
-- Ring-out
-- Grip
-- Harite
-- dedicated Dodge
-- thrust
-- Weight / Power / LowerBody / Balance / Stamina
-- relocation visual interpolation / animation
-- Push distance tuning
-- final Counter/Kuzushi balance tuning
-
-
-# User Play Test Result — 2026-10-20
-
-ACTION-04A2 Counter Position Resolution: ACCEPTED AS CURRENT FUNCTIONAL BASELINE WITH DEFERRED FEEL WORK
-
-User feedback:
-- Core behavior is basically working.
-- Best / Success position results are functioning.
-- Attacker overshoot is NOT visually readable as “the opponent flowing forward” with the current placeholder graphics.
-- User wants the final/production graphics phase to add an explicit forward-flow / stumble animation so the overshoot reads clearly.
-- Side/rear positional advantage does not currently feel strong enough.
-- User wants future game-speed/balance work to be slower/more readable overall.
-- User also wants pushes from the opponent's side/rear to produce a larger displacement than front-on pushes.
-
-Review classification:
-- Overshoot visual readability is a Presentation / Animation Deferred item. Do not change Simulation solely to fake visual motion while placeholder graphics are in use.
-- General game speed, Counter/Kuzushi duration, and numerical tuning remain Deferred balance work.
-- “Side/rear push is stronger” is NOT merely a numeric retune of current behavior: Current Push Core does not apply any angle/relative-position multiplier. Treat it as a future explicit Gameplay Rule / interaction task.
-- Do not silently add that angle-based rule during unrelated balance cleanup.
-- When implemented later, it should remain Simulation-owned and be derived from canonical relative geometry/facing, with focused tests and User Play Test.
-
-Accepted current baseline:
-- Best → rear position
-- Success → automatic side position
-- Fail → self Kuzushi
-- deterministic side selection / fallback
-- attacker-only overshoot exists in Simulation
-- ACTION-04A1 Counter/Kuzushi foundation
-- existing Push / Contact / Movement baseline
-
-Deferred Presentation:
-- forward-flow / stumble animation for successful Counter overshoot
-- visual transition/interpolation for instantaneous side/rear relocation if needed
-
-Deferred Balance/Tuning:
-- overall game speed
-- Counter timing width
-- Kuzushi duration
-- Push susceptibility numerical values
-- overshoot numerical amount
-- Push distance
-
-Deferred Gameplay Rule Candidate:
-- side/rear directional Push advantage:
-  - side/back contact should produce more effective displacement than frontal Push
-  - exact front/side/rear angle bands or continuous multiplier are undecided
-  - interaction with Kuzushi / Weight / LowerBody is undecided
-  - investigate/design before implementation; do not assume formula now
-
-Do not reopen ACTION-04A2 position geometry unless a concrete regression or later rule conflict appears.
+「ACTION-05-GRIP-ENGAGEMENT-MOROZASHI-INVESTIGATION が完了し、ChatGPT Review待ちです」
