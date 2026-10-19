@@ -1,5 +1,5 @@
 Task-ID: LOOP-01-BOUT-FINISH-MATCHQUEUE-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / BOUT FINISH PRESENTATION + DAILY MATCH FLOW + BASHO RECORD
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -813,3 +813,446 @@ Do not implement gyoji, MatchDayFlow, BashoRecord, rank logic, Simulation screen
 
 After Report Commit / Push:
 「LOOP-01-BOUT-FINISH-MATCHQUEUE-INVESTIGATION が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH CORRECTIONS / USER DECISIONS REQUIRED BEFORE IMPLEMENTATION
+
+## Reviewed Investigation
+
+- Investigation report commit:
+  `7f5fbb22b8e3f157f3ddd373d47b9328ffb35628`
+- Agent-Start-Head:
+  `c2e86f0f225d8db870baa1e65d68bfcc50f7eb5c`
+- Diff is exactly one Report-only commit:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / package / lockfile unchanged.
+- `main` unchanged.
+
+## Current Source Findings
+
+Direct review confirms:
+
+- `src/main.ts` registers only `BoutScene`.
+- Stable / Training / Simulation Scene and higher-level flow owner do not exist yet.
+- `BoutScene` creates a fixed `PROTOTYPE_SETUP`.
+- R currently rebuilds BoutSimulation and clears PressLatch instances.
+- Push / Counter / Grip are edge-latched.
+- WASD and ArrowUp held state are read directly from Phaser keys.
+- `PushDummyController` takes participant IDs but BoutScene currently instantiates it with fixed wrestler-a / wrestler-b IDs.
+
+The Report's input-transition risk is real and relevant.
+
+## Accepted Architecture Direction
+
+Accept:
+
+```
+BoutSimulation
+  ↓ BoutOutcome
+Pure higher-level Daily Match Flow
+  ↓
+BoutScene Finish Presentation
+  ↓
+Next scheduled owned Bout / day-complete handoff
+```
+
+Preserve:
+
+- BoutSimulation knows nothing about Match Queue, Basho records, Gyoji, Win/Lose UI, or Management.
+- Phaser Scene is not the long-term record Source of Truth.
+- no generic FSM/event bus.
+- no Result Scene.
+- no per-bout Reward.
+- Finish Presentation overlays the frozen Bout in the same BoutScene.
+- future non-Ring-out win reasons should use the same higher-level flow.
+
+## Accepted Finish Presentation Direction
+
+Accept the small explicit lifecycle concept:
+
+```
+startCue
+→ fighting
+→ decisionPause
+→ gyojiDecision
+→ resultHold
+→ complete
+```
+
+Rematch:
+
+```
+fighting
+→ rematchPause
+→ startCue
+→ fighting
+```
+
+Exact phase names are implementation detail.
+
+Presentation phases are ephemeral.
+They must not own or duplicate persistent win/loss state.
+
+## Accepted Gyoji Placeholder Direction
+
+Accept:
+
+- Gyoji is hidden while fighting.
+- appears only after a win/loss.
+- placeholder geometry is sufficient for first implementation.
+- Gyoji points toward the actual winner's frozen final position.
+- do not infer winner direction from EAST/WEST screen side.
+- final art/sprite/animation remains Deferred.
+
+## Accepted Win / Lose Semantics
+
+Accept:
+
+- result text is from the current scheduled owned wrestler's perspective.
+- owned wrestler is winner → `Win`.
+- owned wrestler is loser → `Lose`.
+- keyboard controller / EAST-WEST / PLAYER label are not the gameplay ownership Source of Truth.
+
+The scheduled bout must explicitly identify the owned wrestler.
+
+## Correction C-1 — Long-term BashoRecord ownership
+
+The Report currently describes Basho records as "場所 persistent" while listing MatchDayFlow as owner.
+
+Correct this before implementation.
+
+### Required ownership boundary
+
+`MatchDayFlow` is the owner of:
+- today's schedule
+- current queue index
+- current attempt/result-consumed state
+- whether today's playable bouts are complete
+
+It is **not** the final long-term canonical owner of Basho records across days.
+
+Basho record belongs conceptually to future Management/Basho state.
+
+Because that state does not exist yet, LOOP-01 implementation may:
+
+- receive an explicit initial owned-record map/state,
+- keep a working copy while today's queue runs,
+- return the updated record state/delta in its day-complete handoff.
+
+Do not imply that a MatchDayFlow instance is the permanent Source of Truth across the whole basho.
+
+This keeps future transition clean:
+
+```
+Management/Basho State
+   ↓ current records + today's schedule
+MatchDayFlow
+   ↓ updated records / result delta
+Management/Basho State
+```
+
+No Save system is required now.
+
+## Correction C-2 — Current scope records owned wrestlers only
+
+The Report recommends updating both winner and loser records, including the non-owned opponent.
+
+Do not adopt that recommendation in LOOP-01A by default.
+
+Reason:
+
+- current daily queue intentionally contains only the user's scheduled owned-wrestler bouts.
+- recording opponent results here would create a partial world-wide record set.
+- future relative Banzuke calculation requires a complete authoritative record for all wrestlers, which will belong to a later Management/world-simulation system.
+- a partial opponent record map must not accidentally become that Source of Truth.
+
+For the current Prototype:
+- update the scheduled `ownedWrestlerId` only:
+  - if owned wins → owned wins + 1
+  - if owned loses → owned losses + 1
+- preserve canonical BoutOutcome winnerId / loserId as the full match fact.
+- future global wrestler record processing may consume the same result when its authoritative owner exists.
+
+If User explicitly wants opponent records now, this correction can be revisited.
+
+## Correction C-3 — Validate outcome against current ScheduledBout
+
+Exactly-once protection needs more than a `recorded` boolean.
+
+Before applying a win result, Pure flow must verify that:
+- winnerId and loserId are exactly the two participants of the current ScheduledBout,
+- IDs are distinct,
+- the scheduled owned wrestler is one of those participants.
+
+A stale/mismatched Outcome must not update records.
+
+Recommended behavior:
+- reject/throw in Pure flow for impossible programmer-state input, or return an explicit invalid result.
+- choose one small deterministic policy and test it.
+
+Do not silently record arbitrary participant IDs.
+
+This protects queue transitions and later dynamic bout creation.
+
+## Rematch
+
+Accept:
+
+- no Basho record update.
+- no queue advance.
+- same ScheduledBout remains current.
+- after the rematch presentation delay/start cue, BoutScene creates a fresh BoutSimulation from the same scheduled bout.
+- new Bout outcome begins ongoing.
+
+No "draw" is added to BashoRecord.
+
+## Input Transition
+
+The Report correctly identifies latch carryover.
+
+Accept:
+- no BoutSimulation stepping during finish/start presentation.
+- clear Push / Counter / Grip latches at the boundary into a new fighting attempt.
+- reset/recreate accumulator so presentation elapsed time is not converted into catch-up ticks.
+- reset/recreate Dummy for the current participant IDs.
+
+Held input recommendation is acceptable for the first Prototype:
+- held WASD may act when fighting becomes active.
+- held ArrowUp does not create a Push edge without a fresh key-down.
+- do not add a neutral-release gate unless User Play Test finds accidental carryover confusing.
+
+User Play Test must specifically check this.
+
+## R Debug Safety
+
+Accept with simplification:
+
+- during active fighting: R may restart the same current attempt without recording.
+- once outcome is final / finish presentation has begun: R must not reset the match in a way that causes duplicate or erased record state.
+
+At day-complete placeholder, debug restart behavior is not gameplay.
+For the first implementation, resetting the entire Prototype day + Prototype records is acceptable if clearly documented as debug-only.
+
+Do not make this a Management rule.
+
+## Daily Queue
+
+Accept:
+
+- queue includes only owned wrestlers who have a bout scheduled today.
+- schedule order is deterministic/input data.
+- one finalized win/loss + completed finish presentation advances exactly one queue item.
+- no scheduled owned bouts → day flow is already complete.
+- last scheduled bout → explicit day-complete handoff/state.
+
+Do not fabricate a full Simulation screen in this task.
+
+## Simulation Handoff
+
+Accept a small semantic boundary such as:
+
+```ts
+{ kind: 'day-bouts-complete', updatedOwnedRecords: ... }
+```
+
+Exact naming can differ.
+
+Since Simulation screen does not exist:
+- first Scene integration may show a small "today's bouts complete" placeholder.
+- do not create fake Management/Simulation UI beyond that.
+
+## 15 / 7 and Kachikoshi Boundary
+
+Accepted User direction remains:
+
+- Yokozuna through Juryo: 15 bouts.
+- Makushita and below: 7 bouts.
+- 15-bout kachikoshi: 8+ wins.
+- 7-bout kachikoshi: 4+ wins.
+
+Agree with Report:
+- this does not belong in Daily Match Flow schedule consumption.
+- total-bout scheduling and end-of-basho kachikoshi/makekoshi belong to future Management/Banzuke logic.
+- no rank movement formula now.
+
+## Future Banzuke
+
+The feasibility note is accepted.
+
+A future pure Management batch can consume:
+- ordered current Banzuke slots,
+- complete wrestler Basho records,
+- special rank rules,
+
+and output next Banzuke ordering.
+
+Do not design its formula in LOOP-01.
+
+## Implementation Split — Correction C-4
+
+Prefer splitting the next implementation into two tasks rather than one combined task.
+
+### LOOP-01A1 — MatchDayFlow Foundation
+
+Pure TypeScript only:
+- ScheduledBout
+- explicit owned wrestler identity
+- Daily queue/index
+- owned Basho record working state
+- idempotent win/loss consume
+- mismatched outcome validation
+- Rematch no-record/no-advance
+- advance after presentation semantic command
+- day-complete handoff
+- deterministic tests
+- new `src/game/flow/` directory explicitly allowed by this task
+
+No Phaser Scene changes.
+No User Play Test required.
+
+### LOOP-01A2 — Bout Finish Presentation Integration
+
+After A1 Review:
+- dynamic current bout setup/controller IDs
+- Finish Presentation phases
+- Gyoji placeholder
+- Win/Lose
+- Rematch auto restart
+- start cue
+- input gating/latch reset/accumulator reset
+- current Prototype multi-bout fixture
+- day-complete placeholder
+- R debug safety
+- Heavy verification
+- User Play Test REQUIRED
+
+Reason:
+This keeps persistent/queue semantics independently testable before refactoring BoutScene and input transitions.
+
+## User Decisions Required
+
+### UD-L1 — Auto advance after normal win/loss
+
+Recommended:
+after decisionPause → Gyoji → Win/Lose hold completes,
+automatically advance to the next scheduled owned bout.
+
+No click/keypress required.
+
+User confirmation required.
+
+### UD-L2 — Rematch text
+
+Current accepted ACTION-06A text is `Draw Rematch`.
+
+Recent User wording says "Rematch" as the restart concept but did not explicitly change the display text.
+
+Recommended:
+retain `Draw Rematch` for now unless User prefers simply `Rematch`.
+
+User can decide before A2; A1 does not depend on display text.
+
+### UD-L3 — Opponent record
+
+Review recommendation:
+**do not persist/update non-owned opponent BashoRecord in LOOP-01A1.**
+
+Only update the current scheduled owned wrestler.
+
+Future authoritative global wrestler records are a separate Management/world-simulation responsibility.
+
+User confirmation required because the Agent Report recommended the opposite.
+
+### UD-L4 — Provisional Presentation timing
+
+The Agent recommendation:
+- start cue 900 ms
+- decision pause 500 ms
+- Gyoji 1200 ms
+- result hold 1500 ms
+- Rematch pause 1500 ms
+
+is acceptable as provisional tuning for A2.
+No pre-implementation User decision is required unless User wants different timing now.
+
+### UD-L5 — Prototype multi-bout fixture
+
+For A2, a small two-owned-wrestler daily schedule is useful to test queue progression.
+
+IDs/names can be non-user-facing prototype fixture values.
+Do not treat them as final wrestler names or roster design.
+
+### UD-L6 — Start cue coverage
+
+Agent recommendation:
+use the same minimal start cue for:
+- first bout
+- next scheduled bout
+- Rematch
+
+This is recommended for consistency and input gating.
+
+User confirmation is useful before A2 but does not block A1.
+
+## New Directory Permission
+
+For LOOP-01A1, explicitly permit:
+
+`src/game/flow/`
+
+AGENTS.md §5 says new directories must be directed by the Task.
+This Review approves that directory for the focused Pure flow implementation.
+
+Do not create broader `management/`, `state/`, or framework directories as a side effect.
+
+## Verification Expectations for LOOP-01A1
+
+At minimum:
+
+- empty schedule → complete.
+- current scheduled bout identity.
+- owned winner → owned wins +1 exactly once.
+- owned loser → owned losses +1 exactly once.
+- opponent record not created/updated under current scope.
+- repeated same final outcome → no duplicate.
+- mismatched/stale outcome rejected.
+- Rematch → no record, no advance.
+- advance before a finalized recorded win/loss rejected.
+- advance after recorded result → exactly one next item.
+- final advance → day complete.
+- multiple owned wrestler records update the correct owned ID.
+- input records are copied/not aliased if mutable structures are used.
+- deterministic replay.
+- Phaser-free.
+- existing 200 tests unchanged.
+
+## Do Not Reopen
+
+Unless explicit User change:
+
+- no Result screen.
+- no per-bout Reward.
+- Gyoji shown after decision, not during fighting.
+- Win/Lose from owned wrestler perspective.
+- Rematch records no win/loss.
+- only today's scheduled owned wrestlers enter the playable queue.
+- after all scheduled owned bouts, hand off back toward Simulation.
+- exact Banzuke movement deferred.
+- Yokozuna/Ozeki special-rule details deferred.
+
+## Deferred
+
+- formal Gyoji art/animation.
+- ground-touch/fall outcome.
+- Throw/Lift.
+- Tachiai.
+- full Simulation/Management screen.
+- complete global wrestler records/world bout simulation.
+- Kachikoshi/Makekoshi implementation.
+- Banzuke calculation.
+- special promotion details.
+- Save.
+- formal wrestler names.
+- global tempo tuning.
