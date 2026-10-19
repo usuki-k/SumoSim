@@ -779,3 +779,41 @@ Unless concrete Play Test feedback requires it:
 - directional FREE Push advantage
 - Ring-out / BoutOutcome
 - final animation
+
+
+# User Play Test Result — 2026-10-20
+
+ACTION-05B1 Grappled Orientation Foundation: ACCEPTED AS CURRENT BASELINE
+
+User feedback:
+- Focused Play Test is OK.
+- Side / Rear orientation behavior is understandable.
+- Current `GRAPPLE_TURN_RATE = π rad/s` (180°/s) feels too fast.
+- However, User also feels the overall game speed is currently too fast.
+- User does NOT want an isolated turn-rate retune now.
+- Final/late gameplay balance should slow the whole action tempo together.
+
+Accepted current baseline:
+- FREE instant auto-facing
+- GRAPPLED gradual facing
+- derived TURNING / READY
+- Side opening shorter than Rear
+- TURNING participant cannot Release
+- Morozashi and Orientation remain separate axes
+- current 180°/s and 15° tolerance remain provisional technical values
+
+Deferred balance/tuning:
+- overall game speed / tempo
+- `GRAPPLE_TURN_RATE`
+- `GRAPPLE_FACING_TOLERANCE` if later readability requires it
+- Movement acceleration/speed
+- Push timing/force/distance
+- Counter timing
+- Kuzushi duration
+- Grip Reach/Recovery timing
+- Drive timing/force once implemented
+
+Do not retune Grappled Orientation in isolation unless a concrete new mechanic requires it.
+When the action systems are sufficiently complete, tune the overall tempo coherently across subsystems.
+
+ACTION-05B1 is accepted and does not need a correction task.
