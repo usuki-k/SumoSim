@@ -1,5 +1,5 @@
 Task-ID: VISUAL-01A-WRESTLER-VISUAL-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / ACTION VISUAL FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -576,3 +576,345 @@ Do not continue into VISUAL-01B FX or Gameplay tuning.
 
 After commit/push/report:
 「VISUAL-01A-WRESTLER-VISUAL-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6`
+- Agent-Start-Head:
+  `dff973d27a890240868fbaba26c39c1cee5715a1`
+- Task diff is exactly one implementation commit.
+- `main` remains unchanged.
+- No new dependency.
+- No image/spritesheet asset was added.
+
+## Scope / Architecture Review
+
+PASS.
+
+Direct source review confirms:
+
+- Gameplay source files were not changed:
+  - BoutSimulation
+  - BoutTypes
+  - grappleOrientation
+  - ringOut
+  - input
+  - Dummy
+- new Pure presentation mapping lives under the explicitly approved:
+  `src/game/presentation/`
+- Pure presentation mapping has no Phaser import.
+- Phaser-specific articulated view remains in Scene-side code.
+- canonical position/facing/action/posture/engagement/outcome stay Simulation-owned.
+- no Phaser Physics or animation callback controls gameplay.
+
+The direction remains:
+
+```
+Simulation Snapshot
+→ Pure WrestlerVisualState
+→ Phaser WrestlerView
+```
+
+## Pure Visual Resolver Review
+
+PASS.
+
+`resolveWrestlerVisualState` derives:
+
+- pose
+- Push / Grip phase progress
+- grapple role
+- turning readiness
+- frozen modifier
+- own locomotion speed
+- Kuzushi strength
+
+from canonical state.
+
+Important:
+- locomotion uses `velocity - externalVelocity`, so being externally pushed is not misclassified as walking.
+- grapple turning uses existing `canActInGrapple`.
+- Morozashi holder/disadvantaged roles come from canonical Engagement.
+- outcome is a freeze modifier, not a duplicate finish-state machine.
+- move/idle hysteresis is presentation-only memory.
+
+No duplicate gameplay Source of Truth was introduced.
+
+## WrestlerView Review
+
+PASS for a validation Prototype.
+
+The view is articulated from runtime-generated parts:
+
+- shadow
+- feet
+- torso
+- mawashi/rear knot cue
+- arms
+- head/mage cue
+
+The root is positioned from the canonical Snapshot position and rotated using exact Simulation facing.
+
+This preserves the accepted gradual grapple orientation rather than quantizing it to directional frames.
+
+### Runtime texture note
+
+The implementation uses Phaser `Graphics.generateTexture`.
+
+The TypeScript build verifies the API surface, but actual browser rendering was NOT RUN by the Agent.
+
+This remains a mandatory User/runtime check.
+
+## Pose Coverage
+
+PASS structurally.
+
+Current implementation has visual treatment for:
+
+- idle
+- move
+- Push startup / active / recovery
+- Counter
+- Kuzushi
+- Grip reach / recovery
+- neutral grapple
+- Morozashi holder
+- Morozashi disadvantaged
+- turning/not-ready
+- Drive
+
+No VISUAL-01B one-shot impact FX were pulled into scope.
+
+## Gameplay Re-evaluation Policy
+
+Important User direction remains:
+
+The current Gameplay baseline is NOT immutable.
+
+VISUAL-01A itself correctly does not alter gameplay.
+
+After User Play Test, any negative result must be classified as:
+
+- Presentation issue
+- Gameplay issue
+- both / unclear
+
+If the visualized game still feels wrong, a follow-up task may reopen:
+- Movement
+- Push
+- Counter
+- Kuzushi
+- grapple orientation
+- Drive
+- other Action tuning/rules.
+
+Do not reject Gameplay feedback merely because those rules were previously accepted in circle-debug form.
+
+## Dohyo / Debug Review
+
+PASS.
+
+Dohyo now has:
+- stronger clay contrast
+- visible tawara/ring edge
+- outside sand band
+- shikiri lines
+- darker surrounding background
+
+The ring-out criterion itself remains Simulation-owned and unchanged.
+
+Debug:
+- default OFF
+- `0` toggles diagnostic overlays
+- existing labels / phase / engagement / grapple line / facing marker remain available for diagnosis.
+
+This is appropriate because User Play Test should first judge readability without debug labels.
+
+## Verification Review
+
+Reported:
+- `pnpm test`: 209/209 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+
+New Pure resolver tests cover:
+- idle / move / hysteresis
+- external momentum not walking
+- Push phases
+- Counter / Grip
+- Kuzushi priority
+- neutral / Morozashi roles
+- rear turning → READY → Drive
+- outcome frozen modifier
+- deterministic / Phaser-free mapping.
+
+Existing 200 gameplay tests remain unchanged and PASS.
+
+## Non-Blocking Technical Notes
+
+### N1 — Runtime visuals remain unverified
+
+Because Browser Smoke was not available, the following are still unknown until User Play Test:
+
+- whether all generated textures render correctly in Phaser runtime
+- whether part origins/scales visually align
+- whether layered limbs look coherent during overlap/grapple
+- whether exact-facing rotation reads naturally
+- whether the improved tawara remains visually consistent with the center-based Ring-out criterion
+
+These are expected Visual Task unknowns, not reasons to add speculative fixes before viewing the result.
+
+### N2 — Outcome freezes presentation interpolation immediately
+
+When Outcome becomes final, `WrestlerView` stops its presentation-time interpolation.
+
+This is consistent with the requested "freeze final visual state" direction, but it means the body can freeze part-way between presentation pose targets.
+
+Do not change this preemptively.
+
+If it looks awkward at Ring-out, classify it as Presentation feedback and adjust in a focused visual task.
+
+### N3 — Current wrestler draw ordering is Prototype-level
+
+Both wrestler bodies share the same body depth, so overlapping limb/body ordering is not a full character-to-character occlusion system.
+
+This is acceptable for the validation pass.
+
+If grappling becomes visually confusing because one whole wrestler consistently layers over the other, fix presentation ordering after seeing the actual runtime result; do not add a complex z/limb interleaving system now.
+
+## Browser Smoke
+
+NOT RUN due Agent environment limitation.
+
+For this task Browser/User visual verification is mandatory before acceptance.
+
+## User Play Test — REQUIRED / READY
+
+Run:
+
+`pnpm dev`
+
+### First pass: debug OFF
+
+Do NOT press `0` initially.
+
+Check:
+
+1. **Basic silhouette**
+   - Do they look like two top-down wrestlers rather than circles?
+   - Can Player/CPU be distinguished?
+   - Is front/back readable from head/mage/mawashi/arms?
+
+2. **Facing**
+   - Move around the opponent.
+   - Can you understand which way each wrestler faces without the old white facing dot?
+   - During side/rear grapple, can you actually see the disadvantaged wrestler rotate?
+
+3. **Movement**
+   - Does foot movement look grounded?
+   - Does it look like walking/shuffling rather than the character image sliding over the dohyo?
+
+4. **Push**
+   - One ArrowUp press should visually read:
+     anticipation → arm extension/drive → recovery.
+   - Is it obviously different from ordinary movement?
+
+5. **Counter**
+   - ArrowDown stance must look different from Push startup.
+   - Current 01A does NOT yet add successful-Counter afterimage/stumble polish.
+   - Judge whether the base stance/position change is understandable enough to proceed to 01B.
+
+6. **Kuzushi**
+   - Does it look like disrupted balance/footing?
+   - Does it look vulnerable rather than stunned/dizzy?
+
+7. **Grip / Grapple**
+   - Can ordinary grapple be understood without the debug white line?
+   - Do arms/body visibly establish a clinch?
+
+8. **Morozashi**
+   - Is it visually obvious which wrestler has the inside-arm advantage?
+   - Can you distinguish it from neutral grapple without text?
+
+9. **Side / Rear advantage**
+   - Is the disadvantaged wrestler visibly not yet established while turning?
+   - Does rear exposure clearly last/read longer than side exposure?
+
+10. **Drive**
+    - Does Drive look like sustained pressure?
+    - When both drive equally, does the stalemate still show visible effort?
+
+11. **Ring-out**
+    - Is the tawara/edge easy to understand?
+    - Does the frozen final state look acceptable?
+
+12. **Overall**
+    - Does this finally begin to read as an Action Game?
+    - Or does it still look mainly like a technical prototype?
+
+### Second pass: debug ON
+
+Press `0`.
+
+Use labels/facing/grapple diagnostics to identify any mismatch between:
+- what the Simulation says
+- what the visual appears to show.
+
+## Feedback Classification
+
+For each problem, please classify if possible:
+
+- Presentation
+- Gameplay
+- Both / unsure
+
+Especially re-evaluate the previously deferred issues:
+
+- overall speed
+- Push distance/strength
+- Counter readability/advantage
+- Kuzushi duration
+- grapple orientation speed
+- side/rear advantage
+- Drive pressure.
+
+It is explicitly acceptable for this Play Test to conclude that the Gameplay itself should change.
+
+## Acceptance State
+
+Technical implementation: PASS.
+
+Runtime rendering: NOT YET VERIFIED.
+Visual readability: PENDING USER PLAY TEST.
+Game Feel: PENDING USER PLAY TEST.
+
+Do not start VISUAL-01B automatically.
+
+First review the User's actual visual/gameplay feedback from VISUAL-01A.
+
+## Next Task Decision
+
+After Play Test:
+
+### If base wrestler presentation is readable
+Proceed to VISUAL-01B for:
+- Push impact
+- Counter forward-flow/stumble/afterimage
+- dust
+- Morozashi highlight
+- Ring-out FX
+- optional small camera impact.
+
+### If base presentation is not readable
+Fix VISUAL-01A presentation first.
+
+### If Gameplay itself now feels wrong
+Create a focused Gameplay investigation/correction before or alongside later visual polish, depending on severity.
+
+Do not force the old Gameplay baseline merely to stay on the visual roadmap.
