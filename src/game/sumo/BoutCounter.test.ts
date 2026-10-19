@@ -3,6 +3,7 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_BEST_TICKS,
+  COUNTER_OVERSHOOT_SPEED,
   COUNTER_WINDOW_TICKS,
   EXTERNAL_DECELERATION,
   KUZUSHI_PUSH_SUSCEPTIBILITY,
@@ -191,7 +192,8 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     expect(B(s).action.kind).toBe('idle')
     // only decay, no new gain on the resolving tick
     expect(A(s).externalVelocity.x).toBeCloseTo(e0 + EXTERNAL_DECELERATION * TICK_SECONDS, 12)
-    expect(B(s).externalVelocity).toEqual(A(s).externalVelocity)
+    // ACTION-04A2: the attacker additionally carries the overshoot along its locked direction (-x)
+    expect(B(s).externalVelocity.x).toBeCloseTo(A(s).externalVelocity.x - COUNTER_OVERSHOOT_SPEED, 12)
   })
 
   it('T65: no Push / too early / too late (opponent Recovery) all fail into self Kuzushi', () => {
@@ -241,22 +243,17 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     expect(posture(far.getSnapshot(), 1)).toBe('stable')
   })
 
-  it('T67: Best and Success both put the attacker into Kuzushi; defender idle/stable, no relocation', () => {
+  // ACTION-04A2 replaced the A1-only "no relocation" assertions here; positions are covered by T78+.
+  it('T67: Best and Success both put the attacker into Kuzushi; defender idle/stable', () => {
     for (const c of [PUSH_STARTUP_TICKS, PUSH_STARTUP_TICKS + COUNTER_BEST_TICKS + 1]) {
       const sim = touching()
-      let prevA = A(sim.getSnapshot()).position
-      for (let t = 0; t <= c; t++) {
-        prevA = A(sim.getSnapshot()).position
-        sim.step(intents({ counter: t === c }, { push: t === 0 }))
-      }
+      for (let t = 0; t <= c; t++) sim.step(intents({ counter: t === c }, { push: t === 0 }))
       const s = sim.getSnapshot()
       expect(B(s).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS })
       expect(B(s).action).toEqual({ kind: 'idle' })
       expect(A(s).action).toEqual({ kind: 'idle' })
       expect(A(s).posture).toEqual({ kind: 'stable' })
-      expect(A(s).position.y).toBeCloseTo(0, 12) // no sideways / rear relocation
-      expect(Math.abs(A(s).position.x - prevA.x)).toBeLessThan(0.05) // ordinary motion only
-      expect(dist(s)).toBeLessThan(COMBINED + 0.01)
+      expect(dist(s)).toBeCloseTo(COMBINED, 9)
     }
   })
 

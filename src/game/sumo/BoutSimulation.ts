@@ -45,6 +45,11 @@ export const COUNTER_BEST_TICKS = 3
 export const KUZUSHI_TICKS = 30 // ~500 ms of full Kuzushi ticks (countered attacker and failed Counter)
 // Received Push acceleration multiplier while the driven-back participant is in Kuzushi.
 export const KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5
+// Counter position resolution (ACTION-04A2). Provisional Prototype tuning.
+// Attacker-only forward carry along its locked Push direction on a successful Counter.
+export const COUNTER_OVERSHOOT_SPEED = 1.0 // m/s
+// Lateral offsets within this (m) count as a tie when choosing the side.
+export const COUNTER_SIDE_EPSILON = 1e-6
 
 // Inward self-velocity sums at or below this (m/s) count as no contribution.
 const INWARD_EPSILON = 1e-9
@@ -102,6 +107,42 @@ function effectiveMove(p: MutableParticipant, move: Vec2): Vec2 {
 export function counterTier(pushActiveTicksRemaining: number): Exclude<CounterTier, 'fail'> {
   const activeElapsed = PUSH_ACTIVE_TICKS - pushActiveTicksRemaining
   return activeElapsed < COUNTER_BEST_TICKS ? 'best' : 'success'
+}
+
+// Where a successful Counter puts the defender, or null to stay put. Basis: attacker center `p` and
+// its locked Push direction `d`; candidates sit at exact contact distance `combined` (no overlap):
+//   rear = p - d*R, side+ = p + perp*R, side- = p - perp*R  with perp = (-d.y, d.x).
+// Side preference: the side the defender already leans to (sign of its lateral offset); on a tie the
+// side nearer the ring center, then side+. Best tries rear first. The first valid candidate wins;
+// a candidate is valid only if the defender body fits fully inside the ring (never clamped).
+export function counterRelocationTarget(
+  tier: Exclude<CounterTier, 'fail'>,
+  p: Vec2,
+  d: Vec2,
+  combined: number,
+  defenderPosition: Vec2,
+  maxCenterDistance: number,
+): Vec2 | null {
+  const perpX = -d.y
+  const perpY = d.x
+  const sidePlus = { x: p.x + perpX * combined, y: p.y + perpY * combined }
+  const sideMinus = { x: p.x - perpX * combined, y: p.y - perpY * combined }
+  const lateralOffset = perpX * (defenderPosition.x - p.x) + perpY * (defenderPosition.y - p.y)
+
+  let sides: Vec2[]
+  if (lateralOffset > COUNTER_SIDE_EPSILON) sides = [sidePlus, sideMinus]
+  else if (lateralOffset < -COUNTER_SIDE_EPSILON) sides = [sideMinus, sidePlus]
+  else {
+    const plusFromCenter = Math.hypot(sidePlus.x, sidePlus.y)
+    const minusFromCenter = Math.hypot(sideMinus.x, sideMinus.y)
+    sides = minusFromCenter < plusFromCenter - COUNTER_SIDE_EPSILON ? [sideMinus, sidePlus] : [sidePlus, sideMinus]
+  }
+  const candidates =
+    tier === 'best' ? [{ x: p.x - d.x * combined, y: p.y - d.y * combined }, ...sides] : sides
+
+  const isValid = (c: Vec2) =>
+    Number.isFinite(c.x) && Number.isFinite(c.y) && Math.hypot(c.x, c.y) <= maxCenterDistance
+  return candidates.find(isValid) ?? null
 }
 
 // The only entry into Kuzushi: cancels the current action, so nothing chosen earlier carries over.
@@ -400,7 +441,9 @@ export class BoutSimulation {
 
   // In contact, a Counter window catching an active opponent Push succeeds: the attacker's Push is
   // cancelled into Kuzushi before this tick's Push force, and the defender returns to idle.
-  // Returns the tier (Best and Success share one result in ACTION-04A1), or null.
+  // Best puts the defender behind the attacker, Success at its side (counterRelocationTarget), and the
+  // attacker alone gets a forward carry along its locked Push direction. Existing external momentum
+  // is kept. Returns the tier, or null.
   private resolveCounter(): CounterTier | null {
     const [a, b] = this.participants
     for (const [defender, attacker] of [
@@ -409,9 +452,26 @@ export class BoutSimulation {
     ]) {
       if (defender.action.kind !== 'counter') continue
       if (attacker.action.kind !== 'push' || attacker.action.phase !== 'active') continue
+      // Captured before enterKuzushi cancels the Push.
+      const d: Vec2 = { x: attacker.action.direction.x, y: attacker.action.direction.y }
       const tier = counterTier(attacker.action.ticksRemaining)
+      const target = counterRelocationTarget(
+        tier,
+        attacker.position,
+        d,
+        attacker.bodyRadius + defender.bodyRadius,
+        defender.position,
+        this.arena.radius - defender.bodyRadius,
+      )
       enterKuzushi(attacker)
       defender.action = { kind: 'idle' }
+      if (target) {
+        defender.position.x = target.x
+        defender.position.y = target.y
+      }
+      attacker.externalVelocity.x += d.x * COUNTER_OVERSHOOT_SPEED
+      attacker.externalVelocity.y += d.y * COUNTER_OVERSHOOT_SPEED
+      clampExternal(attacker.externalVelocity)
       return tier
     }
     return null

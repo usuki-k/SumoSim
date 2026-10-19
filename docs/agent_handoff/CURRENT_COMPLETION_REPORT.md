@@ -1,171 +1,167 @@
-Task-ID: ACTION-04A1-COUNTER-KUZUSHI-FOUNDATION
+Task-ID: ACTION-04A2-COUNTER-POSITION-RESOLUTION
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 730ba8f6fc1fbe8cb8dd939f61e2a67ab0180f17
-Agent-Start-Head: 59c34b3762c4c7b67814f820c56314cfce3ff9d6
+Source-Baseline: 0dede47770b664f9fd01b99597403ad7bd92b55a
+Agent-Start-Head: fe80d5582bc7b6fabc615c453510a5add7d7975c
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-Technical Gateはすべて PASS（`pnpm test` 108/108、`pnpm build`、`git diff --check`）。
+Technical Gateはすべて PASS（`pnpm test` 124/124、`pnpm build`、`git diff --check`）。
 
-- Browser Smoke: **NOT RUN（environment limitation）**。このAgent環境には実ブラウザを操作するToolがない。PASSとは記載しない。
-- User Play Test: **REQUIRED / NOT RUN**。focused foundation checkとして必要。
+- Browser Smoke: **NOT RUN（environment limitation）**
+- User Play Test: **REQUIRED / NOT RUN**（Full Counter Feelを判断するgate）
 
 # Preflight
 
-- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 2`）
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `730ba8f`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `730ba8f..origin/develop` の変更は `docs/agent_handoff/` 配下のみ（CURRENT_TASK.md、CURRENT_COMPLETION_REPORT.md）→ `merge --ff-only` 成功
-- Agent-Start-Head: FF後のHEAD `59c34b3`（前回Reviewの指摘どおり）
+- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 3`）
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `0dede47`（`origin/develop`のancestor）、Handoff-Mode GITHUB
+- `0dede47..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
+- Agent-Start-Head: FF後のHEAD `fe80d55`
 
 # Changed Files
 
-- `src/game/sumo/BoutTypes.ts`: `counterPressed`、`counter` action、`CounterTier`、`ParticipantPosture`、Snapshotの`posture`を追加
-- `src/game/sumo/BoutSimulation.ts`: Counter / Kuzushiのcore処理
-- `src/game/sumo/BoutCounter.test.ts`（新規）: T60〜T73、T76
-- `src/game/sumo/BoutSimulation.test.ts`、`src/game/sumo/BoutPush.test.ts`: test helperに`counterPressed: false`を追加しただけ（assertionは不変）
-- `src/game/input/pushDummyController.ts`: Kuzushiを尊重するようにし、intentに`counterPressed: false`を追加
-- `src/game/input/pushDummyController.test.ts`: helperの追加とT74
-- `src/game/input/pressLatch.test.ts`: T77（ArrowDown latchの統合確認）
-- `src/game/scenes/BoutScene.ts`: ArrowDown用の2個目の`PressLatch`、`COUNTER` / `KUZUSHI`表示
+- `src/game/sumo/BoutSimulation.ts`: 定数`COUNTER_OVERSHOOT_SPEED` / `COUNTER_SIDE_EPSILON`、pure helper`counterRelocationTarget()`、`resolveCounter`の拡張
+- `src/game/sumo/BoutCounterPosition.test.ts`（新規）: T78〜T89、T91
+- `src/game/sumo/BoutCounter.test.ts`: A1のtest 2件をA2の仕様に合わせて更新（下記Design Deviations参照）
 - `docs/ARCHITECTURE.md`: Current Stateを同期
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-`AGENTS.md`は変更なし（Current Sourceの責務の記述に実質的なずれがないため）。新規dependencyはなし。
+変更していないもの: `BoutTypes.ts`（新しい型は不要だった）、`BoutScene.ts`（表示の追加は不要。位置の結果そのものが違いを見せる）、AGENTS.md、Dummy。新規dependencyはなし。
 
-# User Decisions Implemented
+# Best Rear Algorithm
 
-- UD-1: 1つの共有Down Counter。Best / Successのtierは判定するが、A1では両方とも「相手をKuzushiにする」だけ
-- UD-2: ArrowDown（暫定binding）
-- UD-3: 空振り時の強制後退はなし。表示は`COUNTER → KUZUSHI`
-- UD-4: 即決着、PRNG、BoutOutcomeはいずれもなし
+`resolveCounter`内の処理（Task §10の順序どおり）:
+1. Counter windowと攻撃側のPush Activeが成立していることを確認
+2. `d`（locked Push direction）を**`enterKuzushi`の前に**copyする
+3. tierを判定
+4. contact解決後の位置から移動先を決める
+5. 攻撃側Kuzushi
+6. 防御側idle
+7. 防御側の`position`を書き換え（移動先がある場合）
+8. 攻撃側に`d × COUNTER_OVERSHOOT_SPEED`を加えて`clampExternal`
 
-# Counter Input / Window
+移動先の基準: `P` = 攻撃側の中心、`R` = 半径の和、`perp = (-d.y, d.x)`。
+- rear = `P − d·R`
+- Bestの候補順: rear → 優先side → 反対side → 移動なし
 
-- `ParticipantIntent.counterPressed`: そのtickの新しいedge。Sceneでは`counterLatch = new PressLatch()`をArrowDownのPhaser `down` eventへ接続し、frameの最初のtickだけで消費する（Pushと同じ方式）
-- 同じparticipantの同じtickに`pushPressed`と`counterPressed`が両方trueの場合: **Pushを開始し、Counter edgeは捨てる**（queueしない）
-- 開始できるのはaction idleかつposture stableのときだけ。Push中・Counter中・Kuzushi中のedgeは無視する（queueしない）
-- `COUNTER_WINDOW_TICKS = 12`。押したtickがwindowの1 tick目で、12 tickのあいだ成功判定を行う。Contactがなくても開始できる
-- window中は実効move 0（WASD無効）で、既存のgrounded ruleにより制動する
+# Automatic Side Algorithm / Tie-break / Fallback
 
-# Best Tick Rule（exact）
+- side+ = `P + perp·R`、side− = `P − perp·R`
+- `lateralOffset = dot(perp, defender − P)`（移動前の防御側位置で計算）
+  - `> COUNTER_SIDE_EPSILON`（1e-6 m）ならside+
+  - `< −ε`ならside−
+  - それ以外はtie
+- tieの場合: 土俵中心からの距離が小さい方（差がε以内なら同じとみなす）。それも同じならside+
+- Successの候補順: 優先side → 反対side → 移動なし
+- 移動しない場合でもtierは変わらず、攻撃側Kuzushiとovershootも適用する。BestをSuccessへ格下げすることもない
+- randomや手動選択は使わない
 
-`counterTier(pushActiveTicksRemaining)`（exportしたpure関数）で判定する:
+# Target Validity Rule
 
-```
-activeElapsed = PUSH_ACTIVE_TICKS - attacker.action.ticksRemaining
-activeElapsed < COUNTER_BEST_TICKS(=3) ? 'best' : 'success'
-```
+valid = x・yが有限、かつ`hypot(target) <= arena.radius − defender.bodyRadius`。clampはしない。移動先は常に`P`から距離`R`ちょうど（重なりも隠れた隙間もない）。
 
-Active経過0・1・2 tickがBest、3 tick以降がSuccess。Failは「windowが切れた」ことで決まる。
+# Overshoot
 
-# Counter Success / Fail Resolution
+- `COUNTER_OVERSHOOT_SPEED = 1.0` m/s（暫定）
+- Best / Successの成功1回につき1回だけ、**攻撃側だけ**のexternalVelocityへ`d`方向に加える
+- 既存の`clampExternal`（MAX 3 m/s）と既存の減衰（`EXTERNAL_DECELERATION`）がそのまま効く
+- Counter専用の減衰は作っていない
 
-- `step()`の中では、`resolveContact()`が非nullの場合だけ、**contact解決の後、Push力解決の前に**`resolveCounter()`を呼ぶ
-- 成功条件: 防御側がcounter、相手がpush active、そのtickに実Contactがある。windowの最初の該当tickで成立する
-- 成功時: 攻撃側は`enterKuzushi()`（Pushをcancelしてidleへ）、防御側は即idle。tierは`resolveCounter()`が返すが、A1ではgameplayに使わない（A2で位置結果を付ける）
-- 攻撃側がもうActiveでないので、そのtickの`resolvePush`はnet 0になり、Push力は掛からない（T64）
-- Fail: `advanceAction`でwindowが0になったら、使用者が`enterKuzushi()`
-- 背後・側面のrelocation、overshoot、event / historyはなし
+# External Momentum Preservation
 
-# Kuzushi State / Duration
+pair externalVelocityは消さない。防御側は既存の値を維持し（そのtickは通常の減衰だけ）、攻撃側は既存の値にovershootを足す。
 
-- `posture: { kind: 'stable' } | { kind: 'kuzushi'; ticksRemaining }`。`action`とは別fieldで、Snapshotでは独立したcopyとして公開する
-- 入口は`enterKuzushi()`だけ（actionをidleにし、`KUZUSHI_TICKS = 30`をset）。不変条件: kuzushi ⇒ action idle
-- tickの扱い（off-by-oneなし）: tickの先頭で`advancePosture()`を呼ぶ。`ticksRemaining <= 0`ならstableへ戻し、それ以外なら1減らしてそのtickを完全なKuzushi tickとする。途中のtickで入ったKuzushiはそのtickでは数えない
-  - 結果: Kuzushiに入ったtickの後、ちょうど**30 tick**入力を無視し、31 tick目の先頭でstableへ戻ってそのtickの入力を受け付ける（T68）
-  - `ticksRemaining`の意味は「これから来る完全なKuzushi tickの数」。0のSnapshotは「次のtickの先頭で回復する」ことを表す
-- Kuzushi中の挙動:
-  - Push / Counterを開始できない（queueしない）
-  - 実効move 0（grounded brake）
-  - facingは固定
+# Tests（124/124 PASS）
 
-# Kuzushi Facing Rule
+- 既存108件: 全PASS（T64 / T67のみA2の仕様に合わせて更新）
+- 新規16件:
+  - T78 Bestは背後へ（`P − dR`、Contact距離ちょうど、攻撃側Kuzushi、防御側stable / idle）
+  - T79 Successは両方の符号を確認（+y / −yへ歩いてからCounter → その側へ）
+  - T80 tie-break（中心寄り2方向、ε以内のtie、最終tieはside+、明確な傾きは中心優先より優先）
+  - T81 優先sideがinvalidなら反対side、両方invalidなら移動なし、統合版（Successでも攻撃側Kuzushiとovershootはあり）
+  - T82 Bestのfallback 4段階、統合版（rearがinvalid → side+、tierはBestのまま）
+  - T83 grid上の全組み合わせ: 適用された移動先は有限・土俵内・`P`から距離`R`ちょうど
+  - T84 Active初tickのBestで攻撃側にちょうど`d·1.0`、防御側は0。大きな既存momentumに足すとMAX 3.0にclamp
+  - T85 遅いSuccess: 既存のpair momentumは減衰分だけ（そのtickのPush gainなし）、攻撃側だけ`+d·1.0`
+  - T86 overshootは既存の減衰で毎tick`8/60`ずつ0まで下がり、反転せずNaNもない
+  - T87 Push開始後に横へ動いてcontact normalとfacingがずれても、移動先とovershootはlocked `d`基準
+  - T88 Failは移動なし・overshootなし・自分がKuzushi
+  - T89 A1の挙動（そのtickのPush gainなし、tierの境界、Kuzushiのtimerとfacing固定）
+  - T91 3種類の土俵半径（通常 / rear invalid / 全invalid）で、混在sequenceのreplay一致・finite・重なりなし
+- T90: 既存のPush / Contact / Movement / Dummyのtest群が全PASS
 
-`updateFacing()`はKuzushiのparticipantをskipする。stableな相手は通常どおりauto-facingする。回復したtickから即座に相手を向く（turn-rateの仕組みはない）（T70）。
+# Browser Smoke
 
-# Kuzushi Push Susceptibility
-
-`KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5`（暫定）。`resolvePush`で、netの向きから押し込まれる側を決め、その側がKuzushiならPair dvに1.5を掛ける。通常のMovementには掛けない。両者stableの同時Pushの相殺は変わらない（T71 / T73）。
-
-# Grip Boundary
-
-実装していない。将来の境界はARCHITECTURE.mdに記載した: 有効range判定を先に通し、通ったうえで対象がKuzushiなら成功。
-
-# Dummy Integration
-
-`PushDummyController`は、Snapshotの`posture.kind === 'kuzushi'`の間、零入力（move 0、edgeなし）を返し、cooldownを`DUMMY_PUSH_COOLDOWN_TICKS`（30）に保持する。Snapshot上でstableになってからちょうど30 tick後に次のedgeを出す（T74）。
-
-注: Snapshotが`kuzushi, ticksRemaining 0`のtickでは、Simulationはそのtickの先頭でstableへ戻る。一方Dummyはまだcooldownを保持しているので、Kuzushi明けの実際の待ちは31 tickになる。harness側で1 tick保守的になるだけで、「明けてすぐPushしない」要件は満たす。
-
-# Tests（108/108 PASS）
-
-既存86件はhelperに`counterPressed: false`を追加しただけでPASS（T75）。新規22件:
-
-- T60 1 edge = 1回、連打してもrepeat・queueしない / T61 同じtickならPush優先 / T62 window 12 tickちょうど、最終tickでも成立、1 tick後は不成立
-- T63 境界（`counterTier` 8, 7, 6 → best、5 → success）と統合（Counter開始tick 0〜8 → Active初tickでの解決はBest、tick 9 → Success）
-- T64 Successの解決tickはdecayだけでgainなし（Push力のcancel） / T65 Pushなし・早すぎ・遅すぎ（Recovery）はFail
-- T66 Contact前に開始して後からContact + Activeで成功、届かなければFail / T67 Best / Successとも攻撃側がKuzushi、防御側はidle / stable、relocationなし
-- T68 Kuzushiの長さ（30 tickちょうど、off-by-oneなし） / T69 Kuzushi中は入力を無視し、self velocityは0のまま。Counter中の制動はSTOP_DECELERATIONどおり
-- T70 facing固定と回復後の復帰 / T71 押されやすさがちょうど1.5倍 / T72 同時Counterは対称なFail→Kuzushi / T73 Push対Pushの不変性
-- T74 Dummyの挙動 / T76 混在sequenceのreplay一致・finite・重なりなし / T77 ArrowDown latch（0 tickのframe、複数tickのframe、holdでrepeatしない、再押下、同じframeのUp+DownはPush優先）
-- posture snapshotの分離test
-
-# Runtime Smoke
-
-**Browser Smoke: NOT RUN（environment limitation）**。`pnpm build`は成功。実キー入力、表示、console errorはUser側で確認が必要。
+**NOT RUN（environment limitation）**。実ブラウザを操作するToolがない。`pnpm build`は成功。
 
 # Acceptance Criteria
 
-| AC | 状態 |
+| AC | 状態 / 根拠 |
 |---|---|
-| AC-01〜AC-15 | PASS（T60〜T72、T77） |
-| AC-16 | PASS（T71） |
-| AC-17 | PASS（T74） |
-| AC-18、AC-19 | PASS（relocation、overshoot、PRNG、BoutOutcomeのcodeなし） |
-| AC-20、AC-21 | PASS（108/108） |
-| AC-22 | PASS |
-| AC-23 | PASS（ARCHITECTURE.md同期） |
-| AC-24 | REQUIRED / NOT RUN |
-| AC-25 | PASS |
-
-Browser Smokeは未実施（Known Untested）。
+| AC-01 | PASS（T78 / T87） |
+| AC-02 | PASS（T78） |
+| AC-03、AC-04 | PASS（T79） |
+| AC-05 | PASS（T80） |
+| AC-06 | PASS（T81） |
+| AC-07 | PASS（T82） |
+| AC-08 | PASS（T83。clampのcodeなし） |
+| AC-09 | PASS（T81 / T82） |
+| AC-10 | PASS（T84） |
+| AC-11 | PASS（T87） |
+| AC-12 | PASS（T84〜T86） |
+| AC-13 | PASS（T85 / T89） |
+| AC-14 | PASS（T88） |
+| AC-15 | PASS（T89、既存A1 test） |
+| AC-16 | PASS |
+| AC-17、AC-18 | PASS（該当codeなし） |
+| AC-19 | PASS |
+| AC-20 | PASS |
+| AC-21 | PASS |
+| AC-22 | REQUIRED / NOT RUN |
+| AC-23 | PASS |
 
 # Implementation Evidence
 
-1. one-edge Counter: T60 / T77
-2. Push vs Counterの入力優先: T61 / T77
-3. Best / Successの境界: T63
-4. 成功時にPushをcancel: T64
-5. Fail → 自分がKuzushi: T62 / T65
-6. 成功 → 攻撃側がKuzushi: T67
-7. Kuzushi中の行動・移動・facing: T68 / T69 / T70
-8. 押されやすさ: T71
-9. DummyがKuzushiを尊重: T74
-10. relocation / 決着のscope creepなし: T67、diff
+1. Best rear: T78
+2. Success side+ / side−: T79
+3. tie-break: T80 / T82統合
+4. invalid fallback: T81 / T82
+5. 重なりなし・土俵内: T83
+6. 攻撃側だけのovershoot: T84
+7. 既存externalの保持: T85
+8. locked direction基準: T87
+9. Failは不変: T88
+10. A1 + Push / Contact / Movementのregression: T89 / 既存108件
 
 # Design Deviations
 
-なし。Kuzushi timerはTask §10の推奨順序（tickの先頭で進める）で実装した。
+なし（実装の意味はTaskどおり）。
+
+既存testの更新が2件ある。いずれもTaskが求める新しい意味に合わせるために必要だった:
+- T64: 「Counter後もpair externalが完全に一致する」→「攻撃側 = 防御側 + overshoot」。T13で求められている、既存momentumとovershootの区別に合わせた
+- T67: A1限定だった「relocationなし」のassertion（y≈0、|Δx|<0.05）を削除し、Contact距離のassertionに置き換えた。位置の検証はT78以降で行う
 
 # Unexpected Scope
 
 なし。
 
-参考情報（scope外なので修正していない）: 失敗CounterによるKuzushiは、window中の制動でself velocityがすでに0になっている。そのため「Kuzushi中のgrounded brake」が実際に効くのは、カウンターされた攻撃側に接線方向の速度が残っている場合だけ。
+Play Test向けの所見:
+- 静止した相手を真正面から押す標準的な状況では、防御側はlocked direction上にいるのでSuccessはtieになりやすい
+- Prototypeの初期配置（y=0の対称配置）ではtieがほぼ確実で、中心からの距離も同じになるため、横へ動いていなければside+（攻撃者から見て右。現状では画面上の上側）が選ばれやすい
+- Counter前にWASDで横へ寄っていれば、その側が選ばれる
 
 # Known Untested
 
-- Browser Smoke全項目（ArrowDownの実入力、hold、Mode 2でのCounter成功、空振り→KUZUSHI、Kuzushi中の行動不能とfacing固定、回復後の操作、console error）
-- Counter / Kuzushiの体感（User Play Test）
+- Browser Smoke全項目（Mode 2での背後 / 側面の見え方、overshootの見え方、瞬間移動の読みやすさ、console error）
+- Full Counter Feel（User Play Test）
 
 # User Play Test
 
-REQUIRED / NOT RUN（Task §20のfocused foundation check。Best / Successの位置差はまだ見えないのが仕様）。
+REQUIRED / NOT RUN（Task §18の15項目）。
 
 # Git delivery
 
-Task-owned filesだけを明示的にstageし、`feat: add counter kuzushi foundation`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
+Task-owned filesだけを明示的にstageし、`feat: add counter position resolution`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
