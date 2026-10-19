@@ -2,6 +2,7 @@
 import type {
   ArenaSetup,
   BoutEngagement,
+  BoutOutcome,
   BoutSetup,
   BoutSnapshot,
   CounterTier,
@@ -16,6 +17,7 @@ import type {
   Vec2,
 } from './BoutTypes.ts'
 import { GRAPPLE_TURN_RATE, canActInGrapple, turnFacingTowardGrapple } from './grappleOrientation.ts'
+import { resolveRingOut } from './ringOut.ts'
 
 // Provisional technical values for the movement foundation; NOT final balance. Subject to User Play Test.
 export const SIMULATION_HZ = 60
@@ -160,6 +162,12 @@ export function grappledExternalVelocity(v: Vec2, n: Vec2, net: number): Vec2 {
   out.y = parallel * dirY + perp.y
   clampExternal(out)
   return out
+}
+
+function copyOutcome(outcome: BoutOutcome): BoutOutcome {
+  if (outcome.kind === 'ongoing') return { kind: 'ongoing' }
+  if (outcome.kind === 'rematch') return { kind: 'rematch', reason: outcome.reason }
+  return { kind: 'win', winnerId: outcome.winnerId, loserId: outcome.loserId, reason: outcome.reason }
 }
 
 function copyEngagement(engagement: BoutEngagement): BoutEngagement {
@@ -360,6 +368,8 @@ export class BoutSimulation {
   private readonly participants: MutableParticipant[]
   // Pair relationship; the only place grappling is recorded (participants carry no grapple flags).
   private engagement: BoutEngagement = { kind: 'free' }
+  // Bout result; the only place winner / loser / rematch is recorded.
+  private outcome: BoutOutcome = { kind: 'ongoing' }
 
   constructor(setup: BoutSetup) {
     if (!Number.isFinite(setup.arena.radius) || setup.arena.radius <= 0) {
@@ -396,10 +406,15 @@ export class BoutSimulation {
   // FREE action start / grappled Drive decision -> effective move -> grounded self velocity ->
   // external update (FREE decay / grappled shared Drive update) -> integrate (self + external) ->
   // contact -> grapple bond (grappled) -> Counter / Grip / Push resolution (free) -> action timers ->
-  // facing.
+  // facing -> ring-out (once, from the previous and final resolved centers).
+  // Once the outcome is decided the bout is frozen: step() is an exact no-op.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
-    for (const p of this.participants) advancePosture(p)
+    if (this.outcome.kind !== 'ongoing') return
     const [a, b] = this.participants
+    const previousA: Vec2 = { x: a.position.x, y: a.position.y }
+    const previousB: Vec2 = { x: b.position.x, y: b.position.y }
+
+    for (const p of this.participants) advancePosture(p)
 
     // Readiness from the state at tick start (the previous Snapshot), used by release and Drive.
     const startEngagement = this.engagement
@@ -468,6 +483,15 @@ export class BoutSimulation {
     }
     for (const p of this.participants) this.advanceAction(p)
     this.updateFacing()
+
+    // After every positional change of the tick; the final physical state is kept as-is.
+    this.outcome = resolveRingOut(
+      [
+        { id: a.id, previous: previousA, current: a.position },
+        { id: b.id, previous: previousB, current: b.position },
+      ],
+      this.arena.radius,
+    )
   }
 
   // Returns a fresh copy; mutating it never affects canonical state.
@@ -490,6 +514,7 @@ export class BoutSimulation {
         }),
       ),
       engagement: copyEngagement(this.engagement),
+      outcome: copyOutcome(this.outcome),
     }
   }
 

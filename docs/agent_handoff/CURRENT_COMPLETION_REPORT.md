@@ -1,335 +1,190 @@
-Task-ID: ACTION-06-RINGOUT-BOUTOUTCOME-INVESTIGATION
-Result: PASS
+Task-ID: ACTION-06A-RINGOUT-BOUTOUTCOME-FOUNDATION
+Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
 Source-Baseline: 7a28a211cf718a15e29cc7b15817b55e38be6bbf
-Agent-Start-Head: cd6c52066c687887f87bcbacc69dfe62b80fe33f
+Agent-Start-Head: 3e91fc38883edf13a2711017354f1da631e4c1f6
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS（Investigation only）。
+Technical Gateはすべて PASS（`pnpm test` 200/200、`pnpm build`、`git diff --check`）。
 
-- 中心基準（UD-R1）、境界ちょうどはIN（UD-R2）、「先に出た方が負け、同時なら取り直し（Rematch）」（Correction）の3つを、Simulationが所有する決定的なruleとして実装できる
-- 「先に出た」は、**各参加者のtick開始位置からtick終了位置までの直線区間と土俵の円が交わる時刻（tick内の割合）**で決められる。CCDや物理systemは不要
-- 外へ出た深さで勝敗を決める処理は一切使わない
-- 1 tick内の位置の書き換え（contact補正、bond、Grip時の吸着、Counterの位置移動）を検討した結果、この直線区間による定義を破るものはなかった（F4）
-- 残る事項は推奨既定値付きのUser Decisionだけで、BLOCKEDになる点はない
-  - 東西の割り当てと力士名は現在のSourceにない。これはUD-R5 / R6として明示した
-
-Production Source / package / lockfileは未変更。Repository変更は本Reportのみ。
+- Browser Smoke: **NOT RUN（environment limitation）**
+- User Play Test: **REQUIRED / NOT RUN**
 
 # Preflight
 
-- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 4`）
+- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 2`）
 - Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `7a28a21`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `7a28a21..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ（Task、User Decisions、Correction）→ `merge --ff-only` 成功
-- Agent-Start-Head: FF後のHEAD `cd6c520`
-- 読んだもの: AGENTS.md、`BoutTypes.ts`、`BoutSimulation.ts`、`BoutDrive` / `BoutPush` / `BoutCounterPosition` / `BoutOrientation`のtest、`BoutScene.ts`、ARCHITECTURE.md、GAME_CONCEPT.md、Review記録（`cdd5040`）、Taskに追記されたUser Decision / Correction
+- `7a28a21..origin/develop` の変更は `docs/agent_handoff/` 配下のみ → `merge --ff-only` 成功
+- Agent-Start-Head: FF後のHEAD `3e91fc3`
 
-# 用語の区別
+# Changed Files
 
-- **Current Fact**: Current Sourceの事実
-- **Recommendation**: 本Reportの推奨（未実装）
-- **User Decision (UD)**: 実装前にUserが決める、または決めた事項
-- **Deferred**: 後続Task
+- `src/game/sumo/ringOut.ts`（新規、pure、Phaser非依存）: `RING_OUT_SIMULTANEOUS_EPSILON`、`isOutOfRing`、`firstRingBoundaryCrossingFraction`、`resolveRingOut`
+- `src/game/sumo/BoutTypes.ts`: `BoutFinishReason`、`BoutRematchReason`、`BoutOutcome`、`BoutSnapshot.outcome`
+- `src/game/sumo/BoutSimulation.ts`: canonicalな`outcome`、step先頭のfreeze、`P0`の取得、tickの最後の判定、`copyOutcome`
+- `src/game/sumo/BoutRingOut.test.ts`（新規）: T151〜T172
+- `src/game/scenes/BoutScene.ts`: presentation metadata（`side`、未設定の`name`）、`outcomeLabel()`、結果text
+- 意図した既存testの更新: 下記「Intentional Test Adaptations」
+- `docs/ARCHITECTURE.md`: Current Stateを同期
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-Taskのquestionのうち、Correctionで置き換わった部分（Q4 / Q5の深さ比較）は「交差時刻」に読み替えて回答する。
+AGENTS.mdは変更なし。新規dependencyはなし。
 
-# Current Source Findings（Current Fact）
+# User Decisions Implemented
 
-- F1 Arenaは原点中心の円（`arena.radius`、Prototypeでは2.275 m）。participantは`position`と`bodyRadius`を持つ。勝敗のstateはない。壁やclampもない
-- F2 `step()`の中で位置が変わる箇所は、次の順に全部で5つ:
-  1. 積分（`position += (self + external)·dt`）
-  2. `resolveContact`の重なり補正
-  3. GRAPPLEDなら`resolveGrappleBond`
-  4. FREEなら`resolveCounter`の防御側の位置移動
-  5. FREEなら`resolveGrip`の`enterGrapple`での吸着（bond）
+- UD-R1: 中心基準`Math.hypot(center) > arena.radius`。bodyRadiusや支持円は使わない
+- UD-R2: 境界ちょうどはIN（厳密に大きい場合だけOUT）。1人分の判定にgameplay用のepsilonはない
+- UD-R3: 先に出た方が負け。同時ならRematch。深さ・participantの順序・乱数は使わない
+- UD-R4: `EAST|WEST <name> Win` / `Draw Rematch`。Player（`wrestler-a`）= EAST、CPU（`wrestler-b`）= WEST。名前は未設定なので、labelを暫定のfallbackとして使う
 
-  `resolvePush`、action timer、`updateFacing`は位置を変えない
-- F3 Counterの位置移動の有効条件は`|target| <= arena.radius − defender.bodyRadius`（体全体が土俵内に収まる）。中心基準より厳しいので、**位置移動によって中心が土俵外へ出ることはない**
-- F4 tick内の位置の書き換えと「出る」の関係:
-  - 吸着（bondで間を詰める方向）: 2人を互いの中心を結ぶ線分上で動かす。両端が土俵内なら、凸性により結果も土俵内になる。つまり吸着では外へ出ない
-  - bondの押し離し（距離 < Rのとき）: GRAPPLED中は外力が同じなので、ずれは浮動小数の誤差（約1e-16）程度
-  - contact補正: 内側へ動いた側だけを法線方向に戻すので、移動量は重なりの大きさ（通常は数mm以下）
-  - Counterの位置移動: F3により外へ出ない
-  - → 実際に土俵外へ出る原因は、ほぼ積分（速度による移動）だけ
-- F5 最大速度: externalのMAXは3 m/s、selfのMAXも3 m/s。合計しても1 tickあたり0.1 m以下で、土俵（半径2.275 m）に比べて小さい
-- F6 Snapshotのtopレベルのkeyを厳密に確認しているtestがある:
-  - `BoutOrientation.test.ts` T126: `['arena', 'engagement', 'participants']`
-  - `BoutDrive.test.ts` T148: 同じkey集合に加え、**「土俵外でも何も起きない」こと自体**をassertしている
-- F7 小さい土俵のfixtureを使うtest: `BoutCounterPosition.test.ts` T81（半径1.0）、T82（1.25）、T91（100 / 1.25 / 1.0でreplay）。T91は長い移動scriptを含むので、Ring-out導入後は途中でoutcomeが確定してfreezeする可能性がある（replayの一致というassertion自体は成り立つ）。実装時に確認が必要
-- F8 Sceneの`PARTICIPANT_PRESENTATION`はid → `{controller, color, label: 'PLAYER' | 'CPU'}`だけを持つ。**東西の割り当てと力士名はどこにもない**
+# BoutOutcome Type
 
-# Ring-out Criterion（Q1〜Q3）— 決定済み
+`ongoing | win{winnerId, loserId, reason: 'ring-out'} | rematch{reason: 'simultaneous-ring-out'}`
 
-- **UD-R1（決定）**: 中心基準。`|position| > arena.radius`ならOUT。`bodyRadius`や支持円の割合は使わない。Q2は対象外 / Deferred
-- **UD-R2（決定）**: 境界ちょうど（`|position| === arena.radius`）はIN。厳密に大きい場合だけOUT。1人分の境界判定にgameplay用のepsilonは入れない
-- 判定は`Math.hypot(x, y) > arena.radius`
-- 体感: 体の中心が土俵線を越えるまで負けにならないので、見た目の円は半分近くはみ出してから負けになる（後で代表的な絵ができたら見直す前提、UD-R1）
+- 理由は文字列literalのunionで、将来の負け方を追加できる
+- 決まり手の分類systemは作っていない
 
-# First Crossing（Correction）— Recommendation
+# ringOut Helper / Math
 
-## 定義
+- `isOutOfRing`: `hypot > radius`
+- `firstRingBoundaryCrossingFraction(prev, cur, R)`:
+  - `cur`がINならnull
+  - `prev`がOUTなら0（防御的な処理）
+  - それ以外は`|prev + t·d| = R`の大きい方の解（INだった区間の上端）を返す
+  - 相殺の起きない形で計算する: `b ≥ 0`なら`c / q`（`q = −(b + √D) / 2`）、`b < 0`なら`(−b + √D) / (2a)`
+  - `t ≤ 0`、`−0`、NaNは0にし、`[0, 1)`に収める
+  - 外部ライブラリは使わない
 
-tick開始時の位置`P0`（全participantがIN。勝敗未確定のstepしか進まないため）と、tick内のすべての位置解決を終えた後の位置`P1`を使う。
+# Resolved Interpolation Semantics
 
-- `|P1| > R` → このtickで外へ出た
-- 交差時刻: 直線区間`P(t) = P0 + t·(P1 − P0)`（`t ∈ [0, 1]`）で、`|P(t)| ≤ R`を満たす区間の**上端**`t*`（最後にINだった瞬間）
+stepの先頭で各participantの位置`P0`をlocalに取得し、通常のtickを最後まで進めてから、最終的な位置`P1`で判定する。
 
-```ts
-// Pure. Returns the in->out crossing fraction in [0, 1), or null when the tick does not end OUT.
-firstRingBoundaryCrossingFraction(previous: Vec2, current: Vec2, arenaRadius: number): number | null
-```
+- tick内部の中間位置（contact補正、bond、Gripの吸着、Counterの位置移動）は、個別のRing-out eventとして扱わない
+- 物理的なsub-stepの時刻を再現しているとは主張しない
+- T170で確認:
+  - 吸着で境界ちょうどの位置から内側へ引き込まれたtickは、Ring-outにならない
+  - bond補正を含むDriveのtickでは、判定結果がSnapshotの前後の位置に対するhelperの結果と一致する
 
-- 円板は凸なので、INからOUTへ向かう直線区間は境界とちょうど1回交わる（出て戻ることはない）
-- `a = d·d`、`b = 2·P0·d`、`c = |P0|² − R² ≤ 0`（`d = P1 − P0`）として、上側の解`t*`を求める
-- 数値計算は、`b`の符号によって相殺の起きない形（`q = −(b + sign(b)·√(b² − 4ac)) / 2`で、`t* = max(q/a, c/q)`）を使う
-- `c ≤ 0`なので判別式は0以上、`|P1| > R`なので`t* < 1`
-- 境界ちょうど（`|P0| = R`）から外へ出る場合は`t* = 0`（境界ちょうどはINなので、そこが最後のINの瞬間）
+# First-out / Simultaneous
 
-## 勝敗
-
-| このtickの終わりにOUTの者 | Outcome |
+| 状況 | 結果 |
 |---|---|
-| いない | ongoing |
-| 1人だけ | その者の負け（交差時刻は無関係） |
-| 2人 | 交差時刻が早い方の負け。差が`RING_OUT_SIMULTANEOUS_EPSILON`以内なら**Rematch** |
+| 誰もOUTでない | ongoing |
+| 1人だけOUT | その者の負け |
+| 2人ともOUT | 交差時刻の早い方の負け |
+| 2人ともOUTで、差が1e-9以内 | rematch |
 
-- 前のtickで先に出た者がいれば、そのtickで勝敗が決まりfreezeする。そのため、後から出た者が評価されることはない（異なるtickの間の順序は自動的に決まる）
-- 外へ出た深さ、tick終了時の中心からの距離、participantの順序、randomは**一切使わない**
-- 防御的な処理: tick開始時にすでにOUTの者がいた場合（不変条件違反で、通常は起きない）は交差時刻0として扱う
-- **同じtickの典型例**:
-  - pairが土俵の接線方向へ平行移動して、2人同時に出る → 交差時刻が等しいのでRematch
-  - pairが外へ向かって押される → 前にいる者が先（多くは異なるtick）
+**深さを使っていないことの証明（T158）**: 同じtick内に、先に出たが浅い者と、後に出たが深い者を作った（実際の歩行と純関数のfixture、両方向）。どの場合も**先に出た浅い方が負け**になった。
 
-## tick内の位置の書き換えの扱い（F4）
+実測（T156、隙間0.2 / 0.205で両者全速力）: 交差時刻はA = 0.50、B = 0.65で、Aの負け。鏡像ではBの負け、等しい隙間ではRematch。
 
-- 直線区間`P0 → P1`は、そのtickの**正味の変位**を等速に均したもの。補正や吸着もこの区間に含まれる。特別な扱いは要らず、全員に同じ規則で決定的に適用できる
-- 吸着とbondの押し離しは、F4により「外へ出る」原因にならない（bondの浮動小数の誤差は区間に含まれるだけ）
-- Counterの位置移動は、F3により移動後が必ずINになるので、出た者の評価対象にならない
-  - 将来この有効条件を緩めて土俵際や土俵外へ移動できるようにする場合は、瞬間移動を直線に均してよいかを、そのTaskで改めて判断する（Deferred）
-- 一般のCCD、物理system、tick内のsub-step記録は不要
-  - `P0`はstepの先頭で取るlocalな値で、保存するstateではない
+# Tick Order
 
-## 同時のepsilon（Q6）
+0. `outcome ≠ ongoing`なら即return（no-op）
+1. `P0`を取得
+2. 通常のtick: posture → readiness → release → FREE action / Drive → self → external → 積分 → contact → bond / Counter / Grip / Push → action timer → facing
+3. `resolveRingOut(P0, P1)`を1回
+4. `this.outcome`へ代入
 
-- `RING_OUT_SIMULTANEOUS_EPSILON = 1e-9`（tickに対する割合。約1.7e-11秒）を推奨する。**技術的な値**で、鏡像の配置で計算順序の違いから生じる丸め誤差を吸収するためのもの
-- 鏡像配置（y = ±の対称）は、y²が同じ値になるので、多くの場合ぴったり一致する
-- gameplayとしての「ほぼ同時の幅」（例: 数十ms以内なら取り直し）は導入しない。必要ならUser Decision（UD-R7、Deferred推奨）
+Push / Drive / CounterにRing-out用の特別なcodeはない。
 
-# BoutOutcome Type（Q7、Q21）— Recommendation
+# Freeze Semantics
 
-```ts
-export type BoutFinishReason = 'ring-out'                 // future: | 'touch-down' | 'throw' ...
-export type BoutRematchReason = 'simultaneous-ring-out'
+- 勝敗確定後の`step()`は完全なno-op。T167で、入力を変えながら120回`step()`しても、Snapshotが毎回完全に一致することを確認した
+- action / velocity / engagementを正規化しない（T163: 最終Snapshotは`push`のまま。T148: `grappled`のまま）
+- 後から相手が外へ出て結果が上書きされることはない（T166〜T168）
 
-export type BoutOutcome =
-  | { readonly kind: 'ongoing' }
-  | { readonly kind: 'win'; readonly winnerId: ParticipantId; readonly loserId: ParticipantId; readonly reason: BoutFinishReason }
-  | { readonly kind: 'rematch'; readonly reason: BoutRematchReason }
-```
+# Counter / Push / Drive Integration
 
-- `rematch`（同体・取り直し）は、引き分け（draw）とは意味が違うので明示する
-- 表示上の「Draw Rematch」の文言はSceneが作る
-- reasonは文字列literalのunionにしておく。将来の負け方を足しても構造は変わらない。決まり手の分類systemは作らない
+- **Counter**: 位置移動の有効条件`R − bodyRadius`は変更なし。土俵際の代替配置（半径1.25の土俵）でも、中心は`R − bodyRadius`以内でongoing（T165）
+- **Push**: 押し出された側の負け。最終位置は土俵外のままで、壁はない（T163）
+- **Drive**: 前にいる者が先に出て負け（両方向）。bondの距離はRのまま、clampなし（T164 / T148）
 
-# Outcome Source of Truth / Snapshot（Q8、Q9）
+# Snapshot API
 
-- `BoutSimulation`がcanonicalな`outcome`を1つだけ持つ
-  - constructorでは`ongoing`
-  - `BoutSnapshot.outcome`（topレベル）として独立したcopyを公開する
-- participantにwinner / loserのflagは持たせない。Sceneも勝敗stateを持たない
-- Snapshotの形が変わる（意図的なAPI拡張）ので、F6の2件のtestはscopeを限定して更新する:
-  - T126: keyの集合に`'outcome'`を追加する
-  - T148: 「Ring-outなし」を確認しているtestなので、Ring-outの仕様に置き換わる。半径100のfixtureで「Drive中に土俵内では何も起きない」に限定するか、Ring-outのtestへ移す
-- F7の小さい土俵のtestは、実装時に挙動を確認する
-- 古いkey集合のtestを守るために、Sceneだけが使う別APIへ隠すことはしない
+topレベルに`outcome`を追加した（participantに勝敗のflagはない。T172）。
 
-# Tick Order（Q10）— Recommendation
+# Scene
 
-```
-[outcome ≠ ongoing なら即return（no-op）]
-P0 = 各participantの位置（local）
-posture timers → readiness → release → FREE action開始 / Drive → self velocity → external → 積分 →
-contact → bond / Counter（位置移動）→ Grip（吸着）→ Push → action timers → facing →
-resolveRingOut(P0, 最終位置)   // tickの最後に1回だけ
-```
+- `PARTICIPANT_PRESENTATION`に`side: 'EAST' | 'WEST'`と`name?`を追加
+- `outcomeLabel()`:
+  - ongoingなら空
+  - rematchなら`Draw Rematch`
+  - winなら`${side} ${name ?? label} Win`
+- 結果textは上部中央に表示する
+- 体は最終位置のまま
+- 入力の抑制はしない（Simulationがno-opなので不要）
+- `R`で新しいBoutになる
 
-- tick内のすべての位置解決（contact / 位置移動 / 吸着 / bond / Driveの平行移動）が終わった後で判定する
-- 途中でreturnせず、そのtickは最後まで普通に進める。その最終状態が「最後の物理的な瞬間」になる
-- Counterのovershootは速度なので、次のtickの積分で反映され、そのtickの区間に含まれる
-- Push / Drive / Counterのどれにも、Ring-out用の特別なlogicは要らない
+**暫定の名前fallbackについて**: 現在の表示は`EAST PLAYER Win` / `WEST CPU Win`になる。PLAYER / CPUは暫定のlabelで、**正式な力士名ではない**。名前が決まったら、`PARTICIPANT_PRESENTATION`の`name`を設定するだけで差し替えられる。
 
-# Counter / Push / Drive Interaction（Q11〜Q13）
+# Intentional Test Adaptations（既存test）
 
-- **Counter（Q11）**: 位置移動の有効条件（`R − bodyRadius`）は**変更しない**
-  - 中心基準より厳しく、位置移動でRing-outが起きないことを保証している（F3）
-  - 有効条件を中心基準などへ緩めるのは、Accepted Counterの幾何の変更になる。User Decision / 別Task（Deferred）
-- **Push（Q12）**: そのtickの終わりにOUTなら勝敗が確定し、Push actionはSnapshotにactiveのまま残る。actionを即座にcancelする処理は追加しない（最小のrule）
-- **Drive（Q13）**: pairは平行移動し、各participantを独立に判定する。前にいる者が先に出る。同時なら交差時刻で比較する。Driveに特別な処理は不要
+開発中に一時的な計測（勝敗が確定したら例外を投げる）を入れて、既存testの中で勝敗が確定するものを全件洗い出した。その結果に基づいて、次のとおり更新した。計測codeは確認後に除去済み（現在のSourceには残っていない）。
 
-# Post-outcome Freeze（Q14、Q15）— Recommendation
-
-- **A: 勝敗確定後の`step()`は完全なno-op**
-  - 位置・速度・action・posture・facing・engagement・outcomeはすべて変わらない
-  - timerも減衰も止まる
-- 最終Snapshotは物理状態をそのまま保持する（`push` / `drive` / grip / 0でない速度が残っていてよい）。勝敗はoutcomeが表す
-- 結果画面へ移るときに何を見せるかはPresentationが決める。見た目を整えるためだけに他のstateを書き換えることはしない
-
-# Scene Boundary（Q16〜Q18）— Recommendation
-
-- **表示の文言（UD-R4、決定）**: `EAST <名前> Win` / `WEST <名前> Win` / `Draw Rematch`
-  - Simulationはid（winnerId / loserId）とreasonだけを持つ
-  - 文字列はSceneが組み立てる
-- **東西と名前の境界（F8）**: Current Sourceにないので**作り話はしない**
-  - 最小の拡張は、Scene側のpresentation metadata（`PARTICIPANT_PRESENTATION`）に`side: 'EAST' | 'WEST'`と`name`を加えること
-  - Simulation、BoutSetup、勝敗の判定には入れない
-  - 将来はManagement（番付・名簿）から渡されるpresentation用の設定になる
-  - 値はUser決定（UD-R5 / R6）
-- 入力は勝敗確定後も収集してよい（Simulationがno-opなので無害）。Sceneで入力を止める必要はない
-- `R`で新しいBoutを始めると`ongoing`に戻る
-- **Rematch（Q17）**: `Draw Rematch`を表示し、`R`で手動restartする。自動restartやtimerは付けない
-- **土俵（Q18）**: 壁・clamp・跳ね返りは付けない。体は土俵線を越えた位置でfreezeし、押し出された感じが残る
-
-# Body Size Compatibility（Q19）
-
-中心基準では、体の大きさは判定に影響しない。大きい体ほど早く負けるような偏りはない。
-
-将来、体の端や支持円で判定したくなった場合は、`bodyRadius`の割合ではなく、独立したphysical parameter（足の支持範囲）として導入するのがよい（Deferred）。今はstatを追加しない。
-
-# Helper Boundary（Q20）
-
-小さなpure module `src/game/sumo/ringOut.ts`（Phaser非依存）を推奨する。
-
-- `isOutOfRing(position, arenaRadius): boolean`
-- `firstRingBoundaryCrossingFraction(previous, current, arenaRadius): number | null`
-- `resolveRingOut(entries: { id; previous; current }[], arenaRadius): BoutOutcome`
-
-`BoutSimulation`はtickの最後に`resolveRingOut`を1回呼ぶだけ。Rule Engineは作らない。
-
-# Result / Reward Boundary（Q22）
-
-`BoutSimulation`は最終的な`outcome`を出すだけにする。将来、上位のgame state（Stable → Training → Bout → Result / Reward）がSnapshotの`outcome`を読んでResultへ遷移する。Management stateはBoutSimulationに入れない。
-
-# Determinism / Tunneling（Q23）
-
-- 判定は、固定tickごとに1回、位置解決の後に行う。render deltaは使わない
-- 1 tickの最大移動は約0.1 m（F5）。ただし判定は最終位置で行い、交差時刻は区間から正確に求めるので、tunnelingの問題はない
-  - 凸な円板なので、tick内で外へ出て戻る経路は直線区間では起きない
-- CCDは不要
-
-# Required Automated Tests（Q24、06A用）
-
-1. 初期は`ongoing`。Snapshotの`outcome`は独立したcopy
-2. 境界: ちょうど`R`ならIN、`R − 1e-9`ならIN、`R + 1e-9`ならOUT（1人分）
-3. AだけOUT → Bの勝ち。BだけOUT → Aの勝ち（両方向）
-4. 異なるtickで出た場合: 先に出た者が負け（後の者は評価されない）
-5. 同じtickで、交差時刻はAの方が早い → Aの負け。Bの方が早い → Bの負け（両方向。深さは逆になるように配置して、深さで決めていないことを確認する）
-6. 同じtickで、鏡像の配置（交差時刻が等しい）→ Rematch
-7. epsilonの近傍: 差が`1e-9`以内ならRematch、それより大きければ勝敗が決まる（helperで）
-8. `firstRingBoundaryCrossingFraction`: INのまま → null、境界ちょうどから外へ → 0、各方向、外れ値なし、finite
-9. bodyRadiusが違っても結果が変わらない（中心基準）
-10. FREE Pushで押し出す → 押し出された側の負け
-11. Grappled Driveで寄り切る → 前にいる側の負け
-12. 土俵際でのCounterの位置移動は土俵外へ出ない（F3。既存の有効条件のまま）
-13. 壁やclampがない（最終位置は土俵外のまま）
-14. 勝敗確定後、`step()`を何回呼んでもSnapshotが完全に同一（no-op）
-15. 新しいBout（新しいinstance）は`ongoing`
-16. replay一致・finite
-17. 既存の182件: 意図したSnapshotの形の変更（T126 / T148）と、小さい土俵のtest（F7）の確認以外は変更なしでPASS
-
-# User Play Test Plan（Q25）
-
-最初にRing-out FeelがREQUIREDになるのはACTION-06A。
-
-確認項目:
-1. 押し出されたときの負けが、目で見て分かる位置で起きるか（中心基準の見え方）
-2. Driveでの寄り切りが「寄り切り」らしく決まるか
-3. 早すぎる・遅すぎる判定に見えないか
-4. 同時に出たときのRematchが恣意的に見えないか
-5. freezeが勝敗確定として分かりやすいか
-6. `R`でのrestart
-7. 見えない壁がないか
-8. 全体の速度は引き続きDeferred
-
-# User Decisions Required（Q26）
-
-| # | 決定事項 | 状態 / 推奨 |
+| test | 変更内容 | 理由 |
 |---|---|---|
-| UD-R1 | Ring-outの基準 | **決定済み**: 中心基準 |
-| UD-R2 | 境界ちょうど | **決定済み**: IN |
-| UD-R3' | 同じtickで2人とも出た場合 | **決定済み（Correction）**: 先に出た方が負け、同時ならRematch。推奨: 交差時刻は直線区間で求める |
-| UD-R4 | 表示の文言 | **決定済み**: EAST / WEST + 名前 + Win、Draw Rematch |
-| UD-R5 | 東西の割り当て | 推奨: Prototypeでは左（Player, `wrestler-a`）をEAST、右（CPU）をWESTとする（正面から見て東が左になる慣例に合わせた案）。User確認が必要 |
-| UD-R6 | 力士名 | **User指定が必要**（作り話はしない）。未指定のまま実装する場合の代案: 名前を出さず`EAST Win` / `WEST Win`だけにする |
-| UD-R7 | 同時判定のepsilon | 推奨: 技術的な`1e-9`（tickに対する割合）だけにする。gameplayとしての同時の幅はDeferred |
-| UD-R8 | 勝敗確定後のstep | 推奨: 完全なno-opで、最終状態をそのまま保持 |
-| UD-R9 | Outcomeの型 | 推奨: `ongoing | win{winnerId, loserId, reason} | rematch{reason}` |
+| T126（Orientation） | topレベルのkey集合に`outcome`を追加 | Snapshot APIの意図した拡張 |
+| T148（Drive） | 「Ring-outなし」を、「土俵を越えると寄り切りで勝敗が決まる、clampなし、最終状態を保持」に置き換え | 旧仕様が意図的に置き換わったため |
+| T25（BoutSimulation）、T47（Push） | 遠くの相手の初期位置を`x = 1000`から`x = 90`へ（半径100の土俵内） | 1000では最初のtickで即Ring-outになり、testの本来の目的（接触しない遠くの相手）から外れるため。T47は計測なしでは止まっていても通ってしまう状態だった |
+| T91（CounterPosition） | 半径100では全scriptを実行し、小さい土俵（1.25 / 1.0）では冒頭のCounterと代替配置の2区間だけを実行して、ongoingであることを確認する | 小さい土俵では、後半の歩行で中心が出て止まる（半径1.25では75 tick目、1.0では182 tick目）。そのままだとRing-outのtestになってしまうため |
 
-# Rejected / Deferred
+更新後に同じ計測を再度行い、勝敗が確定するのはT148だけ（意図どおり）であることを確認した。T81 / T82（小さい土俵の代替配置）は無変更でPASSしている。その他のassertionは不変。
 
-Rejected:
-- 外へ出た深さでの勝敗（Correction）
-- tick終了時の距離での比較
-- participantの順序や乱数での決着
-- 一般のCCDや物理system
-- tick内のsub-stepの記録
-- 勝敗確定後も物理を続ける案（Q14 B / C）
-- 最終状態を正規化する案
-- 壁・clamp
-- 勝敗の文字列をSimulationに持たせる案
-- PLAYER / CPUを東西とみなす案
+# Tests（200/200 PASS）
 
-Deferred:
-- 支持円・体の端での判定（代表的な絵ができた後）
-- gameplayとしての同時の幅
-- Counterの位置移動の有効条件の緩和
-- 手付き・倒れ・投げによる負け
-- 決まり手
-- Result / Rewardへの遷移
-- 自動restart
-- 全体の速度
+既存182件: 上記の更新を含めてPASS（T173）。新規18件:
 
-# Next Implementation Sequence（Q27）
+- T151 初期はongoing、copyは独立
+- T152 境界（3-4-5のように正確に表せる点ちょうどはIN、±1e-9をいくつかの方向で確認、Simulation内でも境界ちょうどならongoing）
+- T153 / T154 片方だけOUT（両方向）
+- T155 先のtickで出た者が負け
+- T156 / T157 同じtickでの先後（両方の順序）
+- T158 深さを使わない（両方の順序と純関数）
+- T159 鏡像ならRematch（2つの速度で）
+- T160 epsilonの境界（0.5e-9ならRematch、3e-9なら先に出た方が負け）
+- T161 helper（null、境界から0、上下左右と斜め、弦の通過、接線方向、極小の移動、防御的な処理、範囲`[0, 1)`）
+- T162 体の大きさを使わない
+- T163 Push
+- T164 Drive（両方向）
+- T165 Counterの土俵際
+- T166〜T168 壁なし、freeze、上書きなし
+- T169 新しいBout
+- T170 resolved interpolation
+- T171 replay
+- T172 Snapshot API、Phaser非依存
 
-1. **ACTION-06A Ring-out / BoutOutcome Foundation**
-   - 内容: `ringOut.ts`、`outcome`、tick最後の判定、no-op freeze、Sceneの勝敗表示（UD-R5 / R6に従う）、Q24のtest
-   - **User Play Test REQUIRED**
-2. 最小のResult / Reward遷移のInvestigation
-3. Throw / Lift（新しい負け方が必要になるまでは、Ring-outと独立に進められる）
+# Browser Smoke
 
-Ring-outとResult / Rewardを1つのTaskに束ねない。
+**NOT RUN（environment limitation）**。`pnpm build`は成功。
+
+# Implementation Evidence
+
+上記の通り。Result / Reward、自動restart、支持円、手付き・倒れ、Throw / Lift、決まり手、stat、tempo調整、Counterの変更のcodeはない。
 
 # Design Deviations
 
-なし（Investigationのみ）。
-
-Correctionにより、元のQ4 / Q5（深さ比較）は「交差時刻」に読み替えて回答した。
+なし。
 
 # Unexpected Scope
 
 なし。
 
-所見:
-- F6: T148は「Ring-outなし」を確認しているので、06Aで必ず書き換えになる
-- F7: 小さい土俵のtestは06Aで確認が必要
-- F8: 東西と名前のmetadataがない
+所見: T25 / T47のfixtureは、もともと半径100の土俵の外（x = 1000）に相手を置いていた。Ring-out導入前は無害だったが、導入後は最初のtickでRing-outになる。fixtureの修正で対応し、Simulationは変えていない。
 
-# Verification
+# Known Untested
 
-- Q1〜Q27に回答済み（Correctionを反映）。BLOCKEDになる点はない
-- Current Fact / Recommendation / User Decision / Deferredを分けて記載
-- Production Source / package / lockfileは未変更
-- Repository変更は`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`のみ
-- `git diff --check`: PASS（commit前に実行）
-- `pnpm test` / `pnpm build`: 不要（Source変更なし）。実行していない
+- Browser Smoke（Pushで押し出したときの表示とfreeze、Driveでの寄り切り、壁がないこと、Rでのrestart、東西の表示、console error）
+- Ring-out Feel（User Play Test）
 
 # User Play Test
 
-NOT REQUIRED（Investigation）。最初にREQUIREDになるのはACTION-06A。
+REQUIRED / NOT RUN（Taskの10項目）。
 
 # Git delivery
 
-Investigation-only Report Commit Exceptionを適用。本Reportだけをstageし、`docs(agent): investigate ring-out bout outcome`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
+Task-owned filesだけを明示的にstageし、`feat: add ring-out bout outcome`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。

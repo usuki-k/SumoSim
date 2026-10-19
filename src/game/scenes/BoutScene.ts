@@ -7,6 +7,7 @@ import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import type {
   BoutEngagement,
+  BoutOutcome,
   BoutSetup,
   ParticipantActionState,
   ParticipantId,
@@ -34,10 +35,15 @@ interface ParticipantPresentation {
   readonly controller: Controller
   readonly color: number
   readonly label: string
+  // Presentation-only side for the result text (current Prototype assignment, not gameplay state).
+  readonly side: 'EAST' | 'WEST'
+  // Wrestler display name. Not set yet: the result text falls back to `label` (PLAYER / CPU), which
+  // is a temporary Prototype fallback, not a wrestler name.
+  readonly name?: string
 }
 const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
-  { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER' },
-  { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU' },
+  { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER', side: 'EAST' },
+  { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU', side: 'WEST' },
 ]
 
 // Provisional presentation values.
@@ -84,6 +90,15 @@ function grappleLabel(self: ParticipantState, opponent: ParticipantState, engage
   return `TURNING ${degrees}°`
 }
 
+// Presentation-only result text formatted from the Simulation outcome (ids only) + presentation metadata.
+function outcomeLabel(outcome: BoutOutcome): string {
+  if (outcome.kind === 'ongoing') return ''
+  if (outcome.kind === 'rematch') return 'Draw Rematch'
+  const winner = PARTICIPANT_PRESENTATION.find((style) => style.id === outcome.winnerId)
+  if (!winner) return `${outcome.winnerId} Win`
+  return `${winner.side} ${winner.name ?? winner.label} Win`
+}
+
 interface MovementKeys {
   readonly up: Phaser.Input.Keyboard.Key
   readonly down: Phaser.Input.Keyboard.Key
@@ -109,6 +124,7 @@ export class BoutScene extends Phaser.Scene {
   private readonly dummy = new PushDummyController('wrestler-b', 'wrestler-a')
   private modeText: Phaser.GameObjects.Text | null = null
   private engagementText: Phaser.GameObjects.Text | null = null
+  private resultText: Phaser.GameObjects.Text | null = null
   private grappleLine: Phaser.GameObjects.Graphics | null = null
   private views = new Map<ParticipantId, ParticipantView>()
   private pixelsPerMeter = 1
@@ -176,6 +192,9 @@ export class BoutScene extends Phaser.Scene {
     this.grappleLine = this.add.graphics()
     this.modeText = this.add.text(12, 10, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
     this.engagementText = this.add.text(12, 32, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
+    this.resultText = this.add
+      .text(this.scale.width / 2, 40, '', { fontFamily: 'sans-serif', fontSize: '32px', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
+      .setOrigin(0.5, 0)
     this.setDummyMode('stationary')
     this.syncViews()
   }
@@ -250,6 +269,7 @@ export class BoutScene extends Phaser.Scene {
   private syncViews(): void {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
+    this.resultText?.setText(outcomeLabel(snapshot.outcome))
     this.engagementText?.setText(
       snapshot.engagement.kind === 'grappled'
         ? `${engagementLabel(snapshot.engagement)}  pair v: ${pairSpeed.toFixed(2)} m/s`

@@ -306,7 +306,8 @@ describe('discrete Push action (ACTION-03B)', () => {
   })
 
   it('T47: with no Push, snapshot velocity equals the footwork-only movement', () => {
-    const sim = new BoutSimulation(setupAt(-1.5, 0, 1000, 0))
+    // ACTION-06A: the distant opponent must start inside the ring (x = 1000 would be an instant ring-out).
+    const sim = new BoutSimulation(setupAt(-1.5, 0, 90, 0))
     for (let k = 0; k < 40; k++) sim.step(intents({ move: [0, -1] }))
     const s = sim.getSnapshot()
     expect(A(s).externalVelocity).toEqual({ x: 0, y: 0 })

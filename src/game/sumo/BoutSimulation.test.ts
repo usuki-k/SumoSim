@@ -540,7 +540,8 @@ describe('contact & separation (ACTION-03A)', () => {
 
   it('T25: without contact, movement is identical to having a distant opponent', () => {
     const near = new BoutSimulation(setupAt(-1.5, 0, 1.5, 0))
-    const far = new BoutSimulation(setupAt(-1.5, 0, 1000, 0))
+    // ACTION-06A: the distant opponent must start inside the ring (x = 1000 would be an instant ring-out).
+    const far = new BoutSimulation(setupAt(-1.5, 0, 90, 0))
     const script: [number, number, number][] = [
       [30, 0, -1],
       [20, -1, -1],

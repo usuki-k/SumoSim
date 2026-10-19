@@ -106,8 +106,24 @@ export type BoutEngagement =
   | { readonly kind: 'free' }
   | { readonly kind: 'grappled'; readonly advantage: GrappleAdvantage }
 
+// Why a bout was decided. A union so future finishes can be added without changing the shape.
+export type BoutFinishReason = 'ring-out'
+export type BoutRematchReason = 'simultaneous-ring-out'
+
+// Simulation-owned result of the bout; presentation text (sides / names) is formatted elsewhere.
+export type BoutOutcome =
+  | { readonly kind: 'ongoing' }
+  | {
+      readonly kind: 'win'
+      readonly winnerId: ParticipantId
+      readonly loserId: ParticipantId
+      readonly reason: BoutFinishReason
+    }
+  | { readonly kind: 'rematch'; readonly reason: BoutRematchReason }
+
 export interface BoutSnapshot {
   readonly arena: ArenaSetup
   readonly participants: readonly ParticipantState[]
   readonly engagement: BoutEngagement
+  readonly outcome: BoutOutcome
 }

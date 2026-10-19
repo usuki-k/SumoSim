@@ -262,7 +262,7 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
       expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
     }
     const s = sim.getSnapshot()
-    expect(Object.keys(s).sort()).toEqual(['arena', 'engagement', 'participants'])
+    expect(Object.keys(s).sort()).toEqual(['arena', 'engagement', 'outcome', 'participants']) // + outcome (ACTION-06A)
     expect(Object.keys(B(s)).sort()).toEqual(
       ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'velocity'].sort(),
     )

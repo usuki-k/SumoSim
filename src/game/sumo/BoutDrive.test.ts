@@ -393,14 +393,16 @@ describe('Grappled Drive (ACTION-05C1)', () => {
     }
   })
 
-  it('T148: no Ring-out: the pair can be driven past the ring with no outcome, clamp or wall', () => {
+  // ACTION-06A replaced the 05C1 "no Ring-out" expectation: driving past the ring now ends the bout.
+  it('T148: driving the pair past the ring ends the bout by ring-out; no clamp or wall', () => {
     const sim = frontGrip(2.275)
     stepN(sim, 400, intents({ drive: true }))
     const s = sim.getSnapshot()
-    expect(B(s).position.x).toBeGreaterThan(2.275 + 1)
-    expect(s.engagement.kind).toBe('grappled')
-    expect(Object.keys(s).sort()).toEqual(['arena', 'engagement', 'participants'])
-    expect(A(s).externalVelocity.x).toBeCloseTo(GRAPPLE_DRIVE_SPEED, 12)
+    expect(s.outcome).toEqual({ kind: 'win', winnerId: 'a', loserId: 'b', reason: 'ring-out' })
+    expect(Math.hypot(B(s).position.x, B(s).position.y)).toBeGreaterThan(2.275) // not clamped back
+    expect(Math.hypot(A(s).position.x, A(s).position.y)).toBeLessThanOrEqual(2.275)
+    expect(s.engagement.kind).toBe('grappled') // final physical state kept as-is
+    expect(Object.keys(s).sort()).toEqual(['arena', 'engagement', 'outcome', 'participants'])
   })
 
   it('T150: Counter -> Kuzushi -> Morozashi -> TURNING -> Drive -> contest -> release replays exactly', () => {

@@ -372,11 +372,15 @@ describe('Counter position resolution (ACTION-04A2)', () => {
         [4, {}, { counter: true }],
         [60, { move: [-1, 0.5] }, { move: [1, 0] }],
       ]
-      for (const [n, ia, ib] of script) {
+      // ACTION-06A: in the small fallback rings the later walking segments would now end the bout by
+      // ring-out; there only the opening Counter / fallback segments run (and must stay ongoing).
+      const steps = radius === 100 ? script : script.slice(0, 2)
+      for (const [n, ia, ib] of steps) {
         for (let k = 0; k < n; k++) {
           sim.step(intents(ia, ib))
           expectFinite(sim.getSnapshot())
           expect(dist(sim.getSnapshot())).toBeGreaterThanOrEqual(COMBINED - 1e-9)
+          expect(sim.getSnapshot().outcome.kind).toBe('ongoing')
         }
       }
       return sim.getSnapshot()
