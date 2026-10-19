@@ -1,5 +1,5 @@
 Task-ID: ACTION-06A-RINGOUT-BOUTOUTCOME-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE RING-OUT & BOUT OUTCOME FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -673,3 +673,331 @@ Do not continue to Result/Reward, Throw, Lift, stats, or balance.
 
 After commit/push/report:
 「ACTION-06A-RINGOUT-BOUTOUTCOME-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `43efaef5aa2bab5eeb6fa2fc8eceec1bf1fd3105`
+- Agent-Start-Head:
+  `3e91fc38883edf13a2711017354f1da631e4c1f6`
+- Task diff is exactly one implementation commit.
+- `main` remains unchanged.
+- No new dependency.
+- Scope is limited to Ring-out / BoutOutcome Foundation, focused presentation/tests/docs.
+
+## Reported Implementation vs Design
+
+PASS.
+
+Direct Source review confirmed:
+
+### Ring-out criterion
+
+- center only.
+- `Math.hypot(x,y) > arena.radius` is OUT.
+- exact boundary is IN.
+- bodyRadius/support geometry is not used.
+
+### First-out ordering
+
+- no outside-depth winner logic.
+- no participant-order/random tiebreak.
+- same-tick ordering uses previous resolved center P0 and final resolved center P1.
+- boundary crossing fraction is computed by a Pure TS circle/segment helper.
+- smaller crossing fraction loses.
+- effectively equal crossing fractions produce Rematch.
+
+T158 explicitly proves the critical rule:
+an earlier crosser that ends **less deeply outside** still loses.
+
+### Resolved interpolation semantics
+
+Implementation matches the accepted Prototype model:
+
+- P0 is captured at tick start.
+- the normal full tick resolves.
+- Ring-out is evaluated only from P0 → final resolved P1.
+- Contact/bond/Grip/Counter internal intermediate positions are not separate Ring-out events.
+
+This is a fixed-tick interpolation gameplay rule, not a claim that internal solver operations occur continuously at those times.
+
+### Simultaneous technical epsilon
+
+- `RING_OUT_SIMULTANEOUS_EPSILON = 1e-9` tick fraction.
+- used only to absorb numerical equality noise.
+- no broader gameplay "close enough" time window was added.
+
+### BoutOutcome ownership
+
+- BoutSimulation owns one canonical `outcome`.
+- BoutSnapshot exposes an isolated copy.
+- participant state has no winner/loser flags.
+- Scene has no independent gameplay result state.
+
+### Tick ordering / freeze
+
+- outcome final → `step()` immediately returns.
+- normal tick completes before first Ring-out decision.
+- final physical state is preserved.
+- later input cannot change:
+  - position
+  - velocity/external velocity
+  - action
+  - posture
+  - facing
+  - engagement
+  - outcome
+  - timers/decay.
+
+### No wall / clamp
+
+- final participant position remains outside the ring.
+- no bounce/clamp/invisible wall.
+
+### Counter / Push / Drive
+
+- accepted Counter relocation validity remains unchanged.
+- Push has no special Ring-out logic.
+- Drive has no special Ring-out logic.
+- both are resolved through the common tick-end Ring-out rule.
+
+## Crossing Helper Review
+
+PASS.
+
+`src/game/sumo/ringOut.ts` is Phaser-free and small/explicit.
+
+The root calculation handles:
+- current IN → null
+- boundary moving outward → 0
+- radial/diagonal crossings
+- boundary moving inward first then exiting the opposite side
+- defensive already-OUT start when final remains OUT
+- finite [0,1) crossing fractions.
+
+No geometry dependency/framework was added.
+
+## Verification Review
+
+Reported:
+
+- `pnpm test`: 200/200 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+
+Direct test/source inspection confirms coverage for:
+
+- ongoing/default outcome
+- exact boundary IN
+- just inside / just outside
+- both one-sided loser directions
+- earlier-tick loss
+- same-tick A-first and B-first
+- depth-not-used
+- simultaneous Rematch
+- technical epsilon
+- crossing helper
+- bodyRadius independence
+- Push Ring-out
+- Drive/Yorikiri Ring-out
+- Counter edge baseline
+- no wall
+- exact post-outcome freeze
+- fresh Bout ongoing
+- resolved P0→P1 model
+- deterministic replay
+- Snapshot outcome ownership.
+
+## Intentional Existing-Test Adaptations
+
+Reviewed and acceptable:
+
+- exact Snapshot key tests add `outcome`.
+- old Drive T148 "Ring-out absent" is replaced by implemented Ring-out behavior.
+- old test fixtures at x=1000 are moved inside their radius-100 arena because they were invalid under the new rule.
+- small-arena long replay is shortened/scoped so it continues testing Counter geometry rather than accidentally turning into a Ring-out test.
+
+These are direct consequences of the accepted Outcome semantics, not weakened subsystem verification.
+
+## Scene / Result Presentation
+
+PASS for Prototype Foundation.
+
+Presentation metadata now owns:
+- EAST/WEST side
+- optional wrestler name.
+
+Current Prototype mapping:
+- wrestler-a / Player = EAST
+- wrestler-b / CPU = WEST.
+
+Simulation stores only IDs/reason.
+
+User-facing formatter:
+- `EAST <name> Win`
+- `WEST <name> Win`
+- `Draw Rematch`.
+
+Formal wrestler names remain unset.
+Current runtime therefore temporarily falls back to:
+- `EAST PLAYER Win`
+- `WEST CPU Win`.
+
+PLAYER / CPU are not treated as canonical wrestler names.
+A later real name can be supplied by presentation metadata without changing Ring-out logic.
+
+## Non-Blocking Note — Initial OUT setup invariant
+
+Current normal Prototype setup starts both participants inside the ring.
+
+BoutSimulation constructor still accepts any finite initial position and does not:
+- reject a participant already OUT, or
+- decide an Outcome immediately at construction.
+
+The Ring-out helper contains defensive already-OUT behavior, but the canonical flow assumes an ongoing Bout begins with valid in-ring resolved positions.
+
+This does not block ACTION-06A because the current game setup satisfies that invariant.
+
+If future BoutSetup becomes Management/data-driven, explicitly decide whether:
+- initial OUT setup is invalid and rejected, or
+- constructor evaluates an initial Outcome.
+
+Do not broaden ACTION-06A now solely for this defensive case.
+
+## Browser Smoke
+
+NOT RUN due Agent environment limitation.
+
+This is a Known Untested runtime item.
+
+## Accepted Technical Baseline Pending User Play Test
+
+If User Play Test passes:
+
+- center-based Ring-out is current Prototype rule.
+- exact ring boundary remains IN.
+- first center across loses.
+- same-time crossing = Rematch.
+- P0→P1 resolved-state interpolation is current within-tick ordering model.
+- BoutOutcome is Simulation-owned.
+- post-outcome Simulation is frozen.
+- no wall/clamp.
+- EAST/WEST result display boundary is presentation-owned.
+- current PLAYER/CPU result names are temporary fallbacks only.
+
+## User Play Test — REQUIRED / READY
+
+Run `pnpm dev`.
+
+### Push finish
+
+1. Use the normal FREE Push flow near the ring edge.
+2. Push CPU until its **center** passes the dohyo line.
+3. Confirm:
+   - result appears as `EAST PLAYER Win` for the current temporary metadata when Player wins.
+   - CPU remains visibly outside rather than being clamped back.
+   - bodies/state freeze immediately after the result.
+
+### Player loss
+
+4. Mode 2: allow CPU to push Player out.
+5. Confirm:
+   - result appears as `WEST CPU Win`.
+   - Player center has actually crossed the ring line before loss is shown.
+
+### Yorikiri-style Drive finish
+
+6. Establish a grapple and use Drive to move the pair toward an edge.
+7. Confirm:
+   - the participant whose center crosses first loses.
+   - result/freeze feels like a believable current Prototype finish.
+   - the pair is not stopped by an invisible wall.
+
+### Freeze / restart
+
+8. After a result, press movement / Push / Counter / Grip / Drive inputs.
+9. Confirm nothing in the Bout moves or advances.
+10. Press R.
+11. Confirm a fresh Bout starts with no result text and normal input works again.
+
+### Visual criterion
+
+12. Judge the current center-based criterion:
+   - too early?
+   - acceptable?
+   - too late?
+
+Remember:
+the User already chose center-based Ring-out as the current Prototype and may revisit it after representative/final graphics.
+
+### Rematch
+
+A natural exact simultaneous case may be difficult to produce manually with the current harness.
+Automated tests cover symmetric same-tick crossing and `Draw Rematch`.
+
+If a manual simultaneous case occurs, confirm the displayed text is:
+`Draw Rematch`.
+
+### Regression
+
+13. Confirm normal:
+- Movement
+- Push
+- Counter
+- Grip
+- Orientation
+- Drive
+
+still feel unchanged before Outcome.
+
+14. Check browser console/runtime errors.
+
+## Acceptance State
+
+Technical implementation: PASS.
+
+Ring-out / finish Feel: PENDING USER PLAY TEST.
+
+Do not start Result / Reward transition work until this focused Play Test is reviewed.
+
+If accepted:
+- ACTION-06A becomes the current Bout termination baseline.
+- next task should be minimal Result / Reward transition Investigation for the tiny Gameplay Loop.
+
+If rejected:
+classify narrowly:
+- center criterion visual feel
+- first-out timing
+- freeze
+- result presentation
+- restart
+- regression/runtime bug.
+
+Do not reopen first-out vs depth logic; depth comparison is explicitly rejected by User.
+
+## Do Not Reopen
+
+Unless explicit User change:
+
+- center criterion for current Prototype.
+- exact boundary IN.
+- first-out loses.
+- simultaneous Rematch.
+- no outside-depth tiebreak.
+- Outcome Simulation ownership.
+- no wall/clamp.
+- accepted Push/Drive/Counter foundations.
+
+## Deferred
+
+- support/foot-based Ring-out after representative graphics.
+- wrestler names / richer presentation metadata.
+- Result / Reward transition.
+- touchdown/fall/Throw finish.
+- kimarite.
+- whole-game tempo rebalance.
