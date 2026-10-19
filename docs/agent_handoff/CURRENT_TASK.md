@@ -1,5 +1,5 @@
 Task-ID: ACTION-05A-GRIP-ENGAGEMENT-FOUNDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE GRIP ENGAGEMENT FOUNDATION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -441,3 +441,289 @@ Do not continue to Drive, Throw, Lift, Ring-out, stats.
 
 After commit/push/report:
 「ACTION-05A-GRIP-ENGAGEMENT-FOUNDATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `61a1a493a54a02cc7d171f3c70d722a6640f871f`
+- Agent-Start-Head:
+  `2108e0029279007d6f574e630c3cf3b772be5a1d`
+- Agent Task Diff is exactly one implementation commit.
+- `main` remains unchanged.
+- No new dependency.
+- Scope is limited to Grip / Engagement Foundation, focused tests, Dummy/Scene integration, and Current-State docs.
+
+## Reported Implementation vs Design
+
+PASS.
+
+Direct Source review confirmed:
+
+### Engagement Source of Truth
+
+- BoutSimulation owns exactly one pair-level `engagement`.
+- participant state contains no duplicate grapple flags.
+- Snapshot exposes an isolated top-level Engagement copy.
+- default constructor/reset state is FREE.
+- neutral grapple is symmetric.
+- Morozashi identifies one holderId.
+
+### Grip input / action
+
+- `gripPressed` is a semantic edge.
+- Shift uses a third PressLatch.
+- FREE priority is Push > Counter > Grip.
+- Grip is explicit `reach / recovery`.
+- reach/recovery suppress normal steering.
+- inputs during Grip are ignored/not queued.
+
+### Grip eligibility
+
+- valid range is combined body radius + `GRIP_RANGE_MARGIN = 0.09 m`.
+- unilateral Grip only resolves against action-idle target.
+- Grip does not interrupt Push / Counter / Grip actions.
+- reach may wait until the target becomes idle.
+- target posture at actual resolution tick decides neutral vs Morozashi.
+
+### Kuzushi → Morozashi
+
+- in-range Kuzushi target resolves to Morozashi.
+- holder is the gripping participant.
+- target Kuzushi is consumed immediately to stable.
+- Kuzushi does not bypass range.
+- mirrored holder case is tested.
+
+### Simultaneous Grip
+
+- both stable / both reaching / in range resolves to neutral grapple.
+- resolution is symmetric rather than participant-array first.
+- Kuzushi participant cannot initiate Grip.
+
+### Establishment / pair state
+
+- successful Grip cancels both current actions.
+- externalVelocity is normalized to the component-wise pair average under the current equal-body Prototype.
+- this is correctly treated as Prototype normalization, not permanent mass physics.
+- initial attachment puts the centers at exact combined body-radius distance.
+- Grapple bond keeps that distance without a generic constraint solver.
+
+### GRAPPLED behavior
+
+- ordinary WASD is suppressed.
+- FREE Push / Counter starts are suppressed.
+- Grip edge is interpreted as release.
+- current auto-facing remains; no turn-rate/facing redesign.
+- no Drive / Throw / Lift advantage was added.
+
+### Release
+
+- either participant may release.
+- one-sided release returns FREE immediately and puts only releaser in Grip Recovery.
+- simultaneous release puts both in Recovery.
+- Morozashi clears on release.
+- no same-tick Push/Counter starts are allowed on the relationship-transition tick.
+- position/velocity/facing are not artificially reset by release.
+
+### Dummy / presentation
+
+- Dummy is inactive while GRAPPLED and holds cooldown.
+- Dummy does not initiate Grip.
+- FREE / GRAPPLED / MOROZASHI and holder identity have minimal debug presentation.
+- GRIP / GRIP REC presentation exists.
+
+## Verification Review
+
+Reported:
+
+- `pnpm test`: 148/148 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+- prior 124 regressions PASS with only required intent-helper adaptation
+- T92–T114 covered
+
+Direct source/test inspection confirms focused coverage for:
+
+- default FREE / Snapshot isolation
+- stable → neutral
+- Kuzushi → Morozashi, mirrored holder
+- exact Grip range boundary
+- one-edge / action priority
+- target-action protection and reach waiting
+- Kuzushi timer boundary
+- simultaneous Grip
+- one/both Kuzushi cases
+- Counter → Kuzushi → Morozashi integration
+- pair external normalization
+- attachment / bond
+- GRAPPLED action/movement suppression
+- one-sided/simultaneous release
+- release state preservation
+- holder invariant
+- exact Reach/Recovery timing
+- deterministic mixed replay
+
+## Browser Smoke
+
+NOT RUN due Agent environment limitation.
+
+This is a Known Untested runtime item, not a Source failure.
+
+## Non-Blocking Notes
+
+### N-1 — Disadvantaged-side release Feel is not interactively testable yet
+
+The Foundation correctly allows either participant to release, including the Morozashi-disadvantaged participant.
+
+However, the current Push Dummy:
+- never initiates Grip
+- never issues Release
+
+Therefore the current single-player harness cannot directly let the User experience:
+- CPU holding Morozashi on Player
+- disadvantaged Player/CPU choosing release under pressure
+- whether this makes Morozashi feel too easy to escape
+
+The rule is technically tested, but this particular **Feel question remains Deferred** until a harness/CPU path can exercise opponent Grip/Release.
+
+Do not build real AI solely to solve this now.
+
+### N-2 — Successful in-range Grip can resolve on the press tick
+
+Because Grip Reach opens before resolution and the target is already eligible/in range, a valid Grip may become GRAPPLED in the same fixed tick as Shift.
+
+This is consistent with the Task. User Play Test should judge responsiveness; do not add artificial Startup unless it feels too instantaneous.
+
+### N-3 — Bond is intentionally minimal
+
+The bond corrects only radial distance.
+It does not implement:
+- grapple rotation
+- free pair footwork
+- hand fighting
+- traction/mass physics
+
+Those remain later systems.
+
+## Accepted Technical Baseline Pending Play Test
+
+If User Play Test passes:
+
+- Shift = temporary Grip / Release key
+- pair-level Engagement is canonical
+- stable idle valid Grip → neutral GRAPPLED
+- Kuzushi idle valid Grip → Morozashi, Kuzushi consumed
+- Grip range margin 0.09 m provisional
+- Grip Reach 6 ticks / Recovery 12 ticks provisional
+- Push > Counter > Grip
+- unilateral Grip does not interrupt target actions
+- simultaneous stable Grip → neutral
+- GRAPPLED ordinary WASD / FREE actions suppressed
+- bond keeps exact body contact distance
+- either participant may release; releaser pays Recovery
+- Morozashi is a distinct persistent advantage state with no Drive/Throw bonus yet
+
+All numerical values remain Prototype tuning.
+
+## User Play Test — REQUIRED / READY
+
+Run `pnpm dev`.
+
+### Normal Grip
+
+1. Use Mode 1 or approach the stationary CPU.
+2. Press Shift while in range.
+3. Confirm `ENGAGE: GRAPPLED`.
+4. Confirm pair does not separate when WASD is pressed.
+5. Confirm ArrowUp / ArrowDown do not start FREE Push/Counter while GRAPPLED.
+6. Press Shift again and confirm release to FREE.
+7. Confirm releaser shows `GRIP REC` briefly.
+
+### Whiff / range
+
+8. Press Shift clearly too far away.
+9. Confirm Grip does not occur and `GRIP → GRIP REC` is readable.
+10. Approach closer and verify the 0.09 m margin does not feel like grabbing from an obviously excessive distance.
+
+### Counter → Morozashi reward
+
+11. Mode 2: Counter a Dummy Push successfully so CPU enters KUZUSHI.
+12. Press Shift while CPU is still Kuzushi and in range.
+13. Confirm:
+    - `ENGAGE: MOROZASHI (PLAYER)`
+    - CPU KUZUSHI label disappears because Kuzushi was consumed
+    - Morozashi line/display clearly differs from neutral grapple.
+14. Confirm the pair stays attached and does not jitter.
+
+### Release / regressions
+
+15. Release Morozashi with Shift.
+16. Confirm Morozashi advantage disappears and Player enters Grip Recovery.
+17. Confirm normal Push / Counter / Movement still feel unchanged while FREE.
+18. Confirm R resets Engagement to FREE.
+19. Check for browser/console/runtime errors.
+
+Important:
+- Morozashi is **not supposed to be stronger yet** in movement/Throw.
+- its gameplay strength is deliberately deferred to the Grappled Drive / Throw tasks.
+
+### Known Play-Test limitation
+
+The current Dummy cannot Grip or Release, so the User cannot yet fairly judge:
+- Morozashi held by CPU against Player
+- disadvantaged-side voluntary release Feel
+
+Do not treat that missing Feel check as a failure of this Foundation Task.
+
+## Acceptance State
+
+Technical implementation: PASS.
+
+Grip / Engagement Feel: PENDING USER PLAY TEST.
+
+Do not start Grappled Drive until this focused Play Test is reviewed.
+
+If accepted:
+- ACTION-05A becomes current Engagement baseline.
+- next design choice should be whether minimal Ring-out/BoutOutcome is needed before Grappled Drive testing.
+
+If rejected:
+- classify feedback narrowly:
+  - Shift input
+  - Grip reach/range
+  - whiff/recovery
+  - bond/attachment
+  - release
+  - Morozashi readability
+  - runtime bug
+
+and correct only that area.
+
+## Do Not Reopen
+
+Unless User feedback provides a concrete reason:
+
+- pair-level Engagement SoT
+- Kuzushi → Morozashi conversion
+- Kuzushi consumption on Morozashi
+- action-idle target rule
+- automatic Counter side/rear baseline
+- accepted Push / Counter / Contact baseline
+
+## Deferred
+
+- Grappled Drive / Yorikiri
+- Morozashi Drive advantage
+- Throw / Morozashi Throw advantage
+- Lift
+- opponent Grip/Release harness or AI
+- hand fighting / regrip
+- GRAPPLED WASD/rotation
+- stats / RNG
+- directional side/rear Push advantage
+- Ring-out / BoutOutcome
+- final graphics / grapple animation
