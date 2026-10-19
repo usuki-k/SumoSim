@@ -1,5 +1,5 @@
 Task-ID: ACTION-04A2-COUNTER-POSITION-RESOLUTION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE COUNTER POSITION RESOLUTION
 Executor: Codex / Claude Code
 Target-Branch: develop
@@ -693,3 +693,241 @@ Do not continue to:
 After commit / push / Completion Report, stop and report:
 
 「ACTION-04A2-COUNTER-POSITION-RESOLUTION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH KNOWN UNTESTED RUNTIME / FULL USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Accepted implementation commit for technical review:
+  `d72f43b0887203095eebe3f1c7efb1d1193a188d`
+- Agent-Start-Head:
+  `fe80d5582bc7b6fabc615c453510a5add7d7975c`
+- Agent Task Diff is exactly one implementation commit.
+- `main` remains unchanged.
+- Production changes are limited to:
+  - Counter position resolution / overshoot
+  - focused tests
+  - Current-State documentation
+- No new dependency.
+
+## Reported Implementation vs Design
+
+PASS.
+
+Direct Source review confirmed:
+
+### Best rear
+
+- locked Push direction is copied before attacker Push is cancelled.
+- Best preferred target is:
+  `attackerPosition - lockedDirection * combinedRadius`.
+- applied target is exact non-overlap Contact distance.
+
+### Success automatic side
+
+- side basis is perpendicular to locked Push direction.
+- defender lateral offset selects sidePlus / sideMinus.
+- effectively tied positions use deterministic ring-center preference.
+- remaining tie uses fixed sidePlus.
+- no manual A/D side selection.
+- no randomness.
+
+### Invalid-target fallback
+
+- targets are finite and require the defender body to remain inside the arena circle.
+- no positional clamp is used.
+- Success:
+  preferred side → opposite side → none.
+- Best:
+  rear → preferred side → opposite side → none.
+- failure to relocate does not downgrade the Counter tier or cancel Kuzushi.
+
+### Relocation ownership
+
+- position is changed directly in BoutSimulation.
+- Phaser remains Snapshot presentation.
+- no gameplay tween, route solver, pathfinding, or Scene-owned gameplay position was added.
+
+### Attacker overshoot
+
+- `COUNTER_OVERSHOOT_SPEED = 1.0 m/s` provisional.
+- only attacker externalVelocity receives the overshoot.
+- direction is captured locked Push direction.
+- existing external momentum is preserved.
+- existing MAX_EXTERNAL_SPEED clamp and EXTERNAL_DECELERATION are reused.
+- no second physics / decay system.
+
+### Counter resolution order
+
+- current Contact resolves first.
+- Counter resolution then captures direction/tier/target, enters attacker Kuzushi, relocates defender, adds overshoot.
+- existing Push resolution runs afterward.
+- because attacker Push has been cancelled, no same-tick new Push force is added.
+
+### Fail / A1 preservation
+
+- failed Counter still has:
+  - no relocation
+  - no overshoot
+  - self Kuzushi.
+- Counter window, tier boundary, Kuzushi timer/facing/susceptibility remain ACTION-04A1 semantics.
+
+## Verification Review
+
+Reported:
+
+- `pnpm test`: 124/124 PASS
+- `pnpm build`: PASS
+- `git diff --check`: PASS
+- T78–T91 covered
+- prior regressions remain PASS.
+
+Direct test/source inspection confirmed coverage for:
+
+- Best rear target
+- both Success side signs
+- tie-break
+- preferred/alternate invalid fallback
+- Best rear fallback chain
+- finite / ring-contained / exact-contact relocation
+- attacker-only overshoot
+- prior pair external momentum preservation
+- existing decay / no reversal
+- locked Push direction vs changed facing/contact normal
+- Fail unchanged
+- A1 timing/Kuzushi regression
+- deterministic mixed scenarios
+
+## Existing Test Updates
+
+Accepted.
+
+Two ACTION-04A1 tests were updated only where A2 intentionally changes semantics:
+
+- T64 now distinguishes preserved pair momentum from attacker-only overshoot.
+- T67 no longer asserts "no relocation"; position-specific behavior is covered by T78+.
+
+This is not a regression-test weakening of unrelated behavior.
+
+## Browser Smoke
+
+NOT RUN due Agent environment limitation.
+
+No technical PASS claim is made for actual browser presentation/runtime.
+
+The remaining runtime/game-feel gate is User Play Test.
+
+## Non-Blocking Notes
+
+### N-1 — Straight-on Success often uses the deterministic tie fallback
+
+In the common symmetric case, defender lateral offset is near zero, so automatic side selection often reaches the tie rules.
+
+At the centered prototype setup, ring-center distances may also tie, producing fixed `sidePlus`.
+
+This is expected by the accepted deterministic design, not a bug.
+
+User Play Test should judge whether repeated same-side outcomes from perfectly straight attacks feel acceptable.
+
+### N-2 — Instant relocation is deliberately gameplay-first
+
+The defender position changes instantly in Simulation.
+
+No presentation interpolation was added.
+
+If this looks visually abrupt, treat that as a later presentation/Game Feel correction; do not move the gameplay rule into Phaser.
+
+### N-3 — Numerical values remain provisional
+
+Do not treat:
+- overshoot 1.0 m/s
+- Counter/Kuzushi timings
+- susceptibility
+as final balance.
+
+User already accepted that broader/longer action timing may be desirable later.
+
+## Accepted Technical Baseline Pending Play Test
+
+If User Play Test passes:
+
+- Best Push Counter → attacker Kuzushi + defender rear position
+- Success Push Counter → attacker Kuzushi + deterministic automatic side position
+- invalid target → deterministic fallback / possibly no relocation
+- successful Counter → attacker-only forward overshoot
+- prior external momentum preserved
+- Fail → self Kuzushi, no relocation/overshoot
+- ACTION-04A1 Counter/Kuzushi foundation remains accepted
+
+## Full Counter Feel User Play Test — REQUIRED / READY
+
+Run `pnpm dev` and use Mode 2 (`2`).
+
+Evaluate:
+
+1. Best timing visibly puts Player behind the Dummy.
+2. A later successful Counter visibly puts Player at a side.
+3. Best feels meaningfully stronger / more rewarding than Success.
+4. Automatic side choice feels natural without manual A/D choice.
+5. Straight-on/tie cases choosing a deterministic side do not feel obviously strange.
+6. Instant position change is readable enough for Prototype.
+7. If instant relocation is too abrupt, note it as presentation feedback rather than Gameplay-rule failure unless it causes genuine confusion.
+8. Dummy's forward overshoot looks like it was pulled/sent past the defender.
+9. Overshoot amount does not look absurdly large/small.
+10. The Kuzushi attacker keeps its facing frozen, making side/rear advantage readable.
+11. Following with ArrowUp while opponent is Kuzushi feels causally understandable.
+12. Failed Counter still gives self Kuzushi with no position reward.
+13. Push-vs-Push contest still feels like the accepted baseline.
+14. Normal Movement / Contact / Push remain unchanged outside Counter.
+15. Counter now feels like a distinct third choice alongside Push contest and lateral movement.
+16. Check for runtime/console errors.
+
+## Acceptance State
+
+Technical implementation: PASS.
+
+Full Counter positional Feel: PENDING USER PLAY TEST.
+
+Do not proceed to probabilistic finish, Grip, Harite, Ring-out, or stats until this Play Test is reviewed.
+
+If accepted:
+- ACTION-04A2 becomes current Counter positional baseline.
+- Next task should be explicitly chosen; do not automatically add the Deferred systems.
+
+If rejected:
+- classify feedback narrowly:
+  - side selection
+  - instant relocation readability
+  - overshoot amount/direction
+  - position geometry
+  - Counter timing/Kuzushi tuning
+  - runtime bug
+and correct only the relevant area.
+
+## Do Not Reopen
+
+Unless User feedback identifies a concrete problem:
+
+- shared Down Counter semantics
+- automatic, non-manual side selection
+- locked Push direction as position basis
+- deterministic tie/fallback
+- ACTION-04A1 Kuzushi architecture
+- accepted Push / Contact / Movement baseline
+- probabilistic finish deferral
+
+## Deferred
+
+- probability / deterministic RNG / BoutOutcome
+- Ring-out
+- Grip
+- Harite
+- dedicated Dodge
+- thrust
+- Weight / Power / LowerBody / Balance / Stamina
+- relocation visual interpolation / animation
+- Push distance tuning
+- final Counter/Kuzushi balance tuning
