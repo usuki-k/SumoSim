@@ -5,6 +5,9 @@ import { PushDummyController, type DummyMode } from '../input/pushDummyControlle
 import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
+import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
+import { drawDohyo } from './DohyoView.ts'
+import { WrestlerView } from './WrestlerView.ts'
 import type {
   BoutEngagement,
   BoutOutcome,
@@ -49,11 +52,17 @@ const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
 // Provisional presentation values.
 const RING_FILL_RATIO = 0.9 // ring radius as a fraction of half the canvas
 
+// Depths above the wrestler bodies (see WrestlerView): debug overlays, then texts.
+const DEBUG_OVERLAY_DEPTH = 3
+const TEXT_DEPTH = 4
+
 // Accumulator limits (provisional safety values).
 const MAX_FRAME_MS = 250
 const MAX_STEPS_PER_FRAME = 8
 
 interface ParticipantView {
+  readonly wrestler: WrestlerView
+  // Debug-only overlays (key 0): contact circle outline, facing marker, label, phase text.
   readonly body: Phaser.GameObjects.Arc
   readonly facingMarker: Phaser.GameObjects.Arc
   readonly label: Phaser.GameObjects.Text
@@ -128,6 +137,9 @@ export class BoutScene extends Phaser.Scene {
   private grappleLine: Phaser.GameObjects.Graphics | null = null
   private views = new Map<ParticipantId, ParticipantView>()
   private pixelsPerMeter = 1
+  // Prototype debug display toggle (key 0). Off = game-readable view.
+  private debug = false
+  private dummyMode: DummyMode = 'stationary'
   private origin: Vec2 = { x: 0, y: 0 }
 
   constructor() {
@@ -160,6 +172,7 @@ export class BoutScene extends Phaser.Scene {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R).on('down', () => this.restart())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO).on('down', () => this.setDummyMode('push'))
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO).on('down', () => this.setDebug(!this.debug))
     }
 
     const snapshot = this.simulation.getSnapshot()
@@ -169,34 +182,34 @@ export class BoutScene extends Phaser.Scene {
     this.pixelsPerMeter =
       (Math.min(this.scale.width, this.scale.height) / 2 * RING_FILL_RATIO) / snapshot.arena.radius
 
-    const ringPixels = snapshot.arena.radius * this.pixelsPerMeter
-    const ring = this.add.graphics()
-    ring.fillStyle(0xc9a96e, 1)
-    ring.fillCircle(this.origin.x, this.origin.y, ringPixels)
-    ring.lineStyle(8, 0xf2e6c9, 1)
-    ring.strokeCircle(this.origin.x, this.origin.y, ringPixels)
+    drawDohyo(this, this.origin, this.pixelsPerMeter, snapshot.arena.radius)
 
     for (const style of PARTICIPANT_PRESENTATION) {
       const radius = snapshot.participants.find((q) => q.id === style.id)?.bodyRadius ?? 0
       const bodyPixels = radius * this.pixelsPerMeter
-      const body = this.add.circle(0, 0, bodyPixels, style.color).setStrokeStyle(3, 0xffffff)
-      const facingMarker = this.add.circle(0, 0, bodyPixels * 0.25, 0xffffff)
+      const wrestler = new WrestlerView(this, bodyPixels, style.color)
+      const body = this.add.circle(0, 0, bodyPixels).setStrokeStyle(2, style.color).setDepth(DEBUG_OVERLAY_DEPTH)
+      const facingMarker = this.add.circle(0, 0, bodyPixels * 0.2, 0xffffff).setDepth(DEBUG_OVERLAY_DEPTH)
       const label = this.add
         .text(0, 0, style.label, { fontFamily: 'sans-serif', fontSize: '18px', color: '#ffffff' })
         .setOrigin(0.5)
+        .setDepth(TEXT_DEPTH)
       const phaseText = this.add
         .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '14px', color: '#ffe08a' })
         .setOrigin(0.5)
-      this.views.set(style.id, { body, facingMarker, label, phaseText })
+        .setDepth(TEXT_DEPTH)
+      this.views.set(style.id, { wrestler, body, facingMarker, label, phaseText })
     }
-    this.grappleLine = this.add.graphics()
-    this.modeText = this.add.text(12, 10, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
-    this.engagementText = this.add.text(12, 32, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
+    this.grappleLine = this.add.graphics().setDepth(DEBUG_OVERLAY_DEPTH)
+    this.modeText = this.add.text(12, 10, '', { fontFamily: 'sans-serif', fontSize: '14px', color: '#ffffff' }).setDepth(TEXT_DEPTH)
+    this.engagementText = this.add.text(12, 30, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' }).setDepth(TEXT_DEPTH)
     this.resultText = this.add
       .text(this.scale.width / 2, 40, '', { fontFamily: 'sans-serif', fontSize: '32px', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
       .setOrigin(0.5, 0)
+      .setDepth(TEXT_DEPTH)
     this.setDummyMode('stationary')
-    this.syncViews()
+    this.setDebug(false)
+    this.syncViews(0)
   }
 
   update(_time: number, deltaMs: number): void {
@@ -213,7 +226,7 @@ export class BoutScene extends Phaser.Scene {
         )
       }
     }
-    this.syncViews()
+    this.syncViews(deltaMs)
   }
 
   private restart(): void {
@@ -222,12 +235,37 @@ export class BoutScene extends Phaser.Scene {
     this.counterLatch.clear()
     this.gripLatch.clear()
     this.dummy.reset() // keeps the selected dummy mode
-    this.syncViews()
+    this.syncViews(0)
   }
 
   private setDummyMode(mode: DummyMode): void {
     this.dummy.setMode(mode)
-    this.modeText?.setText(mode === 'push' ? 'DUMMY: PUSH  (1: stationary / 2: push / R: restart / Shift: grip)' : 'DUMMY: STATIONARY  (1: stationary / 2: push / R: restart / Shift: grip)')
+    this.dummyMode = mode
+    this.updateModeText()
+  }
+
+  // Debug overlays (labels, phase text, engagement readout, contact outline, facing marker, grapple
+  // line) are hidden in the default game-readable view and shown with key 0.
+  private setDebug(on: boolean): void {
+    this.debug = on
+    for (const view of this.views.values()) {
+      view.body.setVisible(on)
+      view.facingMarker.setVisible(on)
+      view.label.setVisible(on)
+      view.phaseText.setVisible(on)
+    }
+    this.grappleLine?.setVisible(on)
+    this.engagementText?.setVisible(on)
+    this.updateModeText()
+  }
+
+  private updateModeText(): void {
+    const dummy = this.dummyMode === 'push' ? 'DUMMY: PUSH' : 'DUMMY: STATIONARY'
+    this.modeText?.setText(
+      this.debug
+        ? `${dummy}  (1: stationary / 2: push / R: restart / Shift: grip / 0: debug off)`
+        : `${dummy}   WASD move  Up push/drive  Down counter  Shift grip  1/2 dummy  R restart  0 debug`,
+    )
   }
 
   private collectIntents(
@@ -265,8 +303,8 @@ export class BoutScene extends Phaser.Scene {
     }
   }
 
-  // One-way sync: simulation snapshot -> persistent GameObjects.
-  private syncViews(): void {
+  // One-way sync: simulation snapshot -> persistent GameObjects (wrestler visuals + debug overlays).
+  private syncViews(dtMs: number): void {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
     this.resultText?.setText(outcomeLabel(snapshot.outcome))
@@ -298,6 +336,10 @@ export class BoutScene extends Phaser.Scene {
       )
       view.label.setPosition(pos.x, pos.y - bodyPixels - 18)
       const opponent = snapshot.participants.find((q) => q.id !== participant.id)
+      if (opponent) {
+        const visual = resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving)
+        view.wrestler.apply(visual, participant, pos, dtMs)
+      }
       const label = phaseLabel(participant.action, participant.posture)
       view.phaseText.setText(label !== '' || !opponent ? label : grappleLabel(participant, opponent, snapshot.engagement))
       view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 38)
