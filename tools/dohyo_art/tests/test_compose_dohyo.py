@@ -448,6 +448,33 @@ class CliTests(unittest.TestCase):
             [sys.executable, str(self.SCRIPT), *args], capture_output=True, text=True, check=False
         )
 
+    def test_cli_smoke_full_size_tokudawara_candidate_a(self):
+        arena = make_arena(self.tmp / "arena.png", (1672, 941))
+        tawara = make_tawara(self.tmp / "tawara.png")
+        out = self.tmp / "out"
+        proc = self.run_cli(
+            "--arena-base", str(arena), "--tawara-source", str(tawara), "--output-dir", str(out),
+            "--arena-scale", "1.072", "--arena-offset-x", "5.36", "--arena-offset-y", "77.72",
+            "--tokudawara-depth", "42", "--tokudawara-half-angle-deg", "9",
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        manifest = json.loads((out / cd.OUTPUT_MANIFEST).read_text(encoding="ascii"))
+        self.assertEqual(manifest["schema"], cd.MANIFEST_SCHEMA)
+        tok = manifest["tokudawara"]
+        self.assertEqual((tok["depth"], tok["half_angle_deg"], tok["outer_radius"], tok["inner_radius"]), (42, 9, 842, 800))
+        with Image.open(out / cd.OUTPUT_OVERLAY_MASTER) as master:
+            self.assertEqual(master.size, (3840, 2160))
+            alpha = np.asarray(master.getchannel("A"))
+        with Image.open(out / cd.OUTPUT_PREVIEW_1920) as preview:
+            self.assertEqual(preview.size, (1920, 1080))
+        # Center lines: shifted band [800, 842] present, base band [758, 800] gone (all four sections).
+        for x, y in ((1920 + 821, 1080), (1920 - 822, 1080), (1920, 1080 + 821), (1920, 1080 - 822)):
+            self.assertEqual(int(alpha[y, x]), 255, (x, y))
+        for x, y in ((1920 + 779, 1080), (1920 - 780, 1080), (1920, 1080 + 779), (1920, 1080 - 780)):
+            self.assertEqual(int(alpha[y, x]), 0, (x, y))
+        row = np.flatnonzero(alpha[1080])
+        self.assertEqual((row[0], row[-1] + 1), (1920 - 842, 1920 + 842))
+
     def test_cli_smoke_full_master_size(self):
         arena = make_arena(self.tmp / "arena.png", (1672, 941))
         tawara = make_tawara(self.tmp / "tawara.png")
@@ -498,6 +525,11 @@ class CliTests(unittest.TestCase):
             "bad geometry": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--tawara-width", "900"],
             "uncovered arena": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--arena-offset-y", "50"],
             "arena scale too large": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--arena-scale", "2"],
+            "tokudawara without half angle": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--tokudawara-depth", "42"],
+            "tokudawara too deep": [
+                "--arena-base", str(arena), "--tawara-source", str(tawara),
+                "--tokudawara-depth", "43", "--tokudawara-half-angle-deg", "9",
+            ],
         }
         for label, args in cases.items():
             with self.subTest(label):
@@ -515,6 +547,179 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(cd.CompositorError):
             cd.write_outputs(result, self.tmp, [arena, tawara])
         self.assertEqual(arena.read_bytes(), before)
+
+
+# Pixel hashes produced by the pre-Tokudawara compositor (791fb16) for SMALL / TEX and the
+# synthetic fixtures above, on the verified toolchain in requirements.txt.
+LEGACY_CIRCLE_HASHES = {
+    cd.OUTPUT_OVERLAY_MASTER: "52356241c03ed9dd6cedd0db53edf52e20179ab8e722053981357421fc006ea1",
+    cd.OUTPUT_GUIDE_MASTER: "949b397e8428afb56c13c341681e0dcc6a7fa221ba350e85bd8dac8b04d88f30",
+    cd.OUTPUT_COMPOSITE_MASTER: "481d863d3aa371430092013ce4739e5e4ed81c46042a2b235f5af5546a9c572f",
+}
+
+TOK = replace(SMALL, tokudawara_depth=12, tokudawara_half_angle_deg=9)
+
+
+def window_distance(g: cd.Geometry) -> np.ndarray:
+    ys, xs = np.mgrid[0 : g.canvas_height, 0 : g.canvas_width]
+    return cd.tokudawara_window_distance(g, xs + 0.5 - g.center_x, ys + 0.5 - g.center_y)
+
+
+class TokudawaraTests(ComposeTestBase):
+    def tok_alpha(self, g: cd.Geometry = TOK) -> np.ndarray:
+        return np.asarray(self.compose(g).images[cd.OUTPUT_OVERLAY_MASTER].getchannel("A"))
+
+    def test_disabled_reproduces_legacy_circle_pixels(self):
+        for g in (SMALL, replace(SMALL, tokudawara_depth=0, tokudawara_half_angle_deg=9)):
+            images = self.compose(g).images
+            for name, expected in LEGACY_CIRCLE_HASHES.items():
+                self.assertEqual(cd.pixel_sha256(images[name]), expected, name)
+
+    def test_depth_zero_is_disabled_in_manifest(self):
+        self.assertEqual(self.compose().manifest["tokudawara"], {"enabled": False})
+
+    def test_four_cardinal_sections_present_and_base_band_absent(self):
+        g = TOK
+        alpha = self.tok_alpha()
+        cx, cy = 480, 270
+        shifted_mid = g.max_outer_radius - g.tawara_width / 2  # 206
+        base_mid = g.outer_radius - g.tawara_width / 2  # 194
+        for k, (ux, uy) in enumerate(((1, 0), (0, 1), (-1, 0), (0, -1))):
+            with self.subTest(section=k):
+                px = int(math.floor(cx + ux * shifted_mid)), int(math.floor(cy + uy * shifted_mid))
+                self.assertEqual(int(alpha[px[1], px[0]]), 255)
+                bx = int(math.floor(cx + ux * base_mid)), int(math.floor(cy + uy * base_mid))
+                self.assertEqual(int(alpha[bx[1], bx[0]]), 0)
+                # just outside the window side, the normal band is back
+                for side in (-1, 1):
+                    a = k * math.pi / 2 + side * math.radians(g.tokudawara_half_angle_deg + 2)
+                    nx = int(math.floor(cx + math.cos(a) * base_mid))
+                    ny = int(math.floor(cy + math.sin(a) * base_mid))
+                    self.assertEqual(int(alpha[ny, nx]), 255)
+
+    def test_alpha_geometry_is_symmetric(self):
+        alpha = self.tok_alpha()
+        np.testing.assert_array_equal(alpha, alpha[:, ::-1])
+        np.testing.assert_array_equal(alpha, alpha[::-1, :])
+        # x <-> y swap: 540x540 square centered on the ring; shikiri (vertical lines) excluded.
+        square = np.where(ring_pixels(TOK) < TOK.inner_radius - 1, 0, alpha)[:, 210:750]
+        np.testing.assert_array_equal(square, square.T)
+
+    def test_sections_share_identical_rgb_under_rotation(self):
+        overlay = np.asarray(self.compose(TOK).images[cd.OUTPUT_OVERLAY_MASTER])
+        square = overlay[:, 210:750]
+        dist = ring_pixels(TOK)[:, 210:750]
+        inside = window_distance(TOK)[:, 210:750] >= 1
+        mask = inside & (dist > TOK.outer_radius + 1)  # shifted band only
+        rotated = np.rot90(square)
+        diff = np.abs(rotated[mask].astype(int) - square[np.rot90(mask)].astype(int))
+        self.assertLessEqual(int(diff.max()), 1)
+
+    def test_normal_and_shifted_radii_are_exact(self):
+        g = TOK
+        alpha = self.tok_alpha()
+        dist = ring_pixels(g)
+        signed = window_distance(g)
+        shikiri = shikiri_mask(g)
+        outside_window = signed <= -1
+        inside_window = signed >= 1
+        r, w, d = g.outer_radius, g.tawara_width, g.tokudawara_depth
+        # normal section: [R - w, R]
+        self.assertEqual(int(alpha[outside_window & (dist >= r + 0.5)].max()), 0)
+        self.assertEqual(int(alpha[outside_window & (dist >= r - w + 0.5) & (dist <= r - 0.5)].min()), 255)
+        self.assertEqual(int(alpha[outside_window & (dist <= r - w - 0.5) & ~shikiri].max()), 0)
+        # shifted section: [R + d - w, R + d]; no base band left inside the window
+        self.assertEqual(int(alpha[inside_window & (dist >= r + d + 0.5)].max()), 0)
+        self.assertEqual(int(alpha[inside_window & (dist >= r + d - w + 0.5) & (dist <= r + d - 0.5)].min()), 255)
+        self.assertEqual(int(alpha[inside_window & (dist <= r + d - w - 0.5) & ~shikiri].max()), 0)
+        # nothing beyond the Tokudawara outer radius anywhere
+        self.assertEqual(int(alpha[dist >= r + d + 0.5].max()), 0)
+
+    def test_section_center_line_outer_radius(self):
+        g = TOK
+        alpha = self.tok_alpha()
+        row = alpha[270]
+        cols = np.flatnonzero(row)
+        self.assertEqual((cols[0], cols[-1] + 1), (480 - 212, 480 + 212))
+        col = alpha[:, 480]
+        rows = np.flatnonzero(col)
+        self.assertEqual((rows[0], rows[-1] + 1), (270 - 212, 270 + 212))
+
+    def test_side_connections_have_no_alpha_gap(self):
+        # Every pixel straddling a side boundary between R - width and R + depth is covered:
+        # the normal band on one side and the shifted band on the other meet without a gap.
+        g = TOK
+        alpha = self.tok_alpha()
+        dist = ring_pixels(g)
+        signed = window_distance(g)
+        ys, xs = np.mgrid[0 : g.canvas_height, 0 : g.canvas_width]
+        dx, dy = xs + 0.5 - 480, ys + 0.5 - 270
+        seam = (np.abs(signed) < 0.45) & (dist >= g.inner_radius + 0.5) & (dist <= g.max_outer_radius - 0.5)
+        for label, quadrant in (
+            ("+x", dx > np.abs(dy)), ("-x", -dx > np.abs(dy)), ("+y", dy > np.abs(dx)), ("-y", -dy > np.abs(dx))
+        ):
+            for side_label, side in (("cw", dx * dy > 0), ("ccw", dx * dy < 0)):
+                with self.subTest(section=label, side=side_label):
+                    region = seam & quadrant & side
+                    self.assertGreater(int(region.sum()), 10)
+                    self.assertGreater(int(alpha[region].min()), 0)
+
+    def test_shikiri_unchanged(self):
+        plain = np.asarray(self.compose(SMALL).images[cd.OUTPUT_OVERLAY_MASTER])
+        tok = np.asarray(self.compose(TOK).images[cd.OUTPUT_OVERLAY_MASTER])
+        inner = ring_pixels(SMALL) < SMALL.inner_radius - 0.5
+        np.testing.assert_array_equal(plain[inner], tok[inner])
+
+    def test_arena_alignment_does_not_affect_overlay(self):
+        plain = cd.compose(self.arena, self.tawara, TOK, TEX)
+        aligned = cd.compose(self.arena, self.tawara, TOK, TEX, cd.ArenaAlignment(1.15, 6, -35))
+        for name in (cd.OUTPUT_OVERLAY_MASTER, cd.OUTPUT_OVERLAY_1920):
+            self.assertEqual(cd.pixel_sha256(plain.images[name]), cd.pixel_sha256(aligned.images[name]))
+
+    def test_guide_marks_tokudawara_only_when_enabled(self):
+        guide = np.asarray(self.compose(TOK).images[cd.OUTPUT_GUIDE_MASTER]).astype(int)
+        color = np.array(cd.GUIDE_TOKUDAWARA)
+        hits = np.all(np.abs(guide - color) <= 2, axis=-1)
+        ys, xs = np.nonzero(hits)
+        dist = np.hypot(xs + 0.5 - 480, ys + 0.5 - 270)
+        self.assertTrue(hits.any())
+        self.assertGreaterEqual(dist.min(), TOK.outer_radius - 2)
+        self.assertLessEqual(dist.max(), TOK.max_outer_radius + 2)
+        plain = np.asarray(self.compose(SMALL).images[cd.OUTPUT_GUIDE_MASTER]).astype(int)
+        self.assertFalse(np.all(np.abs(plain - color) <= 2, axis=-1).any())
+
+    def test_manifest_records_tokudawara(self):
+        info = self.compose(TOK).manifest["tokudawara"]
+        self.assertEqual(info["enabled"], True)
+        self.assertEqual(info["count"], 4)
+        self.assertEqual(info["depth"], 12)
+        self.assertEqual(info["half_angle_deg"], 9)
+        self.assertEqual(info["outer_radius"], 212)
+        self.assertEqual(info["inner_radius"], 200)
+        self.assertIn("cardinal", info["directions"])
+
+    def test_tokudawara_is_deterministic(self):
+        first = self.compose(TOK)
+        second = self.compose(TOK)
+        for name in first.images:
+            self.assertEqual(cd.pixel_sha256(first.images[name]), cd.pixel_sha256(second.images[name]), name)
+        self.assertEqual(cd.manifest_text(first.manifest), cd.manifest_text(second.manifest))
+
+    def test_invalid_tokudawara_fails(self):
+        cases = {
+            "negative depth": dict(tokudawara_depth=-1, tokudawara_half_angle_deg=9),
+            "nan depth": dict(tokudawara_depth=float("nan"), tokudawara_half_angle_deg=9),
+            "missing half angle": dict(tokudawara_depth=12),
+            "half angle 45": dict(tokudawara_depth=12, tokudawara_half_angle_deg=45),
+            "negative half angle": dict(tokudawara_depth=12, tokudawara_half_angle_deg=-9),
+            "nan half angle": dict(tokudawara_depth=12, tokudawara_half_angle_deg=float("nan")),
+            "deeper than tawara": dict(tokudawara_depth=13, tokudawara_half_angle_deg=9),
+            "exceeds canvas": dict(outer_radius=262, tokudawara_depth=12, tokudawara_half_angle_deg=9),
+        }
+        for label, overrides in cases.items():
+            with self.subTest(label), self.assertRaises(cd.CompositorError):
+                cd.validate_geometry(replace(SMALL, **overrides))
+        cd.validate_geometry(replace(cd.Geometry(), tokudawara_depth=42, tokudawara_half_angle_deg=9))
 
 
 class IndependenceTests(unittest.TestCase):

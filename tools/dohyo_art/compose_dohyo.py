@@ -26,7 +26,7 @@ from PIL import Image
 
 TOOL_NAME = "sumosim-dohyo-art"
 TOOL_VERSION = "1.0.0"
-MANIFEST_SCHEMA = 2
+MANIFEST_SCHEMA = 3
 
 # Product art space (accepted). The CLI always renders this master size.
 MASTER_SIZE = (3840, 2160)
@@ -62,6 +62,11 @@ GUIDE_PROTECTED = (60, 200, 235)
 GUIDE_SHIKIRI = (120, 235, 90)
 GUIDE_CENTER = (255, 255, 255)
 GUIDE_PARTICIPANT = (235, 80, 220)
+GUIDE_TOKUDAWARA = (255, 235, 60)
+
+# Each Tokudawara maps the tile with its own local angle; this fraction of the
+# tile sits on the section's axis, so all four sections look identical.
+TOKUDAWARA_TEXTURE_PHASE = 0.5
 
 
 class CompositorError(Exception):
@@ -81,6 +86,17 @@ class Geometry:
     shikiri_width: float = 24.0
     protected_radius: float = 1064.0
     participant_offset_x: float = 246.0
+    # Four cardinal Tokudawara (+x, +y, -x, -y). depth 0 = disabled (plain circle).
+    tokudawara_depth: float = 0.0
+    tokudawara_half_angle_deg: float = 0.0
+
+    @property
+    def tokudawara_enabled(self) -> bool:
+        return self.tokudawara_depth > 0
+
+    @property
+    def max_outer_radius(self) -> float:
+        return self.outer_radius + self.tokudawara_depth
 
     @property
     def center_x(self) -> float:
@@ -154,6 +170,8 @@ def validate_geometry(g: Geometry) -> None:
         "shikiri_width",
         "protected_radius",
         "participant_offset_x",
+        "tokudawara_depth",
+        "tokudawara_half_angle_deg",
     ):
         finite(name, getattr(g, name))
 
@@ -191,6 +209,29 @@ def validate_geometry(g: Geometry) -> None:
         raise CompositorError("shikiri lines must lie strictly inside the inner tawara radius")
     if g.participant_offset_x < 0:
         raise CompositorError("participant offset-x must be >= 0")
+
+    if g.tokudawara_depth < 0:
+        raise CompositorError(f"tokudawara depth must be >= 0 (got {g.tokudawara_depth})")
+    if g.tokudawara_enabled:
+        if not 0 < g.tokudawara_half_angle_deg < 45:
+            raise CompositorError(
+                f"tokudawara half angle must be within (0, 45) degrees (got {g.tokudawara_half_angle_deg})"
+            )
+        if g.tokudawara_depth > g.tawara_width:
+            # Deeper sections would leave a radial gap between the normal and shifted tawara
+            # at the side connection (no separate connector piece is drawn).
+            raise CompositorError(
+                f"tokudawara depth must be <= tawara width {g.tawara_width} (got {g.tokudawara_depth})"
+            )
+        if (
+            g.center_x - g.max_outer_radius < 0
+            or g.center_x + g.max_outer_radius > g.canvas_width
+            or g.center_y - g.max_outer_radius < 0
+            or g.center_y + g.max_outer_radius > g.canvas_height
+        ):
+            raise CompositorError(
+                f"tokudawara (outer radius {g.max_outer_radius}) exceeds canvas {g.canvas_width}x{g.canvas_height}"
+            )
 
 
 def validate_alignment(a: ArenaAlignment) -> None:
@@ -489,13 +530,83 @@ def _sample_bilinear(tex: np.ndarray, u: np.ndarray, v: np.ndarray) -> np.ndarra
 # --------------------------------------------------------------- rendering
 
 
+def tokudawara_window_distance(g: Geometry, dx: np.ndarray, dy: np.ndarray) -> np.ndarray:
+    """Signed distance (px) from the nearest Tokudawara side boundary; > 0 inside a window.
+
+    Folds the point into the first octant (|x|, |y| and swap are exact), so all four
+    cardinal windows and both of their sides are computed identically.
+    """
+    ax, ay = np.abs(dx), np.abs(dy)
+    along, across = np.maximum(ax, ay), np.minimum(ax, ay)
+    half = math.radians(g.tokudawara_half_angle_deg)
+    return along * math.sin(half) - across * math.cos(half)
+
+
+def _tokudawara_local_angle(dx: np.ndarray, dy: np.ndarray) -> np.ndarray:
+    """Angle relative to the nearest cardinal axis (exact 90 degree rotations)."""
+    horizontal = np.abs(dx) >= np.abs(dy)
+    lx = np.where(horizontal, np.abs(dx), np.abs(dy))
+    ly = np.where(horizontal, np.where(dx >= 0, dy, -dy), np.where(dy >= 0, -dx, dx))
+    return np.arctan2(ly, lx)
+
+
+def _band_coverage(dist: np.ndarray, outer: float, width: float) -> np.ndarray:
+    return np.clip(outer - dist + 0.5, 0.0, 1.0) * np.clip(dist - (outer - width) + 0.5, 0.0, 1.0)
+
+
+def render_tawara_ring_tokudawara(g: Geometry, tex: np.ndarray, repeat: int, out: np.ndarray) -> None:
+    """Normal ring plus four cardinal sections shifted outward by `tokudawara_depth`.
+
+    Inside a window (|angle - k*pi/2| <= half angle) only the shifted band is drawn,
+    outside it only the normal band; the side boundary is the radial line at the window
+    edge, anti-aliased by its signed distance. The shifted band reuses the same tile,
+    mapped by the section's local angle.
+    """
+    tex_h, tex_w = tex.shape[:2]
+    reach = g.max_outer_radius
+    x0 = max(0, int(math.floor(g.center_x - reach)) - 1)
+    x1 = min(g.canvas_width, int(math.ceil(g.center_x + reach)) + 1)
+    y0 = max(0, int(math.floor(g.center_y - reach)) - 1)
+    y1 = min(g.canvas_height, int(math.ceil(g.center_y + reach)) + 1)
+
+    dist = _distance_field(g, x0, y0, x1, y1)
+    dx, dy = np.broadcast_arrays(
+        (np.arange(x0, x1, dtype=np.float64) + 0.5 - g.center_x)[np.newaxis, :],
+        (np.arange(y0, y1, dtype=np.float64) + 0.5 - g.center_y)[:, np.newaxis],
+    )
+    inside = np.clip(tokudawara_window_distance(g, dx, dy) + 0.5, 0.0, 1.0)
+    shifted_outer = g.max_outer_radius
+    weight_normal = _band_coverage(dist, g.outer_radius, g.tawara_width) * (1 - inside)
+    weight_shifted = _band_coverage(dist, shifted_outer, g.tawara_width) * inside
+    hit = (weight_normal + weight_shifted) > 0
+
+    hdx, hdy, hdist = dx[hit], dy[hit], dist[hit]
+    u_normal = np.arctan2(hdy, hdx) / (2 * math.pi) * repeat * tex_w - 0.5
+    v_normal = (g.outer_radius - hdist) / g.tawara_width * tex_h - 0.5
+    u_shifted = (
+        _tokudawara_local_angle(hdx, hdy) / (2 * math.pi) * repeat * tex_w
+        + TOKUDAWARA_TEXTURE_PHASE * tex_w
+        - 0.5
+    )
+    v_shifted = (shifted_outer - hdist) / g.tawara_width * tex_h - 0.5
+
+    sampled = _sample_bilinear(tex, u_normal, v_normal) * weight_normal[hit][:, np.newaxis]
+    sampled += _sample_bilinear(tex, u_shifted, v_shifted) * weight_shifted[hit][:, np.newaxis]
+    window = out[y0:y1, x0:x1]
+    window[hit] = sampled
+
+
 def render_tawara_ring(g: Geometry, tex: np.ndarray, repeat: int, out: np.ndarray) -> None:
     """Polar-map `tex` onto the exact annulus, writing premultiplied RGBA into `out`.
 
     angle -> texture u (repeats `repeat` times around 2*pi)
     radius -> texture v (outer edge = top row, inner edge = bottom row)
     Edges use analytic 1 px coverage; texture alpha is multiplied in.
+    With Tokudawara enabled the separate renderer above is used; this path is unchanged.
     """
+    if g.tokudawara_enabled:
+        render_tawara_ring_tokudawara(g, tex, repeat, out)
+        return
     tex_h, tex_w = tex.shape[:2]
     x0 = max(0, int(math.floor(g.center_x - g.outer_radius)) - 1)
     x1 = min(g.canvas_width, int(math.ceil(g.center_x + g.outer_radius)) + 1)
@@ -571,6 +682,23 @@ def build_guide(g: Geometry, composite: Image.Image) -> Image.Image:
     ring(g.protected_radius, GUIDE_PROTECTED)
     ring(g.outer_radius, GUIDE_OUTER)
     ring(g.inner_radius, GUIDE_INNER)
+    if g.tokudawara_enabled:
+        # Future Ring-out boundary in the windows: outer arcs at R + depth and the radial
+        # side boundaries from R to R + depth (all eight via the folded frame).
+        dx, dy = np.broadcast_arrays(
+            (np.arange(g.canvas_width, dtype=np.float64) + 0.5 - g.center_x)[np.newaxis, :],
+            (np.arange(g.canvas_height, dtype=np.float64) + 0.5 - g.center_y)[:, np.newaxis],
+        )
+        signed = tokudawara_window_distance(g, dx, dy)
+        inside = np.clip(signed + line / 2 + 0.5, 0.0, 1.0)
+        paint(np.clip(line / 2 - np.abs(dist - g.max_outer_radius) + 0.5, 0.0, 1.0) * inside, GUIDE_TOKUDAWARA)
+        half = math.radians(g.tokudawara_half_angle_deg)
+        ax, ay = np.abs(dx), np.abs(dy)
+        along = np.maximum(ax, ay) * math.cos(half) + np.minimum(ax, ay) * math.sin(half)
+        span = np.clip(along - g.outer_radius + line / 2 + 0.5, 0.0, 1.0) * np.clip(
+            g.max_outer_radius + line / 2 - along + 0.5, 0.0, 1.0
+        )
+        paint(np.clip(line / 2 - np.abs(signed) + 0.5, 0.0, 1.0) * span, GUIDE_TOKUDAWARA)
     for x0, y0, x1, y1 in g.shikiri_rects():
         outline(x0, y0, x1, y1, GUIDE_SHIKIRI)
     arm = g.outer_radius * 0.04
@@ -677,6 +805,7 @@ def compose(
                 [g.center_x + g.participant_offset_x, g.center_y],
             ],
         },
+        "tokudawara": tokudawara_info(g),
         "tawara_texture": texture_info,
         "downscale": {
             "size": list(preview_size),
@@ -693,6 +822,24 @@ def compose(
         ],
     }
     return BuildResult(images=images, manifest=manifest)
+
+
+def tokudawara_info(g: Geometry) -> dict:
+    if not g.tokudawara_enabled:
+        return {"enabled": False}
+    return {
+        "enabled": True,
+        "count": 4,
+        "directions": "cardinal (+x, +y, -x, -y)",
+        "depth": g.tokudawara_depth,
+        "half_angle_deg": g.tokudawara_half_angle_deg,
+        "window": "|angle - k*pi/2| <= half_angle (closed)",
+        "outer_radius": g.max_outer_radius,
+        "inner_radius": g.max_outer_radius - g.tawara_width,
+        "side_boundary": "radial line at the window edge, from outer_radius R to R + depth",
+        "normal_band_inside_window": "absent",
+        "texture_mapping": f"same tile; local angle per section, tile phase {TOKUDAWARA_TEXTURE_PHASE} on the axis",
+    }
 
 
 def manifest_text(manifest: dict) -> str:
@@ -757,6 +904,10 @@ def build_parser() -> argparse.ArgumentParser:
     geo.add_argument("--protected-radius", type=float, default=d_geo.protected_radius, help="guide only (default %(default)s)")
     geo.add_argument("--participant-offset-x", type=float, default=d_geo.participant_offset_x, help="guide only (default %(default)s)")
 
+    tok = parser.add_argument_group("tokudawara (four cardinal sections shifted outward)")
+    tok.add_argument("--tokudawara-depth", type=float, default=0.0, help="outward shift, master px, <= tawara width; 0 = disabled (default %(default)s)")
+    tok.add_argument("--tokudawara-half-angle-deg", type=float, default=None, help="half of each section's angular span in degrees, (0, 45); required when depth > 0")
+
     arena = parser.add_argument_group("arena alignment (uniform scale about canvas center, then translate)")
     arena.add_argument("--arena-scale", type=float, default=1.0, help=f"uniform zoom of the arena, 1..{MAX_ARENA_SCALE}; must cover the canvas after the offset (default %(default)s)")
     arena.add_argument("--arena-offset-x", type=float, default=0.0, help="move arena content right, master px (default %(default)s)")
@@ -781,6 +932,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         shikiri_width=args.shikiri_width,
         protected_radius=args.protected_radius,
         participant_offset_x=args.participant_offset_x,
+        tokudawara_depth=args.tokudawara_depth,
+        tokudawara_half_angle_deg=0.0 if args.tokudawara_half_angle_deg is None else args.tokudawara_half_angle_deg,
     )
     alignment = ArenaAlignment(scale=args.arena_scale, offset_x=args.arena_offset_x, offset_y=args.arena_offset_y)
     texture = TextureOptions(

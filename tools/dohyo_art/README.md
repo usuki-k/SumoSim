@@ -76,6 +76,8 @@ arena source needs its own measurement. Full option list: `PY tools/dohyo_art/co
 | `--participant-offset-x` (guide only) | 246 | 123 |
 | `--arena-scale` | 1.0 | |
 | `--arena-offset-x` / `--arena-offset-y` | 0 / 0 | |
+| `--tokudawara-depth` | 0 (disabled) | |
+| `--tokudawara-half-angle-deg` | none (required when depth > 0) | |
 | `--repeat` | `auto` | |
 | `--trim-start` / `--trim-end` | 0.06 / 0.06 | |
 | `--seam-crossfade` | 0.05 | |
@@ -91,7 +93,7 @@ arena source needs its own measurement. Full option list: `PY tools/dohyo_art/co
 | `composite_master.png` | exact alpha composite `arena_base_master + dohyo_ring_overlay_master` |
 | `dohyo_ring_overlay_1920.png` | overlay downscaled to 1920×1080 (BOX = exact 2×2 average, lossless PNG) |
 | `composite_preview_1920.png` | composite at 1920×1080 for User review |
-| `build_manifest.json` | deterministic metadata (schema 2, no timestamps): input basenames + SHA-256, normalization, `arena_alignment`, geometry, texture parameters, decoded-pixel SHA-256 of each output |
+| `build_manifest.json` | deterministic metadata (schema 3, no timestamps): input basenames + SHA-256, normalization, `arena_alignment`, geometry, `tokudawara`, texture parameters, decoded-pixel SHA-256 of each output |
 
 ## How it works
 
@@ -152,6 +154,57 @@ accepted arena: `a ≈ (1915, 1007.5)` → `S = 1.072`, `offset = (5.36, 77.72)`
 `geometry_guide_master.png` shows the fixed ring over the aligned arena for
 checking.
 
+## Tokudawara (Product preview)
+
+Four Tokudawara can be drawn so their Product geometry can be chosen on the
+real arena **before** the same geometry goes into the gameplay Ring-out core.
+This tool changes no gameplay rule; gameplay stays a circle until a later
+Simulation Task implements the User-approved values.
+
+Geometry (master px, `R` = `--outer-radius`, `w` = `--tawara-width`, `D` = depth,
+`H` = half angle):
+
+- four identical sections on the cardinal axes **+x, +y, −x, −y**
+- a section's window is `|angle − k·90°| ≤ H` (closed)
+- inside a window the tawara is shifted outward: band `[R + D − w, R + D]`;
+  the normal band `[R − w, R]` is absent there
+- outside the windows the normal band is unchanged
+- the side boundary is the radial line at the window edge; the shifted and
+  normal bands meet along it without a gap (this is why `D ≤ w` is required)
+- the future gameplay boundary is therefore: arcs at `R`, arcs at `R + D`
+  inside the windows, joined by radial segments from `R` to `R + D`
+
+The tawara source is reused as is. Each section maps the tile by its own
+angle from its axis (tile centre on the axis), so all four look identical;
+the normal ring keeps its continuous mapping. The geometry guide adds the
+Tokudawara outer arcs and the eight side boundaries in yellow.
+
+| Option | Meaning |
+|---|---|
+| `--tokudawara-depth D` | outward shift in master px; `0` = disabled (default, legacy circle output, pixel-identical) |
+| `--tokudawara-half-angle-deg H` | half of each section's span; `0 < H < 45`; required when `D > 0` |
+
+Values are **candidates** until the User approves one; they are not gameplay
+constants. Arena alignment is a separate choice and is never changed by the
+Tokudawara options.
+
+Candidate A (first candidate: one tawara width, 18° span, accepted alignment):
+
+```bash
+PY tools/dohyo_art/compose_dohyo.py \
+  --arena-base tools/dohyo_art/input.local/arena_base.png \
+  --tawara-source tools/dohyo_art/input.local/tawara_source.png \
+  --output-dir tools/dohyo_art/output-tokudawara-a.local \
+  --arena-scale 1.072 --arena-offset-x 5.36 --arena-offset-y 77.72 \
+  --tokudawara-depth 42 --tokudawara-half-angle-deg 9
+```
+
+Compare candidates by writing each to its own `output-tokudawara-<x>.local/`
+directory and opening their `composite_preview_1920.png` side by side (zoom
+into `composite_master.png` and `geometry_guide_master.png` for the side
+connections and the lower painted frame). Each `build_manifest.json` records
+the exact Tokudawara and alignment values used.
+
 ## Iterating on the look
 
 Re-run with different options and compare `composite_preview_1920.png`
@@ -183,6 +236,8 @@ The command exits with status 2 and an `error:` message, writing nothing, when:
   not strictly inside the inner radius
 - texture options are out of range
 - arena scale is outside [1, 1.25] or does not cover the canvas after the offset
+- Tokudawara depth < 0, depth > tawara width, half angle missing or outside
+  (0, 45), or `R + depth` exceeds the canvas
 - an output file would overwrite an input file
 
 Outputs are rendered fully in memory, written to a staging directory inside
@@ -200,6 +255,9 @@ and check sizes, exact ring center/radii, transparency outside the annulus,
 shikiri positions, alpha preservation, alpha-bbox crop/trim, fail-closed cases,
 manifest contents, deterministic pixel hashes, arena alignment (direction,
 uniform scale, coverage, identity = unaligned pixels, overlay unchanged),
+Tokudawara (legacy circle pixel hashes when disabled, all four sections, mirror and
+x↔y alpha symmetry, exact normal / shifted radii, no gap at the side boundaries,
+manifest, validation, full-size CLI),
 that Product `*.local` paths stay git-ignored, and that the tool imports only
 the stdlib, NumPy and Pillow. One test runs the CLI at the full 3840×2160 size.
 
