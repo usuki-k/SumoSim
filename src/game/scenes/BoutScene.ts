@@ -6,6 +6,7 @@ import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
+import { ENGLISH_BOUT_HUD_COPY } from '../presentation/boutHudCopy.ts'
 import { PROTOTYPE_HUD_FIXTURE, assertHudContextMatches, formatOutcome } from '../presentation/boutHudPresentation.ts'
 import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
 import { createBoutHud } from './BoutHudView.ts'
@@ -183,7 +184,8 @@ export class BoutScene extends Phaser.Scene {
     addProductDohyo(this, this.origin)
     // Product HUD shell from the prototype fixture (joined to the bout by participant id only).
     assertHudContextMatches(PROTOTYPE_HUD_FIXTURE, snapshot.participants.map((p) => p.id))
-    createBoutHud(this, PROTOTYPE_HUD_FIXTURE)
+    // Initial release ships English HUD copy only.
+    createBoutHud(this, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY)
     this.boundaryLine = drawArenaBoundaryDebug(this, this.origin, this.pixelsPerMeter, snapshot.arena).setDepth(DEBUG_OVERLAY_DEPTH)
 
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -309,7 +311,7 @@ export class BoutScene extends Phaser.Scene {
   private syncViews(dtMs: number): void {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
-    this.resultText?.setText(formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE))
+    this.resultText?.setText(formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY))
     this.engagementText?.setText(
       snapshot.engagement.kind === 'grappled'
         ? `${engagementLabel(snapshot.engagement)}  pair v: ${pairSpeed.toFixed(2)} m/s`

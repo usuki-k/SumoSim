@@ -10,6 +10,7 @@
 - その後、相撲Actionを重点的に作り込む
 - Actionが成立してからSimulation / Managementを拡張する
 - 最初のTargetはCrazyGames向け
+- 初回releaseの表示言語は英語のみ。将来の多言語化ができる構造にしておく（追加の配信言語はDeferred）
 - Browser Game
 - Action Product presentationは、様式化したpainted 2D（見下ろし型のまま）。現在のarena / dohyo（暖色の伝統的な相撲の意匠）のProduct visual baselineは受理済み。Product HUDは、このarenaに合う方向で`docs/ACTION_HUD_PRODUCT_SPEC.md`に仕様化済み（実装は未着手）
 - Action Product presentationの現在のlogical基準は1920×1080（Product artはこの座標空間で制作・出力し、browser表示はここから縮尺する）。最終的なplatform / performance向けのresolution方針とは別

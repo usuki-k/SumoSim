@@ -1,6 +1,7 @@
 # ACTION_HUD_PRODUCT_SPEC — Bout画面 Product HUD仕様
 
-Status: Product HUDの正本（ACTION-ART-02）。実装はまだ無い。
+Status: Product HUDの正本（ACTION-ART-02）。常時表示のHUD shellは実装済み（ACTION-ART-02A / 02A1）。取組前の比較表示は未実装。
+表示言語: **初回releaseは英語のみ**（Accepted）。Product HUDの見た目の調整は英語で行う。日本語は初回releaseに不要。将来の多言語化に備えた小さな文言の境界だけを持つ（§9）。
 対象: 現在のAction Prototype（1920×1080 logical、Product背景を統合した後のBout画面）。
 
 この文書で使う区分：
@@ -36,13 +37,13 @@ Bの情報（年齢・身長・体重・パラメータ）は、Action中に常�
 
 ### 3.1 必須の項目
 
-| 項目 | 東（画面の左） | 西（画面の右） | 表示例（日本語） |
+| 項目 | 東（画面の左） | 西（画面の右） | 表示例（英語。初回release） |
 |---|---|---|---|
-| 方位のtag | 東 | 西 | `東` / `西` |
-| 番付 | ○ | ○ | `前頭十五枚目`、`前頭15` |
-| 四股名 | ○ | ○ | `朝翠龍` |
-| 今場所の成績（勝-敗） | ○ | ○ | `2-0`、`2勝0敗` |
-| 日目（場所の文脈。中央に1つ） | — | — | `三日目`、`3日目` |
+| 方位のlabel | 東 | 西 | `East` / `West` |
+| 番付 | ○ | ○ | `Maegashira 15` |
+| 四股名（ローマ字の表示名） | ○ | ○ | `Asuiryu` |
+| 今場所の成績（勝-敗） | ○ | ○ | `2-0` |
+| 日目（場所の文脈。中央に1つ） | — | — | `Day 3` |
 
 - 東は画面の左、西は画面の右に置く。Current Sourceの配置（東 = `wrestler-a`、土俵の左側x = −0.7からstart）と一致する
 - 左右の割り当ては、presentationで決める（§5）
@@ -167,8 +168,8 @@ art中心は (960, 540) で、Current Sourceでは次の位置になる。
 ```
  x:0        464             810   1110             1456        1920
  y:0  +-----------+         +-------+           +-----------+
-      | 東 [番付]  |         | 三日目 |           |  [番付] 西 |
-      | 四股名     |         +-------+           |     四股名 |
+      |[East] Rank|         | Day 3 |           |Rank [West]|
+      | Name      |         +-------+           |      Name |
       | 2-0  (自)  |                             | (自)  1-1  |
  174  +-----------+     .-----------------.     +-----------+
                       .'  (徳俵 上 y≈119)   '.
@@ -184,7 +185,7 @@ art中心は (960, 540) で、Current Sourceでは次の位置になる。
 
 ### 7.3 識別ブロックの中身（Recommended）
 
-- 1行目: 方位tag（`東` / `西`）と番付。番付は小さめの文字（目安28–32px）
+- 1行目: 方位label（`East` / `West`。単語の幅に合わせた差し色のpill）と番付。番付は小さめの文字（目安28–32px）
 - 2行目: 四股名。最も大きい文字（目安44–48px）
 - 3行目: 今場所の成績（目安36px）と、操作中の印の枠
 - 西のブロックは、要素を右寄せにした鏡像にする
@@ -201,15 +202,15 @@ art中心は (960, 540) で、Current Sourceでは次の位置になる。
 
 ```
  +----------------------------------------------------------------+
- |                         三日目                                  |
- |   [東]  前頭十五枚目                        前頭十二枚目  [西]   |
- |         朝翠龍                                   ○○山           |
+ |                         Day 3                                  |
+ |   [East]  Maegashira 15                  Maegashira 12  [West]   |
+ |           Asuiryu                                 (Name)        |
  |         2-0                                      1-1           |
  |   ------------------------------------------------------------ |
- |          25        |      年齢       |        29               |
- |         182 cm     |      身長       |       178 cm            |
- |         148 kg     |      体重       |       161 kg            |
- |   ---------------- |  [公開パラメータ] | ----------------        |
+ |          25        |      Age        |        29               |
+ |         182 cm     |     Height      |       178 cm            |
+ |         148 kg     |     Weight      |       161 kg            |
+ |   ---------------- | [public params] | ----------------        |
  |          (値)      |    (項目名)     |       (値)              |
  |          ...       |      ...        |       ...   (件数可変)   |
  +----------------------------------------------------------------+
@@ -222,21 +223,28 @@ art中心は (960, 540) で、Current Sourceでは次の位置になる。
 
 ## 9. Localization / text robustness
 
-CrazyGamesで国際的に配信するので、日本語の固定幅のラベルに依存しない。
+CrazyGamesで国際的に配信するので、特定の言語の固定幅のラベルに依存しない。
+
+**言語の方針（Accepted、ACTION-ART-02A1）**
+- 初回releaseの表示言語は**英語のみ**。Product HUDの見た目の調整は英語で行う。日本語は初回releaseに含めない
+- 将来の多言語化を難しくしない: 意味のdata（数値、id、side）と、locale解決済みの表示文字列と、固定のUI文言を分ける
+- 固定のUI文言（`East` / `West`、`Day N`、勝敗の文言）は、小さなpure module（`src/game/presentation/boutHudCopy.ts` の `BoutHudCopy` / `ENGLISH_BOUT_HUD_COPY`）の1か所に置く。他の言語は、同じ形のcopyを渡せば足りる
+- 四股名と番付は、Management / 番付systemが無いので、locale解決済みの表示文字列としてcontextに入れる（番付のenumなどは作らない）
+- 作らないもの: 言語選択、locale設定画面、翻訳catalog / JSON、外部i18n library、日本語の翻訳pack、browserやplatform（CrazyGames SDK）のlocale検出。これらと追加の配信言語はDeferred
 
 | 層 | 責任 |
 |---|---|
 | 意味のfield | view modelが持つ（例: `rank`、`wins`、`losses`、`day`） |
-| 表示の文字列 | localizationが作る（例: 日本語 `前頭十五枚目` / `3日目` / `2勝0敗`、英語 `Maegashira 15` / `Day 3` / `2-0`） |
+| 表示の文字列 | localizationが作る（初回releaseは英語: `Maegashira 15` / `Day 3` / `2-0`。将来の他言語の例: 日本語 `前頭十五枚目` / `3日目`） |
 | layout | 文字列の長さが変わっても崩れないようにする（縮小、省略） |
 
 - HUDのlayoutは、特定の言語の文字数を前提にしない
-- 四股名のローマ字表記や翻訳の方針はDeferred
+- 初回releaseの四股名はローマ字の表示名。ローマ字化のruleや四股名の生成はDeferred
 - 本格的なlocalization systemは作らない（Deferred）。最初は、表示の文字列をpresentationの1か所に集めておくだけでよい
 - Fontについて
-  - 日本語を表示できるfontが必要
+  - 初回releaseは英語のみなので、HUDはLatin文字用のsystem font（serif系。font assetなし）を使う。日本語fontへの依存はない
   - Productのfontの選定（licenseを含む）はDeferred
-  - Prototypeでは、systemのfallbackでよい
+  - 将来、CJKなどの言語を追加する場合は、その言語を表示できるfontが必要になる
 
 ## 10. Staminaの扱い（Accepted）
 
@@ -281,7 +289,7 @@ Product HUDを実装しても、これらはgameplayに影響しない。表示�
   - CrazyGamesの埋め込みでは、1920×1080が半分程度（例: 960×540）に縮小されて表示されることを想定する
   - Productの文字は、logical **28px以上**（表示上14px以上）にする
   - 名前や成績など重要な値は36px以上にする
-- **東西を色だけで区別しない**: 方位tag（`東` / `西`）、左右の位置、差し色の3つで示す
+- **東西を色だけで区別しない**: 方位label（`East` / `West`。略さない）、左右の位置、差し色の3つで示す
 - **長い名前・長い番付**
   - 枠の幅を超える場合は、まずfontを最小値（名前36px、番付28px）まで縮める
   - それでも入らない場合は、末尾を省略（…）する
@@ -358,7 +366,7 @@ Product visualの進行を、未実装のManagementで止めない。
 - 結果画面、決まり手の表示、崩しや反撃などの演出
 - 操作説明・tutorialのProduct設計
 - touch / mobileの最終layout
-- 最終的なlocalization system、四股名のローマ字表記
+- 最終的なlocalization system、追加の配信言語、言語選択、browser / platformのlocale連携、四股名のローマ字化のrule
 - Productのfont（licenseを含む）
 - 最終的なUIの音、animation、遷移
 - 操作中の力士の表示（§3.3。User Decision）

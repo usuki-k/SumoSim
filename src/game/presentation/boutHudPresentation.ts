@@ -1,13 +1,17 @@
 // Bout HUD presentation context (ACTION-ART-02A, docs/ACTION_HUD_PRODUCT_SPEC.md). Pure TypeScript;
 // must not import Phaser. Wrestler / tournament display data lives here, outside BoutSimulation /
 // ParticipantState / BoutSnapshot; the only join key with the Simulation is the participant id.
+// Content strings here (name, rank label) are already locale-resolved display text; fixed UI copy comes
+// from boutHudCopy.ts.
 import type { BoutOutcome, ParticipantId } from '../sumo/BoutTypes.ts'
+import type { BoutHudCopy } from './boutHudCopy.ts'
 
 export type BoutSide = 'east' | 'west'
 
 export interface BoutHudWrestler {
   readonly participantId: ParticipantId
   readonly side: BoutSide
+  // Display name (romanized for the English release).
   readonly name: string
   // Rank display text; there is no rank system yet, so the label is taken as is.
   readonly rankLabel: string
@@ -21,13 +25,14 @@ export interface BoutHudContext {
   readonly wrestlers: readonly [BoutHudWrestler, BoutHudWrestler]
 }
 
-// PROTOTYPE FIXTURE: sample presentation data for the HUD shell, not game content. Names, ranks,
-// records and the day are placeholders until Management / Tournament state exists.
+// PROTOTYPE FIXTURE: sample English presentation data for the HUD shell, not game content. Names,
+// ranks, records and the day are placeholders until Management / Tournament state exists; the names are
+// sample romanized display names (no shikona generation or romanization rules).
 export const PROTOTYPE_HUD_FIXTURE: BoutHudContext = {
   day: 3,
   wrestlers: [
-    { participantId: 'wrestler-a', side: 'east', name: '朝翠龍', rankLabel: '前頭十五枚目', record: { wins: 2, losses: 0 } },
-    { participantId: 'wrestler-b', side: 'west', name: '寿之富士', rankLabel: '前頭十六枚目', record: { wins: 1, losses: 1 } },
+    { participantId: 'wrestler-a', side: 'east', name: 'Asuiryu', rankLabel: 'Maegashira 15', record: { wins: 2, losses: 0 } },
+    { participantId: 'wrestler-b', side: 'west', name: 'Toshinofuji', rankLabel: 'Maegashira 16', record: { wins: 1, losses: 1 } },
   ],
 }
 
@@ -50,26 +55,18 @@ export function hudWrestlerById(context: BoutHudContext, id: ParticipantId): Bou
   return context.wrestlers.find((w) => w.participantId === id)
 }
 
-// Display formatting: the prototype's Japanese display strings, kept in one place (no localization
-// system yet; the semantic values above stay language-neutral).
-export function formatSide(side: BoutSide): string {
-  return side === 'east' ? '東' : '西'
-}
-
+// Numeric current-basho record (wins-losses); language-neutral.
 export function formatRecord(record: BoutHudWrestler['record']): string {
   return `${record.wins}-${record.losses}`
 }
 
-export function formatDay(day: number): string {
-  return `${day}日目`
-}
-
-// Result text from the Simulation outcome (ids only) + the HUD context. Not a final result screen.
-export function formatOutcome(outcome: BoutOutcome, context: BoutHudContext): string {
+// Result text from the Simulation outcome (ids only) + the HUD context + UI copy. Not a final result
+// screen.
+export function formatOutcome(outcome: BoutOutcome, context: BoutHudContext, copy: BoutHudCopy): string {
   if (outcome.kind === 'ongoing') return ''
-  if (outcome.kind === 'rematch') return '同体 取り直し'
+  if (outcome.kind === 'rematch') return copy.rematch
   const winner = hudWrestlerById(context, outcome.winnerId)
-  return winner ? `${formatSide(winner.side)} ${winner.name} 勝ち` : `${outcome.winnerId} 勝ち`
+  return winner ? copy.formatWin(winner.side, winner.name) : outcome.winnerId
 }
 
 export interface FittedText {

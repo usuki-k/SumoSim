@@ -1,8 +1,8 @@
-Task-ID: ACTION-ART-02A-HUD-SHELL
+Task-ID: ACTION-ART-02A1-HUD-ENGLISH-LOCALIZATION-BASELINE
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 8bd9e0533d58fd6d06db687e8980ae7b80826f84
-Agent-Start-Head: ece5d75b28a1c3d4375ce4e533196dad4d9ab0e5
+Source-Baseline: 59761c1ba3e035e9def2e73097634ee6455f4fe9
+Agent-Start-Head: 96f718e252761fb3ac45430a1103d8e44bd46c6a
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
@@ -11,217 +11,204 @@ Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 PASS WITH KNOWN UNTESTED ITEMS。
 
-**実装したこと**
-- 常時表示のProduct HUD shellを実装した
-  - 東西の識別ブロック: 方位tag「東 / 西」、番付、四股名、今場所の成績
-  - 中央上部の日目chip
-- データは、Phaser非依存のpure presentation context（明示的なprototype fixture）から供給する
-- side / nameの正本は、このcontextの1つだけにした
-- debug OFFのProduct表示では、Prototype / debugのtextをすべて隠した。key `0` では従来どおり表示する
+**変更したこと**
+- 通常表示のProduct HUDを、英語の初回release baselineに切り替えた
+  - 表示: `East` / `West`、`Maegashira 15 / 16`、`Asuiryu` / `Toshinofuji`、`Day 3`、`East Asuiryu Wins` / `Rematch`
+- 固定のUI文言を、Phaser非依存の小さな境界 `boutHudCopy.ts`（`BoutHudCopy` / `ENGLISH_BOUT_HUD_COPY`）の1か所に集めた。将来の多言語化に備えたもの
+- 方位のtagは、単語を略さない横長のpillにした（文字幅を測って幅を決める）
+- fontは、日本語fontに依存しないLatin用のsystem serif（Georgia系）にした
+- 英語のみの方針を、HUD spec / GAME_CONCEPT / ARCHITECTUREに最小限で記録した
+
+**作らなかったもの**: localization framework、言語選択、locale検出、日本語のrelease resource、新しいdependency
+
+**検証**
+- `pnpm test` 249件PASS、`pnpm build` PASS、`tsc --noEmit` PASS、`git diff --check` PASS
 - gameplayは未変更
 
-**検証**: `pnpm test` 248件PASS、`pnpm build` PASS、`tsc --noEmit` PASS、`git diff --check` PASS
-
 **Known Untested**
-- 実ブラウザでの描画smokeは **NOT RUN**（ブラウザ操作の手段がない）
-  - dev serverで、module変換とassetsの配信（HTTP 200）だけを確認した
-  - 日本語fontの実際の描画は未確認
+- 実ブラウザでの描画smokeは **NOT RUN**
+- 代わりに、Windowsの実際のGeorgia fontの寸法で、すべての英語の文字列が推奨サイズで枠に収まることを確認した（下記）
 - **User Visual Check: REQUIRED**
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 3`
 - Remote CURRENT_TASKを確認した
   - Task-ID一致、Status READY、Target-Branch develop
-  - Source-Baseline `8bd9e05`（ancestor）、Handoff-Mode GITHUB
-- `8bd9e05..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
-- Agent-Start-Head = FF後の `ece5d75`
-- Current SourceとHUD specに食い違いはない（東 = `wrestler-a` = 左、西 = `wrestler-b` = 右）
+  - Source-Baseline `59761c1`（ancestor）、Handoff-Mode GITHUB
+- `59761c1..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
+- Agent-Start-Head = FF後の `96f718e`
+- Current Sourceと本Taskに食い違いはない（02AのHUD shell、fixture、formatterは、Reportに書いたとおりに存在した）
 
-# Presentation Context / View Model
+# Localization-ready Boundary
 
-`src/game/presentation/boutHudPresentation.ts`（新規、Phaser非依存）
+`src/game/presentation/boutHudCopy.ts`（新規、Phaser非依存）
 
-- `BoutSide = 'east' | 'west'`
-- `BoutHudWrestler { participantId, side, name, rankLabel, record { wins, losses } }`
-- `BoutHudContext { day, wrestlers: [BoutHudWrestler, BoutHudWrestler] }`
-- age / height / weight / publicParameters は入れていない（02Aでは不要）
-- `assertHudContextMatches(context, participantIds)`: 東西が1人ずつで、participant idが一致することを確認する
-  - Sceneの `create` で、snapshotのidと照合する
-- `hudWrestlerBySide` / `hudWrestlerById`
-- 表示のformatter（日本語の表示文字列を1か所に集めた。localization systemではない）
-  - `formatSide` → `東` / `西`
-  - `formatRecord` → `2-0`
-  - `formatDay` → `3日目`
-  - `formatOutcome` → `西 寿之富士 勝ち` / `同体 取り直し`
-- `fitSingleLine(text, maxWidth, preferred, min, measure, step=2)`: 長いtextを1行に収める（下記）
+```ts
+interface BoutHudCopy {
+  readonly east: string
+  readonly west: string
+  readonly rematch: string
+  formatDay(day: number): string
+  formatWin(side: BoutSide, wrestlerName: string): string
+}
+ENGLISH_BOUT_HUD_COPY = { east: 'East', west: 'West', rematch: 'Rematch',
+  formatDay: (d) => `Day ${d}`, formatWin: (side, name) => `${East|West} ${name} Wins` }
+sideLabel(copy, side)
+```
 
-HUDのmetadataは、`BoutSimulation` / `ParticipantState` / `BoutSnapshot` に入れていない（testで、BoutTypesにこれらの語がないことを確認）。
+- HUD view（`BoutHudView.ts`）と結果の文言（`formatOutcome`）は、copyを引数で受け取る
+  - viewやSceneに、言語ごとの固定文言は残っていない（Sceneはdebug用の英語textのみ）
+- `BoutScene` が `ENGLISH_BOUT_HUD_COPY` を明示的に渡す（初回releaseは英語のみ）
+- 意味のdataとUI文言を分けた
+  - `formatRecord` は数値の `2-0` で、言語に依存しないのでpresentation側に残した
+  - 四股名と番付はlocale解決済みの表示文字列として、contextのfixtureに入れる
+  - 番付のenumや番付のruleは作っていない
+- 型のimportは、`boutHudCopy.ts` ↔ `boutHudPresentation.ts` の相互参照だが、どちらも `import type` だけで、実行時の循環はない
 
-# Fixture Data
+# English Fixture（`PROTOTYPE_HUD_FIXTURE`）
 
-`PROTOTYPE_HUD_FIXTURE` は、sourceのcommentで「sample presentation data, not game content」と明記した。
+source commentで「sample English presentation data, not game content」「sample romanized display names (no shikona generation or romanization rules)」と明記した。
 
-| | participant | 番付 | 四股名 | 成績 |
+| | participant | rankLabel | name | record |
 |---|---|---|---|---|
-| 東 | `wrestler-a` | 前頭十五枚目 | 朝翠龍 | 2-0 |
-| 西 | `wrestler-b` | 前頭十六枚目 | 寿之富士 | 1-1 |
+| East | `wrestler-a` | Maegashira 15 | Asuiryu | 2-0 |
+| West | `wrestler-b` | Maegashira 16 | Toshinofuji | 1-1 |
 
-日目: 3
+day: 3（`Day 3`）。
 
-wrestlerのdatabase、番付のrule、場所の進行、永続化は作っていない。
+presentation contextはSimulationの外のままで、結合keyはparticipant idだけ。
 
-# BoutScene Ownership Cleanup
+# HUD View Changes（`BoutHudView.ts`）
 
-- `PARTICIPANT_PRESENTATION` は、`id`、`controller`、`color`（暫定の力士色）、`label`（debug用の `PLAYER` / `CPU`）だけにした
-  - `side` と `name` は削除した
-  - 東西・四股名の正本は `PROTOTYPE_HUD_FIXTURE` だけになり、二重の所有がなくなった
-- 結果の文言: `outcomeLabel` を削除し、`formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE)` を使う
-  - 表示位置と、勝敗が決まったときだけ出る挙動は変えていない
-  - 文言は `EAST PLAYER Win` / `Draw Rematch` から `東 朝翠龍 勝ち` / `同体 取り直し` に変わった
-- `create`: Product土俵の後に、`assertHudContextMatches` → `createBoutHud(this, PROTOTYPE_HUD_FIXTURE)` を呼ぶ
+- 外枠のzoneは変更なし: East (24, 24, 440, 150)、West (1456, 24, 440, 150)、Day chip (810, 10, 300, 44)
+- 方位の表示: 38pxの正方形の「東 / 西」から、**単語を略さない差し色のpill** に変えた
+  - 高さ36、横の余白12、最小幅76、文字28px（生成り色）
+  - 幅は実際の文字幅から決める
+  - 番付との間隔は12px
+  - 西は鏡像（pillは右端、textは右寄せ）
+- Font: `Georgia, "Times New Roman", Times, serif`（system fontのみ。assetや依存の追加はない。Provisional）
+- 色、パネル、行の配置、文字サイズ（番付30→28、四股名48 bold→36、成績32、日目30）は、02Aから変更していない
 
-# HUD View Implementation
+## English Fit（Windows Georgiaで実測。PILで計測）
 
-`src/game/scenes/BoutHudView.ts`（新規）
+| 文字列 | 実測の幅 | 使える幅 | 結果 |
+|---|---|---|---|
+| `East`（28px） | 54px → pill 78px | — | 単語のまま |
+| `West`（28px） | 63px → pill 87px | — | 単語のまま |
+| `Maegashira 15 / 16`（30px） | 190 / 191px | 308 / 299px（pillを除く） | 推奨サイズのまま |
+| `Asuiryu`（48px bold） | 194px | 398px | 推奨サイズのまま |
+| `Toshinofuji`（48px bold） | 288px | 398px | 推奨サイズのまま |
+| `Day 3`（30px） | 76px | 300px | 余裕あり |
 
-- `createBoutHud(scene, context)` が、静的なHUD shellを作る
-- Phaserの `Graphics`（角丸のパネル、枠、差し色）と `Text` だけを使う。画像assetは使わない
-- depth 4（力士の影1・体2、debug overlay 3の上）
-- Simulation stateは読まない（静的。更新は不要）
-- 汎用のcomponent frameworkは作っていない
+E / Wに略す必要はなかった。
 
-## 初期のlayout（Provisional。spec §7.2と同じ）
+# Long-text Robustness
 
-| Zone | x, y, w, h |
-|---|---|
-| East identity block | 24, 24, 440, 150 |
-| West identity block | 1456, 24, 440, 150 |
-| Day chip | 810, 10, 300, 44 |
+`fitSingleLine`（推奨サイズ → 2px刻みで最小サイズまで縮める → 省略）は変更していない。英語用のtestを追加した。
 
-- いずれも、Action critical circle（中心(960, 540)、半径483px）の外にある
-- 識別ブロックの中
-  - 行の中心は、上端から32 / 84 / 128px
-  - 外側に差し色の帯（10px）、内側の余白16px
-  - 方位tagは38pxの角丸の正方形
-- 西は鏡像: 帯とtagは右端、textは右寄せ
+- 推奨サイズのまま: `Maegashira 15 / 16`、`Asuiryu`、`Toshinofuji`
+- 縮小
+  - `Wakatakakageumi` → 44
+  - `Kotoshoryunoyama` → 40
+  - 長い番付 `Komusubi (Sekiwake)` → 28
+- 省略
+  - `Kotoshoryunosukenoumi-Fujinohana` → 36pxで、収まる最長のprefix + `…`
+  - `Maegashira 15 East (Makuuchi Division)` → `Maegashira 15 Ea…`
+- surrogate pairを分けない場合と、省略記号だけになる場合
 
-## Visual Styling（Provisional）
+# Result Text
 
-| 要素 | 値 |
-|---|---|
-| パネル | 生成り `#F2E8D5`、不透明度0.93、角丸6、墨色の枠2px（α0.85） |
-| 文字 | 墨色 `#1F1A16`。方位tagの文字は生成り `#F6EEDF` |
-| 差し色 | 東: 藍 `#34507A`、西: 朱 `#A3452F`（彩度を抑えた） |
-| Font | system fontのみ: `"Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", "MS PMincho", serif`。新しいfont assetや依存は追加していない |
-| 文字の大きさ | 番付30（最小28）、四股名48 bold（最小36）、成績32、方位tag28、日目30 |
+挙動は同じ。
+- ongoing → 空
+- 勝ち → `East Asuiryu Wins` / `West Toshinofuji Wins`
+- 同時 → `Rematch`
 
-東西は、方位tagの文字・左右の位置・差し色の3つで示す（色だけに頼らない）。肖像の枠、操作中の印、staminaは置いていない。
-
-# Long-Text Behavior
-
-`fitSingleLine`
-1. 推奨サイズで収まればそのまま
-2. 収まらなければ2px刻みで縮め、最小サイズまでで最初に収まるサイズを使う
-3. 最小サイズでも収まらなければ、末尾を `…` で省略する（code point単位で、surrogate pairを分けない）
-
-- 実際の幅は、viewが `Phaser.Text` の `width` で測る
-- 適用している範囲
-  - 四股名: 幅398px、48 → 36
-  - 番付: 幅348px（方位tagの分を除く）、30 → 28
-- 成績と日目は短い数値なので、固定サイズにした
-- scrollやmarqueeはない
-
-# Prototype / Debug Text Cleanup
-
-| 要素 | debug OFF（Product表示） | debug ON（key `0`） |
-|---|---|---|
-| Dummy mode + 操作説明（1行にまとめた） | **非表示** | 左下 (24, 1030) |
-| engagement / `pair v` | 非表示（従来どおり） | 左下 (24, 986) |
-| 頭上の `PLAYER` / `CPU` label、phaseの文字列 | 非表示（従来どおり） | 表示 |
-| 接触円、向き、組みの線、境界線 | 非表示（従来どおり） | 表示 |
-| Product HUD | 表示 | 表示（隠さない） |
-| 結果の文言 | 勝敗が決まったら表示 | 同じ |
-
-- debug textは、左上のEast blockと重ならないように左下へ移した
-  - Action critical circleの外にある（下端の境界は y 1023。engagementの行は中心から約570px）
-- 1 / 2（Dummy mode）、R（restart）、0（debug）の機能はそのまま残した
-
-# Gameplay Preservation
-
-入力、移動、Push / Counter / Grip / Drive、Ring-out / Tokudawara、fixed step、Dummyの挙動、restartは未変更。
-- HUDは読み取り専用のpresentation
-- participantのspawn位置と東西の割り当ては変更していない
+結果画面の設計はしていない。
 
 # Tests
 
-新規 `src/game/presentation/boutHudPresentation.test.ts`（8件）
+`boutHudPresentation.test.ts` を英語のbaselineに更新した（9件）。
 
-- fixtureが2人で、participant idがBoutの参加者と一致する
-  - BoutSceneの `PROTOTYPE_SETUP` にある `wrestler-a` / `wrestler-b` もsourceで確認した
-- 東西が1人ずつで、正しく対応する（東 = `wrestler-a`）
-- 不一致のcontextを拒否する（同じside、同じid、未知のid、参加者数）
-- formatter: 方位、成績、日目、結果（勝ち / 取り直し / 進行中）
-- Phaser非依存であること。BoutTypesにHUDのmetadataの語がないこと
-- `fitSingleLine`: 推奨サイズのまま / 縮小 / 最小サイズ / 省略 / surrogate pair / 省略記号だけになる場合
-
-**回帰**
+- fixtureが2人で、participant idと東西の対応が正しい。BoutSceneのsetupと同じid
+- 不一致のcontextを拒否する
+- copy: `East` / `West`、`Day 3` / `Day 15`、数値の成績、勝ち（両側）/ 同時 / 進行中
+- **出荷されるHUDの言語の回帰**
+  - 実際のcopyの出力、fixtureの文字列、成績、結果の文言を集めた
+  - CJK / かなの文字がないことを確認した
+  - 02Aの日本語の文言（`東`、`西`、`前頭十五枚目`、`朝翠龍`、`日目`、`勝ち`、`取り直し` など）がないことを確認した
+  - repository全体のチェックではない。docsやcommentは対象外
+- architecture
+  - copyとpresentationのmoduleがPhaser非依存である
+  - `BoutTypes.ts` と `BoutSimulation.ts` に、HUDのmetadataの語（`rankLabel`、`BoutHud`、`day`）がない
+- text fit: 上記の英語のcaseと、従来のcase
 
 | 項目 | 結果 |
 |---|---|
-| `pnpm test` | **248 passed**（16 files） |
+| `pnpm test` | **249 passed**（16 files） |
 | `pnpm build` | PASS（chunkサイズの警告は以前からのもの） |
 | `tsc --noEmit` | PASS |
 | `git diff --check` | PASS |
-| 新しいdependency | なし（package / lockfileは未変更） |
+| 新しいdependency | なし |
+
+# Docs Sync
+
+- `docs/ACTION_HUD_PRODUCT_SPEC.md`（最小限）
+  - Status行: shellは実装済み、**初回releaseは英語のみ**、日本語は不要、英語で見た目を調整する
+  - §3.1の例を英語にした（`East / West`、`Maegashira 15`、`Asuiryu`、`2-0`、`Day 3`）
+  - §7.2の配置図、§7.3、§8の配置図のlabelを英語にした
+  - §9に「言語の方針」を追加した
+    - 意味のdata / locale解決済みの表示文字列 / 固定のUI文言を分けること
+    - copy境界のmodule
+    - 作らないもの（言語選択、catalog、i18n library、日本語pack、locale検出、CrazyGames SDK）
+  - §9のfontの記述をLatin system fontに更新した
+  - §14の「色だけで区別しない」を `East / West` に更新した
+  - §17のDeferredに、追加の配信言語、言語選択、locale連携、ローマ字化のruleを加えた
+- `docs/GAME_CONCEPT.md`: 確定事項に1行追加した
+  - 「初回releaseの表示言語は英語のみ。将来の多言語化ができる構造にしておく（追加の配信言語はDeferred）」
+- `docs/ARCHITECTURE.md`
+  - HUD shellの項目を02A / 02A1にした（英語、copyの境界、frameworkは無い）
+  - 結果の文言の説明を英語の文言に更新した
+
+# Prototype / Debug
+
+- 02Aから変更なし（debug OFFでは非表示、key `0` で左下に表示）
+- debugのtextはもともと英語
 
 # Browser Runtime Smoke
 
 **NOT RUN**（Phaserのcanvasを表示して操作する手段がない）。
 
-代わりにdev serverで、`/`、`main.ts`、`BoutScene.ts`、`BoutHudView.ts`、`boutHudPresentation.ts`、Product背景の2枚がHTTP 200で配信されることを確認した。
-
-未確認のもの:
-- HUDの実際の描画
-- 日本語fontの描画（Windowsでは游明朝の想定。fontがない環境では、serifのfallbackになるか、文字が表示できない可能性がある）
-- 操作、debugの切り替え、console error
+- dev serverで、`/`、`BoutScene.ts`、`BoutHudView.ts`、`boutHudPresentation.ts`、`boutHudCopy.ts` がHTTP 200
+- 配信されたmoduleに、英語のfixture（`Asuiryu`、`Maegashira 15`）が含まれていることを確認した
+- 描画の見た目、操作、debugの切り替え、console errorは、User確認で見ていただく必要がある
 
 # User Visual Check — REQUIRED
 
-`pnpm dev`
+`pnpm dev`（screenshotをお願いします）
 
-**debug OFF**
-1. 東の識別ブロックが読める
-2. 西の識別ブロックが読める
-3. 日目chipが読める
-4. 土俵と徳俵の攻防を隠していない
-5. 生成りのパネルがProduct arenaに合う
-6. 東西の差し色が、役に立つが派手すぎない
-7. 四股名が番付や成績より目立つ
-8. 力士の大きさは従来どおり
-9. Dummyや操作説明が消え、debugのPrototypeに見えない
-10. 動作が重くなっていない
+1. `East` / `West` のpillが自然に見える
+2. `Maegashira 15 / 16` が読める
+3. 四股名が収まっていて、最も目立つ
+4. `Day 3` の釣り合い
+5. 外枠の大きさ
+6. pillが番付を窮屈にしていない
+7. 英語の字体がarenaに合う
+8. 日本語のHUD textが残っていない
+9. Actionの見やすさは従来どおり
+10. 動作の重さは従来どおり
 
-**key `0`**
-- debug情報（左下のmode / 操作説明 / engagement、頭上のlabel / phase、図形）が出る
-- HUDは表示されたまま
-- gameplayは変わらない
-
-調整できる値（色、大きさ、位置）はすべてProvisional。
-
-# Docs
-
-`docs/ARCHITECTURE.md` を最小限で同期した（今回の変更で事実と異なる記述になったため）。
-- Product HUDの項目の「仕様のみ・未実装」を外した
-- 「HUD shell（ACTION-ART-02A）」の1項目を追加した（view model、fixture、描画、所有、debug textの扱い）
-- Ring-outの段落にあった結果の文言の説明（`EAST|WEST <name> Win`、PLAYER / CPUのfallback）を、HUD contextを使う現在の文言に更新した
+key `0` では、debug情報が出て、HUDは英語のまま表示され、gameplayは変わらないこと。
 
 # Changed Files
 
-- `src/game/presentation/boutHudPresentation.ts`（新規）
-- `src/game/presentation/boutHudPresentation.test.ts`（新規）
-- `src/game/scenes/BoutHudView.ts`（新規）
-- `src/game/scenes/BoutScene.ts`
+- `src/game/presentation/boutHudCopy.ts`（新規）
+- `src/game/presentation/boutHudPresentation.ts`
+- `src/game/presentation/boutHudPresentation.test.ts`
+- `src/game/scenes/BoutHudView.ts`
+- `src/game/scenes/BoutScene.ts`（copyを渡すだけ）
+- `docs/ACTION_HUD_PRODUCT_SPEC.md`
+- `docs/GAME_CONCEPT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
@@ -229,21 +216,20 @@ wrestlerのdatabase、番付のrule、場所の進行、永続化は作ってい
 
 Design Deviations: NONE
 
-補足（Provisionalな選択として報告するもの）：
-- 名前と番付の字体を明朝系のsystem fontにした（墨の文字という方向に合わせた）
-- 四股名はboldにした
-- 結果の文言を日本語にした（`東 朝翠龍 勝ち` / `同体 取り直し`）。結果画面の設計はしていない
+補足（Taskで予期されていた、英語に合わせた小さな変更）：
+- 方位のtagを、正方形から実測幅のpillに変えた
+- fontをGeorgia系のLatin serifにした
+- 外枠のzoneと階層は変更していない
 
 # Unexpected Scope（報告のみ）
 
-- 日本語fontのない環境（一部のLinuxなど）では、四股名や番付が表示できない可能性がある
-  - 本Taskでは新しいfont assetを追加しないので、未対応
-  - Productのfontの選定（licenseを含む）は、spec §9でDeferredとされている
-- 結果の文言（y = 110、64px）は、勝敗が決まった後に上の徳俵の付近へ重なる（以前と同じ位置）
+- 結果の文言（y = 110、64px、sans-serif）は、02Aと同じ位置と字体のまま
   - 結果の表示の設計はDeferredなので、変更していない
+- Georgiaがない環境では、Times New Roman / serifのfallbackになる
+  - 文字幅は実行時に測るので、fitの処理はfont差を吸収する
 
 # Git Delivery
 
-- Commit: `feat: add product bout hud shell`（task-ownedの6ファイルのみ）
+- Commit: `feat: switch product HUD to English baseline`（task-ownedの9ファイルのみ）
 - fetch → fast-forward safety確認 → push `origin/develop` → remote SHA確認 → clean tree確認
 - `main` は未変更

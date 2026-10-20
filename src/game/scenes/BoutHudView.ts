@@ -1,13 +1,12 @@
-// Product Bout HUD shell (ACTION-ART-02A, docs/ACTION_HUD_PRODUCT_SPEC.md §3 / §7). Presentation only:
-// East / West identity blocks (side tag, rank, name, current record) and the Day chip, drawn with simple
-// primitives from the pure HUD context. Reads no Simulation state. Layout and colors are Provisional
-// values for User Visual Check.
+// Product Bout HUD shell (ACTION-ART-02A / 02A1, docs/ACTION_HUD_PRODUCT_SPEC.md §3 / §7). Presentation
+// only: East / West identity blocks (side label, rank, name, current record) and the Day chip, drawn with
+// simple primitives from the pure HUD context and UI copy (English release baseline). Reads no Simulation
+// state. Layout and colors are Provisional values for User Visual Check.
 import Phaser from 'phaser'
+import { sideLabel, type BoutHudCopy } from '../presentation/boutHudCopy.ts'
 import {
   fitSingleLine,
-  formatDay,
   formatRecord,
-  formatSide,
   hudWrestlerBySide,
   type BoutHudContext,
   type BoutHudWrestler,
@@ -38,19 +37,23 @@ const PAPER_CSS = '#f6eedf'
 const BORDER_ALPHA = 0.85
 const SIDE_ACCENT: Record<BoutSide, number> = { east: 0x34507a, west: 0xa3452f }
 
-const FONT_FAMILY = '"Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", "MS PMincho", serif'
+// Latin system serif stack (no font asset); provisional until Product typography work.
+const FONT_FAMILY = 'Georgia, "Times New Roman", Times, serif'
 const CORNER = 6
 const BORDER = 2
 const ACCENT_BAND = 10
 const PADDING = 16
-const SIDE_TAG = 38
-const SIDE_TAG_GAP = 12
+// Side label pill: sized to the measured full word (East / West), at least SIDE_PILL_MIN_W wide.
+const SIDE_PILL_H = 36
+const SIDE_PILL_PAD_X = 12
+const SIDE_PILL_MIN_W = 76
+const SIDE_PILL_GAP = 12
 
 // Font sizes (logical px): preferred -> minimum before ellipsis (spec §14).
 const RANK_SIZE = { preferred: 30, min: 28 }
 const NAME_SIZE = { preferred: 48, min: 36 }
 const RECORD_SIZE = 32
-const SIDE_TAG_SIZE = 28
+const SIDE_LABEL_SIZE = 28
 const DAY_SIZE = 30
 
 // Row centers inside an identity block.
@@ -82,8 +85,8 @@ function setFitted(text: Phaser.GameObjects.Text, value: string, maxWidth: numbe
   text.setText(fitted.text)
 }
 
-// One identity block; West mirrors East (accent band and side tag on the outer edge, text aligned to it).
-function identityBlock(scene: Phaser.Scene, rect: Rect, wrestler: BoutHudWrestler): void {
+// One identity block; West mirrors East (accent band and side pill on the outer edge, text aligned to it).
+function identityBlock(scene: Phaser.Scene, rect: Rect, wrestler: BoutHudWrestler, copy: BoutHudCopy): void {
   const east = wrestler.side === 'east'
   const accent = SIDE_ACCENT[wrestler.side]
   const g = panel(scene, rect)
@@ -97,17 +100,16 @@ function identityBlock(scene: Phaser.Scene, rect: Rect, wrestler: BoutHudWrestle
   const originX = east ? 0 : 1
   const contentWidth = rect.w - ACCENT_BAND - 2 * PADDING
 
-  // Row 1: side tag (text, not color alone) + rank.
-  const tagX = east ? outer : outer - SIDE_TAG
+  // Row 1: side label pill (full word, so color is not the only cue) + rank.
+  const label = inkText(scene, SIDE_LABEL_SIZE, PAPER_CSS).setText(sideLabel(copy, wrestler.side)).setOrigin(0.5)
+  const pillW = Math.max(SIDE_PILL_MIN_W, Math.ceil(label.width) + 2 * SIDE_PILL_PAD_X)
+  const pillX = east ? outer : outer - pillW
   g.fillStyle(accent, 1)
-  g.fillRoundedRect(tagX, rect.y + ROW_TOP - SIDE_TAG / 2, SIDE_TAG, SIDE_TAG, 4)
-  inkText(scene, SIDE_TAG_SIZE, PAPER_CSS)
-    .setText(formatSide(wrestler.side))
-    .setOrigin(0.5)
-    .setPosition(tagX + SIDE_TAG / 2, rect.y + ROW_TOP)
+  g.fillRoundedRect(pillX, rect.y + ROW_TOP - SIDE_PILL_H / 2, pillW, SIDE_PILL_H, SIDE_PILL_H / 2)
+  label.setPosition(pillX + pillW / 2, rect.y + ROW_TOP)
   const rank = inkText(scene, RANK_SIZE.preferred).setOrigin(originX, 0.5)
-  setFitted(rank, wrestler.rankLabel, contentWidth - SIDE_TAG - SIDE_TAG_GAP, RANK_SIZE)
-  rank.setPosition(outer + inward * (SIDE_TAG + SIDE_TAG_GAP), rect.y + ROW_TOP)
+  setFitted(rank, wrestler.rankLabel, contentWidth - pillW - SIDE_PILL_GAP, RANK_SIZE)
+  rank.setPosition(outer + inward * (pillW + SIDE_PILL_GAP), rect.y + ROW_TOP)
 
   // Row 2: name, the dominant text.
   const name = inkText(scene, NAME_SIZE.preferred).setOrigin(originX, 0.5).setFontStyle('bold')
@@ -121,17 +123,17 @@ function identityBlock(scene: Phaser.Scene, rect: Rect, wrestler: BoutHudWrestle
     .setPosition(outer, rect.y + ROW_RECORD)
 }
 
-function dayChip(scene: Phaser.Scene, rect: Rect, day: number): void {
+function dayChip(scene: Phaser.Scene, rect: Rect, day: number, copy: BoutHudCopy): void {
   panel(scene, rect)
   inkText(scene, DAY_SIZE)
-    .setText(formatDay(day))
+    .setText(copy.formatDay(day))
     .setOrigin(0.5)
     .setPosition(rect.x + rect.w / 2, rect.y + rect.h / 2)
 }
 
 // Creates the static HUD shell. The context is validated against the bout participants by the caller.
-export function createBoutHud(scene: Phaser.Scene, context: BoutHudContext): void {
-  identityBlock(scene, EAST_BLOCK, hudWrestlerBySide(context, 'east'))
-  identityBlock(scene, WEST_BLOCK, hudWrestlerBySide(context, 'west'))
-  dayChip(scene, DAY_CHIP, context.day)
+export function createBoutHud(scene: Phaser.Scene, context: BoutHudContext, copy: BoutHudCopy): void {
+  identityBlock(scene, EAST_BLOCK, hudWrestlerBySide(context, 'east'), copy)
+  identityBlock(scene, WEST_BLOCK, hudWrestlerBySide(context, 'west'), copy)
+  dayChip(scene, DAY_CHIP, context.day, copy)
 }
