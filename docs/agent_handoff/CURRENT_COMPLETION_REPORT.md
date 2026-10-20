@@ -1,371 +1,234 @@
-Task-ID: ACTION-ART-01-BACKGROUND-SPEC
+Task-ID: ART-TOOL-01-DOHYO-COMPOSITOR
 Result: PASS
 Branch: develop
 Source-Baseline: 1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6
-Agent-Start-Head: dd8b5d5b49574cf483642c63d73e43df376faaad
+Agent-Start-Head: 117c158ef0726c697e3dbe573a4328d13bdd6739
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS（Specification only）。
+PASS（Technical）。Product Visual Checkは未了で、User確認が必要。
 
-- Product用の背景と土俵について、次の内容を、実装やasset生成の前に確定できる形で定義した
-  - 構図、解像度、Simulationとの厳密な幾何対応、layer構成、asset表、art brief、安全領域、responsiveな表示、形式と配置、作成手順、受け入れ基準、HUDとwrestlerへの引き継ぎ
-- Gameplay（土俵の半径、Ring-outの基準）、cameraの方式、Production sourceは変更しない
-- 論理解像度の変更は、後続の統合Taskでのpresentationの変更として扱える
-- BLOCKEDになる点はない
-- Userの決定が必要な事項は、推奨既定値とともに列挙した
-  - 特に、俵のどの線をRing-outの境界にするか（UD-A3）と、真上視点か（UD-A2）は、画像を作る前に決める必要がある
-
-Production Source / package / lockfileは未変更。Repository変更は本Reportのみ。
+- 決定的なDohyo Art Compositorを `tools/dohyo_art/` に実装した
+  - Python CLI、入力検証、arena正規化、厳密な円環tawara、shikiri、geometry guide、master / 1920出力、manifest
+- 実Product入力（`input.local/arena_base.png`、`input.local/tawara_source.png`）で実合成を行い、7出力を生成した
+- 同一入力・同一引数で2回実行し、manifestとPNG bytesが完全に一致した
+- Unit test 25件はすべてPASS
+- `src/`、package、lockfile、Phaserは未変更。User画像はcommitしていない（`*.local`でignoreされる）
 
 # Preflight
 
-- working tree clean / branch `develop` / local aheadなし（fetch後 `HEAD...origin/develop` = `0 2`）
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `1c5b033`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `1c5b033..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
-- Agent-Start-Head: FF後のHEAD `dd8b5d5`
-- 読んだもの: AGENTS.md、`package.json`、`src/main.ts`、`src/style.css`、`index.html`、`BoutScene.ts`、`DohyoView.ts`、`WrestlerView.ts`、`BoutTypes.ts`、`BoutSimulation.ts`、ARCHITECTURE.md、GAME_CONCEPT.md、VISUAL-01AのReview（`2b8d903`）
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 5`（local aheadなし）
+- Remote CURRENT_TASKを確認した
+  - Task-ID一致、Status READY、Target-Branch develop
+  - Source-Baseline `1c5b033`（`origin/develop`のancestor）、Handoff-Mode GITHUB
+- `1c5b033..origin/develop` の変更は `docs/agent_handoff/` 配下の2ファイルのみ → `merge --ff-only` 成功
+- Agent-Start-Head: FF後のHEAD `117c158`
+- 実入力2ファイルが存在し、読み込めることを確認した
+  - `arena_base.png`: 1672×941 RGB
+  - `tawara_source.png`: 2172×724 RGBA
 
-# 用語の区別
+# Scope / Changed Files
 
-- **Current Fact**: Current Sourceの事実
-- **Recommendation**: 本仕様の推奨
-- **User Decision (UD)**: 画像を作る前にUserが決める事項
-- **Deferred**: 後続Task
-
-# Current Rendering Facts（Current Fact）
-
-| 項目 | 値 |
+| File | 内容 |
 |---|---|
-| Phaserの論理size | 640×640（`main.ts`）、`Scale.FIT`、`CENTER_BOTH`。cameraは固定 |
-| page | `#app`はviewportいっぱい。背景色は`#1c1c22`（css）/ `#2b2b33`（Phaser） |
-| 土俵の半径（Simulation） | **2.275 m**（`PROTOTYPE_SETUP.arena.radius`）。実際の土俵の内径4.55 mの半分に相当する |
-| 描画の倍率 | `RING_FILL_RATIO = 0.9`、土俵の半径 = 320 × 0.9 = **288 px**、つまり**約126.6 px/m** |
-| 土俵の中心 | canvasの中心（320, 320） |
-| 体の半径 | 0.35 m = **約44 px**（直径約89 px） |
-| 初期位置 | (±0.7 m, 0) = 中心から±約89 px |
-| Ring-outの判定 | **中心基準**: `hypot(center) > 2.275 m`ならOUT。境界ちょうどはIN（ACTION-06A、Accepted） |
-| 現在の俵 | `DohyoView`が判定半径を**中心線**として描き、幅は`max(6, 0.09 m)`（約11 px）。蛇の目は外側へ+0.2 m、仕切り線は±0.35 m、長さ0.8 m |
-| UI / debug | 左上: mode行（12, 10）、debug時のengagement（12, 30）。上部中央（y = 40）: 結果text。debug時は頭上にlabelとphase text |
-| 力士 | 起動時に生成するGraphics textureの部品をContainerで回転（VISUAL-01A）。影は右下へ（+0.07R, +0.12R） |
-| asset | なし（`public/`もない） |
+| `tools/dohyo_art/compose_dohyo.py` | CLI + 合成ロジック（単一module） |
+| `tools/dohyo_art/tests/test_compose_dohyo.py` | `unittest`、synthetic fixture |
+| `tools/dohyo_art/requirements.txt` | `Pillow==11.3.0`、`numpy==2.0.2` |
+| `tools/dohyo_art/README.md` | 目的、構成、install、CLI、defaults、出力、iteration、fail-closed、tests |
+| `tools/dohyo_art/.gitignore` | `.venv/`、`__pycache__/` |
+| `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` | 本Report |
 
-640×640は暫定値であり、最終的な仕様ではない。
+Helper moduleは作っていない。`input.local/` と `output.local/` はrootの `*.local` でignoreされる。
 
-# Recommended Product Composition（Q1）— **16:9の横長**
+# Tool Architecture
 
-- CrazyGames / desktopブラウザの標準的な表示領域は横長なので、正方形では左右が黒帯になって無駄になる
-- 土俵を中央に置いて全体を見せ、左右の余白を将来のHUD（東西の力士の情報）と会場の雰囲気に使える
-- Actionの読みやすさに必要なのは、土俵の周囲（押し出された後に体が見える範囲）。横長にしても上下の余白は確保できる
-- mobileの縦画面は最終的な目標ではない（Deferred）
+`AI/Artist Sources -> Deterministic Geometry/Composition -> Review/Runtime Assets`
 
-# Logical vs Authored Resolution（Q2）
+- 処理の流れ: `compose()`（純粋にin-memory。`BuildResult` = images + manifest）→ `write_outputs()`（staging後に配置）→ `main()`（CLI）
+- 主要部品
+  - `Geometry`: master px、centerはcanvas center
+  - `TextureOptions`
+  - `validate_*`
+  - `normalize_arena`
+  - `prepare_tawara_strip`
+  - `make_seamless_tile`
+  - `resolve_repeat`
+  - `resample_tile`
+  - `render_tawara_ring`
+  - `render_shikiri`
+  - `build_guide`
+- Gameplay / Phaser / TypeScriptとの依存はない（testでimportを検査している）
 
-| 区分 | 推奨 |
-|---|---|
-| **Phaserの論理size（runtime）** | **1920×1080**（Scale.FITのまま）。presentationの変更として、後続の統合Taskで切り替える |
-| **実行時の画像** | 論理sizeと**1:1**の1920×1080。拡大縮小の補正を考えずに済み、座標をそのまま使える |
-| **masterの画像（作業解像度）** | **3840×2160（2倍）**。将来の高DPI化や大きな表示にも描き直さずに対応できる |
-| CSS / ブラウザでの表示 | FITで縮小・拡大する（ブラウザ側の仕事） |
+## RobloxRtsの参照範囲
 
-- 1280×720の論理sizeは軽いが、画像を後で1920へ描き直す危険がある。2倍のmasterから書き出せば、どちらにも対応できる
-- 論理sizeが変わるとtextの大きさや位置も変わる。これはpresentationだけの変更で、gameplayには影響しない
+`usuki-k/RobloxRts` の `tools/card_image/` は設計方針の参考にのみ使った。
+- 参考にした方針
+  - runtimeの外にtoolを置く
+  - sourceと決定的合成を分離する
+  - 明示的なCLI
+  - fail closed
+  - tool-localのrequirements
+  - READMEに正規のcommandを載せる
+  - focused tests
+- class、font、card chrome、Pillowのpin（9.5.0）はコピーしていない。Pillowのversionは本環境で検証した版を選んだ
 
-# Exact Dohyo Geometry Mapping（Q3、Q4）
+# CLI Contract
 
-**以下の数値はすべて、実行時の1920×1080での値。masterの値は×2。**
+```
+python tools/dohyo_art/compose_dohyo.py --arena-base PATH --tawara-source PATH --output-dir DIR
+  [--outer-radius 800] [--tawara-width 42] [--shikiri-offset-x 124]
+  [--shikiri-length 280] [--shikiri-width 24] [--protected-radius 1064]
+  [--participant-offset-x 246] [--repeat auto|N] [--trim-start 0.06]
+  [--trim-end 0.06] [--seam-crossfade 0.05] [--alpha-threshold 8]
+```
 
-| 項目 | 値 |
-|---|---|
-| 土俵の中心（Simulationの原点） | **(960, 540)** |
-| 判定半径（Simulationの2.275 m） | **400 px**（→ **175.82 px/m** = 400 / 2.275）。master: 中心(1920, 1080)、半径800 px |
-| 体の直径（0.7 m） | **約123 px**（master約246 px） |
-| 初期位置（±0.7 m） | (960 ± 123, 540) |
-| 仕切り線（推奨の参照） | x = 960 ± 62（±0.35 m）、y = 540 ± 70（長さ0.8 m） |
+- 成功時はexit 0で、出力pathと解決したrepeatを表示する
+- 入力・引数が不正な場合は `error:` を表示してexit 2。何も書き込まない
+- Master canvasは3840×2160に固定（CLIからは変えない。libraryの `Geometry` ではtest用に縮小できる）
 
-**Ring-outの境界をどの線にするか（UD-A3）— 推奨: 判定半径 = 俵の外縁**
-- 現在の描画（俵の中心線）では、俵に乗った状態でも中心がわずかに外へ出ると負けになり、「俵の上は内」という相撲の感覚と合わない
-- 内縁を判定半径にすると、俵の上がすべてOUTになり、さらに合わない
-- **外縁**にすると、「俵の上はIN、俵を越えて外の砂へ出たらOUT」という相撲の見た目と一致する。外縁は「明るい砂と俵」の境界なので、画像上でもいちばんくっきりした線になり、厳密に合わせやすい
-- 俵の幅は**0.12 m（約21 px）**で、外縁 = 400 px、内縁 = 約379 px
-- 見た目の土俵の内側（俵の内縁の内側）は、判定半径より少し小さく見えるが、gameplayの半径は変わらない（2.275 m）
-- これはpresentationの変更だけで、`DohyoView`の俵を内側へ寄せる。Ring-outの規則は変えない
+# Exact Default Geometry
 
-**中心基準との見た目の整合（Q4、Play Testで確認する危険）**
-- 中心基準なので、負けの瞬間には体の約半分（最大0.35 m ≈ 62 px）が外縁より外へ出ている
-- 外縁を境界にすると「完全に俵を越えた」と見えるので、早すぎる負けには見えにくい
-- 逆に「少し遅い」と感じられる可能性がある
-- 絵の側で「足が俵の外の砂に触れたら負け」を強く示唆する表現（足跡の線や、俵の外側の強調）は避ける。判定基準の見直しはACTION-06AでのDeferred（「代表的な絵ができたら見直す」）として、背景の統合後にPlay Testで確認する
-
-# Background Layer Model（Q5、Q7）
-
-1枚の絵ではなく、**会場と土俵の土台（描いた絵）+ 厳密な幾何の俵のoverlay**の2層を基本にする。
-
-1. **`arena_base`**（不透明、全画面）
-   - 描くもの: 会場、床、客席の暗がり、土俵の土台（台形の盛り土）と土の面、蛇の目の砂
-   - **俵と仕切り線は描かない**（または、上のoverlayで完全に隠れる程度のぼかした下地だけ）
-2. **`dohyo_ring_overlay`**（透過）
-   - 描くもの: 俵の輪、外縁の陰と内縁の陰、仕切り線
-   - **厳密な幾何**（中心 / 半径 / 幅）で作る。描いた絵の質感を、厳密なmaskで切り抜いたもの（Q25）
-3. **`arena_ambient`**（透過、任意）
-   - 描くもの: 周辺を暗くする効果、照明のむら
-   - **力士の下**に置く（力士を暗くしない）
-
-理由:
-- 土俵の位置ずれ（Simulationとの不一致）をoverlayだけで直せる。全体を描き直す必要がない
-- 会場違い（将来の別の場所）では`arena_base`を差し替えるだけで済み、overlayは使い回せる
-- 力士より手前に重ねるforeground（柱、屋根など）は置かない。俵、Ring-outの領域、力士を隠すため（Q9）
-- 実装も、画像3枚をdepth順に並べるだけで済む
-
-# Exact Background Asset List（Q6）
-
-すべて実行時は1920×1080。master（2倍、3840×2160）は別に保管する（Q20〜Q22）。
-
-| file（実行時） | 用途 | 寸法 | alpha | 位置合わせ | depth（runtime） | v1で必須か |
-|---|---|---|---|---|---|---|
-| `arena_base.webp` | 会場、床、土俵の土台、土、蛇の目 | 1920×1080 | 不透明 | 左上を(0, 0)に合わせ、土俵の中心が(960, 540) | 0（最背面） | **必須** |
-| `dohyo_ring_overlay.webp` | 俵（外縁 = 判定半径400 px、幅21 px）、仕切り線 | 1920×1080（中心が(960, 540)） | 透過 | 同上 | 0.5（baseの直上、力士の影より下） | **必須** |
-| `arena_ambient.webp` | 周辺を暗くする効果、照明のむら | 1920×1080 | 透過 | 同上 | 0.8（力士の影より下） | 任意 |
-
-- 力士の影（1）、体（2）、debug（3）、text / HUD（4以上）は、現在のdepthの順を継承する
-- overlayはfileの大きさを抑えるため、800×800程度（中心が(400, 400)）のcrop版にしてもよい
-  - その場合は「左上を(560, 140)に置く」ことを仕様として固定する（どちらにするかは統合Taskで決めればよく、絵の作成には影響しない）
-
-# Safe Areas（Q8、Q9）
-
-**HUDの安全領域**（背景は細部を抑え、明るさのむらを少なくして、暗めで均一な調子にする）:
-
-| 領域 | 矩形（x, y, w, h） | 将来の用途の想定 |
+| 項目 | Master | Runtime（1/2） |
 |---|---|---|
-| 左上 | (0, 0, 560, 200) | 東の力士の情報 |
-| 右上 | (1360, 0, 560, 200) | 西の力士の情報 |
-| 上中央 | (760, 0, 400, 110) | 取組の情報・題（使う場合） |
-| 左下 | (0, 920, 480, 160) | 補助の情報 |
-| 右下 | (1440, 920, 480, 160) | 補助の情報 |
+| Canvas | 3840×2160 | 1920×1080 |
+| Center | (1920, 1080) | (960, 540) |
+| Outer radius | 800 | 400 |
+| Inner radius | 758 | 379 |
+| Tawara width | 42 | 21 |
+| Shikiri center X | 1796 / 2044 | 898 / 1022 |
+| Shikiri center Y | 1080 | 540 |
+| Shikiri length（Y方向） / width（X方向） | 280 / 24 | 140 / 12 |
+| Protected radius（guideのみ） | 1064 | 532 |
+| Participant guide | 1920 ± 246 | 960 ± 123 |
 
-**gameplayの安全領域**（装飾で覆わない、細部も控えめにする）:
-- **保護する円**: 中心(960, 540)、半径**532 px**（土俵の400 px + Ring-outで外に出た体0.35 m + overshootの余裕約0.4 m ≒ 0.75 m ≒ 132 px）
-  - y = 8〜1072、x = 428〜1492の範囲に収まり、HUDの領域とは重ならない
-  - 上中央のHUD領域（y ≤ 110）は、土俵の上端（y = 140）より上で、保護する円の上端とわずかに重なる。上中央にHUDを置く場合は、y ≤ 100程度の細い帯に限る
-- 行司（将来、決着後に表示する）、FX、力士の影も、この円の中で表示する
-- この円の中には、背景の焼き込みによる人物や文字を置かない
+実出力で検証した値：
+- master overlayのring alpha bbox = `(1120, 280, 2720, 1880)`
+- 1920 overlay = `(560, 140, 1360, 940)`
+- outer + 0.5px より外側のalphaは0、inner − 0.5px より内側のalphaはshikiri以外0（master）
+- shikiriの矩形 `x 1784–1808 / 2032–2056、y 940–1220` はalpha 255
 
-# Officials / Crowd / Venue Scope（Q10、Q11）
+# Image Mapping Approach
 
-| 区分 | 内容 |
+1. **Arena正規化**
+   - 不透明であることと、16:9からの差が0.2%以内であることを確認する
+   - 実入力の差は −0.053%
+   - 小数のcrop box `(0, 0.25, 1672, 940.75)` でcenter cropし、Lanczosで3840×2160へresizeする（scaleは2.2967で縦横同一）
+   - それ以外の編集はしない。中央の摩耗模様にも手を加えない
+2. **Tawara準備**
+   - alpha > 8 のbboxでcropする
+     - 実入力では `(52, 206, 2122, 511)`
+     - alpha 1–8 の微小noiseが画像全体に散在していたため、閾値を設けた
+   - 両端を幅の6%ずつtrimし（124px）、縦方向を再cropする → strip 1822×263
+   - source alphaは保持する
+3. **Polar mapping**
+   - annulus内の各pixelについて、角度をu（2πで `repeat` 回）、半径をv（外縁 = stripの上端）に対応させる
+   - tileはwrap paddingを付けてpremultipliedでLanczos縮小し、ring上でほぼ1:1にしてからbilinearでsampleする
+   - 縁は、厳密なcenterと半径に対する解析的な1px coverage × texture alpha
+4. **Shikiri**: 解析的なpixel coverageによる厳密な矩形。色は暖色のivory `(238, 230, 211)`
+5. **Downscale**: BOX（2×2の正確な平均。PillowがRGBAをpremultipliedで処理する）
+6. **`--repeat auto`**: sourceのaspect比をring中央の円周上で保つ整数値。実入力では18
+
+# Seam Strategy
+
+- strip末尾の5%（91px）を先頭へ線形crossfadeする（premultiplied）
+- tileの周期は1731px
+- 既定のtrimでは、stripの両端がほぼ最初と最後のtieの外縁に来るため、seamはtie同士の重なりになる
+- repeatは整数なので、2πで正確に閉じる
+- 実出力のθ=0付近（ring右側）を拡大して確認し、目立つ継ぎ目はなかった（最終判断はUser）
+
+# Outputs（実Product入力。path: `tools/dohyo_art/output.local/`。git ignored）
+
+| File | Size / Mode |
 |---|---|
-| **Required（v1）** | 土俵の土台（真上から見た四角い盛り土。縁の斜面は細い帯として見える）、土の面、蛇の目、土台の周囲の床（板張りか土の地面）、四隅の控えの空間（塩の箱 / 水桶は小さな物として任意） |
-| **Optional（v1）** | 保護する円の外にいる、暗く簡略な客席のsilhouette、審判（勝負審判）の座っているsilhouette（静止）、房の色（四隅の色の手がかり） |
-| **Deferred** | 吊り屋根（真上視点では土俵を覆ってしまう）、動く観客、照明の演出、横断幕・文字、季節や会場の違い |
+| `arena_base_master.png` | 3840×2160 RGB |
+| `dohyo_ring_overlay_master.png` | 3840×2160 RGBA |
+| `geometry_guide_master.png` | 3840×2160 RGB |
+| `composite_master.png` | 3840×2160 RGB |
+| `dohyo_ring_overlay_1920.png` | 1920×1080 RGBA |
+| `composite_preview_1920.png` | 1920×1080 RGB |
+| `build_manifest.json` | schema 1、timestampなし、入力はbasenameとSHA-256 |
 
-- **行司は背景に描かない**（決着後に動く独立した存在になるため。Accepted）
-- 力士・行司・FXは常に独立したlayerにする
+入力のSHA-256：
+- arena `51a04bf5…903d`
+- tawara `bd7cd6a4…03bf`
 
-# Art Brief（Q12、Q16〜Q18）
+# Dependency Versions
 
-- **様式**: stylized、手描きの2D game art（painted）。写実ではないが、chibi（頭身の低いデフォルメ）でもない。形が明快で、質感はやわらかい筆致。輪郭は黒い太線ではなく、少し暗い同系色の細い線
-- **雰囲気**: 落ち着いた伝統的な和の空間。暖かい照明
-- **palette**:
-  - 土俵の土: やや灰みを帯びた砂色の土（肌の色と**明度で分ける**。後述）
-  - 俵: 乾いた藁の金色
-  - 蛇の目: 明るい細かい砂
-  - 会場の外周: 暗い漆塗りの木と、濃い藍の布
-- **contrast（重要）**:
-  - 力士の肌（暖かいベージュ）と土の色相が近いので、**土は肌より明度を1段下げるか彩度を落とす**（目安: 肌と土の明度差L\*で15以上）
-  - まわしの色（暫定は青と赤、将来は多色）は、土・俵の色（橙〜黄土）から離す
-  - 俵は外側の明るい砂と、内側の土の両方に対して見分けられるようにする（外縁に細い陰を入れる）
-  - HUDの領域は暗く均一な調子にする
-- **細部の密度**:
-  - 細部は土俵の外（会場）に集め、低いcontrastにする
-  - 土俵の周り（俵）は中程度
-  - **土俵の中央は、低い周波数の土の肌理（きめ）だけにする**（Actionと競合させない）
-  - 縮小表示（約50%）でも潰れない大きさの形にする
-- **土の跡**:
-  - 細かく低いcontrastの、刷毛で掃いたような質感だけにする
-  - 足跡や引きずった跡のような、**gameplayの出来事に見える模様は描かない**
-  - 仕切り線の周りにも、意味のある模様を描かない
+- Python 3.9.7（Anaconda base、Windows x64）。tool-local venv `tools/dohyo_art/.venv`（ignored）
+  - Anacondaのglobal numpyはDLL errorで壊れていたため、venvを使った
+- Pillow 11.3.0（Python 3.9をsupportする最後の系列）、NumPy 2.0.2（3.9をsupportする最後の系列）
+- Node `package.json` / `pnpm-lock.yaml` は未変更
 
-# Perspective（Q13）— 推奨: **真上からの正投影**（UD-A2）
+# Deterministic Evidence
 
-- Simulationは平面で、等方的な円（土俵、体の接触）。meter → pixelの変換も縦横で同じ
-- 斜めから見下ろすと土俵が楕円になり、円の接触判定や、体を回転させる表現と食い違う
-- 立体感は「真上から見て、縁の斜面がわずかに見える」程度にとどめる（盛り土の側面を細い帯として見せる、影で高さを示す）
-- 力士の部品の画像も、**真上から見て、陰影で少しだけ丸みを出す**形にする（3/4の斜め視点にはしない）。部品を回転させても違和感が出ない
-
-# Lighting / Shadows（Q14、Q15）
-
-- **光源は1つ**: 画面の**左上**、高い仰角（約60°）からの、やわらかい照明。現在の影の向き（右下）と一致する
-- 背景の陰影、力士、将来の行司は、すべてこの向きで描く
-- **力士の影は背景に描かない**。独立したlayer（現在と同じ）にし、柔らかい楕円で、不透明度0.25〜0.35、右下へ体の半径の約7〜12%ずらす
-
-# Responsive Strategy（Q19）
-
-- **v1: 16:9のFIT（letterbox）**。切り取りはしない。letterboxの色は会場の外周の暗い色に合わせる
-- 将来の切り取り（cover）に備えて、masterの`arena_base`は上下左右に約5%の余白（描き足し）を持たせておく（実行時の書き出しには含めない）
-- **切り取ってはいけない領域**: gameplayの保護円（半径532 px）とHUDの安全領域
-- **切り取ってよい領域**: 画面の外周（客席の暗がり）
-
-# Format / Paths / Master（Q20〜Q22）
-
-- **実行時**:
-  - WebP（不透明の`arena_base`はlossy、品質85前後。透過のoverlayはalpha付きの高品質lossyまたはlossless）
-  - 主要なブラウザはすべて対応している。PNGのfallbackは不要
-- **master**:
-  - 2倍（3840×2160）のlayerごとのPNG（lossless）
-  - 道具固有の形式（PSD / Krita / Aseprite）は、道具を決めた場合だけ追加する（**UD-A6**。道具は決めない）
-- **配置**:
-  - 実行時: **`public/assets/action/background/`**。Viteがそのまま配信し、Phaserのloaderで固定のURLで読める
-  - master: **`art-source/action/background/`**。実行時の配信対象（public）にもbundleにも含めない
-  - いずれのdirectoryも、統合Taskで明示的な許可が必要（AGENTS.md §5）
-- 大きなmasterファイルが増えたら、Git LFSの採用を検討する（Deferred / UD）
-- 実行時の書き出しとmasterの**両方**をrepositoryで管理する
-
-# Generation / Revision Workflow（Q23、Q24）
-
-全体の再生成を繰り返さないよう、承認を3段階に分ける。
-
-1. **構図の承認**:
-   - 本仕様の幾何（中心、半径、安全領域）を下敷きにした、低解像度のラフ（1枚）で、配置・明暗・会場の範囲を承認する
-2. **仕上げの承認**:
-   - 承認した構図に描き込み、2倍のmasterを作る
-   - 修正は「部分の修正」で行う（全体を作り直さない）
-3. **統合 / 切り取りの承認**:
-   - 実行時の書き出しを統合し、ブラウザで確認する（幾何の確認用overlayを使う）
-
-画像生成（AI）を使う場合に固定する条件:
-- 真上の正投影
-- **力士なし・行司なし・文字 / logo / HUDなし**
-- 土俵は画面の中央で、指定の半径にする
-- 安全領域を空けておく
-- 光は左上から
-
-画像生成では正確な幾何は保証されないので、**俵と仕切り線は生成画像に頼らず、厳密なoverlayとして別に作る**（Q25）。生成した`arena_base`に俵が描かれてしまった場合は、overlayで覆うか、手作業のmaskで消す。
-
-# Exact Geometry Strategy（Q25）
-
-**描いた土台 + 厳密なoverlay**:
-- overlayは、正確な円（中心(960, 540)、外縁400 px、幅21 px）と仕切り線の矩形を**maskとして作り**、その形に藁の質感（描いたものを貼る）を流し込んで作る
-- そのため、絵の質感を保ったまま幾何は1 pxの精度で一致する
-- 土台の土の円は、overlayの内縁より大きめに描いておけば、多少ずれても隠れる
-
-# Product Acceptance Checklist（Q26）
-
-- [ ] Product品質に見える（試作ではなく、そのまま出せる）
-- [ ] 後の力士の絵と同じ様式・視点・光で描ける（真上、左上の光）
-- [ ] 一目で土俵と分かる
-- [ ] **俵の外縁が、判定半径（中心(960, 540)、400 px）と1 px以内で一致する**（確認用overlayで検証）
-- [ ] 仕切り線が仕様の位置にある
-- [ ] contrast: 肌と土、まわしと土、俵と内外がはっきり見分けられる
-- [ ] 力士・行司・文字・HUD・影が描き込まれていない
-- [ ] HUDの安全領域が暗く均一で、保護円の中に装飾がない
-- [ ] FITで表示したときに欠けがない。将来の切り取り用の余白がmasterにある
-- [ ] 50%に縮小しても、細部が潰れて汚く見えない
-- [ ] 土の跡が、gameplayの出来事に見えない
-
-# Integration Handoff（Q27、Q28）
-
-統合Taskで必要な作業:
-- 論理sizeを1920×1080へ変更（`main.ts`）
-- 倍率を「土俵の半径 = 400 px」に合わせる（`RING_FILL_RATIO`の代わりに、仕様の値から計算する）
-- 3枚の画像のpreloadとdepth（Q6）
-- 現在の`DohyoView`（Graphics）は、debugのfallbackとして残すか、確認用overlayへ置き換える
-- textとUIの位置を新しい解像度に合わせて移す
-
-**幾何の確認用overlay**（developer用。既定は非表示で、debugの`0`と一緒に表示する）:
-- Simulationの中心（十字）
-- 判定半径の円（細い線）
-- 初期位置の円
-- 仕切り線の参照位置
-- 保護円とHUDの安全領域の枠
-
-ブラウザで、俵の外縁が判定の円と重なることを目で確認する。
-
-# HUD Handoff（Q29）
-
-HUDの設計が引き継ぐもの:
-- 16:9、論理1920×1080（masterは2倍）
-- 安全領域（上の表）
-- 土俵の外接矩形: (560, 140)〜(1360, 940)
-- 保護円: 半径532 px
-- 視線の優先順位: 土俵上の力士 > 結果表示 > 東西の情報 > 補助情報
-
-HUDの具体的な要素は、本仕様では決めない。
-
-# Wrestler Handoff（Q30）
-
-部品を組み合わせて作る力士の設計が引き継ぐもの:
-- 画面上の体の直径: **約123 px**（実行時。masterは約246 px）
-- 視点: 真上からの正投影 + 陰影による少しの丸み（3/4の視点にはしない）
-- 光: 左上、高い仰角、やわらかい
-- 影: 独立したlayer、右下へずらす、不透明度0.25〜0.35
-- 色: 肌と土の明度差を守る。まわしは土・俵の色相から離す
-- 動ける範囲: 保護円（半径532 px）の中
-- 回転は任意の角度（Simulationのfacing）。部品は回転しても破綻しない描き方にする
-
-# User Decisions Required（Q31）
-
-| # | 決定事項 | 推奨既定値 |
-|---|---|---|
-| UD-A1 | 主な画面比率と解像度 | 16:9。論理1920×1080、実行時の画像1920×1080（1:1）、masterは3840×2160 |
-| UD-A2 | 視点 | 真上からの正投影（縁と影で少し立体感を出す）。斜め見下ろしは、土俵が楕円になり判定と食い違うので採らない |
-| UD-A3 | Ring-outの境界線 | **判定半径 = 俵の外縁**（俵の上はIN）。俵の幅は0.12 m |
-| UD-A4 | 会場の豊かさ | Required: 土台、床、四隅。Optional: 保護円の外の暗い客席と審判のsilhouette。屋根や動く観客はDeferred |
-| UD-A5 | 客席と審判を背景に描き込むか | 描き込む（静止した暗いsilhouetteとして、保護円の外に）。行司は描かない |
-| UD-A6 | master / 道具 | 書き出し + 2倍のlayer PNGのmasterを両方管理する。道具固有の形式は、道具を決めた時に追加する |
-| UD-A7 | 背景の作り手 | 画像生成（AI）か、artist / 手描きか。どちらでも本仕様で作れる。推奨は、構図ラフの承認を先に行うこと |
-
-# Deferred
-
-- mobile / 縦画面
-- 屋根、動く観客、照明の演出
-- 会場の違い
-- Git LFS
-- 道具の選定
-- 中心基準のRing-outの見直し（統合後のPlay Test）
-- HUDの具体的な要素
-- 力士の部品の仕様
-- 行司の素材
-
-# Next Product-art Task Sequence（Q32）
-
-1. **ACTION-ART-01 Spec Review / User Decisions**（本Report）
-2. **ACTION-ART-01A** 背景の構図ラフ → 承認 → 仕上げ（2倍のmaster）→ 承認（User visual approval REQUIRED）
-3. **ACTION-ART-01B** 実行時の書き出し（3 layer）と統合（解像度の変更、倍率、depth、確認用overlay）→ ブラウザで確認（User visual check REQUIRED）
-4. ACTION-ART-02 HUDの仕様 → 作成 / 統合
-5. ACTION-ART-03 力士の部品の仕様 → 作成 / 統合
-
-HUDや力士の作成を背景のTaskに混ぜない。
-
-# Design Deviations
-
-なし（Specificationのみ）。
-
-# Unexpected Scope
-
-なし。
-
-所見:
-- 実際の土俵の内径の半分（2.275 m）がSimulationの判定半径と一致しているが、相撲の「俵の上はIN」と中心基準の組み合わせでは、境界線の選び方で見た目の整合が変わる（UD-A3）
-- 現在の`DohyoView`の俵（中心線）は、この推奨とは異なる。統合Taskでpresentationだけを直す
+- 実入力で、同じ引数のまま別の出力dirへ2回実行した
+  - `build_manifest.json` はbyte単位で一致（`cmp`）
+  - PNG 6ファイルはすべてsha256が一致
+- manifestには、各出力のdecoded pixelのSHA-256を記録している（例: composite_preview_1920 `61d6e1f7…dc93f`）
+- 乱数、timestamp、fontは使っていない。guideは文字を描かず、色の凡例をREADMEに記載した
+- Unit testでも2回のcomposeでpixel hashとmanifest textが一致することを確認した
 
 # Verification
 
-- Q1〜Q32に回答済み。BLOCKEDになる点はない
-- Current Sourceを直接確認した（上記の数値）
-- Current Fact / Recommendation / User Decision / Deferredを分けて記載
-- asset表と、幾何の対応の節を含む
-- Production Source / package / lockfileは未変更
-- Repository変更は`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`のみ
-- `git diff --check`: PASS（commit前に実行）
-- `pnpm test` / `pnpm build`: 不要（Source変更なし）。実行していない
+- `python -m unittest discover -s tools/dohyo_art/tests -v` → **Ran 25 tests, OK**（約17秒）
+  - 合成の成功、出力とsize（master/preview、full sizeのCLI smoke）
+  - ring center と radius の厳密さ（bboxと左右上下の対称性）
+  - outer の外と inner の内が透明であること、annulusが不透明であること
+  - shikiriの厳密な位置と色、alphaの保持、padding cropとtrim、seamのwrap連続性
+  - 失敗すべきケース
+    - alphaが空、alphaなし、縦長のsource
+    - aspectの大きなずれ、透明なarena、不正なgeometryとtexture option
+    - CLIのfail-closed（5ケースで出力なし）、入力の上書き拒否
+  - 決定性、manifestの内容、stdlib / numpy / PIL以外をimportしないこと
+- CLI smoke: synthetic入力（1672×941）でfull sizeを確認し、実入力でも実行した
+- READMEのcommandを検証した: `pip install -r requirements.txt`、合成command、test command
+- `git diff --cached --check`: 問題なし
+- `src/`、`package.json`、`pnpm-lock.yaml` の変更なし。stagedは `tools/dohyo_art/` の5ファイルと本Reportのみ
+- `input.local/`、`output.local/`、`.venv/` はignoreされていることを `git check-ignore` で確認した
+- `pnpm test` / `pnpm build`: 対象外（TS/Nodeは未変更）
+
+# Acceptance Criteria
+
+- Python CLI / 入力検証 / 決定的な正規化 / 厳密な円環 / polar mapping / shikiri / guide / master / 1920 / manifest / tests / README / requirements: すべて満たした
+- 実Product入力での実合成: 実施済み
+- Product visual acceptance: **未了（User Gate）**
+
+# Design Deviations
+
+Design Deviations: NONE
+
+補足（Taskの範囲内で選んだ細部）：
+- tawaraのbbox用に `--alpha-threshold`（既定8）を追加した。実sourceのnoise対策で、Product semanticsへの影響はない
+- `--protected-radius` と `--participant-offset-x` はguide専用のoption
+- trimは「alpha crop後の幅に対する割合」で指定する。source寸法を仮定しないため
+- 1920への縮小はLanczosではなくBOX。2×の厳密な面積平均で、shikiriの縁にringingを出さないため
+
+# Unexpected Scope（報告のみ・未修正）
+
+- **Arena画像と厳密geometryの位置関係（Visual）**
+  - 採用済みarena内の石枠（正方形の土俵上面）は、中心がcanvas centerよりやや上にある（1920空間で目視約 y≈500）
+  - そのため、ring（y 140–940）の下端が石枠の下辺や下側の徳俵付近の意匠と重なり、上端は石枠の上辺に近い
+  - Geometryは仕様どおりで、arenaの編集はTask範囲外。User visual checkで判断が必要
+    - 背景を上下に合わせるか、ringと石枠の関係を許容するか
+- Anaconda base環境のglobal numpy（1.20.3）がDLL errorでimportできない。tool-local venvで回避しており、Repositoryへの影響はない
+
+# Known Untested Items
+
+- 他のOSやPython versionでのpixel一致は確認していない（決定性の保証は、検証したtoolchainの範囲に限る）
+- tawaraの見た目（repeat、trim、seam、ringに沿った陰影の向き）はUser visual checkによる
 
 # User Play Test
 
-NOT REQUIRED（Specification）。User visual approvalは、後続の背景作成Task（01A）でREQUIRED。
+- Gameplay Play Test: **Not Required**（runtimeは未変更）
+- **Product Visual Check: REQUIRED**
+  - 確認するもの: `tools/dohyo_art/output.local/composite_preview_1920.png`（1920×1080）。必要に応じて `composite_master.png` と `geometry_guide_master.png`
+  - 調整できる項目: `--repeat`、`--trim-start` / `--trim-end`、`--seam-crossfade`、（geometryを変える場合）`--tawara-width`
 
-# Git delivery
+# Git Delivery
 
-Investigation-only Report Commit Exceptionを適用。本Reportだけをstageし、`docs(agent): specify product bout background`としてcommitして`origin/develop`へpushする（SHAはGitHubで確認）。
+- Commit: `tools: add deterministic dohyo art compositor`（Task-owned 6ファイルのみ）
+- fetch → fast-forward safety確認 → push `origin/develop` → remote SHA確認 → clean tree確認
+- `main` は未変更
