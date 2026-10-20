@@ -102,14 +102,35 @@ class CompositionTests(ComposeTestBase):
                 cd.OUTPUT_COMPOSITE_MASTER,
                 cd.OUTPUT_OVERLAY_1920,
                 cd.OUTPUT_PREVIEW_1920,
+                cd.OUTPUT_ARENA_1920,
             },
         )
         for name in (cd.OUTPUT_ARENA_MASTER, cd.OUTPUT_OVERLAY_MASTER, cd.OUTPUT_GUIDE_MASTER, cd.OUTPUT_COMPOSITE_MASTER):
             self.assertEqual(result.images[name].size, (960, 540), name)
-        for name in (cd.OUTPUT_OVERLAY_1920, cd.OUTPUT_PREVIEW_1920):
+        for name in (cd.OUTPUT_OVERLAY_1920, cd.OUTPUT_PREVIEW_1920, cd.OUTPUT_ARENA_1920):
             self.assertEqual(result.images[name].size, (480, 270), name)
         self.assertEqual(result.images[cd.OUTPUT_OVERLAY_MASTER].mode, "RGBA")
         self.assertEqual(result.images[cd.OUTPUT_OVERLAY_1920].mode, "RGBA")
+        self.assertEqual(result.images[cd.OUTPUT_ARENA_1920].mode, "RGB")
+
+    def test_runtime_arena_is_exact_2x_box_downscale_of_master(self):
+        for alignment in (cd.ArenaAlignment(), cd.ArenaAlignment(1.15, 6, -35)):
+            result = cd.compose(self.arena, self.tawara, SMALL, TEX, alignment)
+            master = np.asarray(result.images[cd.OUTPUT_ARENA_MASTER], dtype=np.float64)
+            small = np.asarray(result.images[cd.OUTPUT_ARENA_1920])
+            # BOX 2x = mean of each 2x2 block, rounded
+            blocks = master.reshape(270, 2, 480, 2, 3).mean(axis=(1, 3))
+            self.assertLessEqual(int(np.abs(np.floor(blocks + 0.5) - small).max()), 1)
+            expected = result.images[cd.OUTPUT_ARENA_MASTER].resize((480, 270), Image.Resampling.BOX)
+            self.assertEqual(cd.pixel_sha256(result.images[cd.OUTPUT_ARENA_1920]), cd.pixel_sha256(expected))
+            again = cd.compose(self.arena, self.tawara, SMALL, TEX, alignment)
+            self.assertEqual(
+                cd.pixel_sha256(again.images[cd.OUTPUT_ARENA_1920]), cd.pixel_sha256(result.images[cd.OUTPUT_ARENA_1920])
+            )
+            entry = {o["file"]: o for o in result.manifest["outputs"]}[cd.OUTPUT_ARENA_1920]
+            self.assertEqual(entry["size"], [480, 270])
+            self.assertEqual(entry["mode"], "RGB")
+            self.assertEqual(entry["pixel_sha256"], cd.pixel_sha256(result.images[cd.OUTPUT_ARENA_1920]))
 
     def test_ring_center_and_radius_are_exact(self):
         g = SMALL
@@ -491,6 +512,7 @@ class CliTests(unittest.TestCase):
             cd.OUTPUT_COMPOSITE_MASTER: (3840, 2160),
             cd.OUTPUT_OVERLAY_1920: (1920, 1080),
             cd.OUTPUT_PREVIEW_1920: (1920, 1080),
+            cd.OUTPUT_ARENA_1920: (1920, 1080),
         }
         self.assertEqual(sorted(p.name for p in out.iterdir()), sorted(list(expected) + [cd.OUTPUT_MANIFEST]))
         for name, size in expected.items():

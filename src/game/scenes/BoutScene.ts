@@ -6,7 +6,8 @@ import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
-import { drawArenaBoundaryDebug, drawDohyo } from './DohyoView.ts'
+import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
+import { addProductDohyo, drawArenaBoundaryDebug, preloadProductDohyo } from './DohyoView.ts'
 import { WrestlerView } from './WrestlerView.ts'
 import type {
   BoutEngagement,
@@ -53,9 +54,6 @@ const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
   { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER', side: 'EAST' },
   { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU', side: 'WEST' },
 ]
-
-// Provisional presentation values.
-const RING_FILL_RATIO = 0.9 // ring radius as a fraction of half the canvas
 
 // Depths above the wrestler bodies (see WrestlerView): debug overlays, then texts.
 const DEBUG_OVERLAY_DEPTH = 3
@@ -152,6 +150,10 @@ export class BoutScene extends Phaser.Scene {
     super('BoutScene')
   }
 
+  preload(): void {
+    preloadProductDohyo(this)
+  }
+
   create(): void {
     this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
     this.accumulator = new FixedStepAccumulator({
@@ -183,12 +185,13 @@ export class BoutScene extends Phaser.Scene {
 
     const snapshot = this.simulation.getSnapshot()
 
-    // Presentation transform: simulation meters -> canvas pixels (scale + translate).
-    this.origin = { x: this.scale.width / 2, y: this.scale.height / 2 }
-    this.pixelsPerMeter =
-      (Math.min(this.scale.width, this.scale.height) / 2 * RING_FILL_RATIO) / snapshot.arena.radius
+    // Presentation transform: simulation meters -> Product art pixels (scale + translate). The
+    // logical canvas is the 1920x1080 art space, so the Simulation origin is the art ring center and the
+    // Simulation radius lands on the art ring radius.
+    this.origin = { x: PRODUCT_ART_CENTER.x, y: PRODUCT_ART_CENTER.y }
+    this.pixelsPerMeter = productPixelsPerMeter(snapshot.arena)
 
-    drawDohyo(this, this.origin, this.pixelsPerMeter, snapshot.arena)
+    addProductDohyo(this, this.origin)
     this.boundaryLine = drawArenaBoundaryDebug(this, this.origin, this.pixelsPerMeter, snapshot.arena).setDepth(DEBUG_OVERLAY_DEPTH)
 
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -198,20 +201,20 @@ export class BoutScene extends Phaser.Scene {
       const body = this.add.circle(0, 0, bodyPixels).setStrokeStyle(2, style.color).setDepth(DEBUG_OVERLAY_DEPTH)
       const facingMarker = this.add.circle(0, 0, bodyPixels * 0.2, 0xffffff).setDepth(DEBUG_OVERLAY_DEPTH)
       const label = this.add
-        .text(0, 0, style.label, { fontFamily: 'sans-serif', fontSize: '18px', color: '#ffffff' })
+        .text(0, 0, style.label, { fontFamily: 'sans-serif', fontSize: '32px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 })
         .setOrigin(0.5)
         .setDepth(TEXT_DEPTH)
       const phaseText = this.add
-        .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '14px', color: '#ffe08a' })
+        .text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffe08a', stroke: '#000000', strokeThickness: 4 })
         .setOrigin(0.5)
         .setDepth(TEXT_DEPTH)
       this.views.set(style.id, { wrestler, body, facingMarker, label, phaseText })
     }
     this.grappleLine = this.add.graphics().setDepth(DEBUG_OVERLAY_DEPTH)
-    this.modeText = this.add.text(12, 10, '', { fontFamily: 'sans-serif', fontSize: '14px', color: '#ffffff' }).setDepth(TEXT_DEPTH)
-    this.engagementText = this.add.text(12, 30, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' }).setDepth(TEXT_DEPTH)
+    this.modeText = this.add.text(24, 20, '', { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
+    this.engagementText = this.add.text(24, 60, '', { fontFamily: 'sans-serif', fontSize: '30px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
     this.resultText = this.add
-      .text(this.scale.width / 2, 40, '', { fontFamily: 'sans-serif', fontSize: '32px', color: '#ffffff', stroke: '#000000', strokeThickness: 5 })
+      .text(this.scale.width / 2, 110, '', { fontFamily: 'sans-serif', fontSize: '64px', color: '#ffffff', stroke: '#000000', strokeThickness: 8 })
       .setOrigin(0.5, 0)
       .setDepth(TEXT_DEPTH)
     this.setDummyMode('stationary')
@@ -342,7 +345,7 @@ export class BoutScene extends Phaser.Scene {
         pos.x + Math.cos(participant.facing) * bodyPixels * 0.8,
         pos.y + Math.sin(participant.facing) * bodyPixels * 0.8,
       )
-      view.label.setPosition(pos.x, pos.y - bodyPixels - 18)
+      view.label.setPosition(pos.x, pos.y - bodyPixels - 30)
       const opponent = snapshot.participants.find((q) => q.id !== participant.id)
       if (opponent) {
         const visual = resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving)
@@ -350,7 +353,7 @@ export class BoutScene extends Phaser.Scene {
       }
       const label = phaseLabel(participant.action, participant.posture)
       view.phaseText.setText(label !== '' || !opponent ? label : grappleLabel(participant, opponent, snapshot.engagement))
-      view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 38)
+      view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 66)
     }
   }
 }

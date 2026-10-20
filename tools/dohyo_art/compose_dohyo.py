@@ -26,7 +26,7 @@ from PIL import Image
 
 TOOL_NAME = "sumosim-dohyo-art"
 TOOL_VERSION = "1.0.0"
-MANIFEST_SCHEMA = 3
+MANIFEST_SCHEMA = 4
 
 # Product art space (accepted). The CLI always renders this master size.
 MASTER_SIZE = (3840, 2160)
@@ -53,6 +53,7 @@ OUTPUT_GUIDE_MASTER = "geometry_guide_master.png"
 OUTPUT_COMPOSITE_MASTER = "composite_master.png"
 OUTPUT_OVERLAY_1920 = "dohyo_ring_overlay_1920.png"
 OUTPUT_PREVIEW_1920 = "composite_preview_1920.png"
+OUTPUT_ARENA_1920 = "arena_base_1920.png"  # runtime base layer (under the 1920 overlay)
 OUTPUT_MANIFEST = "build_manifest.json"
 
 # Geometry guide colors (developer reference only).
@@ -749,6 +750,7 @@ def compose(
     preview_size = geometry.preview_size
     overlay_small = overlay.resize(preview_size, Image.Resampling.BOX)
     preview = composite.resize(preview_size, Image.Resampling.BOX)
+    arena_small = arena.resize(preview_size, Image.Resampling.BOX)
 
     images = {
         OUTPUT_ARENA_MASTER: arena,
@@ -757,6 +759,7 @@ def compose(
         OUTPUT_COMPOSITE_MASTER: composite,
         OUTPUT_OVERLAY_1920: overlay_small,
         OUTPUT_PREVIEW_1920: preview,
+        OUTPUT_ARENA_1920: arena_small,
     }
 
     texture_info.update(

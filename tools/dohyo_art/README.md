@@ -16,8 +16,25 @@ produce the same decoded pixels and the same `build_manifest.json`.
 
 None. This tool is not imported by the game, Phaser, or any TypeScript code,
 and does not change gameplay geometry or rules. It only *draws* the accepted
-geometry (below) so Product art matches it. Integrating outputs into the
-runtime is a separate Task.
+geometry (below) so Product art matches it.
+
+The runtime uses two outputs of the accepted Product run (Candidate C) as
+separate layers, copied unchanged into `public/assets/action/background/`:
+`arena_base_1920.png` (base) and `dohyo_ring_overlay_1920.png` (overlay on
+top). Regenerate them with the canonical Candidate C command below and copy
+again; never edit the runtime copies by hand:
+
+```bash
+PY tools/dohyo_art/compose_dohyo.py \
+  --arena-base tools/dohyo_art/input.local/arena_base.png \
+  --tawara-source tools/dohyo_art/input.local/tawara_source.png \
+  --output-dir tools/dohyo_art/output-product-c.local \
+  --arena-scale 1.0952 --arena-offset-x 5.48 --arena-offset-y 95.28 \
+  --tokudawara-depth 42 --tokudawara-half-angle-deg 9
+```
+
+The game maps Simulation meters onto this art with the ring center at
+(960, 540) and the Simulation radius on the 400 px art radius.
 
 Product source images are **not** bundled with the tool. They are passed by
 file path. The canonical local location is `tools/dohyo_art/input.local/`,
@@ -93,7 +110,8 @@ arena source needs its own measurement. Full option list: `PY tools/dohyo_art/co
 | `composite_master.png` | exact alpha composite `arena_base_master + dohyo_ring_overlay_master` |
 | `dohyo_ring_overlay_1920.png` | overlay downscaled to 1920×1080 (BOX = exact 2×2 average, lossless PNG) |
 | `composite_preview_1920.png` | composite at 1920×1080 for User review |
-| `build_manifest.json` | deterministic metadata (schema 3, no timestamps): input basenames + SHA-256, normalization, `arena_alignment`, geometry, `tokudawara`, texture parameters, decoded-pixel SHA-256 of each output |
+| `arena_base_1920.png` | `arena_base_master.png` downscaled to 1920×1080 RGB (BOX = exact 2×2 average); the runtime base layer under `dohyo_ring_overlay_1920.png` |
+| `build_manifest.json` | deterministic metadata (schema 4, no timestamps): input basenames + SHA-256, normalization, `arena_alignment`, geometry, `tokudawara`, texture parameters, decoded-pixel SHA-256 of each output |
 
 ## How it works
 

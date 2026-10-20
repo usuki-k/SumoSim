@@ -1,22 +1,34 @@
-// Provisional dohyo readability pass (VISUAL-01A, Tokudawara TOKUDAWARA-01A). Presentation only: the
-// tawara is drawn exactly on the simulation ring-out boundary (the circle, shifted outward by the
-// Tokudawara depth inside the four cardinal windows). Graphics only; not final arena art.
+// Product dohyo presentation (ACTION-ART-01B). The visible dohyo is the accepted Product art from
+// tools/dohyo_art (Candidate C): the painted arena base plus the exact tawara / Tokudawara overlay, both
+// 1920x1080 and drawn 1:1 at the art center. Presentation only; the Simulation Snapshot stays the
+// gameplay geometry source of truth, and the debug boundary below draws that geometry over the art.
 import Phaser from 'phaser'
 import type { ArenaSetup, Vec2 } from '../sumo/BoutTypes.ts'
-import { allowedArenaRadius } from '../sumo/ringOut.ts'
 
-const BACKGROUND = 0x17171d
-const SAND = 0xd9c79d // janome: light sand band just outside the ring
-const CLAY_OUTER = 0xbf9b62
-const CLAY_INNER = 0xcdab72
-const CLAY_CENTER = 0xd6b67e
-const TAWARA = 0x8f6b3a
-const TAWARA_MARK = 0x5f4423
-const SHIKIRI = 0xf4f0e6
-const DEBUG_BOUNDARY = 0xff3355
+const PRODUCT_ARENA_BASE_KEY = 'product-arena-base'
+const PRODUCT_DOHYO_OVERLAY_KEY = 'product-dohyo-overlay'
+const ASSET_DIR = `${import.meta.env.BASE_URL}assets/action/background/`
+
+// Below the wrestler shadow (1) and body (2) depths.
+const PRODUCT_ARENA_BASE_DEPTH = 0
+const PRODUCT_DOHYO_OVERLAY_DEPTH = 0.5
+
+const DEBUG_BOUNDARY = 0xff00ff // high contrast against clay and straw
+const DEBUG_BOUNDARY_WIDTH = 3
 
 // Drawing resolution of the boundary arcs (presentation only; window edges are exact vertices).
-const ARC_STEP = Math.PI / 360
+const ARC_STEP = Math.PI / 720
+
+export function preloadProductDohyo(scene: Phaser.Scene): void {
+  scene.load.image(PRODUCT_ARENA_BASE_KEY, `${ASSET_DIR}arena_base_1920.png`)
+  scene.load.image(PRODUCT_DOHYO_OVERLAY_KEY, `${ASSET_DIR}dohyo_ring_overlay_1920.png`)
+}
+
+// Places both Product layers with their centers on the art center (the Simulation origin).
+export function addProductDohyo(scene: Phaser.Scene, artCenter: Vec2): void {
+  scene.add.image(artCenter.x, artCenter.y, PRODUCT_ARENA_BASE_KEY).setOrigin(0.5).setDepth(PRODUCT_ARENA_BASE_DEPTH)
+  scene.add.image(artCenter.x, artCenter.y, PRODUCT_DOHYO_OVERLAY_KEY).setOrigin(0.5).setDepth(PRODUCT_DOHYO_OVERLAY_DEPTH)
+}
 
 function arcPoints(radius: number, from: number, to: number, out: Vec2[]): void {
   const steps = Math.max(1, Math.ceil((to - from) / ARC_STEP))
@@ -43,54 +55,14 @@ export function arenaBoundaryOutline(arena: ArenaSetup): Vec2[] {
   return points
 }
 
-function toCanvas(points: readonly Vec2[], center: Vec2, pixelsPerMeter: number): Phaser.Math.Vector2[] {
-  return points.map((p) => new Phaser.Math.Vector2(center.x + p.x * pixelsPerMeter, center.y + p.y * pixelsPerMeter))
-}
-
-export function drawDohyo(scene: Phaser.Scene, center: Vec2, pixelsPerMeter: number, arena: ArenaSetup): void {
-  const ring = arena.radius * pixelsPerMeter
-  const outline = toCanvas(arenaBoundaryOutline(arena), center, pixelsPerMeter)
-  const g = scene.add.graphics()
-  g.fillStyle(BACKGROUND, 1)
-  g.fillRect(0, 0, scene.scale.width, scene.scale.height)
-
-  g.fillStyle(SAND, 1)
-  g.fillCircle(center.x, center.y, ring + 0.2 * pixelsPerMeter)
-
-  g.fillStyle(CLAY_OUTER, 1)
-  g.fillPoints(outline, true)
-  g.fillStyle(CLAY_INNER, 1)
-  g.fillCircle(center.x, center.y, ring * 0.82)
-  g.fillStyle(CLAY_CENTER, 1)
-  g.fillCircle(center.x, center.y, ring * 0.55)
-
-  // Tawara: thick rope centred on the ring-out boundary, with segment marks.
-  const ropeWidth = Math.max(6, 0.09 * pixelsPerMeter)
-  g.lineStyle(ropeWidth, TAWARA, 1)
-  g.strokePoints(outline, true)
-  g.lineStyle(2, TAWARA_MARK, 1)
-  const segments = 40
-  for (let i = 0; i < segments; i++) {
-    // Half-step offset keeps marks off the Tokudawara window edges.
-    const a = ((i + 0.5) / segments) * Math.PI * 2
-    const r = allowedArenaRadius({ x: Math.cos(a), y: Math.sin(a) }, arena) * pixelsPerMeter
-    const inner = r - ropeWidth / 2
-    const outer = r + ropeWidth / 2
-    g.lineBetween(center.x + Math.cos(a) * inner, center.y + Math.sin(a) * inner, center.x + Math.cos(a) * outer, center.y + Math.sin(a) * outer)
-  }
-
-  // Shikiri-sen: two short white starting lines, 0.35 m either side of the center.
-  g.lineStyle(Math.max(3, 0.05 * pixelsPerMeter), SHIKIRI, 0.9)
-  for (const side of [-1, 1]) {
-    const x = center.x + side * 0.35 * pixelsPerMeter
-    g.lineBetween(x, center.y - 0.4 * pixelsPerMeter, x, center.y + 0.4 * pixelsPerMeter)
-  }
-}
-
-// Debug overlay: the exact center ring-out boundary as a thin line (shown with the debug toggle).
+// Debug overlay: the exact Simulation center ring-out boundary as a thin line over the Product art
+// (shown with the debug toggle) to verify art <-> Simulation alignment.
 export function drawArenaBoundaryDebug(scene: Phaser.Scene, center: Vec2, pixelsPerMeter: number, arena: ArenaSetup): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics()
-  g.lineStyle(2, DEBUG_BOUNDARY, 1)
-  g.strokePoints(toCanvas(arenaBoundaryOutline(arena), center, pixelsPerMeter), true)
+  g.lineStyle(DEBUG_BOUNDARY_WIDTH, DEBUG_BOUNDARY, 1)
+  g.strokePoints(
+    arenaBoundaryOutline(arena).map((p) => new Phaser.Math.Vector2(center.x + p.x * pixelsPerMeter, center.y + p.y * pixelsPerMeter)),
+    true,
+  )
   return g
 }
