@@ -791,3 +791,29 @@ If User finds a mismatch:
   - performance
   - presentation layering
 - fix only that issue before HUD work.
+
+
+# User Runtime Visual Feedback — 2026-10-20
+
+User reviewed the integrated Product background in the browser and provided a runtime screenshot.
+
+Accepted feedback:
+
+- Product arena/background presentation is visually usable in runtime.
+- Current provisional wrestler size is **not unnatural** at the new Product scale.
+- Therefore the current meter-to-pixel/body-size presentation baseline should be preserved unless a later explicit gameplay/character-scale task changes it.
+- The provisional procedural wrestler visuals **do look materially lower quality than the Product background**.
+- This is expected and should be addressed by the later Product wrestler-art task, not by changing gameplay body radius or scale.
+
+Do Not Reopen:
+- wrestler gameplay/body scale solely to make the temporary visuals look better.
+- Product arena geometry/alignment based on the current screenshot.
+
+Still Pending for full ACTION-ART-01B runtime acceptance:
+- explicit confirmation of 1920x1080 runtime performance
+- explicit debug-boundary alignment check against the Product ring/Tokudawara.
+
+Current visual baseline:
+- background integration: visually positive
+- wrestler size: accepted
+- wrestler art quality: temporary / below Product bar, Deferred to Product wrestler-art phase.
