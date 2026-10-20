@@ -676,3 +676,33 @@ Perform one focused alignment rerun/tuning using the existing CLI, likely betwee
 - reported inner-frame candidate values.
 
 No new implementation task is needed if only CLI parameter tuning is required.
+
+
+# User Product Visual Approval — Arena Alignment
+
+User corrected the previously uploaded comparison file and confirmed the actual aligned preview.
+
+Accepted visual result:
+- exact ring is now contained within the painted dohyo/platform
+- the previous obvious bottom-side overrun is resolved
+- the current arena alignment is visually acceptable for Product background progression
+
+Accepted Product arena alignment baseline:
+
+```
+--arena-scale 1.072
+--arena-offset-x 5.36
+--arena-offset-y 77.72
+```
+
+Do not reopen these alignment values unless:
+- a later Product visual change materially invalidates them, or
+- the arena source image itself changes.
+
+The remaining mild asymmetry in painted internal edges is accepted as part of the AI-generated background artwork and is not currently blocking.
+
+Next allowed step:
+- Tokudawara investigation/design
+- no Phaser integration yet
+- no HUD production yet
+- no wrestler Product-art production yet
