@@ -1,5 +1,5 @@
 Task-ID: TOKUDAWARA-RINGOUT-INVESTIGATION-01
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / SUMO CORE RULE / RING BOUNDARY + PRODUCT ART
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -476,3 +476,354 @@ Do not implement Tokudawara in Simulation or the Python compositor.
 
 After commit/push/report:
 「TOKUDAWARA-RINGOUT-INVESTIGATION-01 が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS WITH MATERIAL CORRECTION / LEVEL 2 RECOMMENDED
+
+## Reviewed Delivery
+
+- Investigation report commit:
+  `24afc4e7a89edb9264a660cad203e884f80844c1`
+- Agent-Start-Head:
+  `cc509e366567c202e0a3b67e7e224904a25ad340`
+- Diff is exactly one Report-only commit:
+  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- Production Source / art tool / package / lockfile unchanged.
+
+## Overall Assessment
+
+The main recommendation is ACCEPTED:
+
+**Proceed toward Level 2: Visual Tokudawara + Tokudawara-aware Ring-out boundary.**
+
+Current Source inspection supports the Agent's complexity classification:
+
+- implementation is not trivial because Ring-out is core gameplay,
+- but it is localized and does not require a generic collision/geometry framework,
+- existing circle behavior can remain an explicit unchanged branch,
+- BoutSimulation does not need a major architecture rewrite.
+
+Classification:
+**MODERATE / manageable**
+with **Heavy verification** for the implementation task.
+
+## External Reality Check
+
+The Product abstraction is reasonable.
+
+Authoritative Japanese Sumo Association material describes Tokudawara as:
+- four bales among the twenty forming the circular contest boundary,
+- located at front / rear / east / west,
+- shifted outward by approximately one bale width.
+
+Therefore a game abstraction of:
+- four cardinal outward extensions,
+- common depth,
+- common angular width
+
+is appropriate for Product v1.
+
+Do not attempt to reproduce every construction detail.
+
+## Accepted Boundary Representation Direction
+
+Accept the Report's hybrid minimal design:
+
+- point classification:
+  a radial-window / allowed-radius rule
+- crossing calculation:
+  explicit piecewise boundary intersections with
+  - base circle
+  - extended circle
+  - radial side boundaries.
+
+Do NOT introduce:
+- generic polygon engine
+- generic geometry framework
+- Phaser-side rule duplication.
+
+A Tokudawara boundary can remain a small Pure TypeScript module/helper.
+
+## MATERIAL CORRECTION C-T1 — Use EARLIEST IN→OUT crossing
+
+Reject the Report's UD-4 recommendation to use:
+
+> the last time the path was IN / final exit
+
+for a non-convex Tokudawara boundary.
+
+Accepted semantics from ACTION-06 are:
+
+- first participant OUT loses
+- within one fixed tick, compare the first boundary crossing along the canonical straight P0→P1 interpolation
+- internal solver substeps are not independent events.
+
+For a circle, "first IN→OUT crossing" and the existing upper/exit root coincide for the normal ongoing case, so this distinction was previously invisible.
+
+With Tokudawara, the allowed region is non-convex at the side transitions and one P0→P1 segment can theoretically be:
+
+`IN → OUT → IN → OUT`
+
+The canonical Tokudawara crossing helper must therefore return:
+
+**the earliest transition from IN to OUT along P(t), t∈[0,1].**
+
+Consequences:
+
+- if P0 is already OUT: return 0, preserving defensive behavior
+- if P0 is IN and P1 is OUT: find earliest IN→OUT
+- if P0 is IN and P1 is IN but the straight interpolation leaves and re-enters the non-convex boundary: this still contains a first OUT event and must be detected
+- exact boundary remains IN
+- simultaneous epsilon remains technical 1e-9
+- no "last exit" semantics.
+
+This is the direct continuation of the accepted "first-out" rule.
+
+### Implementation implication
+
+Do not early-return null merely because `current` is IN for the Tokudawara case.
+
+Instead:
+
+1. collect candidate boundary-intersection fractions
+2. sort/deduplicate them
+3. classify open intervals using the single canonical point-classifier
+4. starting from t=0, return the first boundary at which classification changes:
+   `IN -> OUT`
+5. return null only if no IN→OUT transition occurs.
+
+For the no-Tokudawara circle branch, retain the existing helper unchanged so existing circle outputs/tests stay bit-compatible.
+
+## Current circle semantics remain preserved
+
+Do not rewrite the accepted circle helper just to unify code.
+
+Preferred:
+- no Tokudawara -> existing `firstRingBoundaryCrossingFraction`
+- Tokudawara -> new Tokudawara-aware boundary crossing helper.
+
+This creates a strong regression firewall for T151–T172.
+
+## Accepted State Ownership Direction
+
+Accept the small optional setup extension:
+
+```ts
+interface TokudawaraSetup {
+  depth: number
+  halfAngle: number
+}
+
+interface ArenaSetup {
+  radius: number
+  tokudawara?: TokudawaraSetup
+}
+```
+
+Exact naming may vary.
+
+Reasons:
+- existing `{radius}` setups remain valid
+- no broad discriminated-union migration
+- Simulation remains geometry SoT
+- Snapshot can expose the same values to presentation/debug.
+
+Required validation:
+- finite
+- depth > 0
+- 0 < halfAngle < π/4
+- copy isolation preserved.
+
+## Counter relocation
+
+Accept the recommendation to leave Counter relocation's existing circular whole-body constraint unchanged for the first Tokudawara implementation.
+
+That is a conservative subset of the Tokudawara-extended valid area.
+
+Do not broaden Counter relocation into Tokudawara in this task.
+
+This avoids coupling Counter design to the new boundary feature.
+
+## Cross-language geometry contract
+
+Accept **no shared JSON yet**.
+
+For the first implementation:
+- TypeScript Simulation owns the gameplay values
+- Python art tool receives matching explicit values/defaults
+- values are documented
+- Python manifest records them
+- focused tests pin both implementations.
+
+Re-evaluate shared JSON only when Product background is actually integrated into Phaser and there is a demonstrated maintenance problem.
+
+Do not add cross-language config infrastructure preemptively.
+
+## Art-tool direction
+
+Accept the finding that the existing tawara texture can be reused.
+
+Tokudawara rendering can extend the current annulus mask:
+- normal sections remain at R
+- four local sections shift to R+depth
+- side boundaries connect them
+- geometry guide must show the exact resulting gameplay boundary.
+
+The accepted arena source does not need to be regenerated solely to add Tokudawara.
+
+## Visual-only option
+
+Level 1 is NOT recommended for Product.
+
+Reason:
+- visible Tokudawara would create a region that visually looks playable but the current circle rule would already call OUT,
+- the mismatch occurs at the most meaningful "remain at the edge" location,
+- Level 2 is manageable enough that this mismatch is not justified.
+
+## Level 3
+
+Remain Deferred.
+
+Do not add:
+- collision against tawara
+- wall/bounce
+- foot/contact Ring-out
+- ground-touch
+- edge friction
+- special Tokudawara movement physics.
+
+Level 2 only changes the allowed CENTER boundary.
+
+## Tokudawara count / placement
+
+Accept Product-v1 abstraction:
+- four sections
+- cardinal directions relative to the Simulation axes.
+
+Do not attach additional semantic East/West labels to axes unless needed by presentation.
+
+Geometry should be symmetric by construction.
+
+## Dimensions are NOT final yet
+
+Do NOT yet lock:
+
+- `depth = 0.1195 m / 42 master px`
+- `halfAngle = 9°`
+
+as final Product gameplay constants.
+
+They are strong first candidates:
+- approximately one current tawara visual width outward,
+- approximately one of 20 equal boundary sections.
+
+But the accepted painted arena has limited lower visual clearance.
+
+Therefore final depth/angle should be chosen after an exact Tokudawara visual preview.
+
+## Product-art constraint / alignment
+
+The Report discovered a real constraint:
+
+with the currently accepted arena alignment:
+- lower clearance from current circular ring outer edge to the painted inner frame is very small,
+- a full 42-master-px outward Tokudawara may visually collide with the lower painted structure.
+
+Do NOT immediately reopen the accepted alignment to the unverified proposed values.
+
+The current alignment:
+- scale 1.072
+- offset X 5.36
+- offset Y 77.72
+
+was User visually accepted.
+
+Before changing it, generate a deterministic Tokudawara preview and inspect the actual composition.
+
+Possible outcomes:
+1. current alignment + proposed depth looks acceptable
+2. current alignment + smaller depth is preferable
+3. a modest re-alignment/zoom is worth accepting
+4. a targeted arena-art edit is necessary.
+
+The User should decide from actual images rather than from estimated clearances alone.
+
+## Recommended next implementation sequence — CORRECTION
+
+Do NOT implement Simulation core first with unapproved depth/halfAngle.
+
+Recommended sequence:
+
+### Next: ART-TOOL-02-TOKUDAWARA-PREVIEW
+
+Purpose:
+- extend the offline compositor to render Tokudawara geometry,
+- no gameplay changes,
+- expose explicit depth / halfAngle,
+- generate Product previews using the accepted arena,
+- compare likely geometry values and confirm visual fit.
+
+This is not a "visual-only final solution"; it is a geometry-selection tool step.
+
+Required output:
+- exact Tokudawara geometry guide
+- Product composite preview
+- User chooses final:
+  - depth
+  - halfAngle
+  - whether arena re-alignment is necessary.
+
+### Then: TOKUDAWARA-01A-RINGOUT-CORE
+
+After geometry values are visually approved:
+- add optional Tokudawara setup to Simulation
+- implement point classification
+- implement EARLIEST IN→OUT P0→P1 crossing
+- retain exact circle branch
+- Heavy focused boundary tests
+- temporary/debug rendering may read Snapshot geometry.
+
+### Then
+Product background/runtime integration can use the already-matched Python overlay.
+
+This order avoids implementing gameplay constants and immediately retuning them because of art fit.
+
+## Required Simulation test semantics for later implementation
+
+In addition to the Agent's matrix, explicitly require:
+
+- P0 IN, P1 IN, interpolation goes OUT then back IN near Tokudawara side:
+  **Ring-out occurs at the first IN→OUT transition**
+- P0 IN, interpolation goes OUT→IN→OUT:
+  return the FIRST exit, not final exit
+- candidate intersections at exact boundary are classified consistently as IN
+- all four cardinal Tokudawara and both side boundaries each tested
+- mirrored cases produce equal fractions where mathematically symmetric
+- no-Tokudawara T151–T172 unchanged.
+
+## Overall Result
+
+Investigation: PASS WITH MATERIAL CORRECTION.
+
+Accepted:
+- Level 2 is practical and preferred.
+- localized Pure TS geometry design.
+- four symmetric Tokudawara.
+- optional ArenaSetup extension.
+- circle branch preserved.
+- Level 3 deferred.
+
+Corrected:
+- crossing semantics MUST be earliest IN→OUT, not last-IN/final-exit.
+
+Pending before gameplay implementation:
+- Product visual selection of Tokudawara depth / angular width
+- decision whether current accepted arena alignment provides enough visual clearance.
+
+## Next Task Constraint
+
+Next task should be Product Tokudawara geometry preview in `tools/dohyo_art`, not Simulation implementation yet.
+
+It must not alter gameplay.
