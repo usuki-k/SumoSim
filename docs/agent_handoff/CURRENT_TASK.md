@@ -1,819 +1,564 @@
-Task-ID: ACTION-ART-01B-PRODUCT-BACKGROUND-INTEGRATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / PRODUCT ART RUNTIME INTEGRATION / PHASER
+Task-ID: ACTION-ART-02-HUD-PRODUCT-SPEC
+Status: READY
+Task-Type: DOCUMENTATION / PRODUCT UI SPEC / ACTION HUD
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 294530e8adfd3f5402b043583032d766dc0d150c
+Source-Baseline: dc3df77c9d8e7463c53292b46b7d8e1c3d5bf4ae
 Handoff-Mode: GITHUB
 
-# ACTION-ART-01B — Product Background / Tokudawara Runtime Integration
+# ACTION-ART-02 — Product HUD Specification
 
 ## Purpose
 
-Integrate the User-approved Product arena background and Tokudawara overlay into the Phaser Bout runtime.
+Create the first authoritative Product HUD specification for the SumoSim Bout screen.
 
-This Task replaces the default provisional Graphics dohyo presentation with the accepted Product artwork while preserving the accepted Tokudawara Ring-out gameplay exactly.
+This Task is Documentation / Product UI Specification only.
 
-After this Task, the Action screen should use the actual Product background baseline and be ready for the next Product-art phase: HUD.
+Do NOT implement Phaser HUD in this Task.
 
-## Accepted Baseline — DO NOT REOPEN
+The spec must turn the User-approved HUD direction into an implementation-ready information hierarchy while preserving:
+- the accepted Product arena
+- the accepted wrestler scale
+- current gameplay
+- Management/Bout state ownership separation
+- unresolved Simulation parameter design.
 
-### Tokudawara Gameplay
+## Current Product Baseline
 
-Implementation commit:
-`294530e8adfd3f5402b043583032d766dc0d150c`
+### Runtime Product arena
+ACTION-ART-01B technical integration is PASS.
 
-Technical Review:
-PASS.
+Current runtime presentation:
+- 1920×1080 logical Product art space
+- Product arena base + exact Tokudawara overlay
+- Simulation origin -> art center (960,540)
+- base gameplay radius -> 400 px
+- existing provisional wrestler diameter -> about 123 px.
 
-User Play Test:
-**ACCEPTED / no issues reported.**
+The User reviewed the runtime screenshot and reported:
+- wrestler size is not unnatural
+- provisional wrestler visual quality is noticeably below the Product background quality bar
+- proceed to HUD.
 
-Accepted gameplay:
-- center-based Ring-out
-- exact boundary IN
-- first OUT loses
-- earliest IN→OUT along canonical P0→P1 interpolation
-- four cardinal Tokudawara
-- depth = **0.1194375 m**
-- halfAngle = **π/20**
-- no wall / clamp / bounce
-- no foot/ground-touch rule
-- no Level 3 edge physics.
+Therefore:
+- current wrestler scale is an Accepted presentation baseline
+- do not adjust bodyRadius / meter-to-pixel scale for HUD
+- wrestler Product-art replacement remains a later task.
 
-Do not change Ring-out gameplay in this Task.
+The User explicitly instructed the project to proceed to HUD.
 
-### Product Tokudawara Art
+Do not infer unreported browser-performance/debug-boundary results from that instruction.
 
-User visually compared Candidates A/B/C and selected:
+## Reference Direction
 
-**Candidate C**
+The User supplied a real sumo broadcast reference.
 
-Accepted Product-art geometry:
+Use it only as a reference for:
+- instant side-by-side competitor identification
+- rank/name/current-record readability
+- compact information grouping.
 
-Master:
-- 3840×2160
-- center (1920,1080)
-- base radius 800 px
-- tawara width 42 px
-- Tokudawara depth 42 px
-- halfAngle 9°
+Do NOT copy:
+- broadcaster graphics
+- sponsor areas
+- logos
+- exact typography
+- exact box shapes/layout
+- portrait treatment.
 
-Runtime art:
-- 1920×1080
-- center (960,540)
-- base radius 400 px
-- tawara width 21 px
-- Tokudawara depth 21 px
-- halfAngle 9°.
+The SumoSim HUD should be its own stylized game UI matching the warm Product arena.
 
-### Accepted Product arena alignment
+## User-approved Information Architecture
 
-Candidate C supersedes the earlier arena alignment.
+There are TWO different UI surfaces.
 
-Accepted:
-- `--arena-scale 1.0952`
-- `--arena-offset-x 5.48`
-- `--arena-offset-y 95.28`
+### A. Always-visible Bout HUD
 
-Do not use the older 1.072 / 5.36 / 77.72 Product alignment.
+Keep this concise during Action.
 
-## Product Inputs
+Required for both wrestlers:
+- wrestler name
+- current rank
+- current tournament / basho record (wins-losses)
 
-Required local inputs:
+Required center/context information:
+- current tournament day / day number.
+
+Example semantic data only:
+- Rank: 前頭15
+- Name: 朝翠龍
+- Record: 2-0
+- Day: 3日目.
+
+Do not lock these exact fictional names/ranks as content.
+
+### B. Pre-bout comparison presentation
+
+Shown before active Bout gameplay.
+
+Required for both wrestlers:
+- name
+- rank
+- current tournament record
+- age
+- height
+- weight
+- all public Simulation / wrestler parameters that exist in the final design.
+
+The User intends Simulation parameters to be openly visible rather than hidden.
+
+Important:
+The actual parameter list is NOT decided yet.
+
+The spec must support a variable/extensible list without inventing:
+- parameter names
+- parameter count
+- final numeric ranges
+- formulas
+- gameplay effects.
+
+## Explicit Product Decisions
+
+### Face portrait
+For Product v1 HUD:
+**NO wrestler face portrait is required.**
+
+Do not:
+- design a random low-quality portrait generator
+- require portrait assets
+- reserve the layout around an assumed portrait dependency.
+
+The layout should work cleanly with no face image.
+
+Portraits may be reconsidered later as a separate Product-art feature.
+
+### Birthplace
+Birthplace is NOT required in the always-visible Bout HUD.
+
+It is a possible future profile field, especially if foreign wrestler backgrounds are later introduced.
+
+Current Task:
+- document it as Optional / Deferred
+- do not create location-generation rules
+- do not create nationality rules
+- do not make it a required pre-bout field yet.
+
+### Stamina
+Do NOT add a real-time stamina bar or current-depletion meter in this HUD spec.
+
+If/when Stamina exists as a public wrestler/Simulation parameter:
+- its parameter VALUE should be visible in the pre-bout public-parameter list like other stats.
+
+Do not define:
+- stamina formula
+- maximum
+- depletion
+- recovery
+- realtime display.
+
+## Tournament Context
+
+The Product concept uses sumo tournament / basho context.
+
+The User expects:
+- current tournament wins-losses to be visible
+- current day number to be visible
+- top-division style context can have a 15-day tournament
+- tournament events are conceptually periodic, including the real-sumo-like two-month rhythm discussed by the User.
+
+However:
+- tournament scheduling rules
+- calendar/time implementation
+- ranking promotion/demotion
+- record aggregation
+- division rules
+
+are NOT part of this Task.
+
+The HUD spec should consume these values from future Management/Tournament state.
+
+Do not turn presentation requirements into new Simulation rules.
+
+## Architecture Constraint — Critical
+
+Do not put long-term wrestler/tournament metadata into BoutSimulation merely because HUD needs it.
+
+Examples of data that should NOT become Bout runtime physics state:
+- age
+- height
+- weight
+- rank
+- tournament record
+- tournament day
+- birthplace
+- long-term parameters that belong to wrestler/management data.
+
+Preserve:
 
 ```
-tools/dohyo_art/input.local/arena_base.png
-tools/dohyo_art/input.local/tawara_source.png
+Management / Wrestler / Tournament State
+        ↓
+Bout presentation context / view model
+        ↓
+Phaser HUD
 ```
 
-They are local authoring sources and remain ignored/uncommitted.
-
-If missing, STOP/BLOCKED.
-
-## Product Generation Source of Truth
-
-Use the accepted deterministic Python compositor:
-
-`tools/dohyo_art/compose_dohyo.py`
-
-Before copying runtime assets, regenerate Candidate C from the real inputs using the accepted parameters.
-
-Do not manually edit the exported Product runtime images.
-
-## Authoring vs Runtime Layers
-
-Maintain the accepted separation:
+separate from:
 
 ```
-arena_base
-+
-exact dohyo/tokudawara overlay
-=
-runtime Product presentation
+BoutSimulation
+        ↓
+BoutSnapshot
+        ↓
+Action rendering
 ```
 
-Runtime should use separate base and overlay layers rather than baking new gameplay geometry into Phaser Graphics.
+The spec should define the smallest future presentation-data boundary needed to combine these sources.
 
-The exact overlay remains replaceable without regenerating the painted arena.
+Do not implement that boundary yet.
 
-## Explicit Directory Permission
+Do not introduce DI framework, global event bus, generic UI state system, or ECS.
 
-This Task explicitly authorizes creation of:
+## Required Source Inspection
 
-`public/assets/action/background/`
+Read directly:
 
-Runtime Product assets will live there.
+- `AGENTS.md`
+- `CLAUDE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/GAME_CONCEPT.md`
+- current `CURRENT_TASK.md`
+- current `CURRENT_COMPLETION_REPORT.md`
+- `src/main.ts`
+- `src/game/scenes/BoutScene.ts`
+- `src/game/presentation/productArena.ts`
+- `src/game/sumo/BoutTypes.ts`
+- any current presentation metadata / participant presentation code.
 
-Do not create unrelated asset directories.
+Review Handoff does not replace Current Source inspection.
 
-## Runtime Asset Export
+If Current Source materially contradicts this handoff, STOP and report.
 
-The current compositor already creates:
-- `arena_base_master.png` at 3840×2160
-- `dohyo_ring_overlay_1920.png` at 1920×1080.
+## Deliverable
 
-For clean runtime layering, add the smallest deterministic compositor output needed:
+Create:
 
-`arena_base_1920.png`
+`docs/ACTION_HUD_PRODUCT_SPEC.md`
+
+This becomes the authoritative Product HUD spec for the current Action prototype.
+
+Update `docs/ARCHITECTURE.md` only if a very small state-ownership note is required to prevent future implementation mistakes.
+
+Do not modify Production Source.
+
+## Required Spec Sections
+
+The new HUD spec must include at minimum:
+
+### 1. Purpose / Product goals
+Define the HUD goals:
+- immediate opponent identification
+- current basho context
+- readable Action screen
+- public wrestler-information philosophy
+- preserve arena readability.
+
+### 2. Information hierarchy
+Separate clearly:
+- Always-visible Bout HUD
+- Pre-bout comparison presentation
+- Debug-only Prototype information
+- Deferred profile information.
+
+### 3. Always-visible HUD content
+Specify required semantic fields:
+- East/left wrestler identity area
+- West/right wrestler identity area
+- rank
+- name
+- current tournament record
+- current day.
+
+Do not require age/height/weight/stats to remain onscreen during action.
+
+### 4. Pre-bout comparison content
+Required:
+- name
+- rank
+- current record
+- age
+- height
+- weight
+- all public parameters.
+
+Explain how a variable number of parameters should be accommodated conceptually:
+- table/list/grid
+- no fixed final parameter count.
+
+Do not invent final parameters.
+
+### 5. Data ownership
+Classify each field by likely owner/source:
+
+Examples:
+- BoutSnapshot gameplay state
+- Wrestler/Management profile
+- Tournament context
+- Presentation-only side assignment/localization.
+
+Do not claim unimplemented systems exist.
+
+Mark future ownership where source is not implemented.
+
+### 6. Product visual direction
+Document the approved art direction:
+
+- warm traditional sumo visual language
+- warm off-white / paper-like panels
+- dark ink-like high-contrast text
+- restrained red/blue accents for the two sides
+- readable over the detailed Product arena
+- stylized game UI, not a TV broadcast copy
+- no sponsor/logo treatment
+- no face portrait requirement.
+
+### 7. 1920×1080 layout zones
+Create a practical wireframe / safe-area proposal for the current Product canvas.
 
 Requirements:
-- exact 1920×1080
-- derived from the aligned `arena_base_master`
-- deterministic exact 2× downscale
-- use the same high-quality / area-appropriate downscale strategy as other 2× review/runtime outputs
-- no additional repainting.
+- Action play area remains visually dominant
+- avoid covering the central dohyo more than necessary
+- always-visible identity blocks should prefer upper left / upper right
+- day/context should be compact and centered or otherwise balanced
+- should coexist with future wrestler Product art.
 
-Do NOT create a generic export framework.
+Provide proposed zones/relationships in the spec.
 
-Update:
-- compositor
-- manifest
-- tests
-- README
+Exact pixel values may be:
+- Recommended / provisional
+rather than irrevocable Product constants.
 
-only as needed for this one runtime output.
+Clearly label them as such.
 
-### Runtime committed files
+### 8. Pre-bout screen layout
+Define the side-by-side comparison structure.
 
-Generate Candidate C locally, then copy/commit:
+It must work:
+- without portraits
+- with long/short names
+- with rank text of varying length
+- with variable parameter rows.
 
-```
-public/assets/action/background/arena_base_1920.png
-public/assets/action/background/dohyo_ring_overlay_1920.png
-```
+Do not specify final transition animation.
 
-Do NOT commit:
-- master 3840 images to `public/`
-- local input sources
-- `output*.local`
-- geometry guides/manifests as runtime assets.
+### 9. Localization / text robustness
+Because CrazyGames distribution is international-facing:
 
-The committed runtime images must be the exact Candidate C outputs.
+Do not lock the implementation to Japanese-only fixed-width labels.
 
-Record their SHA-256 and dimensions in the Completion Report.
+The spec should distinguish:
+- semantic field
+- example Japanese display
+- localization responsibility.
 
-## Phaser Logical Resolution
+Do not design a full localization system.
 
-For this Product integration, set the initial Product logical resolution to:
+### 10. Stamina decision
+Record:
+- no realtime stamina depletion bar in current Product HUD
+- if stamina becomes a public parameter, display its base/stat value in comparison information.
 
-**1920×1080**
+### 11. Portrait decision
+Record:
+- no portrait requirement for v1
+- random portrait generation Deferred.
 
-Reason:
-- 1:1 correspondence with the accepted runtime-art coordinate space
-- exact Product geometry mapping without extra resampling inside Phaser
-- current Product character-scale target was defined in this coordinate space
-- CSS/Phaser Scale.FIT still controls browser display size.
+### 12. Birthplace decision
+Record:
+- optional/deferred profile field
+- not required for Bout HUD.
 
-This is the current Product presentation baseline, not an irreversible performance decision.
+### 13. Prototype debug text transition
+Current BoutScene contains control/debug/status text.
 
-If browser/runtime performance is materially unacceptable, report it rather than silently choosing a lower logical resolution.
+Specify which current text is:
+- debug/development-only
+- temporary control help
+- actual Product information.
 
-## Scale / Coordinate Mapping
+Do not assume current debug strings become Product HUD.
 
-Do not use the old square-screen `RING_FILL_RATIO = 0.9` mapping as the Product mapping.
+The future implementation should be able to hide/remove prototype text without losing gameplay.
 
-Accepted Product art contract:
-
-- logical canvas: 1920×1080
-- Product art center: (960,540)
-- base gameplay radius: 400 px
-- Simulation radius: 2.275 m.
-
-Therefore Product presentation mapping is:
-
-```
-pixelsPerMeter = 400 / 2.275
-```
-
-when logical canvas is exactly 1920×1080.
-
-Prefer a small explicit mapping derived from Product art constants rather than a magic ratio.
-
-It is acceptable to support uniform scaling from the 1920×1080 art reference if the Scene abstraction makes that trivial, but do not build a responsive-layout framework in this Task.
-
-The exact Simulation origin must map to the exact art center.
-
-## Phaser Asset Loading
-
-Use Phaser's normal asset loader.
-
-Recommended asset keys:
-- Product arena base
-- Product dohyo overlay.
-
-Exact key names may follow current naming style.
-
-Load from stable Vite public URLs, for example:
-
-```
-/assets/action/background/arena_base_1920.png
-/assets/action/background/dohyo_ring_overlay_1920.png
-```
-
-Verify the exact Phaser 4.2.1 API in Current Source / installed package.
-
-No new dependency.
-
-## Runtime Layering
-
-Expected visual depth:
-
-1. Product `arena_base_1920.png`
-2. Product `dohyo_ring_overlay_1920.png`
-3. wrestler shadows
-4. wrestler bodies
-5. debug overlays
-6. text / future HUD.
-
-Existing WrestlerView depths currently use:
-- shadow depth 1
-- body depth 2.
-
-Choose base/overlay depths below them, for example:
-- base = 0
-- overlay = 0.5
-
-without changing gameplay.
-
-Do not bake wrestler shadows or HUD into the background.
-
-## DohyoView Responsibility After Integration
-
-The Product images become the default visible dohyo.
-
-Do NOT keep the old Graphics clay/tawara presentation visible underneath or on top by default.
-
-Retain only what is useful for diagnostics.
-
-Recommended:
-- preserve `arenaBoundaryOutline`
-- preserve exact debug boundary rendering
-- allow debug mode to display the Simulation boundary over the Product overlay
-- old provisional full `drawDohyo` may remain only if a clean debug/fallback role is genuinely useful.
-
-Do not create two visible sources of truth for the ring.
-
-The Product PNG overlay is presentation.
-Simulation Snapshot remains gameplay geometry SoT.
-
-## Debug Geometry Verification
-
-This Task must make it easy to verify Product art vs Simulation.
-
-With debug mode ON:
-- draw the exact Simulation center-boundary over the Product overlay
-- it must align with:
-  - normal circular sections
-  - all four Tokudawara outer sections
-  - all eight side transitions.
-
-The debug line may be intentionally high-contrast.
-
-This verification is mandatory before User acceptance.
-
-## BoutScene / Existing Prototype UI
-
-The logical resolution changes from 640×640 to 1920×1080.
-
-Do not redesign HUD in this Task.
-
-However, existing prototype/debug text must remain usable.
-
-Allowed:
-- reposition existing control/debug/result text
-- scale existing font sizes enough to remain readable
-- keep debug text default hidden where already hidden.
-
-Do NOT:
-- create Product HUD panels
-- add portraits
-- add final meters/gauges
-- invent new UI information.
-
-HUD Product design is the next art phase.
-
-## Wrestler Presentation
-
-Do not redesign wrestler visuals in this Task.
-
-The existing provisional articulated WrestlerView should continue to:
-- use Simulation positions
-- use exact facing
-- scale from bodyRadius through pixelsPerMeter.
-
-At Product mapping:
-- body diameter should naturally become approximately 123 px for current 0.7 m diameter.
-
-This is expected and is part of the Product visual-scale baseline.
-
-Do not retune bodyRadius to match the art.
-
-## Scope
-
-Implement:
-
-1. accepted Candidate C regeneration
-2. `arena_base_1920.png` deterministic tool output
-3. runtime Product asset commit
-4. Phaser preload
-5. 1920×1080 logical presentation baseline
-6. Product base + exact Tokudawara overlay display
-7. exact art↔Simulation coordinate mapping
-8. removal/hiding of old default Graphics dohyo
-9. debug boundary verification over Product art
-10. minimal existing prototype text adaptation
-11. focused tests where useful
-12. build / runtime verification
-13. User visual/gameplay Play Test preparation.
-
-## Scope Out
-
-Do NOT:
-- change Ring-out gameplay
-- change Tokudawara depth/angle
-- change Candidate C arena alignment
-- change Push/Counter/Grip/Drive
-- create HUD Product art
-- create wrestler Product part images
-- create Gyoji
-- add arena animations
-- add audio
-- add camera effects
-- optimize/compress Product assets into a broader pipeline
-- add CrazyGames SDK
-- build responsive/mobile layout system.
-
-## Art Tool Tests
-
-Update Python tests for the new runtime arena output.
-
+### 14. Accessibility/readability constraints
 At minimum:
-- `arena_base_1920.png` exists in BuildResult
-- size = 1920×1080
-- deterministic pixel output
-- exact 2× derivation from master
-- manifest records it
-- existing Tokudawara / circle compatibility tests remain PASS.
+- sufficient contrast over detailed background
+- avoid tiny type at 1920×1080
+- do not encode wrestler side only by color
+- long name/rank behavior must be specified conceptually
+- UI must not hide critical ring edge/Tokudawara action unnecessarily.
 
-## Runtime / TypeScript Verification
+Do not create a full accessibility framework.
 
-Required:
+### 15. Future data contract direction
+Recommend the smallest future presentation model.
 
-- `pnpm test`
-- `pnpm build`
-- TypeScript noEmit if repository workflow uses it
-- `git diff --check`
-- Python `tools/dohyo_art` unit suite
-- runtime asset dimensions verified
-- committed asset hashes match regenerated Candidate C local output
-- no local Product inputs/outputs staged
-- no new dependency.
+Example only:
 
-## Browser Smoke — REQUIRED IF AVAILABLE
+```ts
+interface BoutWrestlerPresentation {
+  id: ParticipantId
+  side: ...
+  name: string
+  rank: string
+  currentRecord: ...
+  age: number
+  heightCm: number
+  weightKg: number
+  publicParameters: readonly PublicParameterView[]
+}
 
-Verify:
+interface BoutTournamentPresentation {
+  day: number
+}
+```
 
-- canvas is 16:9
-- Product arena fills the canvas
-- no stretch
-- no black/blank edge inside the Phaser canvas
-- exact overlay aligns with the arena
-- wrestlers appear at expected size/positions
-- controls still work
-- debug toggle works
-- debug boundary lies on the Product Tokudawara boundary
-- Ring-out outcome still matches visible boundary
-- R restart and Dummy modes still work
-- no console/runtime asset-load errors.
+Do NOT mandate exact field/type names if Current Source suggests a cleaner minimal shape.
 
-If Agent environment cannot perform browser graphical smoke:
-- report NOT RUN
-- do not mark visual acceptance complete
-- User visual check remains mandatory.
+Do NOT implement it in this Task.
 
-## User Play / Visual Test — REQUIRED
+Do not put these fields inside `ParticipantState`.
 
-Run:
+### 16. Implementation staging recommendation
+Recommend the smallest next implementation sequence.
 
-`pnpm dev`
+Expected direction to evaluate:
 
-First inspect with debug OFF.
+1. static/prototype Product HUD shell with presentation fixtures
+2. User visual check
+3. connect future Management/Tournament data when those systems exist
 
-Verify:
+or another minimal sequence.
 
-1. Product arena appears at 16:9 without distortion
-2. Tokudawara Candidate C looks the same as the accepted composite preview
-3. all four Tokudawara fit inside the painted platform
-4. provisional wrestlers sit at the expected scale relative to the Product dohyo
-5. no old Graphics ring is visibly doubled underneath
-6. normal gameplay controls still work.
+Avoid blocking Product visual progress on unimplemented full Management systems.
 
-Then press `0`.
+## Important Unresolved Items
 
-Verify:
-7. exact debug boundary aligns with Product ring
-8. +X / -X / +Y / -Y Tokudawara all align
-9. diagonal normal-circle boundary aligns
-10. Ring-out result occurs on the same visible boundary.
+Do NOT decide these in this Task:
 
-Also report:
-- whether 1920×1080 logical rendering feels performant in the browser
-- whether background detail is too soft/sharp
-- whether current provisional wrestlers now look obviously below the Product background quality bar.
+- final Simulation parameter list
+- final wrestler names
+- rank progression rules
+- tournament progression implementation
+- tournament result aggregation rules
+- birthplace generation
+- nationality system
+- portrait generation
+- stamina gameplay
+- realtime stamina meter
+- final touch/mobile layout
+- final localization system
+- final UI sound/animation.
 
-The last item will guide the later Wrestler Product-art task; do not fix it here.
+Mark them explicitly as Deferred / unresolved.
 
 ## Acceptance Criteria
 
-Technical:
-- Candidate C runtime assets are reproducible
-- exact asset dimensions/hashes recorded
-- Product background is default runtime rendering
-- simulation↔art center/radius mapping exact
-- no gameplay changes
-- debug boundary verifies geometry
-- tests/build pass.
+The spec is accepted technically if:
 
-Product:
-- User confirms Product background looks correct in runtime
-- no visible geometry mismatch
-- no unacceptable 1920×1080 performance problem.
+1. Always-visible vs pre-bout information is clearly separated.
+2. Required User-approved fields are all covered.
+3. No final Simulation parameters are invented.
+4. Portrait is optional/deferred, not required.
+5. Birthplace is optional/deferred.
+6. Realtime stamina meter is explicitly out.
+7. Public-parameter philosophy is preserved.
+8. 1920×1080 layout proposal is concrete enough for implementation.
+9. Product art direction is compatible with the accepted arena.
+10. Management/tournament metadata is kept out of BoutSimulation.
+11. Current prototype/debug text is classified.
+12. Deferred decisions are clearly separated from accepted decisions.
+13. A minimal next implementation Task is recommended.
 
-Technical PASS != Product visual acceptance.
+## Verification
+
+Lean / Documentation Only.
+
+Required:
+- direct Current Source inspection
+- documentation consistency check
+- no Production Source changes
+- no Product asset changes
+- no package/lock changes
+- `git diff --check` PASS.
+
+No `pnpm test` or build required unless Source is accidentally touched; it must not be.
+
+## Completion Report
+
+Include:
+
+- Result
+- Preflight
+- Source findings relevant to HUD
+- Created/changed docs
+- Accepted Product decisions captured
+- Always-visible HUD summary
+- Pre-bout comparison summary
+- data ownership matrix
+- layout/wireframe summary
+- portrait/birthplace/stamina decisions
+- Deferred
+- recommended implementation sequence
+- User Decisions Required, if any
+- Design Deviations
+- Unexpected Scope
+- Verification
+- Git delivery.
 
 ## Stop Conditions
 
 STOP/BLOCKED if:
 
-- Candidate C local Product inputs are missing
-- regenerated Candidate C differs unexpectedly from the previously accepted preview
-- runtime asset generation cannot be deterministic
-- exact overlay does not align with Simulation geometry under the chosen logical resolution
-- 1920×1080 logical resolution causes a material runtime problem that prevents meaningful testing
-- Phaser 4 loading/rendering requires an unexpected dependency
-- integrating Product images requires changing gameplay geometry.
+- Current Source already has a conflicting authoritative HUD spec
+- required data ownership cannot be described without deciding an unresolved Management architecture
+- the task would require Production Source changes
+- a missing User decision prevents the HUD information hierarchy itself from being specified.
 
-Do not compensate by changing Ring-out values.
-
-## Implementation Evidence
-
-Completion Report must include:
-
-- accepted Candidate C command used
-- local generated output hashes
-- committed runtime asset paths + hashes + dimensions
-- Python tool change evidence
-- Phaser preload/render integration
-- logical resolution/mapping
-- debug boundary alignment method
-- old Graphics presentation handling
-- tests/build
-- browser smoke
-- User Play Test status
-- Design Deviations / Unexpected Scope.
-
-## Design Deviations
-
-Required.
-
-If none:
-`Design Deviations: NONE`
-
-Material deviations requiring STOP:
-- different Candidate geometry
-- different arena alignment
-- gameplay rule changes
-- non-uniform background scaling.
+Do not invent missing gameplay/management rules to complete the document.
 
 ## Git Delivery
 
-Follow AGENTS.md.
+Documentation-only Task.
 
-Explicitly stage task-owned files only.
+Expected task-owned files:
 
-Expected files may include:
-
-- `tools/dohyo_art/compose_dohyo.py`
-- `tools/dohyo_art/tests/test_compose_dohyo.py`
-- `tools/dohyo_art/README.md`
-- `public/assets/action/background/arena_base_1920.png`
-- `public/assets/action/background/dohyo_ring_overlay_1920.png`
-- `src/main.ts`
-- `src/game/scenes/BoutScene.ts`
-- `src/game/scenes/DohyoView.ts`
-- focused presentation tests if added
+- `docs/ACTION_HUD_PRODUCT_SPEC.md` (new)
+- `docs/ARCHITECTURE.md` only if minimally necessary
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
 
-Do not stage local ignored art inputs/outputs.
-
-One Task ≈ one commit.
-
 Suggested commit:
-`feat: integrate product dohyo background`
+`docs: specify product bout hud`
 
 Push `origin/develop`.
 Do not modify `main`.
 
+## User Visual Gate
+
+NOT REQUIRED for this Documentation Task.
+
+A later HUD implementation/mockup will require User Visual Approval.
+
 ## Final Instruction
 
-Stop after Product background / Tokudawara runtime integration and verification.
+Stop after the Product HUD specification and Completion Report.
 
-Do NOT continue into:
-- Product HUD
-- wrestler Product art
-- Gyoji
-- gameplay tuning.
+Do NOT:
+- implement Phaser HUD
+- create HUD image assets
+- change Product background
+- change wrestler visuals
+- implement Management/Tournament systems.
 
 After commit/push/report:
-「ACTION-ART-01B-PRODUCT-BACKGROUND-INTEGRATION が完了し、ChatGPT ReviewとUser Visual Check待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS / USER VISUAL + PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `dc3df77c9d8e7463c53292b46b7d8e1c3d5bf4ae`
-- Agent-Start-Head:
-  `0b515e407f7ae19becd59ea0faa1c1cbea3eb02f`
-- Diff is one implementation commit.
-- `main` unchanged.
-- No gameplay rule changes.
-- No package/lock changes.
-
-## Runtime Product Art Integration
-
-PASS.
-
-The accepted Candidate C Product art is now the default Bout background.
-
-Committed runtime assets:
-
-- `public/assets/action/background/arena_base_1920.png`
-- `public/assets/action/background/dohyo_ring_overlay_1920.png`
-
-Reported dimensions:
-- both 1920×1080
-
-Reported SHA-256:
-- arena base:
-  `07e7f5b2b25483ccc2578426a02045dd7653dd78083e2807ba560cc3392aeaa5`
-- overlay:
-  `d14ee82807763c1dcd8c20a749f1f52cc004de0f67c4678f2e0d339463a58680`
-
-The runtime files are reported to match the deterministic Candidate C regeneration.
-
-## Product Art Mapping
-
-PASS.
-
-`productArena.ts` defines a small Phaser-free presentation contract:
-
-- logical art space: 1920×1080
-- center: (960,540)
-- base ring radius: 400 px
-- Tokudawara depth: 21 px
-- halfAngle: π/20
-- meter-to-pixel mapping:
-  `400 / arena.radius`.
-
-For the current accepted Simulation arena:
-
-- 2.275 m -> 400 px
-- 0.1194375 m -> 21 px.
-
-This is the correct direct correspondence with Candidate C.
-
-## Phaser Logical Resolution
-
-Accepted for current Product baseline:
-
-- 1920×1080 logical canvas
-- Phaser Scale.FIT
-- CENTER_BOTH.
-
-This provides 1:1 art-to-logical pixels before browser scaling.
-
-This is still subject to User/runtime performance feedback; it is not an irreversible platform optimization decision.
-
-## Layering
-
-PASS.
-
-Runtime order:
-
-1. Product arena base depth 0
-2. exact Product dohyo/tokudawara overlay depth 0.5
-3. wrestler shadows depth 1
-4. wrestler bodies depth 2
-5. debug overlays depth 3
-6. text depth 4.
-
-No Product wrestler/HUD is baked into the background.
-
-## Old Graphics Dohyo
-
-PASS.
-
-The old full Graphics-based clay/tawara rendering is removed from default display.
-
-Retained:
-- boundary-outline helper
-- debug boundary renderer.
-
-Therefore there is no default double-ring source.
-
-## Debug Geometry
-
-PASS structurally.
-
-The debug boundary:
-- is derived from Simulation arena state
-- uses the same Product meter-to-pixel mapping
-- is rendered over the Product overlay
-- remains presentation only.
-
-This is the correct verification surface for User Play Test.
-
-The Report also includes numerical image-vs-Simulation validation across thousands of boundary angles and all Tokudawara side transitions.
-
-## Python Tool Export
-
-PASS.
-
-The compositor now adds:
-
-`arena_base_1920.png`
-
-as a deterministic 2× downscale from the aligned master.
-
-Reported Python suite:
-- 51 PASS.
-
-Existing Product/circle/Tokudawara deterministic tests remain PASS.
-
-## Runtime Verification
-
-Reported:
-
-- `pnpm test`: 240 PASS / 15 files
-- `pnpm build`: PASS
-- `tsc --noEmit`: PASS
-- Python tests: 51 PASS
-- `git diff --check`: PASS
-- Vite serves modules/assets successfully.
-
-Browser graphical smoke:
-**NOT RUN** due Agent environment limitation.
-
-Therefore technical integration is accepted, but Product/runtime visual acceptance is still pending.
-
-## Non-Blocking Notes
-
-### N1 — Product arena size
-
-`arena_base_1920.png` is reported around 2.5 MB as PNG.
-
-This is acceptable for the current visual integration gate.
-
-Do not optimize it in this Task.
-
-Before CrazyGames release, runtime image compression/download size should receive a separate asset-performance review.
-
-### N2 — Ring-radius historical comment
-
-`BoutScene.ts` still contains a comment tying 2.275 m to the approximately 4.55 m real dohyo inner diameter.
-
-The current Product visual contract uses R as the visible gameplay/tawara outer-edge boundary.
-
-This comment is not a runtime bug, but its historical-geometric wording should eventually be clarified.
-
-Do not change gameplay radius solely because of this comment.
-
-### N3 — Product art mapping is current-arena-specific
-
-The Product PNG is generated for the accepted Candidate C geometry.
-
-`productPixelsPerMeter` can scale another arena radius to 400 px, but a future arena with a different Tokudawara depth/radius ratio would not automatically match this fixed PNG.
-
-This is acceptable because the current Bout Product background is tied to the accepted arena geometry.
-
-Do not build a generic venue system now.
-
-## User Visual + Play Test — REQUIRED
-
-Run:
-
-`pnpm dev`
-
-### First: debug OFF
-
-Check:
-
-1. canvas appears 16:9
-2. Product arena fills the canvas correctly
-3. no horizontal/vertical stretching
-4. no black/blank area inside the canvas
-5. four Tokudawara match the accepted Candidate C appearance
-6. all four remain inside the painted platform
-7. old Graphics dohyo is not doubled underneath
-8. provisional wrestlers appear centered at the expected scale
-9. movement / Push / Counter / Grip / Drive still work
-10. R restart and 1/2 Dummy modes still work.
-
-### Then: press 0 for debug ON
-
-Check:
-
-11. magenta boundary lies on the Product tawara gameplay boundary
-12. +X Tokudawara aligns
-13. -X Tokudawara aligns
-14. +Y Tokudawara aligns
-15. -Y Tokudawara aligns
-16. diagonal normal-circle section aligns
-17. Ring-out occurs at that same visible/debug boundary.
-
-### Performance / visual feedback
-
-Please also report:
-
-- Is 1920×1080 noticeably heavy or choppy?
-- Does the background look too blurry or too sharp?
-- Does the Product background look materially better in actual runtime?
-- Do the current provisional wrestlers now look noticeably lower quality than the background?
-
-The last point determines how urgently to begin Product wrestler art after HUD.
-
-## Acceptance State
-
-Technical Product background integration:
-PASS.
-
-Product visual/runtime acceptance:
-PENDING USER TEST.
-
-Do not start Product HUD automatically until the User confirms this runtime background integration is acceptable.
-
-## Next Step
-
-If User accepts:
-- record Product arena/background runtime as Accepted Baseline
-- proceed to ACTION-ART-02 HUD specification.
-
-If User finds a mismatch:
-- classify it as:
-  - image alignment
-  - Phaser scaling
-  - Simulation/art geometry
-  - performance
-  - presentation layering
-- fix only that issue before HUD work.
-
-
-# User Runtime Visual Feedback — 2026-10-20
-
-User reviewed the integrated Product background in the browser and provided a runtime screenshot.
-
-Accepted feedback:
-
-- Product arena/background presentation is visually usable in runtime.
-- Current provisional wrestler size is **not unnatural** at the new Product scale.
-- Therefore the current meter-to-pixel/body-size presentation baseline should be preserved unless a later explicit gameplay/character-scale task changes it.
-- The provisional procedural wrestler visuals **do look materially lower quality than the Product background**.
-- This is expected and should be addressed by the later Product wrestler-art task, not by changing gameplay body radius or scale.
-
-Do Not Reopen:
-- wrestler gameplay/body scale solely to make the temporary visuals look better.
-- Product arena geometry/alignment based on the current screenshot.
-
-Still Pending for full ACTION-ART-01B runtime acceptance:
-- explicit confirmation of 1920x1080 runtime performance
-- explicit debug-boundary alignment check against the Product ring/Tokudawara.
-
-Current visual baseline:
-- background integration: visually positive
-- wrestler size: accepted
-- wrestler art quality: temporary / below Product bar, Deferred to Product wrestler-art phase.
+「ACTION-ART-02-HUD-PRODUCT-SPEC が完了し、ChatGPT Review待ちです」
