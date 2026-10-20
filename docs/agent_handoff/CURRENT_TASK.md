@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-03-WRESTLER-PRODUCT-SPEC
-Status: READY
+Status: REVIEWED
 Task-Type: DESIGN / PRODUCT ART SPEC / WRESTLER
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -848,3 +848,409 @@ Current accepted gameplay wrestler scale remains unchanged:
 - bodyRadius and meter-to-pixel mapping stay as-is.
 
 Variation should change the visible silhouette within a controlled Product-art range, not redefine current gameplay geometry in this Task.
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS
+
+## Reviewed Delivery
+
+- Documentation commit:
+  `1f89765e94490dd22aeec0cfbc812d9d5247d4d7`
+- Agent-Start-Head:
+  `2c61c9a5ee0e3ce28b91f3a03a9a6d903dee7c14`
+- Diff is one Documentation/Design commit.
+- Changed only:
+  - `docs/WRESTLER_PRODUCT_ART_SPEC.md`
+  - one minimal Architecture note
+  - Completion Report.
+- No Production Source / Product assets / package / lock changes.
+
+## Overall Assessment
+
+The Product wrestler-art specification is accepted.
+
+It is sufficiently concrete to begin actual Product source-art generation without first changing gameplay or Phaser runtime code.
+
+Most importantly, it preserves the current architecture:
+
+```
+BoutSimulation / BoutSnapshot
+        ->
+wrestlerVisualState.ts
+        ->
+Product Wrestler View / parts
+```
+
+Gameplay remains the state/rule source of truth.
+Product wrestler art remains presentation.
+
+## Accepted Product Part Direction
+
+Accept the recommended articulated part-based direction.
+
+Baseline part set:
+
+- torso
+- mawashi
+- upper arm
+- forearm + hand
+- head / hair / mage
+- foot
+- shadow.
+
+Left/right limb reuse through mirroring is acceptable for the first baseline set.
+
+### Arm segmentation
+
+Accept:
+**upper arm + forearm/hand**
+
+Do NOT return to one whole painted arm stretched over the current 0.5–1.55 reach scale range.
+
+Reason:
+- existing reach already spans a large range
+- the User now explicitly wants visible height/reach variation
+- large non-uniform stretching would be visibly below the Product-art quality bar.
+
+The later integration may tune the provisional bone lengths, but the two-part arm architecture is now the baseline.
+
+## Current Visual-state Coverage
+
+PASS.
+
+The specification covers every current presentation state:
+
+- idle
+- move
+- push startup / active / recovery
+- counter
+- kuzushi
+- grip reach / recovery
+- grapple turning
+- grapple neutral
+- morozashi holder
+- morozashi disadvantaged
+- drive
+- frozen/outcome.
+
+No new gameplay action was invented.
+
+The first Product set may represent these through part transforms rather than separate baked whole-body pose images.
+
+## Local Coordinate / Pivot Contract
+
+Accepted.
+
+Preserve:
+
+- participant center = wrestler root
+- local +X = forward / facing
+- local +Y = wrestler's right
+- root follows continuous `participant.facing`
+- part pivots are explicit metadata, not inferred from crop dimensions.
+
+The future deterministic art pipeline should emit explicit pivot/joint metadata in `parts.json` or an equivalent small manifest.
+
+Do not guess shoulder/elbow/head pivots at runtime.
+
+## Two-joint Arm Solver
+
+Accepted as the implementation direction, with numeric values remaining Provisional.
+
+Recommended:
+- analytic 2-link solution
+- target direction derives from current spread semantics
+- target reach derives from current visual pose semantics
+- elbow bends outward for each arm
+- clamp impossible target distance rather than stretching the painted limb.
+
+The example:
+- L1 ≈ 0.85R
+- L2 ≈ 0.95R
+
+is NOT an immutable art/game constant.
+
+The current maximum target (~1.86R) is slightly beyond the example 1.8R total length, so the integration/preview stage must tune the two provisional lengths or accept a small visual clamp.
+
+Do not change gameplay reach/rules to resolve that visual issue.
+
+## Wrestler Scale
+
+Do Not Reopen.
+
+Current accepted presentation scale remains:
+
+- bodyRadius = 0.35 m in gameplay
+- current Product mapping
+- visible baseline diameter ≈123 px.
+
+Do not resize gameplay geometry to fit Product art.
+
+Product assets should be normalized to the accepted runtime scale.
+
+## Weight / Height Appearance Variation
+
+The User decision is correctly reflected and is accepted as a Product-art architecture requirement.
+
+### Weight
+Must be able to affect visible:
+- torso/shoulder width
+- belly/hip bulk
+- general silhouette width.
+
+### Height
+Must be able to affect visible:
+- body length/depth
+- upper-arm length
+- forearm length / visual reach
+- stance/leg presentation where useful.
+
+### Important boundary
+This is initially PRESENTATION ONLY.
+
+Do NOT change:
+- bodyRadius
+- contact
+- Grip range
+- Push
+- Drive
+- Ring-out
+- other BoutSimulation rules.
+
+The possibility that height/weight later influence Management/Simulation stat growth remains Deferred.
+
+No formulas/stat names are accepted.
+
+## Appearance-factor Model
+
+The normalized-factor concept is accepted.
+
+Raw kg/cm should not be passed directly into Phaser sprite scale.
+
+A future profile/presentation conversion may derive normalized appearance values such as:
+- bulk
+- stature
+- bodyWidthFactor
+- bodyDepthFactor
+- arm-length factors
+- stance factor.
+
+However, the numeric ranges in §18 such as:
+- 0.90–1.15
+- 0.92–1.12
+- etc.
+
+remain **Recommended / Provisional**.
+
+They must be visually tested with actual Product assets before becoming a baseline.
+
+In particular, visible body-width changes must not become so large that the player consistently sees contact before the unchanged gameplay contact circle would allow it.
+
+This presentation/gameplay mismatch is a later User Visual/Game Feel gate, not a reason to change gameplay now.
+
+## Transform Risk Review
+
+Accepted.
+
+### Replace
+- large whole-arm `setScale(reach, 1)`
+- runtime mawashi tint as the primary Product color method.
+
+### Preserve / tune in presentation
+- root facing rotation
+- torso rotation
+- foot offsets
+- small crouch scale.
+
+### Controlled-only
+- mild non-uniform scaling for body/limb appearance variation.
+
+Do not apply the same scale factor uniformly to the entire wrestler.
+
+## AI Generation Workflow
+
+Accept the recommended sequence:
+
+**Canonical wrestler -> approved visual reference -> coherent parts sheet -> deterministic extraction.**
+
+This is preferable to independently generating every limb.
+
+The immediate next visual artifact should therefore be ONE canonical Product wrestler.
+
+The canonical image is for:
+- art style
+- silhouette
+- strict top-down readability
+- anatomy
+- skin/hair/mawashi treatment
+- lighting.
+
+It is not yet the runtime segmented asset.
+
+## Deterministic Offline Tooling
+
+Accept the recommendation to create a later small:
+
+`tools/wrestler_art/`
+
+pipeline after a source image / parts sheet exists.
+
+Expected responsibilities:
+- explicit region/joint definition
+- crop
+- transparent padding
+- scale normalization
+- pivot normalization
+- deterministic runtime downscale
+- mawashi color variant generation
+- `parts.json`
+- hashes/manifest
+- previews.
+
+Do NOT build the extraction tool before seeing the actual generated sheet unless a later Task finds a concrete reason to do so.
+
+Do NOT turn it into a generic asset framework.
+
+## Master / Runtime Size
+
+Accept the **direction**, not immutable final numbers.
+
+Recommended starting point:
+- master ≈4× runtime
+- runtime ≈ current 1× Product logical scale.
+
+This is reasonable for small rotating painted character parts.
+
+However:
+- 4× master
+- 1× runtime export
+- 2× alternative
+
+remain production choices to validate once real generated source art exists.
+
+No user decision is required before generating the canonical wrestler.
+
+## Mawashi Strategy
+
+Accept the current recommended direction for later tooling:
+
+- preserve painted shading
+- create deterministic color variants offline rather than relying on strong runtime multiply tint.
+
+The first canonical wrestler only needs one visually coherent mawashi.
+
+Final color system remains Deferred.
+
+Current blue/red debug/player colors are not Product lore/rules.
+
+Morozashi-holder visual cue remains Deferred for integration.
+
+## Lighting / Shadow
+
+Accepted.
+
+Because the whole wrestler rotates continuously:
+
+- baked body lighting should remain subtle / near-overhead / directionally neutral
+- strong world-direction highlights should not rotate with the wrestler
+- world-consistent grounding should primarily come from a separate soft shadow.
+
+The accepted arena lighting direction remains a presentation reference, but the character source art must stay rotationally readable.
+
+## Two-wrestler Overlap
+
+The identified risk is valid.
+
+Current fixed root ordering is insufficiently robust for final Product grapple readability.
+
+The proposed body/arm/head depth bands are a good integration candidate but are NOT yet locked as the only solution.
+
+Before Product Phaser integration:
+- preview neutral grapple
+- preview morozashi
+- verify both wrestlers' arms remain readable.
+
+Dynamic depth sorting should not be introduced preemptively.
+
+## Product Portrait
+
+Correctly separated.
+
+Top-down wrestler production must not require a face portrait.
+
+HUD portrait/random face generation remains Deferred.
+
+## User Decisions Required — Review Resolution
+
+The Report lists four decisions.
+
+For the next immediate task, NONE block canonical wrestler generation.
+
+### UD-1 arm segmentation
+Resolved by this review:
+**upper arm + forearm/hand accepted as baseline.**
+
+### UD-2 runtime export scale
+Remain Provisional.
+Does not block canonical generation.
+
+### UD-3 appearance-factor range
+Remain Provisional.
+Must be tuned with real Product art preview.
+
+### UD-4 Morozashi visual cue
+Remain Deferred to integration/visual test.
+
+## Next Production Sequence
+
+Accepted sequence:
+
+1. **ART-WRESTLER-01 — Canonical Product Wrestler**
+   - generate one complete strict top-down wrestler
+   - transparent/simple background
+   - current Product visual scale/style reference
+   - User approves art direction.
+
+2. **ART-WRESTLER-02 — Parts Sheet + deterministic wrestler-art tool**
+   - use approved canonical wrestler as visual reference
+   - generate coherent parts sheet
+   - build `tools/wrestler_art/`
+   - export runtime parts + metadata
+   - preview idle/rotation/push/grapple/appearance extremes
+   - User approves.
+
+3. **ACTION-ART-03A — Phaser Product Wrestler Integration**
+   - replace procedural generated textures
+   - articulated arms
+   - appearance factors
+   - Product mawashi variant
+   - overlap/layering solution
+   - User Play + Visual Test.
+
+This minimizes redraw risk.
+
+## Next Task Constraint
+
+The next task should NOT be another Claude implementation task yet.
+
+Next step is visual asset generation:
+**ART-WRESTLER-01 — Canonical Product Wrestler**
+
+Use the approved prompt recipe from `docs/WRESTLER_PRODUCT_ART_SPEC.md`.
+
+Generate the canonical wrestler first and obtain User visual approval before asking an Agent to build extraction tooling.
+
+## Overall Result
+
+PASS.
+
+The specification is implementation-ready and sufficiently preserves:
+- gameplay ownership
+- accepted wrestler scale
+- current visual-state semantics
+- future body-shape variation
+- Product-art quality goals.
+
+No Production correction is required before canonical image generation.
