@@ -1,585 +1,613 @@
-Task-ID: ACTION-ART-01A-PRODUCT-BACKGROUND-CREATION
+Task-ID: ART-TOOL-01-DOHYO-COMPOSITOR
 Status: READY
-Task-Type: PRODUCT ART CREATION / BOUT BACKGROUND + DOHYO MASTER
-Executor: Codex / Claude Code
+Task-Type: IMPLEMENTATION / ASSET-PRODUCTION TOOL / PYTHON IMAGE COMPOSITION
+Executor: Claude Code / Codex
 Target-Branch: develop
 Source-Baseline: 1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6
 Handoff-Mode: GITHUB
 
-# ACTION-ART-01A — Product Background Creation
+# ART-TOOL-01 — Deterministic Dohyo Art Compositor
 
 ## Purpose
 
-Create the first **Product-quality Bout background master** for SumoSim.
+Create a small, reusable Python asset-production tool for SumoSim that deterministically builds:
 
-This is NOT a disposable Prototype-art task.
+- an exact-geometry `dohyo_ring_overlay`
+- a geometry guide
+- normalized Product background master
+- master composite
+- 1920×1080 runtime/review outputs
 
-User direction:
-- avoid repeatedly recreating image assets
-- create art with the intent that it can remain in the Product version
-- Product-art order is:
-  1. Background / Dohyo
-  2. HUD
-  3. Wrestler character parts
-- current Action-first development remains the priority
+from:
+- a User-approved `arena_base` image
+- a User-approved tawara texture/source image
 
-This Task should produce one controlled, approved Product background direction based on the accepted Background Spec.
+This tool is intended to be rerun many times while tuning:
+- gameplay radius
+- tawara width
+- tawara texture
+- ring texture repetition
+- background source
+- shikiri geometry
 
-Do NOT integrate it into Phaser yet.
-Integration is ACTION-ART-01B after User visual approval.
+The goal is:
+**AI / artist creates visual source material; Python owns exact geometry and deterministic composition.**
 
-## Accepted Decisions
+Do NOT implement this logic in Phaser.
+This is an offline authoring tool only.
 
-These are now approved and should not be reopened inside this Task unless a hard contradiction is discovered.
+## Explicit Reference Permission
 
-### Art coordinate space
+The User explicitly approved using:
 
-- Product runtime-art coordinate space: **1920×1080**
-- Product master working space: **3840×2160**
-- aspect ratio: **16:9 landscape**
+`usuki-k/RobloxRts` branch `develop`, especially `tools/card_image/`
+
+as a REFERENCE ONLY.
+
+Relevant principles confirmed there:
+- asset-production tools live outside runtime/gameplay
+- AI/source art is separated from deterministic composition
+- explicit CLI
+- same inputs + same parameters -> same pixels
+- fail closed instead of silently drawing placeholders
+- tool-local requirements
+- README with canonical commands
+- focused automated tests
+- review outputs are separate from runtime/gameplay
+
+Do NOT copy Roblox/Card-specific architecture, classes, fonts, chrome logic, or its exact Pillow pin blindly.
+
+SumoSim should get a much smaller explicit tool.
+
+## Current Product Art Decisions
+
+Accepted:
+
+### Product art coordinate space
+- runtime/review art space: **1920×1080**
+- master art space: **3840×2160**
+- 16:9
+
+### Perspective
+- strict top-down orthographic
+
+### Exact gameplay geometry
+
+Runtime:
+- center: `(960, 540)`
+- gameplay radius / tawara outer edge: `400 px`
+- tawara inner edge: approximately `379 px`
+- tawara width: `21 px`
+- shikiri center X: `898`, `1022`
+- shikiri center Y: `540`
+- shikiri length: `140 px`
+- shikiri width: `12 px`
+- protected gameplay/presentation radius: approximately `532 px`
+
+Master = exact ×2:
+- canvas: `3840×2160`
+- center: `(1920, 1080)`
+- outer radius: `800 px`
+- inner radius: `758 px`
+- tawara width: `42 px`
+- shikiri center X: `1796`, `2044`
+- shikiri center Y: `1080`
+- shikiri length: `280 px`
+- shikiri width: `24 px`
+- protected radius: approximately `1064 px`
+
+These must be configurable by the offline tool so future changes do not require code edits.
+
+### Accepted arena base
+
+The User has visually accepted the current generated arena background direction.
 
 Important:
-- this does NOT permanently lock Phaser logical resolution to 1920×1080
-- the later Integration Task will map art-space to logical-space explicitly
+- preserve the original accepted arena image before edits
+- do not preemptively remove the broad central circular wear pattern
+- first composite exact tawara over it
+- only later apply a targeted background edit if User says the wear pattern competes with the gameplay boundary
 
-### Camera / perspective
+### Tawara source
 
-Use **strict top-down orthographic** as the Product background basis.
+The User has generated a horizontal RGBA straw/tawara source image.
 
-Allowed:
-- subtle depth through shading
-- narrow visible platform edge / clay-bank side
-- soft cast shadows
+It is a visual texture source only.
+It is NOT the final ring geometry.
 
-Not allowed:
-- perspective that turns the playable circle into a visible ellipse
-- oblique camera that makes future freely-rotating wrestler parts look pasted on
+The tool must convert the source texture into an exact annulus.
 
-### Gameplay / tawara mapping
+## Source Images Are NOT Assumed to Be in the Repository
 
-For the current Product-art direction:
-
-- gameplay radius reference in art-space = **400 px**
-- art-space center = **(960, 540)**
-- the preferred visible boundary mapping is:
-  **gameplay radius = outer edge of the tawara**
+The accepted arena image and tawara image currently exist outside the repository / in the User's ChatGPT workflow.
 
 Therefore:
-- tawara lies inward from the 400 px outer edge
-- current preferred tawara width = approximately **0.12 m ≈ 21 px** at runtime-art scale
-- the exact geometry remains a separable overlay so it can be changed without regenerating the full arena painting
 
-This is a Product Presentation decision for the current center-based Ring-out rule.
-The center-based Gameplay rule itself remains subject to later User Play Test with Product art.
+- the tool must take explicit input file paths via CLI
+- do not hard-code repository image filenames
+- do not commit placeholder copies of the User's images
+- use synthetic temporary fixtures in tests
+- README must explain how the User supplies local input images
 
-### Venue richness
+If real input files are locally available during Agent execution, a real smoke composition may be performed.
+If they are not available, this is NOT blocking for implementing/testing the tool.
 
-Product v1 should look like a finished game screen, but keep action readable.
+## Directory Permission
 
-Required:
-- finished dohyo/clay platform
-- surrounding floor
-- clear clay / sand / tawara material separation
-- enough Japanese/sumo venue atmosphere that the screen does not look like a technical demo
+This Task explicitly authorizes creation of:
 
-Allowed:
-- static dark spectators outside the protected gameplay region
-- static seated officials outside the protected gameplay region
-- restrained architectural / cloth / wooden framing
-- subtle salt box / water / corner details where they do not compete with play
+`tools/dohyo_art/`
 
-Do NOT bake in:
-- Gyoji
-- wrestlers
-- active FX
-- HUD
-- logos / text
-- moving crowd
-- large roof/foreground elements that occlude the ring
+Only for this dedicated asset-production tool.
 
-### Production method
+Recommended minimal contents:
 
-Do NOT generate many unrelated full-background alternatives.
+```
+tools/dohyo_art/
+  README.md
+  requirements.txt
+  compose_dohyo.py
+  tests/
+    test_compose_dohyo.py
+```
 
-Workflow:
-1. lock one composition
-2. produce one Product direction
-3. User reviews that direction
-4. revisions should be targeted/local where possible
-5. lock Product master
-6. export/integrate in ACTION-ART-01B
+A small helper module is allowed only if it materially improves clarity.
 
-## Critical Tool / Quality Rule
+Do not create a broad generic art framework.
 
-The User explicitly rejected throwaway primitive/prototype graphics.
+## Scope
 
-If the execution environment does NOT have a credible image-generation / digital-painting capability that can produce the required Product-quality background:
+Implement:
 
-**STOP / BLOCKED.**
-
-Do NOT substitute:
-- Python-painted placeholder art
-- SVG primitive art
-- Phaser Graphics art
-- procedural debug textures
-- low-quality mockups
-
-and do not claim they are Product art.
-
-In that case:
-- prepare/verify the geometry guide and art-generation package only
-- report the missing image-creation capability as BLOCKED
-- do not create fake Product assets
-
-If a genuine image-generation or digital-art tool is available, proceed.
-
-## Art Direction
-
-Target:
-- polished stylized 2D game art
-- hand-painted / illustrative finish
-- traditional Japanese/sumo atmosphere
-- warm, calm lighting
-- high visual quality suitable for a shipped web game
-- clear shapes and material separation
-- not photorealistic
-- not low-detail chibi
-- no heavy black comic outline
-
-The supplied User reference is a quality/mood/composition reference only.
-
-Do NOT copy:
-- exact artwork
-- exact layout
-- exact decorative motifs
-- exact UI
-- copyrighted text/logo elements
-
-## Lighting
-
-Use one consistent soft light:
-- from upper-left in screen-space
-- high-angle, approximately 60° feel
-- soft shadows
-
-This lighting direction must later be usable by:
-- part-based wrestler art
-- Gyoji art
-- character shadows
-
-Do NOT bake wrestler shadows into the background.
-
-## Color / Contrast
-
-Required:
-- playable clay area must not visually merge with wrestler skin
-- clay should be lower-saturation and/or meaningfully different in value from skin
-- tawara must read against both clay and outer sand
-- future mawashi colors must remain readable
-- HUD-safe regions should be calmer/darker and less detailed
-- central gameplay area should have restrained detail
-
-Avoid:
-- high-frequency noise under the wrestlers
-- bright patterns competing with Push/Grip states
-- marks that look like gameplay trails or footprints
-
-## Product Geometry Guide
-
-Create/retain an explicit non-destructive geometry guide for art production.
-
-Runtime-art coordinates:
-
-- canvas: 1920×1080
-- center: (960, 540)
-- gameplay radius: 400 px
-- preferred tawara outer edge: radius 400 px
-- preferred tawara inner edge: about radius 379 px
-- current participant body diameter reference: about 123 px
-- current initial participant centers: x ≈ 960 ± 123, y = 540
-- shikiri reference x ≈ 960 ± 62
-- shikiri reference vertical length ≈ 140 px
-- protected gameplay/presentation region: center (960, 540), radius about 532 px
-
-Master-space values are exactly ×2:
-- 3840×2160
-- center (1920, 1080)
-- gameplay radius 800 px
-- protected radius about 1064 px
-
-The guide itself is NOT runtime game art.
-
-## Layer Strategy
-
-The Product background must be authored so these responsibilities remain separable.
-
-### Layer 1 — arena_base
-
-Master intent:
-- opaque
-- full 3840×2160
-- venue/environment
-- platform/base
-- clay surface
-- outer sand
-- surrounding floor
-- spectators/officials only outside protected gameplay region
-- no exact gameplay-critical tawara geometry
-- no exact shikiri geometry
-- no characters/HUD/text/logo
-
-The painted base may contain soft/non-critical hints under the exact overlay only if they can be fully hidden later.
-
-### Layer 2 — dohyo_ring_overlay source
-
-Exact geometry source for:
-- tawara
-- tawara shading
-- shikiri lines
-
-Must be geometrically aligned to the accepted guide.
-
-Preferred:
-- create the texture/painting needed for the tawara
-- apply it through an exact circular mask/guide
-- preserve the editable/separable overlay source
-
-Do NOT rely on an AI-generated imperfect ring as the final gameplay boundary.
-
-### Layer 3 — arena_ambient source (optional)
-
-Subtle:
-- vignette
-- light falloff
-- low-frequency atmosphere
-
-Must sit behind future wrestlers.
-Do not darken critical gameplay readability.
-
-## Required Deliverables
-
-If image creation capability is available, produce:
-
-### D1 — Product master background
-
-A Product-quality **3840×2160** master background image for `arena_base`.
-
-Minimum:
-- lossless PNG master
-- no wrestler / Gyoji / HUD / text
-- geometry-compatible composition
-- transparent layers are not required for the opaque base
-
-### D2 — Exact geometry guide
-
-A lossless 3840×2160 guide or equivalent reproducible vector/mask data showing:
-- center
-- gameplay radius
-- tawara outer/inner edges
-- shikiri references
-- protected gameplay radius
-- optional HUD safe areas
-
-This is a developer/art-production guide, not a runtime layer.
-
-### D3 — Ring overlay master/source
-
-Create a separable master/source for the exact tawara + shikiri layer.
-
-Preferred:
-- 3840×2160 transparent PNG master
-or
-- a smaller exact crop with documented placement if that materially reduces file size
-
-Geometry must match the guide.
-
-### D4 — Preview composite
-
-Create a review preview at 1920×1080 combining:
-- arena base
-- exact ring overlay
-
-Purpose:
-User can judge the Product appearance before integration.
-
-Do NOT bake the preview back into the master source.
-
-### D5 — Production recipe
-
-Save a small text/markdown record containing:
-- accepted art brief version
-- generation prompt(s), if AI generation is used
-- negative prompt / exclusions if applicable
-- geometry coordinates
-- layer decomposition
-- editing notes
-- source image identifiers/filenames
-- any manual corrections performed
-
-Goal:
-avoid needing to rediscover how the Product background was produced.
-
-## Proposed Repository Paths
-
-This Task explicitly permits creation of:
-
-`art-source/action/background/`
-
-for Product source/master assets and production recipe.
-
-Do NOT create the runtime directory yet unless a runtime preview is explicitly needed for review.
-
-Runtime assets will be exported in ACTION-ART-01B to:
-
-`public/assets/action/background/`
-
-after User visual approval.
-
-Because AGENTS.md requires explicit new-directory permission:
-- `art-source/action/background/` is explicitly authorized by this Task
-- `public/assets/action/background/` is NOT yet authorized for Product runtime integration in this Task
-
-## Master / File Format
-
-For source/master:
-- lossless PNG is the required interchange format
-- retain original generated source image before destructive editing where practical
-- if a native editable art format is actually used, retain it as additional source
-
-Do NOT require a proprietary tool.
-
-For later runtime export:
-- arena_base may use lossy WebP
-- exact ring overlay must use lossless PNG or lossless WebP
-
-Runtime export is ACTION-ART-01B, not this Task.
-
-## Composition Requirements
-
-The main gameplay focus must remain central.
-
-### Protected gameplay region
-
-Within radius ≈ 532 px runtime equivalent:
-- no baked characters
-- no text
-- no high-contrast spectators
-- no foreground occluders
-- no strong decorative pattern
-- no architectural element that could be mistaken for a collision boundary
-
-### HUD planning regions
-
-Treat these as low-detail visual zones only.
-Do NOT paint empty UI boxes.
-
-- top-left: approx (0,0)-(560,200)
-- top-right: approx (1360,0)-(1920,200)
-- top-center: keep the first ~100 px relatively calm if possible
-- lower corners: calmer than surrounding venue
-
-These are guides for ACTION-ART-02, not final HUD geometry.
-
-## Venue Content Guidance
-
-Recommended composition:
-- central dohyo/platform as the hero
-- surrounding warm wooden/clay floor
-- outer edges becoming darker
-- limited spectators/official silhouettes beyond the protected region
-- subtle Japanese architectural/cloth cues
-
-Keep the environment believable and polished without turning it into a crowd-detail illustration.
-
-## Perspective Requirements
-
-Strict top-down orthographic for gameplay geometry.
-
-Allowed:
-- soft side shading on platform edge
-- slightly visible raised clay-bank side through light/shadow
-- top-down material texture
-- volumetric shading that does not distort geometry
-
-The visible gameplay circle must remain circular.
-
-## Geometry / Painted-Art Separation
-
-Do not force the painted base to solve exact geometry.
-
-The base must visually support a centered dohyo, but:
-- exact tawara boundary belongs to the overlay
-- exact shikiri geometry belongs to the overlay
-
-If generation produces an inaccurate ring:
-- remove/mask it
-- do not distort Simulation geometry to match the painting
-
-## Acceptance Criteria — Art Quality
-
-The generated Product direction is acceptable only if:
-
-- it looks materially closer to a shipped game than the current Graphics prototype
-- it is not obviously a generic AI/stock scene
-- dohyo is immediately recognizable
-- exact overlay does not look pasted on top of an incompatible base
-- style could support future wrestler parts in the same visual language
-- central action area is readable
-- lighting is coherent
-- venue atmosphere is present but restrained
-- no visible UI/text/wrestlers/Gyoji are baked in
-- 1920×1080 preview still looks clean
-- master has enough detail for later HUD/character integration
-
-If quality is materially below Product intent:
-- do not commit it as accepted Product art
-- report the limitation and request revision/another creation pass
-
-## Acceptance Criteria — Geometry
-
-- master art composition uses the accepted center
-- ring overlay outer edge matches master-space radius 800 px within 1 px
-- shikiri references align with guide
-- no scaling/stretching of overlay is required to fit the base
-- preview composite uses exact 16:9 crop
-- protected gameplay region remains unobstructed
-
-## User Visual Approval — REQUIRED
-
-This Task is not complete merely because files exist.
-
-After generation, provide the User:
-- 1920×1080 preview composite
-- optionally a second preview with geometry guide overlay for validation
-
-User must judge:
-- overall composition
-- Product-quality feel
-- color/lighting
-- environment richness
-- dohyo prominence
-- whether this is the visual direction to lock before HUD work
-
-Do NOT proceed to ACTION-ART-01B integration until User approves the Product direction.
+1. Python CLI
+2. input validation
+3. deterministic Product background normalization
+4. exact annular tawara geometry
+5. texture mapping around the annulus
+6. exact shikiri lines
+7. geometry guide
+8. master composite
+9. 1920×1080 downscaled outputs
+10. deterministic build manifest
+11. focused Python tests
+12. README / usage instructions
+13. tool-local Python dependency definition
 
 ## Scope Out
 
 Do NOT:
+- modify `src/`
+- modify Phaser rendering
+- integrate runtime assets
+- change Gameplay / Ring-out rules
+- alter HUD
+- create wrestler assets
+- use RobloxRts as a runtime dependency
+- copy Roblox card-specific code
+- create a generic image-processing framework
+- commit User image inputs unless a later Task explicitly requests it
+- modify accepted arena art automatically beyond normalization/crop/resize
+- remove the center wear pattern
+- use generative AI from the Python tool
 
-- integrate background into Phaser
-- change logical resolution
-- change Gameplay
-- change Ring-out formula
-- create HUD art
-- create wrestler part art
-- create Gyoji art
-- install Aseprite/Tiled
-- implement camera changes
-- create moving spectators
-- generate multiple unrelated complete backgrounds as a comparison set
+## Tool Design
 
-## Stop Conditions
+### CLI
 
-STOP and report if:
+Provide one explicit command, for example:
 
-- no capable image-generation/digital-art tool is available
-- only prototype/procedural-quality art can be produced
-- exact circular geometry cannot be kept separable from the painted base
-- Product art would require changing current Gameplay/camera before creation
-- master file sizes exceed practical Git limits and no repository policy exists
-- a proprietary source-art tool becomes mandatory
-- Current Source materially conflicts with the accepted Product Art Spec
+```bash
+python tools/dohyo_art/compose_dohyo.py \
+  --arena-base "/path/to/arena_base.png" \
+  --tawara-source "/path/to/tawara_source.png" \
+  --output-dir "/path/to/output"
+```
 
-## Verification
+Exact naming may vary slightly.
 
-Art creation / source-asset verification.
+The CLI must expose the geometry/tuning values that are likely to change without code edits.
+
+At minimum support:
+- `--outer-radius` master-space px (default 800)
+- `--tawara-width` master-space px (default 42)
+- `--shikiri-offset-x` master-space px from center (default 124)
+- `--shikiri-length` (default 280)
+- `--shikiri-width` (default 24)
+- tawara texture repetition/tiling tuning
+- optional source-end trimming for the tawara source if needed to remove frayed ends
+- master/output size should default to 3840×2160 but need not become a generic arbitrary-layout framework
+
+Prefer clear named options rather than an opaque config system.
+
+### Fail Closed
+
+Invalid input must return non-zero and write no misleading final output.
+
+Examples:
+- arena missing/unreadable
+- arena aspect materially incompatible with 16:9
+- tawara source missing/unreadable
+- invalid radius/width
+- inner radius <= 0
+- ring exceeds canvas
+- invalid shikiri geometry
+- output path collision/partial write concerns where relevant
+
+Do not silently create placeholder art.
+
+## Arena Base Normalization
+
+The currently accepted arena source is very close to 16:9 but may not be exactly 3840×2160.
+
+The tool should normalize it deterministically.
+
+Requirements:
+- preserve composition
+- preserve aspect ratio
+- no obvious non-uniform stretching
+- accept very small aspect mismatch
+- fail if mismatch is large enough that a material crop would be required
+
+Recommended:
+- validate input aspect against 16:9 with a small documented tolerance (for example ~0.2%, if justified)
+- center-fit/crop only the tiny excess
+- resize to exactly 3840×2160 with a high-quality deterministic filter
+
+Do not hide a significant crop.
+
+Output:
+- `arena_base_master.png` — exact 3840×2160
+
+## Tawara Texture Preparation
+
+Requirements:
+- preserve alpha
+- crop transparent padding using the alpha bounding box
+- reject an empty-alpha source
+- do not assume the source dimensions
+- allow controlled trimming of left/right source ends because generated straw may contain frayed ends
+- prepare a horizontally repeatable texture deterministically
+
+The source currently contains visible tied sections.
+The tool should allow User iteration over texture repetition without code changes.
+
+Do not assert one visually perfect repeat count as permanent.
+Provide a documented default and CLI control.
+
+## Exact Ring Mapping
+
+Use a true polar/annular mapping, not a manually approximated polygon ring.
+
+For every output pixel within the annulus:
+- radius determines texture vertical coordinate
+- angle determines texture horizontal coordinate
+- horizontal texture repeats around 2π according to the configured repeat count
+
+Requirements:
+- exact circle center
+- exact outer radius
+- exact inner radius
+- transparent everywhere outside the annulus, except shikiri lines
+- anti-aliased ring edges
+- deterministic sampling
+- no visible geometry drift from texture dimensions
+
+Implementation may use Pillow + NumPy if useful.
+
+Do not add heavy CV/scientific dependencies unless genuinely required.
+
+## Seam Handling
+
+The full 360° texture wrap must not have an obvious hard seam at angle 0.
+
+Implement one small deterministic strategy, such as:
+- a horizontally seamless prepared texture,
+- edge crossfade,
+- mirror tiling,
+- or equivalent.
+
+Do not over-engineer procedural texture synthesis.
+
+Expose only the small controls needed for likely visual iteration.
+
+## Shikiri Lines
+
+Draw shikiri lines deterministically in the exact master geometry.
+
+Default:
+- centers X = center ± 124
+- center Y = 1080
+- length = 280
+- width = 24
+
+Color:
+- warm off-white / ivory appropriate for the accepted arena
+
+The shikiri geometry must not be inferred from the AI image.
+
+## Required Outputs
+
+Default output directory should contain:
+
+```
+arena_base_master.png
+dohyo_ring_overlay_master.png
+geometry_guide_master.png
+composite_master.png
+dohyo_ring_overlay_1920.png
+composite_preview_1920.png
+build_manifest.json
+```
+
+### arena_base_master.png
+- RGB/RGBA allowed
+- exact 3840×2160
+- normalized accepted arena input
+
+### dohyo_ring_overlay_master.png
+- RGBA
+- exact 3840×2160
+- transparent except:
+  - tawara annulus
+  - shikiri lines
+  - very small/tightly controlled local shadow/edge treatment if implemented
+- must NOT include arena/clay
+
+### geometry_guide_master.png
+Developer/art-production guide only.
+
+Show clearly:
+- canvas center
+- outer gameplay radius
+- inner tawara radius
+- protected radius
+- shikiri reference geometry
+- optional initial participant centers
+
+This image is not a runtime asset.
+
+### composite_master.png
+Exact alpha composite:
+`arena_base_master + dohyo_ring_overlay_master`
+
+### dohyo_ring_overlay_1920.png
+Lossless downscale to 1920×1080.
+
+### composite_preview_1920.png
+Review image for User approval.
+
+### build_manifest.json
+Deterministic metadata only; no timestamp.
+
+Include:
+- tool/version/schema number
+- input paths or basenames
+- SHA-256 of input bytes
+- source dimensions/modes
+- normalized master dimensions
+- center
+- radius
+- tawara width
+- repeat count
+- trim setting
+- shikiri geometry
+- resize/sampling mode
+- output dimensions
+
+Same inputs + same parameters + same canonical toolchain should produce identical decoded pixels.
+
+## Optional Initial Participant Guide
+
+Geometry guide may also show current participant center references:
+- runtime x ≈ 960 ± 123, y = 540
+- master x ≈ 1920 ± 246, y = 1080
+
+This is reference/debug only.
+
+Do not bake participant guides into the overlay or composite.
+
+## Dependencies / Toolchain
+
+Use a tool-local Python environment.
+
+Likely dependencies:
+- Pillow
+- NumPy, only if used for vectorized polar mapping
+
+Do not modify Node `package.json` / `pnpm-lock.yaml`.
+
+Before choosing pins:
+- inspect Agent Python version
+- choose versions compatible with that Python
+- pin the versions actually used for verification in `tools/dohyo_art/requirements.txt`
+
+Do NOT blindly copy RobloxRts's `Pillow==9.5.0`; its pin exists for Roblox card-specific historical byte contracts.
+
+README must show:
+- venv creation
+- requirements install
+- tool command
+- test command
+- verified Python / library versions
+
+A local venv should not be committed.
+
+If Python is missing or a compatible minimal toolchain cannot be established, STOP/BLOCKED.
+
+## Determinism
+
+Within the verified toolchain:
+
+- no random numbers
+- no timestamps in generated pixels/manifest
+- no machine-dependent font usage
+- no metadata that changes per run
+- same inputs / args -> same decoded pixels and same manifest content except absolute input paths should preferably be normalized to basenames or stable relative values
+
+Tests should compare deterministic pixel data/hashes where practical.
+
+## Tests
+
+Use stdlib `unittest` unless there is a strong reason otherwise.
+
+Synthetic fixtures must be generated in temporary directories during tests and must never become Product art.
+
+At minimum test:
+
+1. CLI/library composition succeeds from synthetic valid inputs
+2. master output dimensions = 3840×2160 (a reduced test geometry may be used internally for speed if the same functions are covered)
+3. preview output dimensions = 1920×1080
+4. ring center/radius are correct
+5. pixels outside outer radius are transparent in overlay
+6. pixels inside inner radius are transparent except shikiri
+7. annulus has visible alpha
+8. shikiri lines are at exact configured positions
+9. alpha is preserved
+10. source transparent padding crop works
+11. invalid/empty tawara alpha fails
+12. materially wrong arena aspect fails
+13. invalid geometry fails
+14. same inputs/parameters produce deterministic identical pixels
+15. manifest contains the exact geometry/parameters
+16. no dependency on Phaser / TypeScript / gameplay source
+
+Avoid visual-golden tests that are fragile to irrelevant compression metadata.
+Prefer decoded pixel assertions/hashes.
+
+## Visual Quality / User Gate
+
+Automated tests verify geometry and determinism, NOT whether the tawara looks good.
+
+After the tool is implemented:
+
+User will run it with the accepted real:
+- arena base
+- tawara source
+
+and inspect `composite_preview_1920.png`.
+
+Likely visual tuning controls:
+- repeat count
+- source end trim
+- potentially tawara width
+
+The User may rerun the tool several times.
+
+This is expected and is the reason the tool exists.
+
+Technical PASS != Product visual acceptance.
+
+## README
+
+Document:
+
+- Purpose
+- architecture:
+  `AI/Artist Sources -> Deterministic Geometry/Composition -> Review/Runtime Assets`
+- relationship to gameplay (none; offline only)
+- install
+- CLI example
+- defaults
+- all output files
+- how to iterate repeat/trim/radius/width
+- how to compare preview
+- fail-closed behavior
+- tests
+- note that the center wear pattern in arena base is intentionally NOT edited by this tool
+- note that actual Product inputs are supplied by file path and are not bundled with the tool
+
+## Verification Level
+
+Standard for the asset tool, no game-runtime changes.
 
 Required:
-- expected deliverables exist
-- dimensions verified
-- alpha/transparency verified where applicable
-- exact geometry guide measurements verified
-- overlay alignment verified
-- preview composite generated
-- production recipe saved
-- no Production TypeScript/source changes
-- package/lockfile unchanged
-- `git diff --check` for text files
-- repository file-size sanity check
-- only task-owned art/source files staged
+- Python unit tests for the tool
+- one CLI smoke using synthetic inputs
+- deterministic rerun comparison
+- `git diff --check`
+- confirm no `src/` changes
+- confirm no package/lock changes
+- confirm no User images accidentally committed
+- README commands verified
 
-Tests/build are NOT required if Production source is unchanged.
+`pnpm test` / `pnpm build` are not required unless TypeScript/Node files are unexpectedly touched; they should not be.
 
-## Completion Report
+## Implementation Evidence
 
-Minimum:
-- Result
-- Preflight
-- image-creation capability used
-- source/master files created
-- exact dimensions
-- layer/file list
-- generation/edit workflow
-- production recipe path
-- geometry verification
-- preview path
-- file-size summary
-- art acceptance self-check
-- User visual approval REQUIRED
-- Design Deviations
-- Unexpected Scope
-- Verification
-- Git delivery
+Completion Report must include:
 
-If BLOCKED:
-- explain exactly which capability is unavailable
-- do not substitute low-quality placeholder art
+- Tool architecture
+- Reference from RobloxRts used only as design guidance
+- Changed files
+- CLI contract
+- exact default geometry
+- image mapping approach
+- seam strategy
+- output list
+- dependency versions
+- deterministic evidence
+- tests
+- real Product inputs available/not available
+- User visual check status
+
+## Design Deviations
+
+Required.
+
+If none:
+`Design Deviations: NONE`
+
+If mapping/seam/dependency approach differs from this Task:
+- Planned
+- Implemented
+- Reason
+- Product semantics affected?
+
+Do not change accepted gameplay geometry silently.
+
+## Unexpected Scope
+
+Report only.
+Do not fix unrelated issues.
 
 ## Git Delivery
 
 Follow AGENTS.md.
 
-Product source assets belong on `develop`.
-Task-owned files only.
+Task-owned files only:
+- `tools/dohyo_art/**`
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-One successful creation Task ≈ one commit.
+One Task ≈ one commit.
 
 Suggested commit:
-`art: add product bout background master`
+`tools: add deterministic dohyo art compositor`
 
+Push `origin/develop`.
 Do not modify `main`.
+
+## User Play / Visual Test
+
+No gameplay Play Test required.
+
+**Product Visual Check: REQUIRED AFTER TOOL IMPLEMENTATION**, using the real accepted images supplied by the User.
+
+The tool implementation may technically PASS without real Product inputs if:
+- synthetic tests fully pass
+- real images were not present in the Agent workspace
+
+In that case report:
+`Real Product Composite: NOT RUN — source images not available in repository/workspace`
+
+Do not claim the Product background is visually accepted.
 
 ## Final Instruction
 
-Stop after Product background creation and preview.
+Stop after implementing and verifying the reusable Python compositor.
 
-Do NOT integrate into Phaser.
+Do not integrate outputs into Phaser.
+Do not begin HUD.
+Do not alter gameplay.
 
 After commit/push/report:
-「ACTION-ART-01A-PRODUCT-BACKGROUND-CREATION が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
-
-
-# User Visual Decision — Product Arena Base
-
-User has visually approved the generated Product background direction as the accepted `arena_base` baseline.
-
-Accepted:
-- 16:9 top-down sumo venue direction
-- warm painted/stylized Product-quality look
-- central dohyo/platform composition
-- surrounding wooden venue and restrained spectators
-- no wrestlers / Gyoji / HUD baked into the background
-
-Important follow-up:
-- Do NOT preemptively repaint or erase the broad circular clay wear marks in the center.
-- First composite the exact `dohyo_ring_overlay` against this background.
-- Only if the wear marks materially compete with or visually contradict the exact gameplay boundary should they be softened with a targeted local edit.
-- Preserve the original accepted arena-base source before any such edit.
-
-Next visual step:
-1. preserve accepted arena base unchanged
-2. create exact tawara + shikiri overlay using the accepted art-space geometry
-3. create 1920×1080 composite preview
-4. User checks whether the center wear ring conflicts with the exact boundary
-5. if necessary, apply only a local/non-destructive reduction of the wear ring
-6. then lock the Product background before HUD work
+「ART-TOOL-01-DOHYO-COMPOSITOR が完了し、ChatGPT Reviewと実画像Composite確認待ちです」
