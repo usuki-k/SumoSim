@@ -804,3 +804,40 @@ If User visually accepts the English shell:
 If English fit/style needs adjustment:
 - create a focused 02A1 visual-tuning follow-up first
 - do not combine it with the pre-bout comparison screen.
+
+
+# User Visual Acceptance — English HUD Shell
+
+User reviewed the ACTION-ART-02A1 runtime screenshot and reported no issues.
+
+Accepted Product visual baseline:
+
+- normal Product HUD language: English
+- full `East` / `West` side pills
+- `Maegashira 15 / 16` rank presentation
+- romanized fixture wrestler names
+- `Day 3` center chip
+- current East/West identity block sizes and positions
+- current panel paper/ink/accent direction
+- current text hierarchy: wrestler name > rank / record
+- current Product arena visibility remains acceptable
+- current wrestler presentation scale remains acceptable.
+
+No Japanese Product HUD text is required for the initial release.
+
+Do Not Reopen without an explicit visual/design task:
+- switching the normal Product HUD back to Japanese
+- shrinking side labels to E/W solely for space
+- changing the accepted shell layout without a concrete visual need.
+
+Technical + User Visual status:
+**ACTION-ART-02A1 ACCEPTED**
+
+Next allowed Product HUD task:
+`ACTION-ART-02B-PREBOUT-COMPARISON`
+
+Constraint:
+- retain the English-first / future-multilingual presentation boundary
+- use English fixture content
+- do not implement Management/Tournament systems
+- do not invent final Simulation parameter list.
