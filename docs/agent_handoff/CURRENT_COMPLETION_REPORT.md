@@ -1,217 +1,180 @@
-Task-ID: ACTION-ART-01B-PRODUCT-BACKGROUND-INTEGRATION
-Result: PASS WITH KNOWN UNTESTED ITEMS
+Task-ID: ACTION-ART-02-HUD-PRODUCT-SPEC
+Result: PASS
 Branch: develop
-Source-Baseline: 294530e8adfd3f5402b043583032d766dc0d150c
-Agent-Start-Head: 0b515e407f7ae19becd59ea0faa1c1cbea3eb02f
+Source-Baseline: dc3df77c9d8e7463c53292b46b7d8e1c3d5bf4ae
+Agent-Start-Head: 0d30e1044e997a60af6da7fa2d4fa8529be55e66
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS。
+PASS（Documentation only）。
 
-**実装したこと**
-- 受理済みのCandidate Cから、runtime assets（`arena_base_1920.png` と `dohyo_ring_overlay_1920.png`）を決定的に再生成し、commitした
-- Phaserで、logical 1920×1080、ring中心 (960, 540)、半径400pxの1:1対応で、2つの層として表示する
-- 従来のGraphics土俵は削除した
-- debug（key `0`）で、Simulationの正確な境界をProduct artの上に重ねて表示する
-
-**検証**
-- art ↔ Simulation の一致を、runtime overlayの画素で数値的に確認した
-  - 7144の角度と8本の側端で、Simulationの境界の外にtawaraは一切なく、境界の内側には必ずtawaraがある
-- `pnpm test` 240件PASS、`pnpm build` PASS、`tsc --noEmit` PASS、Python 51件PASS、`git diff --check` PASS
-- gameplayは未変更
-
-**Known Untested**
-- 実ブラウザでの描画smokeは **NOT RUN**（ブラウザ操作の手段がない）
-  - dev serverで、module変換とassetsの配信（HTTP 200、配信されたPNGのsha256がcommitしたものと一致）だけを確認した
-- **User Visual / Play Test: REQUIRED**
+- `docs/ACTION_HUD_PRODUCT_SPEC.md` を新しく作り、Product HUDの正本とした
+- 内容
+  - 常時表示と取組前の比較表示を分けた情報の階層
+  - 各項目のdata ownership
+  - 1920×1080のzone案（推奨値。幾何から導いた禁止領域を含む）
+  - 肖像・出身地・staminaの扱い
+  - 既存のdebug textの分類
+  - 将来のdata contract
+  - 実装の段階
+- 公開パラメータは一切決めていない。件数が変わる前提の構造だけを定めた
+- `docs/ARCHITECTURE.md` に、HUDのmetadataをSimulationに入れないという1項目だけを追加した
+- Production Source / assets / package / lockfileは未変更
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 3`
 - Remote CURRENT_TASKを確認した
   - Task-ID一致、Status READY、Target-Branch develop
-  - Source-Baseline `294530e`（ancestor）、Handoff-Mode GITHUB
-- `294530e..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
-- Agent-Start-Head = FF後の `0b515e4`
-- 実入力 `input.local/arena_base.png` と `tawara_source.png` の存在を確認した
+  - Source-Baseline `dc3df77`（ancestor）、Handoff-Mode GITHUB
+- `dc3df77..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
+- Agent-Start-Head = FF後の `0d30e10`
+- 既存の正式なHUD specはない（`docs/` にあるのはARCHITECTURE、GAME_CONCEPT、agent_handoffのみ）。衝突はない
 
-# Candidate C Regeneration
+# Source Findings Relevant to HUD
 
-使ったcommand：
+- `src/main.ts`: logical 1920×1080、`Scale.FIT`
+- `productArena.ts`: art中心 (960, 540)、基本半径400px、徳俵21px
+  - 徳俵の外縁は421px、力士の直径は約123px（半径約62px）
+- `BoutScene.ts` の `PARTICIPANT_PRESENTATION`
+  - `wrestler-a` = keyboard / 青 / `PLAYER` / **EAST**、spawnは x = −0.7（画面の左）
+  - `wrestler-b` = dummy / 赤 / `CPU` / **WEST**（画面の右）
+  - `name` は未設定で、結果の文言は `PLAYER` / `CPU` をfallbackにしている
+- 画面のtext
+  - modeText（Dummyのmodeと操作説明）、engagementText（debug）、頭上のlabel（debug）、phaseText（debug）、resultText（勝敗）
+  - 加えて、debugの図形（接触円、向き、組みの線、境界）
+- `BoutTypes.ts`
+  - `ParticipantState` にprofileやtournamentの情報はない
+  - `BoutSnapshot` = arena / participants / engagement / outcome
+- 東 = 左、西 = 右というTaskの前提は、Current Sourceと一致する。食い違いはない
 
-```
-tools/dohyo_art/.venv/Scripts/python.exe tools/dohyo_art/compose_dohyo.py \
-  --arena-base tools/dohyo_art/input.local/arena_base.png \
-  --tawara-source tools/dohyo_art/input.local/tawara_source.png \
-  --output-dir tools/dohyo_art/output-product-c.local \
-  --arena-scale 1.0952 --arena-offset-x 5.48 --arena-offset-y 95.28 \
-  --tokudawara-depth 42 --tokudawara-half-angle-deg 9
-```
+# Created / Changed Docs
 
-- 既存の出力6種（arena / overlay / guide / composite の master、overlay_1920、preview_1920）は、受理時の `output-tokudawara-c.local/` と **byte一致**した
-  - 「再生成したCandidate Cが予期せず異なる」という状況は起きていない
-- 同じcommandで別dirへ再実行し、`build_manifest.json` と `arena_base_1920.png` が **byte一致**した
-
-## Local Generated / Committed Runtime Assets
-
-| File | Size / Mode | SHA-256 |
-|---|---|---|
-| `public/assets/action/background/arena_base_1920.png` | 1920×1080 RGB | `07e7f5b2b25483ccc2578426a02045dd7653dd78083e2807ba560cc3392aeaa5` |
-| `public/assets/action/background/dohyo_ring_overlay_1920.png` | 1920×1080 RGBA | `d14ee82807763c1dcd8c20a749f1f52cc004de0f67c4678f2e0d339463a58680` |
-
-- どちらも `output-product-c.local/` にある同名ファイルと、sha256が一致する
-- PNGにmetadataはない
-- master画像、guide、manifest、入力は `public/` に置いていない
-
-# Python Tool Change
-
-- `OUTPUT_ARENA_1920 = "arena_base_1920.png"` を追加した
-  - `arena_base_master.png` をBOX（2×2の正確な平均）で縮小する。overlay / previewの1920と同じ方式
-  - 追加の再描画はしない
-- `BuildResult.images` と manifest `outputs` に追加し、manifest schemaを 3 → 4 にした
-- Tests（51件PASS）
-  - 出力の集合とサイズ（480×270、RGB）、CLIのfull sizeの出力一覧（1920×1080）
-  - 新規 `test_runtime_arena_is_exact_2x_box_downscale_of_master`
-    - 恒等とalignment付きの両方で、`master.resize(BOX)` とpixel hashが一致する
-    - 2×2の平均と±1以内で一致する
-    - 決定的で、manifestにも記録される
-  - 既存のTokudawaraと円の互換test（旧版のhashを固定したものを含む）はPASSのまま
-- README: runtimeの層と正規のCandidate C command、出力表に `arena_base_1920.png` を追加、schema 4
-
-# Phaser Integration
-
-- `src/main.ts`
-  - logical sizeを `PRODUCT_ART_WIDTH × PRODUCT_ART_HEIGHT` = **1920×1080** にした
-  - `Scale.FIT` と `CENTER_BOTH` はそのまま
-- `src/game/presentation/productArena.ts`（新規、Phaser非依存）が、art contractを持つ
-  - `PRODUCT_ART_CENTER (960, 540)`、`PRODUCT_RING_RADIUS_PX 400`、`PRODUCT_TOKUDAWARA_DEPTH_PX 21`、`PRODUCT_TOKUDAWARA_HALF_ANGLE π/20`
-  - `productPixelsPerMeter(arena) = 400 / arena.radius`
-- `src/game/scenes/DohyoView.ts`
-  - `preloadProductDohyo`: Phaser 4.2.1の `scene.load.image(key, url)`（installed typesで確認）で読み込む
-    - URLは `${import.meta.env.BASE_URL}assets/action/background/...`
-  - `addProductDohyo`: 2枚を `scene.add.image(960, 540, key).setOrigin(0.5)` で、art pixelに1:1で置く
-    - depthは arena base 0、overlay 0.5（WrestlerViewの影1と体2より下）
-  - 従来の `drawDohyo`（Graphicsの土・俵・仕切り線）は **削除** した。ringの見える正本が二重にならない
-  - `arenaBoundaryOutline` と `drawArenaBoundaryDebug` は残した
-    - debugの線は高コントラストのmagenta、3px、0.25°刻み。窓の端は厳密な頂点にしてある
-- `src/game/scenes/BoutScene.ts`
-  - `preload()` を追加した
-  - 原点 = `PRODUCT_ART_CENTER`、`pixelsPerMeter = productPixelsPerMeter(snapshot.arena)`（= 175.824…）
-  - `RING_FILL_RATIO` は削除した
-  - 既存のprototype / debug textだけを1920用に調整した（font sizeを約2倍、縁取り、位置）
-  - 新しいUIは作っていない
-- 力士: `bodyRadius × pixelsPerMeter` で、直径は **約123.1px**（0.7 m）。bodyRadiusは変更していない
-- 新しいdependencyはない
-
-# Logical Resolution / Mapping
-
-- 2.275 m → 400.0 px
-- Tokudawara 0.1194375 m → 21.0 px
-- halfAngle π/20 = 9°
-
-`productArena.test.ts` で、art contractとSimulationの値の一致を確認している。
-- 半径と徳俵の深さは1e-12まで一致
-- 42/800の比率、力士の直径約123px、Phaser非依存であること
-
-# Debug Boundary Alignment Method
-
-**数値的な検証**（runtimeのoverlay PNGと、Simulationの幾何をppm 400/2.275で写したもの）
-
-- 側端の±0.2°を除く7144の角度で調べた
-  - 境界 + 1.5px のalphaが0でない角度: **0**
-  - 境界の内側20px以内に俵がない角度: **0**
-- 8本の側端（4方向 × 2）
-  - 窓の内側の帯（R+1〜R+D−1）の最小alpha: 187 / 249
-  - 窓の外側（r > R+2）の最大alpha: **0**
-- debug表示の線は、同じ `arenaBoundaryOutline` を同じ原点とppmで描く。そのため、表示上も同じ境界に重なるはず
-- 目視での確認は、User Play Testの 7〜10 で行う
-
-**runtimeの2層と、受理済みpreviewの比較**
-- `arena_base_1920` に `overlay_1920` をalpha合成した結果と、受理済みの `composite_preview_1920` の差は、最大3/255（平均0.017）
-- 「合成してから縮小する」と「縮小してから合成する」の丸めの差で、見た目は同じ
-
-# Tests / Build
-
-| 項目 | 結果 |
-|---|---|
-| `pnpm test` | **240 passed**（15 files。新規 `productArena.test.ts` 3件） |
-| `pnpm build` | PASS。`dist/assets/action/background/` に2枚が出力される（chunkサイズの警告は以前からのもの） |
-| `tsc --noEmit` | PASS |
-| Python `tools/dohyo_art` | **51 passed** |
-| `git diff --check` | PASS |
-| runtime assetのsize / hash | 上の表のとおり。再生成したものと一致 |
-| package / lockfile | 未変更 |
-
-# Browser Smoke
-
-**NOT RUN**（この環境には、Phaserのcanvasを表示して操作する手段がない）。
-
-代わりに、dev server（vite）で次を確認した。
-- `/`、`main.ts`、`BoutScene.ts`、`DohyoView.ts`、`productArena.ts` がHTTP 200
-- 2枚のPNGが `image/png` で200。配信されたarena PNGのsha256は、commitしたものと一致
-
-canvasの16:9表示、引き伸ばしや黒い縁がないこと、操作、debugの切り替え、console errorの有無は、User確認で見ていただく必要がある。
-
-# User Visual / Play Test — REQUIRED
-
-`pnpm dev` で起動する。
-
-**debug OFF**
-1. 16:9で歪みなく表示される
-2. 受理済みのCandidate Cのpreviewと同じ見た目
-3. 4つの徳俵が、描かれた石枠の内側に収まる
-4. 暫定の力士の大きさ
-5. 古い土俵の描画が重なっていない
-6. 操作が効く
-
-**key `0` で debug ON**
-7. magentaの線がProductのringに重なる
-8. ±X / ±Y の徳俵
-9. 斜め（通常の円の部分）
-10. Ring-outが、見えている境界で起きる
-
-あわせて報告をお願いします：
-- 1920×1080での動作の重さ
-- 背景の解像感（ぼけすぎ / 鋭すぎ）
-- 暫定の力士が、背景の品質と比べて見劣りするか（後続の力士Product art Taskの判断材料。本Taskでは修正しない）
-
-# Changed Files
-
-- `tools/dohyo_art/compose_dohyo.py`
-- `tools/dohyo_art/tests/test_compose_dohyo.py`
-- `tools/dohyo_art/README.md`
-- `public/assets/action/background/arena_base_1920.png`（新規）
-- `public/assets/action/background/dohyo_ring_overlay_1920.png`（新規）
-- `src/main.ts`
-- `src/game/presentation/productArena.ts`（新規）
-- `src/game/presentation/productArena.test.ts`（新規）
-- `src/game/scenes/BoutScene.ts`
-- `src/game/scenes/DohyoView.ts`
-- `docs/ARCHITECTURE.md`（最小限の同期）
+- `docs/ACTION_HUD_PRODUCT_SPEC.md`（新規。§1–§17）
+- `docs/ARCHITECTURE.md`（「Product HUD」の1項目を追加）
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+
+# Accepted Product Decisions Captured
+
+- 常時表示: 東西の四股名・番付・今場所の成績と、日目
+- 取組前の比較表示: 四股名・番付・成績・年齢・身長・体重・すべての公開パラメータ（件数は可変）
+- 公開の方針: パラメータは隠さずに見せる
+- 顔の肖像: v1では不要。肖像に依存しないlayoutにする
+- 出身地: Optional / Deferred
+- Stamina: realtimeのbarは置かない。公開パラメータになった場合は、その基本値を比較表示に出す
+- 意匠: 暖色、生成りのパネル、墨色の文字、控えめな赤と青。テレビ中継の写しやsponsor / logoは無し
+- 力士の大きさ（約123px）と、metersからpixelsへのscaleは変更しない
+
+# Always-visible HUD Summary（spec §3、§7）
+
+- 左上に東、右上に西の識別ブロック（Recommended (24, 24, 440, 150) / (1456, 24, 440, 150)）
+  - 内容: 方位tag + 番付 / 四股名 / 成績 + 操作中の印の枠
+- 中央上部に、小さなDay chip（Recommended (810, 10, 300, 44)）
+- **Action critical circle**: 中心から483px（徳俵の外縁421 + 力士の半径62）にはHUDを入れない
+  - 境界の上にいる力士の体まで含めて隠さないための制約
+  - zone案の配置は検算済み（East blockの角は616px、Day chipの下端は486px）
+
+# Pre-bout Comparison Summary（spec §4、§8）
+
+- 全画面のoverlayで、`東の値 | 項目名 | 西の値` の3列の表にする
+- 項目名は中央に1回だけ書く
+- 肖像の代わりに、方位tagと差し色の帯を使う
+- 行の高さは48px、パラメータは約12行（Prototypeの目安）
+  - それを超えた場合の扱いや比較barは、パラメータ一覧が決まってからにする（Deferred）
+- groupの見出しと行の順は、データ側から渡す
+
+# Data Ownership Matrix（spec §5の要約）
+
+| 項目 | 現在 | 将来の持ち主 |
+|---|---|---|
+| participant id | BoutSetup / Snapshot（既存） | 同じ |
+| 東西 | BoutSceneのpresentation（暫定） | Tournamentの取組（未実装） |
+| 四股名 / 年齢 / 身長 / 体重 | 無し | Wrestler profile（未実装） |
+| 番付 | 無し | Management / 番付（未実装） |
+| 成績 / 日目 | 無し | Tournament state（未実装） |
+| 公開パラメータ | 無し | Wrestler / Management（一覧は未定） |
+| 勝敗 / engagement / action | BoutSnapshot（既存） | 同じ |
+| 操作者 | BoutScene（presentation / input） | 同じ |
+| 表示の文言 | Sceneに直書き | localization（presentation） |
+
+原則: HUDのmetadataは `BoutSimulation` / `ParticipantState` に入れない。体格がgameplayに影響する場合も、`BoutSetup` へ変換して渡す。
+
+# Layout / Wireframe Summary
+
+- spec §7にASCIIの配置図、zone表、識別ブロックの中身（文字サイズの目安）を書いた
+- spec §8に比較表示の配置図を書いた
+- pixelの値はすべて **Recommended / Provisional**
+
+# Portrait / Birthplace / Stamina Decisions
+
+- 肖像: 不要。ランダム生成はDeferred（§11）
+- 出身地: 常時表示でも比較表示でも必須にしない。任意のprofile項目としてDeferred。生成ruleや国籍ruleは作らない（§12）
+- Stamina: realtime表示はしない。値は公開パラメータになった場合のみ比較表示に出す。計算式などはDeferred（§10）
+
+# Prototype Debug Text Classification（spec §13）
+
+- Debug / 開発専用: Dummyのmode、engagement、`pair v`、頭上の `PLAYER` / `CPU`、phaseの文字列、debugの図形
+- 暫定の操作説明: `WASD move ...`。Productの操作説明はDeferred
+- 実際のProduct情報（表示形式は暫定）: `EAST ... Win` / `Draw Rematch`（勝敗）
+
+これらを隠したり削除したりしても、gameplayには影響しない。
+
+# Deferred（spec §17）
+
+- パラメータの最終一覧、値の範囲、計算式
+- 四股名や番付の名称
+- 番付の昇降、場所の進行、成績の集計、日程
+- 出身地、国籍、肖像
+- staminaのgameplay、realtime表示
+- 比較表示で行が多い場合の扱い、比較bar
+- 結果画面、決まり手、演出
+- 操作説明・tutorial
+- mobile / touchのlayout
+- localization system、font
+- 音、animation
+
+# Recommended Implementation Sequence（spec §16）
+
+1. **ACTION-ART-02A**: HUD shell（pure view model + fixture + 識別ブロック・Day chip + debug textの整理）→ User Visual Check
+2. **ACTION-ART-02B**: 取組前の比較表示（fixtureで、仮であることが明確な行。件数を変えても崩れないことを確認）→ User Visual Check
+3. Management / Tournamentができてから、fixtureを実データに置き換える
+
+# User Decisions Required
+
+- **UD-1（§3.3）**: プレイヤーが操作している力士を、Productでどう示すか
+  - 現在はdebugの `PLAYER` / `CPU` labelだけ
+  - 推奨: 識別ブロックに小さな「操作中」の印の枠を用意し、表示するかどうかと表記はUserが決める
+  - 決まるまでは枠を空けたままでもlayoutが成り立つ
+  - HUD shellの実装（02A）の前に決めることが望ましいが、決まっていなくても始められる
 
 # Design Deviations
 
 Design Deviations: NONE
 
-補足（Taskの範囲内で選んだ細部）：
-- 座標の対応を、小さなpure module `src/game/presentation/productArena.ts` に置いた
-  - Taskの「Product artの定数から導く小さな明示的mapping」を、testできる形にするため
-- `docs/ARCHITECTURE.md` を最小限で同期した
-  - 予定のfile一覧にはないが、「logical sizeは暫定」「DohyoViewがGraphicsで俵を描く」という記述が、今回の変更で事実と異なるため
-  - 変えたのは該当の3か所と、Product背景の1項目の追加だけ
+# Unexpected Scope（報告のみ・未修正）
 
-# Unexpected Scope（報告のみ）
+- `docs/GAME_CONCEPT.md` の確定事項にある「ドット絵・簡素な2D Presentationを基本方向とする」は、受理済みのProduct arena（描き込んだ暖色の背景）と方向が異なって見える
+  - また「Resolution」は未決事項に残っているが、ARCHITECTUREでは1920×1080がProductの基準になっている
+  - GAME_CONCEPTの更新はScope外なので、変更していない。整理が必要かどうかは、ChatGPTとUserで判断していただきたい
 
-- 1920のlogical sizeでは、debug用の接触円の輪郭（2px）がやや細く見える可能性がある。debug専用なので変更していない
-- `arena_base_1920.png` は約2.5MB（PNG）。圧縮やasset pipelineはScope外なので変更していない。配信サイズの最適化は将来のTaskの候補
+# Verification
+
+- Current Sourceを直接読んだ（AGENTS.md、CLAUDE.md、ARCHITECTURE.md、GAME_CONCEPT.md、CURRENT_TASK / 直前のREPORT、`main.ts`、`BoutScene.ts`、`productArena.ts`、`BoutTypes.ts`）
+- 文書の整合を確認した
+  - 東西と左右の対応
+  - 幾何（421 / 62 / 483px）と、zoneの距離の検算
+  - Accepted / Recommended / Deferredの区分
+  - Task要求の§1–§16をすべて含めた
+- Production Source、assets、package / lockfileは未変更
+- `git diff --check`: PASS
+- tests / build: 不要（Sourceは未変更）
 
 # Git Delivery
 
-- Commit: `feat: integrate product dohyo background`（Task-ownedの12ファイルのみ）
-- `input.local/` と `output*.local/` はignoreされており、stageしていない
+- Commit: `docs: specify product bout hud`
+  - `docs/ACTION_HUD_PRODUCT_SPEC.md` / `docs/ARCHITECTURE.md` / 本Report の3ファイル
 - fetch → fast-forward safety確認 → push `origin/develop` → remote SHA確認 → clean tree確認
 - `main` は未変更
