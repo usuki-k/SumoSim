@@ -1,5 +1,5 @@
 Task-ID: ART-TOOL-01-DOHYO-COMPOSITOR
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / ASSET-PRODUCTION TOOL / PYTHON IMAGE COMPOSITION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -652,3 +652,224 @@ Expected:
 `git status --short` remains empty because `input.local` matches the existing `*.local` ignore rule.
 
 Do not rename, move, delete, stage, or commit the files in `input.local/`.
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / PRODUCT VISUAL CHECK REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `3dff5c7aa3c080a8578dc8eab835eccdc4a23373`
+- Agent-Start-Head:
+  `117c158ef0726c697e3dbe573a4328d13bdd6739`
+- Task diff is one implementation commit.
+- Changed production scope is limited to:
+  - `tools/dohyo_art/**`
+  - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- no `src/` changes
+- no Node package/lock changes
+- User Product inputs remain under ignored `input.local/`.
+
+## Technical Assessment
+
+PASS.
+
+Direct source review confirms the intended architecture:
+
+```
+AI / artist source images
+        ↓
+offline Python tool
+        ↓
+exact deterministic geometry / composition
+        ↓
+review/runtime image outputs
+```
+
+The tool has no Phaser/TypeScript/gameplay dependency.
+
+## Accepted Tool Baseline
+
+Accept `tools/dohyo_art/` as the SumoSim-specific offline Product-art compositor.
+
+Accepted characteristics:
+- explicit CLI
+- explicit local input paths
+- deterministic output
+- exact annular geometry
+- exact shikiri geometry
+- Product arena normalization
+- geometry guide
+- master + 1920 preview outputs
+- manifest with input hashes / parameters / output pixel hashes
+- tool-local Python requirements
+- focused synthetic tests
+- real Product-input smoke run.
+
+This follows the useful RobloxRts asset-tool principle without importing Roblox/Card-specific architecture.
+
+## Geometry Review
+
+PASS.
+
+Default master geometry matches the accepted current Product-art contract:
+
+- canvas: 3840×2160
+- center: (1920,1080)
+- tawara outer/gameplay radius: 800 px
+- tawara width: 42 px
+- inner radius: 758 px
+- shikiri centers: x=1796 / 2044, y=1080
+- shikiri length: 280 px
+- shikiri width: 24 px.
+
+The 1920 outputs are exact half-scale equivalents.
+
+The ring is generated mathematically from the center/radii rather than inferred from the AI art.
+
+## Mapping Review
+
+PASS.
+
+The horizontal RGBA tawara source is:
+- alpha-cropped,
+- optionally end-trimmed,
+- made periodically tileable through a deterministic seam crossfade,
+- resampled with premultiplied alpha,
+- polar-mapped onto the exact annulus.
+
+This is materially better than trying to generate a mathematically exact ring with image generation.
+
+## Arena Normalization Review
+
+PASS for the intended use.
+
+The accepted 1672×941 arena is close enough to 16:9 to normalize through a tiny centered crop and uniform resize.
+
+The tool correctly refuses materially incompatible aspect ratios instead of silently stretching/cropping them.
+
+Important:
+normalization does NOT attempt to move/repaint the arena contents.
+
+## Verification Review
+
+Reported verification is sufficient for the offline tool:
+
+- Python unit tests: 25 PASS
+- synthetic full-size CLI smoke
+- real Product-input CLI run
+- deterministic rerun:
+  - manifest byte-identical
+  - all six PNG outputs SHA-identical
+- geometry/alpha/shikiri assertions
+- invalid-input fail-closed cases
+- no Product source images committed
+- ignored local inputs/outputs confirmed
+- `git diff --cached --check` PASS.
+
+No `pnpm test` / `pnpm build` is required because runtime/TS code is untouched.
+
+## Non-Blocking Technical Note — Output replacement atomicity
+
+The implementation stages all files first and then replaces final files one by one.
+
+This is adequate for the local authoring tool.
+
+Strictly speaking, an OS/filesystem failure during the final sequence of `os.replace` calls could leave a partially updated output set.
+
+Do not expand this Task to solve that theoretical case.
+If this tool later becomes CI/release-critical, directory-swap/versioned-output hardening can be considered separately.
+
+## Product Visual Gate — STILL OPEN
+
+Technical PASS does NOT mean the generated Product composite is visually accepted.
+
+The real output to inspect is:
+
+`tools/dohyo_art/output.local/composite_preview_1920.png`
+
+Two visual risks must be judged from the actual preview.
+
+### V1 — Arena art center vs exact gameplay center
+
+The Agent reports that the painted square dohyo/platform in the accepted arena source appears slightly above the exact canvas center.
+
+The Python ring is correctly centered at gameplay center.
+
+Therefore the exact ring may visually sit too low relative to:
+- the painted platform,
+- surrounding stone/clay border,
+- existing central wear pattern,
+- lower decorative/tawara-like elements in the generated arena.
+
+This is NOT a geometry bug in the Python tool.
+
+Do not change gameplay center to fit the painting.
+
+If the composite looks misaligned, choose a Product-art correction:
+- targeted arena-base alignment/edit,
+- or add an explicit deterministic arena-art offset/normalization option in a small follow-up tool task.
+
+Do not silently move the gameplay ring.
+
+### V2 — Tawara repetition density
+
+`--repeat auto` resolves to 18 for the current source.
+
+The current horizontal source itself already contains several tied sections.
+
+Therefore the final circle may contain too many visible binding bands / repeated motifs.
+
+This is a visual tuning question, not a technical correctness problem.
+
+If it looks too dense:
+- try explicit `--repeat N`,
+- or prepare a better single/repeatable tawara source strip.
+
+Do not change the mapping algorithm just because the first texture frequency is visually imperfect.
+
+## Required User Visual Check
+
+Please inspect or upload:
+
+`tools/dohyo_art/output.local/composite_preview_1920.png`
+
+Optional diagnostic:
+`tools/dohyo_art/output.local/geometry_guide_master.png`
+
+Evaluate:
+
+1. Does the exact tawara sit naturally on the painted dohyo/platform?
+2. Is the ring visually centered where the background says the dohyo center is?
+3. Does the lower edge collide with painted structural/decorative elements?
+4. Does the broad circular wear mark help or compete with the exact ring?
+5. Are there too many rope/binding repetitions?
+6. Does the ring texture look naturally curved rather than mechanically warped?
+7. Are shikiri lines believable in the painted environment?
+8. Is the overall result Product-quality enough to lock the background?
+
+## Acceptance State
+
+Tool implementation: ACCEPTED.
+Deterministic geometry/composition architecture: ACCEPTED.
+Current Product composite appearance: PENDING USER VISUAL CHECK.
+
+Do not integrate into Phaser yet.
+Do not start HUD yet.
+
+## Next Step
+
+If the composite is visually good:
+- lock the Product background master,
+- then create ACTION-ART-01B background/runtime integration.
+
+If geometry is correct but the painted arena is misaligned:
+- first perform a focused arena-art alignment correction.
+
+If only tawara repetition/trim is wrong:
+- rerun the existing tool with tuned CLI parameters; no implementation task is necessarily needed.
+
+If the central wear circle competes with the exact ring:
+- make one targeted/non-destructive arena-base edit only after seeing the composite.
