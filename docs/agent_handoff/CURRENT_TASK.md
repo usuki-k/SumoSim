@@ -1,5 +1,5 @@
 Task-ID: TOKUDAWARA-01A-RINGOUT-CORE
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / SUMO CORE RULE / TOKUDAWARA RING-OUT
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -576,3 +576,259 @@ Do NOT:
 
 After commit/push/report:
 「TOKUDAWARA-01A-RINGOUT-CORE が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `294530e8adfd3f5402b043583032d766dc0d150c`
+- Agent-Start-Head:
+  `908b09f171876cbbeea451cfb6c56ce4ede79df2`
+- Diff is one implementation commit.
+- `main` remains unchanged.
+- Product Python art tool remains unchanged.
+- No package/lock changes.
+
+## Core Gameplay Review
+
+PASS.
+
+The implemented boundary matches the accepted Product Tokudawara geometry:
+
+- base radius R = 2.275 m
+- depth = 0.1194375 m
+- halfAngle = π/20
+- four cardinal windows
+- exact allowed boundary is IN
+- center criterion remains canonical.
+
+## First-out Semantics
+
+PASS.
+
+The material Review correction from the Investigation is implemented correctly:
+
+**Tokudawara uses the earliest IN→OUT transition along canonical P0→P1 interpolation.**
+
+Important verified behavior:
+
+- P0 already OUT -> 0
+- P0 IN / P1 OUT -> earliest exit
+- P0 IN / P1 IN but the straight interpolation exits and re-enters -> still Ring-out
+- IN→OUT→IN→OUT -> first exit, not final exit
+- exact boundary remains IN.
+
+No coarse sampling is used by Production logic.
+
+## Circle Regression Firewall
+
+PASS.
+
+When `arena.tokudawara` is absent:
+
+- `isOutOfArena` delegates to the existing circle classifier
+- `firstArenaExitFraction` delegates to the existing circle crossing helper
+- existing circle API remains available
+- existing T151–T172 remain unchanged and PASS
+- added tests confirm bit-identical crossing-helper output in selected circle cases.
+
+This is the correct regression-preserving structure.
+
+## Boundary Representation
+
+PASS.
+
+The Pure TS classifier uses the symmetric folded cardinal representation:
+
+- abs X/Y
+- min/max
+- half-angle tangent test.
+
+This corresponds to the Python Product-art geometry.
+
+The crossing solver uses candidate intersections with:
+- R circle
+- R + depth circle
+- four through-origin side lines carrying the eight cardinal window sides
+
+then classifies open intervals with the single canonical `isOutOfArena`.
+
+No generic geometry framework was introduced.
+
+## Numeric Robustness
+
+PASS WITH NON-BLOCKING RISK NOTE.
+
+No candidate-root dedup tolerance is used.
+
+The test suite includes:
+- all eight side boundaries
+- exact/near-corner cases
+- tangents
+- IN→OUT→IN cases
+- IN→OUT→IN→OUT cases
+- deterministic pseudo-random 1500-segment comparison against a dense classifier oracle.
+
+This is sufficient for the current Product baseline.
+
+Known microscopic risk:
+floating-point representations at an exact circle/side corner can create a sub-ulp interval classified as OUT even when the mathematical path only touches the corner.
+
+The focused test explicitly constrains such a case to a non-material ~1e-9 neighborhood.
+
+Do not introduce a geometry tolerance preemptively.
+If User/runtime testing exposes a real edge-case contradiction, investigate with a dedicated regression task.
+
+## State Ownership
+
+PASS.
+
+`ArenaSetup.tokudawara?` is the canonical configuration.
+
+BoutSimulation:
+- validates it
+- deep copies it
+- exposes copied snapshot state.
+
+Scene does not own gameplay boundary state.
+
+## Counter Behavior
+
+PASS.
+
+Counter relocation remains constrained by the original circular:
+`arena.radius - bodyRadius`
+
+and does not use the Tokudawara extension.
+
+This preserves the reviewed conservative behavior and avoids scope expansion.
+
+## Provisional Rendering
+
+PASS for pre-Product-integration validation.
+
+`DohyoView` derives a visual boundary from Snapshot arena values:
+- R arcs
+- R + depth arcs
+- radial connectors.
+
+Debug mode can show the boundary.
+
+Gameplay decisions are not made from the Phaser polyline.
+
+This is acceptable until the Product PNG background/overlay integration task replaces the provisional Graphics visuals.
+
+## Verification Review
+
+Reported required automated verification is complete:
+
+- `pnpm test`: 237 PASS / 14 files
+- new Tokudawara tests: 28
+- `pnpm build`: PASS
+- `tsc --noEmit`: PASS
+- `git diff --check`: PASS
+- deterministic scenarios covered
+- Pure Simulation helper has no Phaser import.
+
+Browser graphical smoke:
+NOT RUN due Agent environment limitation.
+
+Therefore the remaining mandatory gate is User Play Test.
+
+## Non-Blocking Documentation Note
+
+`BoutScene.ts` still comments that 2.275 m derives from the real dohyo inner diameter of approximately 4.55 m.
+
+The current Product visual contract treats the gameplay R as the visible tawara outer-edge boundary.
+
+These are not literally the same real-world geometric reference.
+
+This does not change current gameplay correctness, but the comment should be clarified during a later Product background integration/documentation cleanup so it does not imply exact real-world dimensional fidelity.
+
+Do not reopen gameplay radius in this Task.
+
+## User Play Test — REQUIRED
+
+Run:
+
+`pnpm dev`
+
+Use `0` to show the debug boundary when useful.
+
+### Required directions
+
+Test all five categories, not only one Tokudawara:
+
+1. +X / right Tokudawara
+2. -X / left Tokudawara
+3. +Y / down Tokudawara
+4. -Y / up Tokudawara
+5. diagonal normal-circle section.
+
+### For each Tokudawara direction
+
+First use movement if easiest.
+
+Verify:
+- crossing the old base circle R inside the Tokudawara window does NOT end the bout
+- remaining inside the extension is allowed
+- crossing the Tokudawara outer boundary DOES end the bout
+- final position remains outside; no clamp/bounce.
+
+Then test at least one practical Push/Drive case:
+- pushing/yorikiri toward a Tokudawara direction visibly gets the extra survival space.
+
+### Normal circular area
+
+Move diagonally between Tokudawara windows.
+
+Verify:
+- Ring-out still happens at the normal circular boundary R
+- there is no extra extension there.
+
+### Debug agreement
+
+With `0` ON:
+- red debug boundary and visible provisional tawara should agree
+- outcome should occur when the center crosses that same boundary.
+
+### Feel questions
+
+Please report:
+- Does “徳俵で残る” feel understandable?
+- Is the extension amount too large/small in actual gameplay?
+- Does the sudden side edge of the Tokudawara feel visually/gameplay-wise unnatural?
+- Does center-based Ring-out still feel acceptable now that representative boundary graphics exist?
+
+The final point is important:
+the User previously allowed Gameplay rules to be reconsidered after representative visuals.
+
+Technical PASS does NOT permanently lock center-based Ring-out if the Play Test feels wrong.
+
+## Acceptance State
+
+Tokudawara Ring-out technical implementation:
+PASS.
+
+Gameplay acceptance:
+PENDING USER PLAY TEST.
+
+Do not start Product background Phaser integration or HUD automatically until User feedback on the Ring-out behavior is reviewed.
+
+## Next Step After Play Test
+
+If User accepts gameplay:
+- record Tokudawara Ring-out as Accepted Baseline
+- proceed to Product background / overlay runtime integration.
+
+If boundary feel is wrong:
+- classify whether the issue is:
+  - Tokudawara depth/angle
+  - center-based criterion
+  - presentation
+  - another Ring-out rule
+- create a focused follow-up rather than adjusting unrelated Action systems.
