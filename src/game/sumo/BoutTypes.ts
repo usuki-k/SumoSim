@@ -16,9 +16,18 @@ export interface ParticipantSetup {
   readonly position: Vec2
 }
 
+// Four identical Tokudawara on the cardinal axes (+x, +y, -x, -y). Inside a window
+// |angle - k*pi/2| <= halfAngle the ring-out boundary lies `depth` meters further out.
+export interface TokudawaraSetup {
+  readonly depth: number // meters, > 0
+  readonly halfAngle: number // radians, 0 < halfAngle < pi/4
+}
+
 // Ring is a circle centered on the simulation origin (0, 0). Radius in meters.
+// Without `tokudawara` the boundary is the plain circle.
 export interface ArenaSetup {
   readonly radius: number
+  readonly tokudawara?: TokudawaraSetup
 }
 
 // Explicit input boundary. Future management state is converted into this shape by the caller.

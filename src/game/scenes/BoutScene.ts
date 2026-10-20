@@ -6,7 +6,7 @@ import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
-import { drawDohyo } from './DohyoView.ts'
+import { drawArenaBoundaryDebug, drawDohyo } from './DohyoView.ts'
 import { WrestlerView } from './WrestlerView.ts'
 import type {
   BoutEngagement,
@@ -22,8 +22,13 @@ import type {
 
 // Prototype fixture values (meters); not final gameplay values.
 // Ring inner diameter of a real dohyo is about 4.55 m.
+const RING_RADIUS = 2.275
+// Accepted Product Tokudawara (ART-TOOL-02 Candidate C) on the four cardinal axes:
+// depth = 2.275 * 42 / 800 m (art: 42 px over an 800 px radius), half angle 9 degrees.
+const TOKUDAWARA_DEPTH = 0.1194375
+const TOKUDAWARA_HALF_ANGLE = Math.PI / 20
 const PROTOTYPE_SETUP: BoutSetup = {
-  arena: { radius: 2.275 },
+  arena: { radius: RING_RADIUS, tokudawara: { depth: TOKUDAWARA_DEPTH, halfAngle: TOKUDAWARA_HALF_ANGLE } },
   participants: [
     { id: 'wrestler-a', position: { x: -0.7, y: 0 } },
     { id: 'wrestler-b', position: { x: 0.7, y: 0 } },
@@ -135,6 +140,7 @@ export class BoutScene extends Phaser.Scene {
   private engagementText: Phaser.GameObjects.Text | null = null
   private resultText: Phaser.GameObjects.Text | null = null
   private grappleLine: Phaser.GameObjects.Graphics | null = null
+  private boundaryLine: Phaser.GameObjects.Graphics | null = null
   private views = new Map<ParticipantId, ParticipantView>()
   private pixelsPerMeter = 1
   // Prototype debug display toggle (key 0). Off = game-readable view.
@@ -182,7 +188,8 @@ export class BoutScene extends Phaser.Scene {
     this.pixelsPerMeter =
       (Math.min(this.scale.width, this.scale.height) / 2 * RING_FILL_RATIO) / snapshot.arena.radius
 
-    drawDohyo(this, this.origin, this.pixelsPerMeter, snapshot.arena.radius)
+    drawDohyo(this, this.origin, this.pixelsPerMeter, snapshot.arena)
+    this.boundaryLine = drawArenaBoundaryDebug(this, this.origin, this.pixelsPerMeter, snapshot.arena).setDepth(DEBUG_OVERLAY_DEPTH)
 
     for (const style of PARTICIPANT_PRESENTATION) {
       const radius = snapshot.participants.find((q) => q.id === style.id)?.bodyRadius ?? 0
@@ -245,7 +252,7 @@ export class BoutScene extends Phaser.Scene {
   }
 
   // Debug overlays (labels, phase text, engagement readout, contact outline, facing marker, grapple
-  // line) are hidden in the default game-readable view and shown with key 0.
+  // line, exact ring-out boundary) are hidden in the default game-readable view and shown with key 0.
   private setDebug(on: boolean): void {
     this.debug = on
     for (const view of this.views.values()) {
@@ -255,6 +262,7 @@ export class BoutScene extends Phaser.Scene {
       view.phaseText.setVisible(on)
     }
     this.grappleLine?.setVisible(on)
+    this.boundaryLine?.setVisible(on)
     this.engagementText?.setVisible(on)
     this.updateModeText()
   }

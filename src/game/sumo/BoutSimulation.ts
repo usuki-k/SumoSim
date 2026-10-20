@@ -17,7 +17,7 @@ import type {
   Vec2,
 } from './BoutTypes.ts'
 import { GRAPPLE_TURN_RATE, canActInGrapple, turnFacingTowardGrapple } from './grappleOrientation.ts'
-import { resolveRingOut } from './ringOut.ts'
+import { resolveArenaRingOut } from './ringOut.ts'
 
 // Provisional technical values for the movement foundation; NOT final balance. Subject to User Play Test.
 export const SIMULATION_HZ = 60
@@ -282,6 +282,26 @@ function copyPosture(posture: MutablePosture): ParticipantPosture {
   return { kind: 'kuzushi', ticksRemaining: posture.ticksRemaining }
 }
 
+// Simulation-owned deep copy (no `tokudawara` key for a plain circle).
+function copyArena(arena: ArenaSetup): ArenaSetup {
+  const t = arena.tokudawara
+  return t ? { radius: arena.radius, tokudawara: { depth: t.depth, halfAngle: t.halfAngle } } : { radius: arena.radius }
+}
+
+function assertValidArena(arena: ArenaSetup): void {
+  if (!Number.isFinite(arena.radius) || arena.radius <= 0) {
+    throw new Error('Invalid BoutSetup: arena.radius must be a positive finite number')
+  }
+  const t = arena.tokudawara
+  if (t === undefined) return
+  if (!Number.isFinite(t.depth) || t.depth <= 0) {
+    throw new Error('Invalid BoutSetup: arena.tokudawara.depth must be a positive finite number')
+  }
+  if (!Number.isFinite(t.halfAngle) || t.halfAngle <= 0 || t.halfAngle >= Math.PI / 4) {
+    throw new Error('Invalid BoutSetup: arena.tokudawara.halfAngle must be within (0, pi/4)')
+  }
+}
+
 function assertFiniteVec2(v: Vec2, label: string): void {
   if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) {
     throw new Error(`Invalid BoutSetup: ${label} must be finite`)
@@ -372,9 +392,7 @@ export class BoutSimulation {
   private outcome: BoutOutcome = { kind: 'ongoing' }
 
   constructor(setup: BoutSetup) {
-    if (!Number.isFinite(setup.arena.radius) || setup.arena.radius <= 0) {
-      throw new Error('Invalid BoutSetup: arena.radius must be a positive finite number')
-    }
+    assertValidArena(setup.arena)
     if (setup.participants.length !== 2) {
       throw new Error('Invalid BoutSetup: exactly 2 participants are required')
     }
@@ -387,7 +405,7 @@ export class BoutSimulation {
     }
 
     // Copy so the caller setup object is never aliased as canonical state.
-    this.arena = { radius: setup.arena.radius }
+    this.arena = copyArena(setup.arena)
     this.participants = setup.participants.map((p) => ({
       id: p.id,
       position: { x: p.position.x, y: p.position.y },
@@ -485,19 +503,19 @@ export class BoutSimulation {
     this.updateFacing()
 
     // After every positional change of the tick; the final physical state is kept as-is.
-    this.outcome = resolveRingOut(
+    this.outcome = resolveArenaRingOut(
       [
         { id: a.id, previous: previousA, current: a.position },
         { id: b.id, previous: previousB, current: b.position },
       ],
-      this.arena.radius,
+      this.arena,
     )
   }
 
   // Returns a fresh copy; mutating it never affects canonical state.
   getSnapshot(): BoutSnapshot {
     return {
-      arena: { radius: this.arena.radius },
+      arena: copyArena(this.arena),
       participants: this.participants.map(
         (p): ParticipantState => ({
           id: p.id,
