@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-02-HUD-PRODUCT-SPEC
-Status: READY
+Status: REVIEWED
 Task-Type: DOCUMENTATION / PRODUCT UI SPEC / ACTION HUD
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -562,3 +562,298 @@ Do NOT:
 
 After commit/push/report:
 「ACTION-ART-02-HUD-PRODUCT-SPEC が完了し、ChatGPT Review待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: PASS / REPOSITORY DOC CONSISTENCY FOLLOW-UP REQUIRED
+
+## Reviewed Delivery
+
+- Documentation commit:
+  `8a6015643cccf253524f31f5ee3c027be27d3ec4`
+- Agent-Start-Head:
+  `0d30e1044e997a60af6da7fa2d4fa8529be55e66`
+- Diff is exactly one documentation commit.
+- Changed:
+  - `docs/ACTION_HUD_PRODUCT_SPEC.md`
+  - one minimal Product HUD ownership note in `docs/ARCHITECTURE.md`
+  - Completion Report.
+- No Production Source / asset / package / lock changes.
+
+## HUD Product Spec Assessment
+
+PASS.
+
+`docs/ACTION_HUD_PRODUCT_SPEC.md` is accepted as the authoritative Product HUD spec for the current Action prototype.
+
+It correctly separates:
+
+1. always-visible Bout HUD
+2. pre-bout comparison presentation
+3. debug/prototype information
+4. deferred profile information.
+
+This separation is important and should not be reopened without an explicit design change.
+
+## Accepted Always-visible HUD
+
+During active Bout, keep only:
+
+- East/left wrestler:
+  - side
+  - rank
+  - name
+  - current basho record
+- West/right wrestler:
+  - side
+  - rank
+  - name
+  - current basho record
+- current tournament day / day number.
+
+Do NOT add to the permanent in-bout HUD:
+- age
+- height
+- weight
+- all public stats
+- realtime stamina
+- portrait
+- birthplace.
+
+Those belong elsewhere as specified.
+
+## Accepted Pre-bout Comparison
+
+Before active Action, show side-by-side:
+
+- name
+- rank
+- current record
+- age
+- height
+- weight
+- every public Simulation / wrestler parameter that eventually exists.
+
+The parameter list remains intentionally variable and unresolved.
+
+Accepted:
+- table/list structure
+- data-driven parameter rows
+- no final parameter names/count/ranges/formulas invented.
+
+Do not treat the approximate 12-row prototype capacity as a Product stat-count limit.
+
+## Data Ownership
+
+PASS and important.
+
+Long-term/profile/tournament metadata must NOT be added to:
+
+- `BoutSimulation`
+- `ParticipantState`
+- `BoutSnapshot`
+
+merely to feed the HUD.
+
+Accepted direction:
+
+```
+Management / Wrestler / Tournament data
+        ->
+pure presentation context / view model
+        ->
+Phaser HUD
+```
+
+separate from:
+
+```
+BoutSimulation -> BoutSnapshot -> Action rendering
+```
+
+ParticipantId is the join key.
+
+This is an Accepted Architecture constraint for HUD implementation.
+
+## Portrait / Birthplace / Stamina
+
+Accepted as written:
+
+### Portrait
+- no portrait requirement for Product v1
+- no random low-quality face generator now
+- portrait feature Deferred.
+
+### Birthplace
+- not required in always-visible HUD
+- not required in the initial pre-bout comparison
+- optional future profile field
+- birthplace/nationality generation rules Deferred.
+
+### Stamina
+- no realtime depletion bar
+- if Stamina later exists as a public base/stat parameter, show that value with the other pre-bout parameters
+- do not define Stamina gameplay here.
+
+## Product Visual Direction
+
+Accepted.
+
+HUD should:
+- match the warm traditional Product arena
+- use warm off-white/paper-like panel surfaces
+- high-contrast dark ink-like text
+- restrained side accents
+- not reproduce TV broadcast graphics
+- avoid sponsor/logo treatment
+- work without portraits.
+
+Exact colors remain Visual-Test tuning values.
+
+## 1920x1080 Layout
+
+Accepted as Recommended / Provisional, not immutable geometry.
+
+Useful baseline:
+- East identity block upper-left
+- West identity block upper-right
+- compact day chip upper center
+- do not cover the Action critical region.
+
+The 483 px critical-circle derivation is useful as a visual safety guide:
+- Tokudawara outer extent
+- plus current accepted wrestler radius.
+
+Do not convert that presentation guide into gameplay geometry.
+
+The Day chip currently has only a few pixels of calculated clearance from that guide, so actual User Visual Check remains the final authority.
+
+## Localization / Readability
+
+Accepted.
+
+Important constraints:
+- do not encode East/West by color alone
+- do not assume Japanese fixed-width text
+- long rank/name strings must degrade gracefully
+- keep meaningful text readable after CrazyGames embedding/downscale
+- final font/license remains Deferred.
+
+## Prototype Debug Text
+
+Accepted classification.
+
+Debug/development-only:
+- Dummy mode
+- engagement / pair velocity
+- PLAYER / CPU labels over wrestlers
+- phase labels
+- contact/facing/grapple/boundary debug graphics.
+
+Product information:
+- Bout result semantics, though its final presentation remains Deferred.
+
+Future HUD work may hide/reorganize debug strings without changing gameplay.
+
+## Player-controlled Indicator
+
+The spec correctly leaves the “YOU / 操作中” indicator unresolved.
+
+This is NOT a blocker for the first HUD shell.
+
+For the next visual prototype:
+- do not invent a final indicator
+- it is acceptable to omit it entirely
+- do not leave awkward visible empty UI chrome solely to reserve space.
+
+If later needed, add it through an explicit User decision.
+
+## Implementation Staging
+
+The overall staging is accepted:
+
+1. HUD shell with explicit fixture presentation data
+2. User Visual Check
+3. pre-bout comparison with fixture data
+4. User Visual Check
+5. connect real Management/Tournament data only after those systems exist.
+
+This allows Product UI progress without prematurely building Management.
+
+## Material Repository Documentation Conflict
+
+A current repository document is now stale:
+
+`docs/GAME_CONCEPT.md`
+
+It still states as a confirmed direction:
+
+> ドット絵・簡素な2D Presentationを基本方向とする
+
+This materially conflicts with:
+- the User-approved painted/stylized Product arena
+- committed Product background assets
+- current runtime presentation
+- the accepted HUD Product visual direction.
+
+This is not a defect in the new HUD spec.
+
+It is a repository documentation consistency defect created by older project assumptions.
+
+### Required handling
+
+Do NOT let a future Agent use that old line to redesign the current Product presentation back toward pixel-art/simple placeholder graphics.
+
+Before the next Product HUD Production implementation begins, synchronize `GAME_CONCEPT.md` so it reflects the current accepted Product visual baseline.
+
+Keep the change small:
+- remove/supersede the obsolete “pixel art / simple 2D” confirmed direction
+- preserve the accepted top-down Action direction
+- record that the current Action Product baseline is stylized painted 2D Product art
+- do not define wrestler Product-art details that remain Deferred.
+
+Also check whether the old `Resolution` unresolved line should be clarified:
+- 1920×1080 is the current Product Action presentation baseline,
+- final platform/performance resolution policy can remain open.
+
+Do not expand this into a broad concept rewrite.
+
+## Overall Result
+
+HUD Product Spec:
+PASS.
+
+Architecture ownership:
+PASS.
+
+Verification:
+PASS for Documentation-only scope.
+
+Repository documentation consistency:
+FOLLOW-UP REQUIRED before the next Product HUD implementation.
+
+## Next Task Recommendation
+
+First perform a very small Documentation Sync:
+`PRODUCT-VISUAL-BASELINE-SPEC-SYNC-01`
+
+Purpose:
+- synchronize stale `GAME_CONCEPT.md` visual/resolution language with the already accepted Current Product baseline.
+
+Verification:
+Lean / Documentation only.
+
+After that:
+`ACTION-ART-02A-HUD-SHELL`
+
+should implement:
+- pure fixture presentation context
+- East/West identity blocks
+- day chip
+- debug/prototype text cleanup
+- no Management implementation
+- no pre-bout comparison yet
+- User Visual Check.
+
+Do not combine unresolved Simulation parameter design into 02A.
