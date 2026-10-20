@@ -26,7 +26,7 @@ from PIL import Image
 
 TOOL_NAME = "sumosim-dohyo-art"
 TOOL_VERSION = "1.0.0"
-MANIFEST_SCHEMA = 1
+MANIFEST_SCHEMA = 2
 
 # Product art space (accepted). The CLI always renders this master size.
 MASTER_SIZE = (3840, 2160)
@@ -35,6 +35,10 @@ MASTER_SIZE = (3840, 2160)
 # 1672x941 source that is ~3 px of width: an imperceptible center crop.
 # Anything larger would be a material crop and fails closed.
 ASPECT_TOLERANCE = 0.002
+
+# Arena alignment may zoom in at most 25 %: enough to cover a center
+# correction, small enough not to visibly soften the painted arena.
+MAX_ARENA_SCALE = 1.25
 
 # Warm off-white for shikiri lines on the accepted clay arena.
 SHIKIRI_COLOR = (238, 230, 211)
@@ -114,6 +118,20 @@ class TextureOptions:
     alpha_threshold: int = 8
 
 
+@dataclass(frozen=True)
+class ArenaAlignment:
+    """Aligns painted arena content to the fixed canvas center.
+
+    Uniform scale about the canvas center, then translation in master px
+    (+x right, +y down). Identity by default; Product values are passed
+    explicitly on the command line (see README).
+    """
+
+    scale: float = 1.0
+    offset_x: float = 0.0
+    offset_y: float = 0.0
+
+
 @dataclass
 class BuildResult:
     images: Dict[str, Image.Image]
@@ -173,6 +191,14 @@ def validate_geometry(g: Geometry) -> None:
         raise CompositorError("shikiri lines must lie strictly inside the inner tawara radius")
     if g.participant_offset_x < 0:
         raise CompositorError("participant offset-x must be >= 0")
+
+
+def validate_alignment(a: ArenaAlignment) -> None:
+    for name in ("scale", "offset_x", "offset_y"):
+        if not math.isfinite(getattr(a, name)):
+            raise CompositorError(f"arena {name} must be finite (got {getattr(a, name)})")
+    if not 1.0 <= a.scale <= MAX_ARENA_SCALE:
+        raise CompositorError(f"arena scale must be within [1, {MAX_ARENA_SCALE}] (got {a.scale})")
 
 
 def validate_texture_options(t: TextureOptions) -> None:
@@ -264,7 +290,53 @@ def _distance_field(g: Geometry, x0: int, y0: int, x1: int, y1: int) -> np.ndarr
 # ------------------------------------------------------------- arena normalize
 
 
-def normalize_arena(image: Image.Image, size: Tuple[int, int]) -> Tuple[Image.Image, dict]:
+def required_arena_scale(size: Tuple[int, int], offset_x: float, offset_y: float) -> float:
+    """Smallest uniform scale about the canvas center that still covers the canvas after the offset."""
+    return max(1 + abs(offset_x) / (size[0] / 2), 1 + abs(offset_y) / (size[1] / 2))
+
+
+def aligned_source_box(
+    box: Tuple[float, float, float, float], size: Tuple[int, int], alignment: ArenaAlignment
+) -> Tuple[float, float, float, float]:
+    """Source-space box for: normalized 16:9 box -> scale about canvas center -> translate -> crop.
+
+    Output pixel X samples normalized-master x = (X - cx - offset_x) / scale + cx,
+    which maps linearly back into the source box. Composing everything into one
+    box keeps it a single resample.
+    """
+    if alignment == ArenaAlignment():
+        return box
+    width, height = size
+    cx, cy = width / 2, height / 2
+    kx = (box[2] - box[0]) / width
+    ky = (box[3] - box[1]) / height
+
+    def src_x(x: float) -> float:
+        return box[0] + ((x - cx - alignment.offset_x) / alignment.scale + cx) * kx
+
+    def src_y(y: float) -> float:
+        return box[1] + ((y - cy - alignment.offset_y) / alignment.scale + cy) * ky
+
+    aligned = (src_x(0), src_y(0), src_x(width), src_y(height))
+    eps = 1e-9
+    if (
+        aligned[0] < box[0] - eps
+        or aligned[1] < box[1] - eps
+        or aligned[2] > box[2] + eps
+        or aligned[3] > box[3] + eps
+    ):
+        needed = required_arena_scale(size, alignment.offset_x, alignment.offset_y)
+        raise CompositorError(
+            f"arena scale {alignment.scale} with offset ({alignment.offset_x}, {alignment.offset_y}) "
+            f"leaves canvas pixels uncovered; scale must be >= {needed:.6f}"
+        )
+    return aligned
+
+
+def normalize_arena(
+    image: Image.Image, size: Tuple[int, int], alignment: ArenaAlignment = ArenaAlignment()
+) -> Tuple[Image.Image, dict, dict]:
+    validate_alignment(alignment)
     rgba = image.convert("RGBA")
     alpha_min = rgba.getchannel("A").getextrema()[0]
     if alpha_min != 255:
@@ -285,7 +357,8 @@ def normalize_arena(image: Image.Image, size: Tuple[int, int]) -> Tuple[Image.Im
     else:
         crop_w, crop_h = float(width), width / target
     box = ((width - crop_w) / 2, (height - crop_h) / 2, (width + crop_w) / 2, (height + crop_h) / 2)
-    normalized = rgba.convert("RGB").resize(size, Image.Resampling.LANCZOS, box=box)
+    source_box = aligned_source_box(box, size, alignment)
+    normalized = rgba.convert("RGB").resize(size, Image.Resampling.LANCZOS, box=source_box)
 
     info = {
         "source_aspect": round(aspect, 6),
@@ -298,7 +371,19 @@ def normalize_arena(image: Image.Image, size: Tuple[int, int]) -> Tuple[Image.Im
         "output_size": list(normalized.size),
         "output_mode": normalized.mode,
     }
-    return normalized, info
+    alignment_info = {
+        "scale": alignment.scale,
+        "offset_x": alignment.offset_x,
+        "offset_y": alignment.offset_y,
+        "units": "master px; +offset_x moves arena content right, +offset_y moves it down",
+        "transform_order": "16:9 normalize -> uniform scale about canvas center -> translate -> crop "
+        "to canvas (composed into one LANCZOS resample)",
+        "min_scale_for_offset": round(required_arena_scale(size, alignment.offset_x, alignment.offset_y), 6),
+        "coverage": "full (aligned box inside the normalized 16:9 source region)",
+        "source_box": [round(v, 4) for v in source_box],
+        "intended_anchor": "painted main dohyo/platform top surface center -> canvas center",
+    }
+    return normalized, info, alignment_info
 
 
 # ----------------------------------------------------------- tawara texture
@@ -504,15 +589,17 @@ def compose(
     tawara_path: Path,
     geometry: Geometry = Geometry(),
     texture: TextureOptions = TextureOptions(),
+    alignment: ArenaAlignment = ArenaAlignment(),
 ) -> BuildResult:
     validate_geometry(geometry)
     validate_texture_options(texture)
+    validate_alignment(alignment)
 
     arena_source = _load_image(arena_path, "arena base")
     tawara_source = _load_image(tawara_path, "tawara source")
 
     canvas_size = (geometry.canvas_width, geometry.canvas_height)
-    arena, arena_info = normalize_arena(arena_source, canvas_size)
+    arena, arena_info, alignment_info = normalize_arena(arena_source, canvas_size, alignment)
 
     strip, texture_info = prepare_tawara_strip(tawara_source, texture)
     strip_w = strip.shape[1]
@@ -568,6 +655,7 @@ def compose(
             "tawara_source": _file_info(tawara_path, tawara_source),
         },
         "arena_normalization": arena_info,
+        "arena_alignment": alignment_info,
         "geometry": {
             "space": "master",
             "canvas_size": [g.canvas_width, g.canvas_height],
@@ -669,6 +757,11 @@ def build_parser() -> argparse.ArgumentParser:
     geo.add_argument("--protected-radius", type=float, default=d_geo.protected_radius, help="guide only (default %(default)s)")
     geo.add_argument("--participant-offset-x", type=float, default=d_geo.participant_offset_x, help="guide only (default %(default)s)")
 
+    arena = parser.add_argument_group("arena alignment (uniform scale about canvas center, then translate)")
+    arena.add_argument("--arena-scale", type=float, default=1.0, help=f"uniform zoom of the arena, 1..{MAX_ARENA_SCALE}; must cover the canvas after the offset (default %(default)s)")
+    arena.add_argument("--arena-offset-x", type=float, default=0.0, help="move arena content right, master px (default %(default)s)")
+    arena.add_argument("--arena-offset-y", type=float, default=0.0, help="move arena content down, master px (default %(default)s)")
+
     tex = parser.add_argument_group("tawara texture")
     tex.add_argument("--repeat", type=_repeat_arg, default=d_tex.repeat, metavar="N|auto", help="texture repeats around the ring (default auto: keep source aspect)")
     tex.add_argument("--trim-start", type=float, default=d_tex.trim_start, help="fraction of alpha-cropped width cut from the left end (default %(default)s)")
@@ -689,6 +782,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         protected_radius=args.protected_radius,
         participant_offset_x=args.participant_offset_x,
     )
+    alignment = ArenaAlignment(scale=args.arena_scale, offset_x=args.arena_offset_x, offset_y=args.arena_offset_y)
     texture = TextureOptions(
         repeat=args.repeat,
         trim_start=args.trim_start,
@@ -697,7 +791,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         alpha_threshold=args.alpha_threshold,
     )
     try:
-        result = compose(args.arena_base, args.tawara_source, geometry, texture)
+        result = compose(args.arena_base, args.tawara_source, geometry, texture, alignment)
         written = write_outputs(result, args.output_dir, [args.arena_base, args.tawara_source])
     except CompositorError as error:
         print(f"error: {error}", file=sys.stderr)

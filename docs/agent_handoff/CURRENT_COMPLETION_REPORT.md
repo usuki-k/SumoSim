@@ -1,8 +1,8 @@
-Task-ID: ART-TOOL-01-DOHYO-COMPOSITOR
+Task-ID: ART-TOOL-01A-ARENA-ALIGNMENT
 Result: PASS
 Branch: develop
-Source-Baseline: 1c5b033addbb1adfb7fd19fc3c51b28a8bd96ca6
-Agent-Start-Head: 117c158ef0726c697e3dbe573a4328d13bdd6739
+Source-Baseline: 3dff5c7aa3c080a8578dc8eab835eccdc4a23373
+Agent-Start-Head: 213b1e01687222b1151e30ab6ea2d95c1cdc1e94
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
@@ -11,224 +11,192 @@ Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 PASS（Technical）。Product Visual Checkは未了で、User確認が必要。
 
-- 決定的なDohyo Art Compositorを `tools/dohyo_art/` に実装した
-  - Python CLI、入力検証、arena正規化、厳密な円環tawara、shikiri、geometry guide、master / 1920出力、manifest
-- 実Product入力（`input.local/arena_base.png`、`input.local/tawara_source.png`）で実合成を行い、7出力を生成した
-- 同一入力・同一引数で2回実行し、manifestとPNG bytesが完全に一致した
-- Unit test 25件はすべてPASS
-- `src/`、package、lockfile、Phaserは未変更。User画像はcommitしていない（`*.local`でignoreされる）
+- `tools/dohyo_art/` にarena alignmentを追加した
+  - 一様scale（canvas center基準）→ 平行移動 → crop
+  - canvasを覆えない値はfail closed
+  - manifestへ記録する
+- 実arenaの正方形土俵上面の中心を計測し、Product用の値（`--arena-scale 1.072 --arena-offset-x 5.36 --arena-offset-y 77.72`）を導いた
+- 補正後のPreviewを生成した: `tools/dohyo_art/output-aligned.local/composite_preview_1920.png`（1920×1080）
+- Gameplay center / 半径 / shikiri / overlayは変更していない
+  - 補正前後でoverlay PNGがbyte一致
+- 既定値は恒等（1, 0, 0）。補正しない場合は旧出力とbyte一致する
+- `src/`、package、lockfileは未変更。Product画像はcommitしていない
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 5`（local aheadなし）
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
 - Remote CURRENT_TASKを確認した
   - Task-ID一致、Status READY、Target-Branch develop
-  - Source-Baseline `1c5b033`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `1c5b033..origin/develop` の変更は `docs/agent_handoff/` 配下の2ファイルのみ → `merge --ff-only` 成功
-- Agent-Start-Head: FF後のHEAD `117c158`
-- 実入力2ファイルが存在し、読み込めることを確認した
-  - `arena_base.png`: 1672×941 RGB
-  - `tawara_source.png`: 2172×724 RGBA
+  - Source-Baseline `3dff5c7`（ancestor）、Handoff-Mode GITHUB
+- `3dff5c7..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
+- Agent-Start-Head = FF後の `213b1e0`
+- 実入力2ファイルと、補正前の出力 `output.local/` が存在することを確認した
 
-# Scope / Changed Files
+# Visual Alignment Problem（確認）
+
+補正前の `output.local/composite_preview_1920.png` と `geometry_guide_master.png` で確認した。
+- 正方形土俵の中心がcanvas centerより上にある
+- ring下端が内側の俵石枠の下辺と重なっている
+- 上下の余白が非対称
+
+# Measurement Method
+
+- 補正前の `arena_base_master.png`（3840×2160、恒等正規化）を使った
+- 縁を垂直・水平の帯で平均したluminanceの勾配で特定し、拡大cropで目視確認した
+  - 横方向の帯: x 1300–1500 / 2340–2540
+  - 縦方向の帯: y 650–850 / 1310–1510
+- 中央の俵ブロック、角柱、摩耗模様、観客は避けた
+- 小規模で決定的な計測にとどめ、CV detectorは作っていない
+
+## Platform reference coordinates（master、補正前）
+
+| Reference | 上 | 下 | 左 | 右 | 中心 |
+|---|---|---|---|---|---|
+| **土俵上面の外縁（主anchor）** | y≈98 | y≈1917（前面の側面が始まる位置） | x≈883（892 / 873） | x≈2947（2937 / 2957） | **(1915, 1007.5)** |
+| 内側俵石枠の内縁（参考） | y≈222 | y≈1766 | x≈1009 / 994 | x≈2822 / 2836 | (≈1915, 994) |
+| 内側俵石枠の外縁（参考） | y≈181 | y≈1820 | x≈955 | x≈2885 | (1920, ≈1000) |
+
+- 左右の値が2つあるのは、上の帯と下の帯で測ったため。下ほど少し幅が広く、軽い透視がある
+- 上下は、前面の側面が見えている分だけ曖昧さがある。構造中心のばらつきは y 994〜1007.5（約±7px）
+- Taskの指示どおり、土俵上面の四辺から出した中心 **(1915, 1007.5)** を採用した
+
+# Correction
+
+- 補正前の視覚中心: (1915, 1007.5)。runtime換算で (957.5, 503.75)
+- 固定target center: master (1920, 1080) / runtime (960, 540)
+- 変換は「中心基準のscaleの後に平行移動」なので、点 `a` は `(a − c)·S + c + offset` へ移る
+  - 中心を合わせる条件: `offset = (c − a)·S = (5·S, 72.5·S)`
+- canvasを覆う条件: `S ≥ 1 + max(|ox|/1920, |oy|/1080)`
+  - 上の条件と連立すると `S ≥ 1 / (1 − 72.5/1080) = 1.07196`
+- 採用値: **S = 1.072、offset = (5.36, 77.72)**
+  - min scale 1.071963、manifestに記録
+  - 最終的なsource box: `(53.9722, 0.2662, 1613.6737, 877.5983)`。source 1672×941の内側で、縦横比は16:9のまま
+- この値で十分な理由（補正後のarena masterを再計測した）
+  - 土俵上面の外縁: 上 y≈105 / 下 y≈2055 → 中心 **1080**
+  - 内側石枠の左右内縁: 950 / 2891 と 936 / 2905 → 中心 **1920.5**
+  - ring（y 280–1880、x 1120–2720）は内側石枠の内縁（上 ≈238 / 下 ≈1893 / 左 ≈936–950 / 右 ≈2891–2905）の内側に収まる
+    - 補正前は、石枠内縁の縦の半幅が約772 < 800で、ringがはみ出していた
+    - 1.072倍で約828になり、収まった
+- 拡大は7.2%のみ。元画像はもともと2.3倍に拡大しているので、追加の劣化は軽微
+- 画面端の観客と床が約3.4%ずつ切れる。目視で構図の破綻はない
+
+# Changed Files
 
 | File | 内容 |
 |---|---|
-| `tools/dohyo_art/compose_dohyo.py` | CLI + 合成ロジック（単一module） |
-| `tools/dohyo_art/tests/test_compose_dohyo.py` | `unittest`、synthetic fixture |
-| `tools/dohyo_art/requirements.txt` | `Pillow==11.3.0`、`numpy==2.0.2` |
-| `tools/dohyo_art/README.md` | 目的、構成、install、CLI、defaults、出力、iteration、fail-closed、tests |
-| `tools/dohyo_art/.gitignore` | `.venv/`、`__pycache__/` |
+| `tools/dohyo_art/compose_dohyo.py` | `ArenaAlignment`、`validate_alignment`、`required_arena_scale`、`aligned_source_box`、`normalize_arena(…, alignment)`、`compose(…, alignment)`、CLI、manifest schema 2 |
+| `tools/dohyo_art/tests/test_compose_dohyo.py` | alignment tests（10件追加）、CLI cases、git-ignore test |
+| `tools/dohyo_art/README.md` | Product用の正規command、Arena alignment節、defaults、fail-closed |
 | `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` | 本Report |
 
-Helper moduleは作っていない。`input.local/` と `output.local/` はrootの `*.local` でignoreされる。
-
-# Tool Architecture
-
-`AI/Artist Sources -> Deterministic Geometry/Composition -> Review/Runtime Assets`
-
-- 処理の流れ: `compose()`（純粋にin-memory。`BuildResult` = images + manifest）→ `write_outputs()`（staging後に配置）→ `main()`（CLI）
-- 主要部品
-  - `Geometry`: master px、centerはcanvas center
-  - `TextureOptions`
-  - `validate_*`
-  - `normalize_arena`
-  - `prepare_tawara_strip`
-  - `make_seamless_tile`
-  - `resolve_repeat`
-  - `resample_tile`
-  - `render_tawara_ring`
-  - `render_shikiri`
-  - `build_guide`
-- Gameplay / Phaser / TypeScriptとの依存はない（testでimportを検査している）
-
-## RobloxRtsの参照範囲
-
-`usuki-k/RobloxRts` の `tools/card_image/` は設計方針の参考にのみ使った。
-- 参考にした方針
-  - runtimeの外にtoolを置く
-  - sourceと決定的合成を分離する
-  - 明示的なCLI
-  - fail closed
-  - tool-localのrequirements
-  - READMEに正規のcommandを載せる
-  - focused tests
-- class、font、card chrome、Pillowのpin（9.5.0）はコピーしていない。Pillowのversionは本環境で検証した版を選んだ
-
-# CLI Contract
+# CLI Changes
 
 ```
-python tools/dohyo_art/compose_dohyo.py --arena-base PATH --tawara-source PATH --output-dir DIR
-  [--outer-radius 800] [--tawara-width 42] [--shikiri-offset-x 124]
-  [--shikiri-length 280] [--shikiri-width 24] [--protected-radius 1064]
-  [--participant-offset-x 246] [--repeat auto|N] [--trim-start 0.06]
-  [--trim-end 0.06] [--seam-crossfade 0.05] [--alpha-threshold 8]
+--arena-scale S        uniform zoom about canvas center, 1..1.25 (default 1.0)
+--arena-offset-x X     master px, + = arena content right (default 0)
+--arena-offset-y Y     master px, + = arena content down  (default 0)
 ```
 
-- 成功時はexit 0で、出力pathと解決したrepeatを表示する
-- 入力・引数が不正な場合は `error:` を表示してexit 2。何も書き込まない
-- Master canvasは3840×2160に固定（CLIからは変えない。libraryの `Geometry` ではtest用に縮小できる）
+- 変換順序: 16:9正規化 → scale → 平行移動 → crop
+  - 全体を1つのsource boxに合成し、Lanczosで1回だけresampleする（二重resampleなし）
+- 回転と非一様scaleは扱わない
+- 次の場合はfail closedする（exit 2、何も書かない）
+  - canvasを覆えない
+  - scaleが範囲外
+  - 値が非有限
+- 露出部分を埋める処理（黒、blur、clone、inpaint）はしない
 
-# Exact Default Geometry
+# Manifest Changes
 
-| 項目 | Master | Runtime（1/2） |
-|---|---|---|
-| Canvas | 3840×2160 | 1920×1080 |
-| Center | (1920, 1080) | (960, 540) |
-| Outer radius | 800 | 400 |
-| Inner radius | 758 | 379 |
-| Tawara width | 42 | 21 |
-| Shikiri center X | 1796 / 2044 | 898 / 1022 |
-| Shikiri center Y | 1080 | 540 |
-| Shikiri length（Y方向） / width（X方向） | 280 / 24 | 140 / 12 |
-| Protected radius（guideのみ） | 1064 | 532 |
-| Participant guide | 1920 ± 246 | 960 ± 123 |
+- `schema`: 1 → 2
+- `arena_alignment` を追加した
+  - `scale`、`offset_x`、`offset_y`、`units`
+  - `transform_order`、`min_scale_for_offset`、`coverage`、`source_box`
+  - `intended_anchor: "painted main dohyo/platform top surface center -> canvas center"`
+- 既存の `arena_normalization.crop_box` は16:9正規化のboxとしてそのまま残した
 
-実出力で検証した値：
-- master overlayのring alpha bbox = `(1120, 280, 2720, 1880)`
-- 1920 overlay = `(560, 140, 1360, 940)`
-- outer + 0.5px より外側のalphaは0、inner − 0.5px より内側のalphaはshikiri以外0（master）
-- shikiriの矩形 `x 1784–1808 / 2032–2056、y 940–1220` はalpha 255
+# Tests
 
-# Image Mapping Approach
+`python -m unittest discover -s tools/dohyo_art/tests -v` → **Ran 35 tests, OK**（skipなし）。
 
-1. **Arena正規化**
-   - 不透明であることと、16:9からの差が0.2%以内であることを確認する
-   - 実入力の差は −0.053%
-   - 小数のcrop box `(0, 0.25, 1672, 940.75)` でcenter cropし、Lanczosで3840×2160へresizeする（scaleは2.2967で縦横同一）
-   - それ以外の編集はしない。中央の摩耗模様にも手を加えない
-2. **Tawara準備**
-   - alpha > 8 のbboxでcropする
-     - 実入力では `(52, 206, 2122, 511)`
-     - alpha 1–8 の微小noiseが画像全体に散在していたため、閾値を設けた
-   - 両端を幅の6%ずつtrimし（124px）、縦方向を再cropする → strip 1822×263
-   - source alphaは保持する
-3. **Polar mapping**
-   - annulus内の各pixelについて、角度をu（2πで `repeat` 回）、半径をv（外縁 = stripの上端）に対応させる
-   - tileはwrap paddingを付けてpremultipliedでLanczos縮小し、ring上でほぼ1:1にしてからbilinearでsampleする
-   - 縁は、厳密なcenterと半径に対する解析的な1px coverage × texture alpha
-4. **Shikiri**: 解析的なpixel coverageによる厳密な矩形。色は暖色のivory `(238, 230, 211)`
-5. **Downscale**: BOX（2×2の正確な平均。PillowがRGBAをpremultipliedで処理する）
-6. **`--repeat auto`**: sourceのaspect比をring中央の円周上で保つ整数値。実入力では18
+追加・変更したもの：
+1. 恒等alignment（既定値と明示指定）が、旧正規化の `resize(box=…)` と同じpixel hashになる
+2. +X offsetで内容が右へ動く（marker重心が `(p−c)·S+c+o` と ±0.5px で一致）
+3. +Y offsetで内容が下へ動く
+4. 一様scaleで正方形markerが正方形のまま（幅=高さ）、source boxが16:9
+5. 覆えない値は失敗する（scale不足、<1、>1.25、NaN、inf）
+6. 最小scaleで正確に覆える（box境界内、端のpixelは背景色）
+7. manifestにalignmentが記録される（恒等も含む）
+8. alignment付きでも決定的（pixel hashとmanifest text）
+9. alignmentだけを変えた場合、overlayのmaster / 1920 hashとgeometry manifestが不変
+10. ring center / radiusが不変（geometryは (480, 270) / 200）
+11. CLIでalignmentを指定したfull sizeのsmoke（Product値）。CLIのfail-closedに「uncovered arena」「scale too large」を追加
+12. `input.local/`、`output.local/`、`output-aligned.local/` がgit-ignoreされ、`tools/dohyo_art` にPNGや `.local` がtrackされていない
 
-# Seam Strategy
-
-- strip末尾の5%（91px）を先頭へ線形crossfadeする（premultiplied）
-- tileの周期は1731px
-- 既定のtrimでは、stripの両端がほぼ最初と最後のtieの外縁に来るため、seamはtie同士の重なりになる
-- repeatは整数なので、2πで正確に閉じる
-- 実出力のθ=0付近（ring右側）を拡大して確認し、目立つ継ぎ目はなかった（最終判断はUser）
-
-# Outputs（実Product入力。path: `tools/dohyo_art/output.local/`。git ignored）
-
-| File | Size / Mode |
-|---|---|
-| `arena_base_master.png` | 3840×2160 RGB |
-| `dohyo_ring_overlay_master.png` | 3840×2160 RGBA |
-| `geometry_guide_master.png` | 3840×2160 RGB |
-| `composite_master.png` | 3840×2160 RGB |
-| `dohyo_ring_overlay_1920.png` | 1920×1080 RGBA |
-| `composite_preview_1920.png` | 1920×1080 RGB |
-| `build_manifest.json` | schema 1、timestampなし、入力はbasenameとSHA-256 |
-
-入力のSHA-256：
-- arena `51a04bf5…903d`
-- tawara `bd7cd6a4…03bf`
-
-# Dependency Versions
-
-- Python 3.9.7（Anaconda base、Windows x64）。tool-local venv `tools/dohyo_art/.venv`（ignored）
-  - Anacondaのglobal numpyはDLL errorで壊れていたため、venvを使った
-- Pillow 11.3.0（Python 3.9をsupportする最後の系列）、NumPy 2.0.2（3.9をsupportする最後の系列）
-- Node `package.json` / `pnpm-lock.yaml` は未変更
+既存testは、`normalize_arena` の戻り値が3要素になった点のみ修正した。
 
 # Deterministic Evidence
 
-- 実入力で、同じ引数のまま別の出力dirへ2回実行した
-  - `build_manifest.json` はbyte単位で一致（`cmp`）
-  - PNG 6ファイルはすべてsha256が一致
-- manifestには、各出力のdecoded pixelのSHA-256を記録している（例: composite_preview_1920 `61d6e1f7…dc93f`）
-- 乱数、timestamp、fontは使っていない。guideは文字を描かず、色の凡例をREADMEに記載した
-- Unit testでも2回のcomposeでpixel hashとmanifest textが一致することを確認した
+- **恒等の回帰**: 既定値で再実行した結果が、補正前の `output.local/` と **byte一致**した
+  - 対象: `arena_base_master` / `dohyo_ring_overlay_master` / `composite_master` / `dohyo_ring_overlay_1920`
+- **再実行**: Product値で2回実行し、`build_manifest.json` と全PNGが **byte一致**した
+- **overlay不変**: 補正前の `output.local` と補正後の `output-aligned.local` で、`dohyo_ring_overlay_master.png` と `dohyo_ring_overlay_1920.png` が **byte一致**した
 
-# Verification
+# Real Product Outputs
 
-- `python -m unittest discover -s tools/dohyo_art/tests -v` → **Ran 25 tests, OK**（約17秒）
-  - 合成の成功、出力とsize（master/preview、full sizeのCLI smoke）
-  - ring center と radius の厳密さ（bboxと左右上下の対称性）
-  - outer の外と inner の内が透明であること、annulusが不透明であること
-  - shikiriの厳密な位置と色、alphaの保持、padding cropとtrim、seamのwrap連続性
-  - 失敗すべきケース
-    - alphaが空、alphaなし、縦長のsource
-    - aspectの大きなずれ、透明なarena、不正なgeometryとtexture option
-    - CLIのfail-closed（5ケースで出力なし）、入力の上書き拒否
-  - 決定性、manifestの内容、stdlib / numpy / PIL以外をimportしないこと
-- CLI smoke: synthetic入力（1672×941）でfull sizeを確認し、実入力でも実行した
-- READMEのcommandを検証した: `pip install -r requirements.txt`、合成command、test command
-- `git diff --cached --check`: 問題なし
-- `src/`、`package.json`、`pnpm-lock.yaml` の変更なし。stagedは `tools/dohyo_art/` の5ファイルと本Reportのみ
-- `input.local/`、`output.local/`、`.venv/` はignoreされていることを `git check-ignore` で確認した
-- `pnpm test` / `pnpm build`: 対象外（TS/Nodeは未変更）
+- 補正前（比較用）: `tools/dohyo_art/output.local/`
+- **補正後: `tools/dohyo_art/output-aligned.local/`**
 
-# Acceptance Criteria
+| File | Size |
+|---|---|
+| `arena_base_master.png` / `dohyo_ring_overlay_master.png` / `geometry_guide_master.png` / `composite_master.png` | 3840×2160 |
+| `dohyo_ring_overlay_1920.png` / **`composite_preview_1920.png`** | 1920×1080 |
+| `build_manifest.json` | schema 2 |
 
-- Python CLI / 入力検証 / 決定的な正規化 / 厳密な円環 / polar mapping / shikiri / guide / master / 1920 / manifest / tests / README / requirements: すべて満たした
-- 実Product入力での実合成: 実施済み
-- Product visual acceptance: **未了（User Gate）**
+どちらもgit-ignore（`*.local`）で、commitしていない。
+
+# Product Visual Check
+
+**REQUIRED**。確認するファイルは `tools/dohyo_art/output-aligned.local/composite_preview_1920.png`。
+
+Agentが目視した範囲：
+- ringは正方形土俵の中に収まり、下端のはみ出しはなくなった
+- 左右は対称
+- 露出した端はない
+- 非一様な伸びはない
+
+User判断ポイント：
+- 内側俵石枠の内縁を基準にすると、中心はまだ約14px上（y≈1065.5）にある
+  - そのため、ringから石枠までの余白が下（約13px）より上（約42px）で大きく見える
+  - 透視によって、土俵上面の外縁と石枠の基準がずれていることが原因
+  - 石枠基準で合わせたい場合の目安: `--arena-scale 1.088 --arena-offset-x 5.44 --arena-offset-y 93.57`
+    - 石枠中心 (1915, 994) から計算した値。未生成・未検証
 
 # Design Deviations
 
 Design Deviations: NONE
 
-補足（Taskの範囲内で選んだ細部）：
-- tawaraのbbox用に `--alpha-threshold`（既定8）を追加した。実sourceのnoise対策で、Product semanticsへの影響はない
-- `--protected-radius` と `--participant-offset-x` はguide専用のoption
-- trimは「alpha crop後の幅に対する割合」で指定する。source寸法を仮定しないため
-- 1920への縮小はLanczosではなくBOX。2×の厳密な面積平均で、shikiriの縁にringingを出さないため
+- 汎用の既定値は恒等（1, 0, 0）のままにした。Product値はREADMEの正規commandで明示的に渡す
+- 補正後の出力は、比較できるように `output-aligned.local/` に分けて出力した（Taskの例示どおり）
+- 新しいreview出力やguide annotationは追加していない。既存の `geometry_guide_master.png` が、補正後のarenaの上に固定ringを重ねて表示する
 
-# Unexpected Scope（報告のみ・未修正）
+# Unexpected Scope（報告のみ）
 
-- **Arena画像と厳密geometryの位置関係（Visual）**
-  - 採用済みarena内の石枠（正方形の土俵上面）は、中心がcanvas centerよりやや上にある（1920空間で目視約 y≈500）
-  - そのため、ring（y 140–940）の下端が石枠の下辺や下側の徳俵付近の意匠と重なり、上端は石枠の上辺に近い
-  - Geometryは仕様どおりで、arenaの編集はTask範囲外。User visual checkで判断が必要
-    - 背景を上下に合わせるか、ringと石枠の関係を許容するか
-- Anaconda base環境のglobal numpy（1.20.3）がDLL errorでimportできない。tool-local venvで回避しており、Repositoryへの影響はない
+- 上記の透視による基準の曖昧さ（土俵上面と内側石枠で約14px）。arenaを再描画しないと解消しないため、Task範囲外
+- それ以外はなし
 
-# Known Untested Items
+# Verification
 
-- 他のOSやPython versionでのpixel一致は確認していない（決定性の保証は、検証したtoolchainの範囲に限る）
-- tawaraの見た目（repeat、trim、seam、ringに沿った陰影の向き）はUser visual checkによる
-
-# User Play Test
-
-- Gameplay Play Test: **Not Required**（runtimeは未変更）
-- **Product Visual Check: REQUIRED**
-  - 確認するもの: `tools/dohyo_art/output.local/composite_preview_1920.png`（1920×1080）。必要に応じて `composite_master.png` と `geometry_guide_master.png`
-  - 調整できる項目: `--repeat`、`--trim-start` / `--trim-end`、`--seam-crossfade`、（geometryを変える場合）`--tawara-width`
+- Python unit suite: 35 / 35 OK
+- 実Product CLIの実行: 補正前（既定値）と補正後（Product値）の両方
+- 決定的な再実行の一致、overlay hashの不変、preview 1920×1080を確認した
+- `git diff --cached --check`: 問題なし
+- `src/`、`package.json`、`pnpm-lock.yaml` の変更なし。Product入力・出力のstageなし
+- `pnpm test` / `pnpm build`: 対象外（runtimeは未変更）
 
 # Git Delivery
 
-- Commit: `tools: add deterministic dohyo art compositor`（Task-owned 6ファイルのみ）
+- Commit: `tools: align product arena background`
+  - Task-owned 4ファイル: `compose_dohyo.py` / `tests/test_compose_dohyo.py` / `README.md` / 本Report
 - fetch → fast-forward safety確認 → push `origin/develop` → remote SHA確認 → clean tree確認
 - `main` は未変更

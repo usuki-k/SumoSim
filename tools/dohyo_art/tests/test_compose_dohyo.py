@@ -254,7 +254,7 @@ class TextureTests(unittest.TestCase):
 class ArenaTests(unittest.TestCase):
     def test_tiny_aspect_mismatch_is_normalized(self):
         image = Image.new("RGB", (1672, 941), (120, 90, 60))  # accepted source shape
-        out, info = cd.normalize_arena(image, (3840, 2160))
+        out, info, _ = cd.normalize_arena(image, (3840, 2160))
         self.assertEqual(out.size, (3840, 2160))
         self.assertEqual(out.mode, "RGB")
         self.assertLess(abs(info["aspect_mismatch"]), cd.ASPECT_TOLERANCE)
@@ -267,6 +267,135 @@ class ArenaTests(unittest.TestCase):
     def test_transparent_arena_fails(self):
         with self.assertRaises(cd.CompositorError):
             cd.normalize_arena(Image.new("RGBA", (1920, 1080), (0, 0, 0, 0)), (3840, 2160))
+
+
+ARENA_BG = (100, 80, 60)
+
+
+def marker_arena(size=(960, 540), box=(300, 200, 340, 240)) -> Image.Image:
+    """Opaque background with one bright square marker (x0, y0, x1, y1)."""
+    image = Image.new("RGB", size, ARENA_BG)
+    image.paste((255, 255, 255), box)
+    return image
+
+
+def marker_centroid_and_extent(image: Image.Image):
+    lum = np.asarray(image.convert("L"), dtype=np.float64)
+    weight = np.clip(lum - 160, 0, None)
+    ys, xs = np.mgrid[0 : lum.shape[0], 0 : lum.shape[1]]
+    total = weight.sum()
+    centroid = ((weight * (xs + 0.5)).sum() / total, (weight * (ys + 0.5)).sum() / total)
+    mask = lum > 177  # ~half way between background and marker
+    cols = np.flatnonzero(mask.any(axis=0))
+    rows = np.flatnonzero(mask.any(axis=1))
+    return centroid, (cols[-1] + 1 - cols[0], rows[-1] + 1 - rows[0])
+
+
+class ArenaAlignmentTests(unittest.TestCase):
+    SIZE = (960, 540)
+
+    def expected_centroid(self, alignment: cd.ArenaAlignment):
+        cx, cy = self.SIZE[0] / 2, self.SIZE[1] / 2
+        return (
+            (320 - cx) * alignment.scale + cx + alignment.offset_x,
+            (220 - cy) * alignment.scale + cy + alignment.offset_y,
+        )
+
+    def test_identity_alignment_preserves_previous_normalization(self):
+        image = marker_arena((1672, 941))
+        default, _, info = cd.normalize_arena(image, (3840, 2160))
+        explicit, _, _ = cd.normalize_arena(image, (3840, 2160), cd.ArenaAlignment(1.0, 0.0, 0.0))
+        previous = image.resize((3840, 2160), Image.Resampling.LANCZOS, box=(0, 0.25, 1672, 940.75))
+        self.assertEqual(cd.pixel_sha256(default), cd.pixel_sha256(previous))
+        self.assertEqual(cd.pixel_sha256(explicit), cd.pixel_sha256(previous))
+        self.assertEqual(info["source_box"], [0, 0.25, 1672, 940.75])
+
+    def test_positive_offset_x_moves_content_right(self):
+        alignment = cd.ArenaAlignment(scale=1.1, offset_x=30)
+        out, _, _ = cd.normalize_arena(marker_arena(), self.SIZE, alignment)
+        (x, y), _ = marker_centroid_and_extent(out)
+        ex, ey = self.expected_centroid(alignment)
+        self.assertGreater(x, ex - 30 + 20)
+        self.assertAlmostEqual(x, ex, delta=0.5)
+        self.assertAlmostEqual(y, ey, delta=0.5)
+
+    def test_positive_offset_y_moves_content_down(self):
+        alignment = cd.ArenaAlignment(scale=1.2, offset_y=40)
+        out, _, _ = cd.normalize_arena(marker_arena(), self.SIZE, alignment)
+        (x, y), _ = marker_centroid_and_extent(out)
+        ex, ey = self.expected_centroid(alignment)
+        self.assertAlmostEqual(x, ex, delta=0.5)
+        self.assertAlmostEqual(y, ey, delta=0.5)
+
+    def test_uniform_scale_without_stretch(self):
+        alignment = cd.ArenaAlignment(scale=1.2, offset_x=-20, offset_y=30)
+        out, _, info = cd.normalize_arena(marker_arena(), self.SIZE, alignment)
+        self.assertEqual(out.size, self.SIZE)
+        _, (w, h) = marker_centroid_and_extent(out)
+        self.assertEqual(w, h)
+        self.assertAlmostEqual(w, 40 * 1.2, delta=1)
+        x0, y0, x1, y1 = info["source_box"]
+        self.assertAlmostEqual((x1 - x0) / (y1 - y0), self.SIZE[0] / self.SIZE[1], places=3)
+
+    def test_insufficient_coverage_fails(self):
+        cases = [
+            cd.ArenaAlignment(scale=1.0, offset_x=10),
+            cd.ArenaAlignment(scale=1.05, offset_y=60),  # needs 1 + 60/270
+            cd.ArenaAlignment(scale=0.9),
+            cd.ArenaAlignment(scale=cd.MAX_ARENA_SCALE + 0.01, offset_y=10),
+            cd.ArenaAlignment(scale=float("nan")),
+            cd.ArenaAlignment(scale=1.1, offset_x=float("inf")),
+        ]
+        for alignment in cases:
+            with self.subTest(alignment), self.assertRaises(cd.CompositorError):
+                cd.normalize_arena(marker_arena(), self.SIZE, alignment)
+
+    def test_minimum_valid_scale_covers_exact_canvas(self):
+        scale = cd.required_arena_scale(self.SIZE, 12, -60)
+        out, _, info = cd.normalize_arena(marker_arena(), self.SIZE, cd.ArenaAlignment(scale, 12, -60))
+        self.assertEqual(out.size, self.SIZE)
+        x0, y0, x1, y1 = info["source_box"]
+        self.assertGreaterEqual(min(x0, y0), -1e-6)
+        self.assertLessEqual(x1, self.SIZE[0] + 1e-6)
+        self.assertLessEqual(y1, self.SIZE[1] + 1e-6)
+        pixels = np.asarray(out)
+        for edge in (pixels[0], pixels[-1], pixels[:, 0], pixels[:, -1]):
+            np.testing.assert_allclose(edge, np.broadcast_to(ARENA_BG, edge.shape), atol=1)
+
+
+class AlignedCompositionTests(ComposeTestBase):
+    ALIGN = cd.ArenaAlignment(scale=1.15, offset_x=6, offset_y=-35)
+
+    def test_manifest_records_alignment(self):
+        manifest = cd.compose(self.arena, self.tawara, SMALL, TEX, self.ALIGN).manifest
+        info = manifest["arena_alignment"]
+        self.assertEqual(info["scale"], 1.15)
+        self.assertEqual(info["offset_x"], 6)
+        self.assertEqual(info["offset_y"], -35)
+        self.assertIn("scale about canvas center -> translate", info["transform_order"])
+        self.assertEqual(len(info["source_box"]), 4)
+        identity = cd.compose(self.arena, self.tawara, SMALL, TEX).manifest["arena_alignment"]
+        self.assertEqual((identity["scale"], identity["offset_x"], identity["offset_y"]), (1.0, 0.0, 0.0))
+
+    def test_alignment_is_deterministic(self):
+        first = cd.compose(self.arena, self.tawara, SMALL, TEX, self.ALIGN)
+        second = cd.compose(self.arena, self.tawara, SMALL, TEX, self.ALIGN)
+        for name in first.images:
+            self.assertEqual(cd.pixel_sha256(first.images[name]), cd.pixel_sha256(second.images[name]), name)
+        self.assertEqual(cd.manifest_text(first.manifest), cd.manifest_text(second.manifest))
+
+    def test_alignment_changes_arena_only(self):
+        plain = cd.compose(self.arena, self.tawara, SMALL, TEX)
+        aligned = cd.compose(self.arena, self.tawara, SMALL, TEX, self.ALIGN)
+        for name in (cd.OUTPUT_OVERLAY_MASTER, cd.OUTPUT_OVERLAY_1920):
+            self.assertEqual(cd.pixel_sha256(plain.images[name]), cd.pixel_sha256(aligned.images[name]), name)
+        self.assertNotEqual(
+            cd.pixel_sha256(plain.images[cd.OUTPUT_ARENA_MASTER]),
+            cd.pixel_sha256(aligned.images[cd.OUTPUT_ARENA_MASTER]),
+        )
+        self.assertEqual(plain.manifest["geometry"], aligned.manifest["geometry"])
+        self.assertEqual(aligned.manifest["geometry"]["center"], [480, 270])
+        self.assertEqual(aligned.manifest["geometry"]["outer_radius"], 200)
 
 
 class GeometryValidationTests(unittest.TestCase):
@@ -323,7 +452,10 @@ class CliTests(unittest.TestCase):
         arena = make_arena(self.tmp / "arena.png", (1672, 941))
         tawara = make_tawara(self.tmp / "tawara.png")
         out = self.tmp / "out"
-        proc = self.run_cli("--arena-base", str(arena), "--tawara-source", str(tawara), "--output-dir", str(out), "--repeat", "12")
+        proc = self.run_cli(
+            "--arena-base", str(arena), "--tawara-source", str(tawara), "--output-dir", str(out), "--repeat", "12",
+            "--arena-scale", "1.072", "--arena-offset-x", "5.36", "--arena-offset-y", "77.72",
+        )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         expected = {
             cd.OUTPUT_ARENA_MASTER: (3840, 2160),
@@ -343,6 +475,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(manifest["geometry"]["inner_radius"], 758)
         self.assertEqual(manifest["geometry"]["shikiri"]["centers"], [[1796, 1080], [2044, 1080]])
         self.assertEqual(manifest["tawara_texture"]["repeat"], 12)
+        alignment = manifest["arena_alignment"]
+        self.assertEqual((alignment["scale"], alignment["offset_x"], alignment["offset_y"]), (1.072, 5.36, 77.72))
         with Image.open(out / cd.OUTPUT_OVERLAY_1920) as small:
             alpha = np.asarray(small.getchannel("A"))
         # Runtime space: ring outer edge 400 px around (960, 540).
@@ -362,6 +496,8 @@ class CliTests(unittest.TestCase):
             "empty tawara": ["--arena-base", str(arena), "--tawara-source", str(empty)],
             "wrong aspect": ["--arena-base", str(wrong_aspect), "--tawara-source", str(tawara)],
             "bad geometry": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--tawara-width", "900"],
+            "uncovered arena": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--arena-offset-y", "50"],
+            "arena scale too large": ["--arena-base", str(arena), "--tawara-source", str(tawara), "--arena-scale", "2"],
         }
         for label, args in cases.items():
             with self.subTest(label):
@@ -382,6 +518,23 @@ class CliTests(unittest.TestCase):
 
 
 class IndependenceTests(unittest.TestCase):
+    def test_product_inputs_and_outputs_are_git_ignored(self):
+        repo = TOOL_DIR.parents[1]
+        if not (repo / ".git").exists():
+            self.skipTest("not a git checkout")
+        for rel in (
+            "tools/dohyo_art/input.local/arena_base.png",
+            "tools/dohyo_art/input.local/tawara_source.png",
+            "tools/dohyo_art/output.local/composite_preview_1920.png",
+            "tools/dohyo_art/output-aligned.local/composite_preview_1920.png",
+        ):
+            proc = subprocess.run(["git", "check-ignore", "-q", rel], cwd=repo, check=False)
+            self.assertEqual(proc.returncode, 0, f"{rel} is not git-ignored")
+        tracked = subprocess.run(
+            ["git", "ls-files", "tools/dohyo_art"], cwd=repo, capture_output=True, text=True, check=True
+        ).stdout.split()
+        self.assertFalse([f for f in tracked if f.endswith(".png") or ".local/" in f])
+
     def test_tool_imports_only_stdlib_numpy_and_pillow(self):
         tree = ast.parse((TOOL_DIR / "compose_dohyo.py").read_text(encoding="utf-8"))
         modules = set()

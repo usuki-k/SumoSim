@@ -46,8 +46,21 @@ PY tools/dohyo_art/compose_dohyo.py \
   --output-dir tools/dohyo_art/output.local
 ```
 
-`output.local/` is git-ignored too. The command prints written files and the
-resolved texture repeat count. Full option list: `PY tools/dohyo_art/compose_dohyo.py --help`.
+`output.local/` is git-ignored too (as is any `*.local` directory). The
+command prints written files and the resolved texture repeat count.
+
+### Accepted Product arena (canonical command)
+
+The accepted `arena_base.png` paints its square dohyo platform above the
+gameplay center, so the Product command aligns it explicitly
+(see [Arena alignment](#arena-alignment)):
+
+```bash
+PY tools/dohyo_art/compose_dohyo.py   --arena-base tools/dohyo_art/input.local/arena_base.png   --tawara-source tools/dohyo_art/input.local/tawara_source.png   --output-dir tools/dohyo_art/output-aligned.local   --arena-scale 1.072 --arena-offset-x 5.36 --arena-offset-y 77.72
+```
+
+These values belong to that one image (input SHA-256 `51a04bf5…903d`). A new
+arena source needs its own measurement. Full option list: `PY tools/dohyo_art/compose_dohyo.py --help`.
 
 ## Defaults (master space 3840×2160 = runtime 1920×1080 × 2)
 
@@ -61,6 +74,8 @@ resolved texture repeat count. Full option list: `PY tools/dohyo_art/compose_doh
 | `--shikiri-width` (along X) | 24 | 12 |
 | `--protected-radius` (guide only) | 1064 | 532 |
 | `--participant-offset-x` (guide only) | 246 | 123 |
+| `--arena-scale` | 1.0 | |
+| `--arena-offset-x` / `--arena-offset-y` | 0 / 0 | |
 | `--repeat` | `auto` | |
 | `--trim-start` / `--trim-end` | 0.06 / 0.06 | |
 | `--seam-crossfade` | 0.05 | |
@@ -70,13 +85,13 @@ resolved texture repeat count. Full option list: `PY tools/dohyo_art/compose_doh
 
 | File | Content |
 |---|---|
-| `arena_base_master.png` | arena input normalized to exactly 3840×2160 RGB (tiny center crop + Lanczos resize only) |
+| `arena_base_master.png` | arena input normalized (and, if requested, aligned) to exactly 3840×2160 RGB: tiny center crop, uniform scale + translation, Lanczos resize only |
 | `dohyo_ring_overlay_master.png` | RGBA 3840×2160, transparent except the tawara annulus and shikiri lines (no arena/clay) |
 | `geometry_guide_master.png` | developer guide (not a runtime asset): dimmed composite + red outer radius, orange inner radius, cyan protected radius, green shikiri outlines, white center cross, magenta participant centers |
 | `composite_master.png` | exact alpha composite `arena_base_master + dohyo_ring_overlay_master` |
 | `dohyo_ring_overlay_1920.png` | overlay downscaled to 1920×1080 (BOX = exact 2×2 average, lossless PNG) |
 | `composite_preview_1920.png` | composite at 1920×1080 for User review |
-| `build_manifest.json` | deterministic metadata (no timestamps): input basenames + SHA-256, normalization, geometry, texture parameters, decoded-pixel SHA-256 of each output |
+| `build_manifest.json` | deterministic metadata (schema 2, no timestamps): input basenames + SHA-256, normalization, `arena_alignment`, geometry, texture parameters, decoded-pixel SHA-256 of each output |
 
 ## How it works
 
@@ -85,21 +100,22 @@ resolved texture repeat count. Full option list: `PY tools/dohyo_art/compose_doh
    excess is center-cropped with a fractional box and resized with Lanczos to
    3840×2160. No non-uniform stretch, no other edit. A larger mismatch fails
    instead of hiding a material crop.
-2. **Tawara texture** — crop the source to its alpha bounding box (alpha >
+2. **Arena alignment** (optional) — see below. Gameplay geometry never moves.
+3. **Tawara texture** — crop the source to its alpha bounding box (alpha >
    `--alpha-threshold`, so faint stray pixels are ignored), trim
    `--trim-start` / `--trim-end` (fractions of the cropped width) from the
    frayed ends, then re-crop vertically. Source alpha is kept.
-3. **Seam** — the last `--seam-crossfade` fraction of the strip is linearly
+4. **Seam** — the last `--seam-crossfade` fraction of the strip is linearly
    crossfaded into its start (premultiplied alpha), so the strip tiles without
    a hard seam. With the defaults the trim lands on the outer edges of the
    first/last ties, so the seam blends tie into tie.
-4. **Polar mapping** — for every pixel in the annulus, angle selects texture u
+5. **Polar mapping** — for every pixel in the annulus, angle selects texture u
    (repeated `--repeat` times around 2π, integer so it closes exactly) and
    radius selects texture v (outer edge = top row of the strip). The tile is
    first Lanczos-resized (wrap-padded) to about 1:1 ring resolution, then
    sampled bilinearly. Ring edges use analytic 1 px coverage around the exact
    center/radii, multiplied by texture alpha.
-5. **Shikiri** — exact rectangles with analytic pixel coverage, warm ivory
+6. **Shikiri** — exact rectangles with analytic pixel coverage, warm ivory
    `(238, 230, 211)`. Not inferred from any AI image.
 
 `--repeat auto` picks the integer count that keeps the source strip's aspect
@@ -107,6 +123,34 @@ ratio on the ring's mid circumference (18 for the current accepted source).
 
 The broad central circular wear pattern in the arena base is intentionally
 **not** edited by this tool.
+
+## Arena alignment
+
+The ring, shikiri and center are fixed gameplay geometry. If a painted arena
+is off-center, move the *arena*, not the ring:
+
+- `--arena-scale S` — uniform zoom about the canvas center (1 ≤ S ≤ 1.25).
+  No rotation, no non-uniform scale.
+- `--arena-offset-x X` / `--arena-offset-y Y` — master px; **positive X moves
+  arena content right, positive Y moves it down**.
+
+Order: 16:9 normalize → scale about canvas center → translate → crop to
+3840×2160. A normalized-master point `p` lands at `(p − c)·S + c + offset`
+(`c` = canvas center). The whole chain is composed into one source crop box
+and one Lanczos resample, so there is no double resampling.
+
+Translating a full-frame image exposes edges, so the tool requires
+`S ≥ 1 + max(|X| / 1920, |Y| / 1080)` and **fails** otherwise; it never fills
+uncovered pixels (no black, blur, clone or inpainting). Defaults are identity
+(1, 0, 0) and reproduce the unaligned output pixel-for-pixel.
+
+Measuring an arena: pick the painted main square platform top surface (not
+the circular wear pattern, spectators or decorative straw blocks), measure its
+center `a` on an unaligned `arena_base_master.png`, then solve
+`offset = (c − a)·S` together with the coverage bound on `S`. For the
+accepted arena: `a ≈ (1915, 1007.5)` → `S = 1.072`, `offset = (5.36, 77.72)`.
+`geometry_guide_master.png` shows the fixed ring over the aligned arena for
+checking.
 
 ## Iterating on the look
 
@@ -138,6 +182,7 @@ The command exits with status 2 and an `error:` message, writing nothing, when:
   canvas, protected radius < outer radius, shikiri overlapping each other or
   not strictly inside the inner radius
 - texture options are out of range
+- arena scale is outside [1, 1.25] or does not cover the canvas after the offset
 - an output file would overwrite an input file
 
 Outputs are rendered fully in memory, written to a staging directory inside
@@ -153,7 +198,9 @@ PY -m unittest discover -s tools/dohyo_art/tests -v
 Tests build synthetic fixtures in temporary directories (never Product art)
 and check sizes, exact ring center/radii, transparency outside the annulus,
 shikiri positions, alpha preservation, alpha-bbox crop/trim, fail-closed cases,
-manifest contents, deterministic pixel hashes, and that the tool imports only
+manifest contents, deterministic pixel hashes, arena alignment (direction,
+uniform scale, coverage, identity = unaligned pixels, overlay unchanged),
+that Product `*.local` paths stay git-ignored, and that the tool imports only
 the stdlib, NumPy and Pillow. One test runs the CLI at the full 3840×2160 size.
 
 Automated tests verify geometry and determinism only. Whether the tawara looks
