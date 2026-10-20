@@ -117,20 +117,37 @@ It is NOT the final ring geometry.
 
 The tool must convert the source texture into an exact annulus.
 
-## Source Images Are NOT Assumed to Be in the Repository
+## Required Local Product Inputs — MUST EXIST BEFORE START
 
-The accepted arena image and tawara image currently exist outside the repository / in the User's ChatGPT workflow.
+The User will place the two real Product source images inside the SumoSim working tree BEFORE the Agent starts.
 
-Therefore:
+Required paths:
 
-- the tool must take explicit input file paths via CLI
-- do not hard-code repository image filenames
-- do not commit placeholder copies of the User's images
-- use synthetic temporary fixtures in tests
-- README must explain how the User supplies local input images
+```
+tools/dohyo_art/input.local/arena_base.png
+tools/dohyo_art/input.local/tawara_source.png
+```
 
-If real input files are locally available during Agent execution, a real smoke composition may be performed.
-If they are not available, this is NOT blocking for implementing/testing the tool.
+Meaning:
+- `arena_base.png` = the User-approved Product arena background image
+- `tawara_source.png` = the User-approved horizontal RGBA straw/tawara texture source
+
+Important Git behavior:
+- repository root `.gitignore` already contains `*.local`
+- therefore the directory name `input.local` is intentionally ignored
+- these Product source images are local authoring inputs and MUST NOT be staged/committed by this Task
+- placing these files must still leave `git status --short` clean
+
+After normal Remote-Task-First Git preflight succeeds, verify BOTH files exist and are readable before implementation.
+
+If either file is missing/unreadable:
+- STOP / BLOCKED
+- do not substitute synthetic Product art
+- do not proceed with Product composite verification
+
+Synthetic temporary fixtures are still required for unit tests, but the real Product inputs MUST also be used for a real CLI smoke/composite in this Task.
+
+The CLI must still support explicit input paths; do not hard-code these filenames into composition logic. The documented example may use these canonical local paths.
 
 ## Directory Permission
 
@@ -592,14 +609,17 @@ No gameplay Play Test required.
 
 **Product Visual Check: REQUIRED AFTER TOOL IMPLEMENTATION**, using the real accepted images supplied by the User.
 
-The tool implementation may technically PASS without real Product inputs if:
-- synthetic tests fully pass
-- real images were not present in the Agent workspace
+The real Product inputs are a prerequisite for this Task.
 
-In that case report:
-`Real Product Composite: NOT RUN — source images not available in repository/workspace`
+Required real run:
+- use `tools/dohyo_art/input.local/arena_base.png`
+- use `tools/dohyo_art/input.local/tawara_source.png`
+- generate the real Product composite outputs
+- report exact output paths and dimensions
 
-Do not claim the Product background is visually accepted.
+If the real inputs are absent, the Task is BLOCKED rather than PASS.
+
+Do not claim Product visual acceptance automatically: after the real composite is generated, User visual approval is still REQUIRED.
 
 ## Final Instruction
 
@@ -611,3 +631,24 @@ Do not alter gameplay.
 
 After commit/push/report:
 「ART-TOOL-01-DOHYO-COMPOSITOR が完了し、ChatGPT Reviewと実画像Composite確認待ちです」
+
+
+## Local Input Setup — User Preparation
+
+Before sending the Agent start instruction, the User should place the real images exactly here:
+
+```
+SumoSim/
+  tools/
+    dohyo_art/
+      input.local/
+        arena_base.png
+        tawara_source.png
+```
+
+It is acceptable that `tools/dohyo_art/` does not yet contain the implementation files; the ignored `input.local/` directory may be created first.
+
+Expected:
+`git status --short` remains empty because `input.local` matches the existing `*.local` ignore rule.
+
+Do not rename, move, delete, stage, or commit the files in `input.local/`.
