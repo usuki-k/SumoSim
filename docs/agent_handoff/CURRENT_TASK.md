@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-02B-PREBOUT-COMPARISON
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT UI / PRE-BOUT COMPARISON
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -827,3 +827,278 @@ Do NOT continue into:
 After commit/push/report:
 
 「ACTION-ART-02B-PREBOUT-COMPARISON が完了し、ChatGPT ReviewとUser Visual Check待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER FLOW CONFIRMATION REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `c937db6931a830b79d6110077cb1b5e1cf0ce577`
+- Agent-Start-Head:
+  `3245cb8d76fea8a7832fa2c83cae0f5146e061b6`
+- Diff is one implementation commit.
+- No BoutSimulation/gameplay source changes.
+- No new dependencies.
+- No Product arena asset changes.
+
+## Pre-bout Comparison Implementation
+
+PASS.
+
+The implementation matches the accepted ACTION-ART-02B scope:
+
+- pre-bout comparison overlay
+- East/West identity header
+- rank / name / current record
+- Age / Height / Weight
+- every supplied public-parameter row
+- English start prompt
+- Scene-owned pre-bout/active presentation phase
+- Enter starts Action
+- R restart returns to pre-bout
+- accepted always-visible Action HUD is hidden while comparison is visible.
+
+No portrait, birthplace, realtime stamina, Management/Tournament system, or final stat design was introduced.
+
+## State / Architecture Ownership
+
+PASS.
+
+Age / height / weight and public-parameter rows live in the pure presentation context.
+
+They are NOT added to:
+- `BoutSimulation`
+- `ParticipantState`
+- `BoutSnapshot`.
+
+The comparison screen therefore remains presentation-only.
+
+Participant id remains the join key.
+
+This preserves the accepted Architecture.
+
+## Public Parameter Discipline
+
+PASS.
+
+The fixture uses:
+
+- Sample Stat A
+- Sample Stat B
+- ...
+- Sample Stat G.
+
+This is the correct approach because the final public parameter list remains unresolved.
+
+The implementation does NOT invent:
+- Power
+- Technique
+- Balance
+- Stamina
+- ranges
+- formulas
+- gameplay effects.
+
+Do Not Reopen these fixture labels as real Product stats.
+
+## Variable Row Handling
+
+PASS for the current task.
+
+The renderer iterates over all supplied rows in order.
+
+Focused tests cover:
+- 0 rows
+- 1 row
+- current 7-row fixture
+- 12-row synthetic list.
+
+No supplied rows are silently omitted.
+
+For larger counts, current behavior compresses pitch to a minimum and may eventually exceed the panel.
+
+This remains an explicitly Deferred design problem and is NOT a Product stat-count limit.
+
+Do not treat 12 or 15 as a final maximum.
+
+## English Copy Boundary
+
+PASS.
+
+The existing small English-first copy boundary was extended only with the fixed copy needed by this screen:
+
+- Age
+- Height
+- Weight
+- formatted years/cm/kg
+- Press Enter to Start.
+
+Public parameter labels/values remain data-driven presentation strings.
+
+No localization framework or additional shipping language was introduced.
+
+## Presentation Flow
+
+PASS from Source inspection.
+
+### Initial state
+- Scene starts in `pre-bout`.
+- Comparison is visible.
+- accepted Action HUD is hidden.
+
+### While waiting
+- `BoutSimulation.step()` is not called.
+- `FixedStepAccumulator.advance()` is not called.
+- hidden gameplay time does not accumulate.
+
+### Enter
+- comparison hides
+- Action HUD shows
+- Push / Counter / Grip latches are cleared
+- accumulator is recreated
+- normal fixed-step Action begins.
+
+This prevents queued edge presses made during pre-bout from firing on the first active tick.
+
+Held movement state is read normally once Action is active; it is current input, not a queued pre-bout edge.
+
+### Restart
+- creates a fresh BoutSimulation
+- clears press latches
+- resets Dummy timing while preserving selected Dummy mode
+- returns to pre-bout.
+
+No gameplay rule was moved into the presentation phase.
+
+## View Structure
+
+PASS.
+
+`PreBoutComparisonView.ts` is a dedicated small Phaser view.
+
+The comparison is one visibility-controlled Container at depth 10.
+
+It is visually above:
+- arena
+- wrestlers
+- debug
+- Action HUD.
+
+The accepted Action HUD is not duplicated behind the comparison; it is hidden and restored by visibility state.
+
+No generic UI framework was introduced.
+
+## Shared HUD Styling
+
+PASS.
+
+The extraction of the existing HUD styling into `HudStyle.ts` is justified and small:
+
+- shared paper palette
+- ink text
+- side accents
+- system serif
+- fitted text helper integration
+- side pill.
+
+It does not constitute a generic UI framework.
+
+The accepted 02A1 Action HUD visual values were preserved.
+
+## Screenshot Visual Review
+
+The User supplied a runtime screenshot of the comparison screen.
+
+ChatGPT visual review:
+**PASS / no blocking visual issue observed.**
+
+Positive observations:
+
+- Product arena remains clearly recognizable behind the dimmer.
+- Comparison panel visually belongs to the same warm paper / ink / subdued accent UI family as the accepted Action HUD.
+- East / West are immediately distinguishable by position, label, and accent.
+- Wrestler names are correctly the strongest identity text.
+- Rank and record are readable without competing with names.
+- Age / Height / Weight form a clear comparison table.
+- Seven `Sample Stat` rows are readable and visibly placeholder-like rather than plausible final stat design.
+- The screen is not overcrowded at the current fixture row count.
+- `Press Enter to Start` has strong visual affordance.
+- No portrait area is missing or visually required.
+- Background dimming is strong enough for readability while still preserving venue context.
+
+No visual correction task is recommended based on this screenshot alone.
+
+## One Visual/Design Note
+
+The comparison panel is intentionally large and dominates the screen.
+
+For a pre-bout information screen this is appropriate.
+
+Do not shrink it merely to expose more of the arena unless User feedback asks for that; readability and comparison are the purpose of this phase.
+
+## Verification Completeness
+
+Automated verification is complete for the technical scope:
+
+- `pnpm test`: 257 PASS / 17 files
+- `pnpm build`: PASS
+- `tsc --noEmit`: PASS
+- `git diff --check`: PASS
+- no new dependency.
+
+Agent browser interaction:
+NOT RUN.
+
+The User screenshot confirms that the comparison actually renders in a browser.
+
+The remaining runtime gate is interaction-flow confirmation, which cannot be proven by the screenshot alone.
+
+## Required User Flow Confirmation
+
+Please verify in the running browser:
+
+1. Before Enter, wrestlers do not actually advance/move through gameplay.
+2. Pressing Push / Counter / Grip before Enter does not cause an action immediately after starting.
+3. Enter hides the comparison and immediately shows the previously accepted Action HUD.
+4. Normal movement / Push / Counter / Grip / Drive still work after Enter.
+5. Key `0` still enables debug during active Action.
+6. `R` returns to this pre-bout comparison screen.
+7. Restarted wrestlers are back at their original initial positions.
+8. No noticeable performance regression.
+
+If these are all normal, ACTION-ART-02B can be fully User Accepted.
+
+## Documentation
+
+PASS.
+
+The previously stale GAME_CONCEPT statement that Product HUD implementation was not started is now corrected.
+
+The docs correctly distinguish:
+- accepted English Action HUD
+- implemented comparison pending User acceptance
+- fixture public parameters are not Product stat decisions.
+
+## Acceptance State
+
+Technical:
+PASS.
+
+ChatGPT visual review:
+PASS.
+
+User runtime flow acceptance:
+PENDING explicit confirmation.
+
+## Next Step After User Acceptance
+
+Do not automatically design final Simulation parameters next.
+
+Once 02B is accepted, Product HUD foundation is sufficient for now.
+
+The next Product-art priority should return to the planned sequence and evaluate the next visual task, likely the **Product wrestler art / part-based wrestler visual direction**, unless the User explicitly chooses another Action task.
+
+Do not turn Sample Stat rows into a parameter-design task by inertia.
