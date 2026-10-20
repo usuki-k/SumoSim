@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-02A-HUD-SHELL
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT UI / BOUT HUD SHELL
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -632,3 +632,327 @@ Do NOT continue into:
 After commit/push/report:
 
 「ACTION-ART-02A-HUD-SHELL が完了し、ChatGPT ReviewとUser Visual Check待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER VISUAL CHECK REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `59761c1ba3e035e9def2e73097634ee6455f4fe9`
+- Agent-Start-Head:
+  `ece5d75b28a1c3d4375ce4e533196dad4d9ab0e5`
+- Diff is one implementation commit.
+- `main` remains unchanged.
+- No package/lock changes.
+- No Product background asset changes.
+
+## Reported Implementation vs Design
+
+PASS.
+
+The implementation matches the accepted ACTION-ART-02A scope:
+
+- East identity block
+- West identity block
+- center Day chip
+- explicit fixture presentation data
+- debug/prototype text cleanup
+- no pre-bout comparison screen
+- no Management/Tournament implementation
+- no portrait
+- no stamina UI
+- no gameplay change.
+
+## Presentation State Ownership
+
+PASS.
+
+`src/game/presentation/boutHudPresentation.ts` is Pure TypeScript and owns the prototype HUD fixture:
+
+- participant id
+- side
+- name
+- rank label
+- current record
+- day.
+
+The HUD metadata is not added to:
+- `BoutSimulation`
+- `ParticipantState`
+- `BoutSnapshot`.
+
+The only Simulation join key is participant id.
+
+This preserves the accepted architecture.
+
+## Single Source of Truth
+
+PASS.
+
+The previous `PARTICIPANT_PRESENTATION` side/name fields were removed.
+
+Current ownership is clean:
+
+### HUD context
+- side
+- wrestler name
+- rank
+- record
+- day.
+
+### Scene input/debug metadata
+- participant id
+- controller
+- provisional wrestler color
+- debug-only PLAYER / CPU label.
+
+Result text also reads side/name from the same HUD context.
+
+Do not reintroduce a second side/name table.
+
+## Fixture Data
+
+Accepted as Prototype fixture only:
+
+- East / wrestler-a:
+  - 朝翠龍
+  - 前頭十五枚目
+  - 2-0
+- West / wrestler-b:
+  - 寿之富士
+  - 前頭十六枚目
+  - 1-1
+- Day 3.
+
+These values remain sample presentation data, not final game content.
+
+Do not build game rules around them.
+
+## HUD View Structure
+
+PASS.
+
+`BoutHudView.ts` is a small dedicated Phaser presentation module rather than expanding `BoutScene.create()` with panel details.
+
+No generic component/UI framework was introduced.
+
+The initial zones exactly match the Product HUD spec's provisional baseline:
+
+- East: (24,24,440,150)
+- West: (1456,24,440,150)
+- Day: (810,10,300,44).
+
+These remain provisional until User Visual Check.
+
+## Visual Styling
+
+Technically acceptable for the first Product shell:
+
+- warm paper panel
+- dark ink-like text
+- subdued indigo East accent
+- subdued vermilion West accent
+- explicit 東 / 西 tags
+- name visually dominant
+- no portrait area
+- no player-controlled indicator.
+
+The exact colors, opacity, panel size, typography and spacing are NOT accepted yet.
+
+They are User Visual Check values.
+
+## Action Visibility
+
+PASS structurally.
+
+The specified HUD zones remain outside the documented 483 px Action critical circle.
+
+The central Day chip has only a very small calculated clearance from that boundary, so actual runtime viewing is especially important.
+
+Do not enlarge or move it downward before User review.
+
+## Long-text Handling
+
+PASS for current scope.
+
+The implementation:
+1. uses preferred font size
+2. shrinks to the documented minimum
+3. ellipsizes if still too long.
+
+Name minimum:
+- 36 logical px.
+
+Rank minimum:
+- 28 logical px.
+
+No marquee/scroll was added.
+
+This is sufficient for the shell.
+
+## Debug / Prototype Cleanup
+
+PASS.
+
+With debug OFF:
+- Dummy mode is hidden
+- control-help text is hidden
+- engagement/pair velocity is hidden
+- PLAYER / CPU labels are hidden
+- phase labels and debug geometry remain hidden.
+
+With key `0`:
+- development information becomes visible again
+- HUD remains visible.
+
+The Dummy/restart/debug harness functionality remains intact.
+
+## Result Text
+
+Accepted as a non-final presentation adjustment.
+
+The existing result behavior is preserved while the wording now uses HUD fixture identity:
+
+- `東 朝翠龍 勝ち`
+- `西 寿之富士 勝ち`
+- `同体 取り直し`.
+
+This is not acceptance of a final result screen.
+
+Result presentation remains Deferred.
+
+## Gameplay Preservation
+
+PASS from source inspection.
+
+No changes were made to:
+- movement
+- Push
+- Counter
+- Grip
+- Drive
+- Ring-out
+- Tokudawara
+- fixed step
+- Dummy behavior
+- restart.
+
+HUD remains read-only presentation.
+
+## Verification Completeness
+
+Automated verification is complete for the technical scope:
+
+- `pnpm test`: 248 PASS / 16 files
+- `pnpm build`: PASS
+- `tsc --noEmit`: PASS
+- `git diff --check`: PASS
+- no new dependency.
+
+Browser graphical smoke:
+NOT RUN.
+
+Therefore technical implementation passes, but Product visual acceptance remains pending.
+
+## Japanese Font Risk
+
+Non-blocking but important.
+
+The current font stack relies on system fonts:
+
+- Yu Mincho
+- Hiragino Mincho
+- Noto Serif JP
+- MS PMincho
+- generic serif.
+
+No font asset is bundled.
+
+This is acceptable for this prototype visual gate because Product font selection/license is Deferred.
+
+However:
+- User must confirm Japanese characters render correctly in the current browser
+- this does NOT establish cross-platform/CrazyGames font reliability.
+
+Do not add a font dependency in this Task.
+
+A Product font/assets decision can be made later when localization/font work is explicitly in scope.
+
+## Minor Technical Note — Ellipsis Helper
+
+`fitSingleLine` can theoretically return only the ellipsis even when the available width is smaller than the ellipsis glyph itself.
+
+Current HUD widths are hundreds of pixels, so this is not a runtime issue for the actual identity blocks.
+
+No follow-up fix is required now.
+
+If the helper is later reused for extremely narrow UI, add a dedicated contract for that case instead of broadening this Task.
+
+## User Visual Check — REQUIRED
+
+Run:
+
+`pnpm dev`
+
+### Debug OFF
+
+Please check:
+
+1. Japanese text renders correctly, not tofu/missing glyphs
+2. East block is readable
+3. West block is readable
+4. Day chip is readable
+5. names feel clearly more important than rank/record
+6. panel size does not feel too large
+7. HUD does not cover Tokudawara/edge action
+8. paper color fits the accepted arena
+9. indigo/vermilion accents are restrained enough
+10. no Dummy/control/debug text remains in the normal view
+11. current wrestler scale still feels correct
+12. no noticeable performance regression.
+
+### Debug ON — key 0
+
+Verify:
+
+- Dummy/control text appears bottom-left
+- engagement/debug labels appear
+- contact/facing/grapple/boundary diagnostics appear
+- Product HUD remains visible
+- gameplay is unchanged.
+
+## What to Report Back
+
+A screenshot is preferred.
+
+Please mention specifically if:
+
+- panels are too large/small
+- text is too large/small
+- Day chip is too close to the dohyo action
+- paper panel feels too bright/opaque
+- East/West colors feel too strong/weak
+- Mincho-style text fits or does not fit the Product background.
+
+## Acceptance State
+
+Technical implementation:
+PASS.
+
+HUD Product visual acceptance:
+PENDING USER VISUAL CHECK.
+
+## Next Task
+
+Do NOT automatically start ACTION-ART-02B until the HUD shell receives User Visual Approval.
+
+If the shell is accepted:
+- record its visual baseline
+- then proceed to `ACTION-ART-02B-PREBOUT-COMPARISON`.
+
+If visual changes are requested:
+- make a focused 02A visual-tuning task first
+- do not mix pre-bout comparison into that correction.
