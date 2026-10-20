@@ -1,5 +1,5 @@
 Task-ID: ART-TOOL-01A-ARENA-ALIGNMENT
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / ASSET-PRODUCTION TOOL / BACKGROUND ALIGNMENT
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -473,3 +473,206 @@ Do NOT:
 
 After commit/push/report:
 「ART-TOOL-01A-ARENA-ALIGNMENT が完了し、ChatGPT ReviewとProduct Visual Check待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / PRODUCT VISUAL CHECK REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `791fb16b1934a68d2840404809d1e17d32e70904`
+- Agent-Start-Head:
+  `213b1e01687222b1151e30ab6ea2d95c1cdc1e94`
+- Diff is one implementation commit.
+- Runtime/gameplay source remains unchanged.
+- Product source/output images remain local and ignored.
+
+## Technical Assessment
+
+PASS.
+
+The implementation follows the requested correction strategy:
+
+```
+fixed Gameplay / art-space geometry
+        +
+painted arena only
+        ↓
+uniform scale about canvas center
+        ↓
+explicit X/Y translation
+        ↓
+exact 3840×2160 crop
+        ↓
+unchanged exact tawara overlay
+```
+
+The gameplay center, ring radius, shikiri, and participant reference geometry are not moved to fit the painting.
+
+## Accepted Tool Change
+
+Accept the addition of:
+
+- `--arena-scale`
+- `--arena-offset-x`
+- `--arena-offset-y`
+
+with generic defaults remaining:
+
+- scale = 1.0
+- offset x = 0
+- offset y = 0.
+
+This is preferable to baking Product-image-specific constants into generic compositor behavior.
+
+The accepted arena's alignment values are documented as an explicit Product command.
+
+## Product Alignment Measurement
+
+The Agent measured the main painted square dohyo/platform top surface and selected:
+
+- painted structural center before correction:
+  approximately `(1915, 1007.5)` in master space
+- fixed target:
+  `(1920, 1080)`.
+
+The selected transform:
+
+- scale: `1.072`
+- offset X: `+5.36 px`
+- offset Y: `+77.72 px`
+
+is mathematically consistent with:
+- bringing the chosen painted anchor to the fixed gameplay center,
+- keeping the full output canvas covered,
+- avoiding blank fill/inpainting.
+
+## Geometry Preservation
+
+PASS.
+
+Direct source review confirms:
+- `Geometry.center_x / center_y` remain canvas center.
+- ring radius logic is untouched.
+- shikiri geometry remains derived from fixed `Geometry`.
+- arena alignment is applied only inside arena normalization.
+- alignment-only changes do not alter the overlay.
+
+Reported regression evidence:
+- pre/post alignment overlay PNGs byte-identical.
+- default identity alignment reproduces the previous output.
+- ring/shikiri geometry tests remain intact.
+
+## Transform Implementation
+
+PASS.
+
+The tool composes:
+- the original 16:9 normalization,
+- uniform scale,
+- translation,
+- final crop
+
+into one Pillow source-box resample.
+
+This avoids:
+- non-uniform stretching,
+- repeated resampling,
+- exposed/black canvas edges.
+
+The coverage calculation fails closed when scale is insufficient for the requested translation.
+
+## Verification Review
+
+Sufficient.
+
+Reported:
+- Python tests: 35 / 35 PASS
+- no skips
+- real Product run completed
+- deterministic corrected rerun byte-identical
+- pre/post overlay byte-identical
+- preview remains 1920×1080
+- no `src/` / package / lockfile changes
+- Product images not staged
+- `git diff --cached --check`: PASS.
+
+## Important Visual Caveat
+
+The correction solves the large mismatch using the Task's required primary anchor:
+**the main square dohyo/platform top surface**.
+
+However the generated arena artwork itself contains mild perspective/asymmetry.
+
+The Report notes that the inner stone-frame reference still has a residual center difference of roughly:
+
+- master: about 14–15 px vertically
+- runtime preview: about 7 px.
+
+This is not a Python geometry bug.
+
+It reflects that different painted structural cues in the AI-generated arena do not share exactly the same center.
+
+Do NOT automatically apply the alternative `1.088 / +5.44 / +93.57` transform yet.
+
+First inspect the corrected preview.
+
+The visually correct choice should be based on whether the **exact gameplay tawara now appears naturally seated inside the painted dohyo**, not on forcing every imperfect painted edge to mathematically agree.
+
+## Product Visual Gate — REQUIRED
+
+Review this file:
+
+`tools/dohyo_art/output-aligned.local/composite_preview_1920.png`
+
+Compare against the previous:
+
+`tools/dohyo_art/output.local/composite_preview_1920.png`
+
+Please evaluate:
+
+1. Has the obvious bottom-side ring overrun disappeared?
+2. Does the ring now look centered on the actual playable clay area?
+3. Are top/bottom margins around the ring visually balanced enough?
+4. Does the 7.2% zoom damage the surrounding composition?
+5. Does the bottom decorative/tawara structure still visually conflict with the gameplay ring?
+6. Does the central circular wear pattern compete with the exact tawara?
+7. Is the remaining ~7 runtime-pixel inner-frame asymmetry perceptible at all?
+
+## Acceptance State
+
+Arena-alignment tool change: ACCEPTED TECHNICALLY.
+
+Current alignment parameters:
+**candidate Product baseline, pending User visual approval.**
+
+Do not integrate into Phaser yet.
+
+Do not proceed to Tokudawara implementation yet.
+
+## Next Step
+
+Upload or inspect:
+
+`tools/dohyo_art/output-aligned.local/composite_preview_1920.png`
+
+### If visually centered enough
+Accept:
+- `--arena-scale 1.072`
+- `--arena-offset-x 5.36`
+- `--arena-offset-y 77.72`
+
+as the Product arena alignment baseline.
+
+Then proceed to Tokudawara investigation/design.
+
+### If still visibly too high/low
+Do NOT change gameplay geometry.
+
+Perform one focused alignment rerun/tuning using the existing CLI, likely between:
+- current outer-platform anchor values
+- reported inner-frame candidate values.
+
+No new implementation task is needed if only CLI parameter tuning is required.
