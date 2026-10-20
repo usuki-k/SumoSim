@@ -6,12 +6,13 @@ import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
+import { PROTOTYPE_HUD_FIXTURE, assertHudContextMatches, formatOutcome } from '../presentation/boutHudPresentation.ts'
 import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
+import { createBoutHud } from './BoutHudView.ts'
 import { addProductDohyo, drawArenaBoundaryDebug, preloadProductDohyo } from './DohyoView.ts'
 import { WrestlerView } from './WrestlerView.ts'
 import type {
   BoutEngagement,
-  BoutOutcome,
   BoutSetup,
   ParticipantActionState,
   ParticipantId,
@@ -36,23 +37,20 @@ const PROTOTYPE_SETUP: BoutSetup = {
   ],
 }
 
-// Outside the simulation: which controller drives which participant, and how it is presented.
-// Simulation participant ids are plain identities; roles live only here.
+// Outside the simulation: which controller drives which participant, its provisional wrestler color and
+// its debug label. Simulation participant ids are plain identities; roles live only here. Side / name /
+// rank / record / day come only from the HUD presentation context (PROTOTYPE_HUD_FIXTURE).
 type Controller = 'keyboard' | 'dummy'
 interface ParticipantPresentation {
   readonly id: ParticipantId
   readonly controller: Controller
   readonly color: number
+  // Debug-only role label (key 0), not a wrestler name.
   readonly label: string
-  // Presentation-only side for the result text (current Prototype assignment, not gameplay state).
-  readonly side: 'EAST' | 'WEST'
-  // Wrestler display name. Not set yet: the result text falls back to `label` (PLAYER / CPU), which
-  // is a temporary Prototype fallback, not a wrestler name.
-  readonly name?: string
 }
 const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
-  { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER', side: 'EAST' },
-  { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU', side: 'WEST' },
+  { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER' },
+  { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU' },
 ]
 
 // Depths above the wrestler bodies (see WrestlerView): debug overlays, then texts.
@@ -100,15 +98,6 @@ function grappleLabel(self: ParticipantState, opponent: ParticipantState, engage
   if (canActInGrapple(self, opponent, engagement)) return 'READY'
   const degrees = Math.round((Math.abs(grappleFacingError(self.position, self.facing, opponent.position)) * 180) / Math.PI)
   return `TURNING ${degrees}°`
-}
-
-// Presentation-only result text formatted from the Simulation outcome (ids only) + presentation metadata.
-function outcomeLabel(outcome: BoutOutcome): string {
-  if (outcome.kind === 'ongoing') return ''
-  if (outcome.kind === 'rematch') return 'Draw Rematch'
-  const winner = PARTICIPANT_PRESENTATION.find((style) => style.id === outcome.winnerId)
-  if (!winner) return `${outcome.winnerId} Win`
-  return `${winner.side} ${winner.name ?? winner.label} Win`
 }
 
 interface MovementKeys {
@@ -192,6 +181,9 @@ export class BoutScene extends Phaser.Scene {
     this.pixelsPerMeter = productPixelsPerMeter(snapshot.arena)
 
     addProductDohyo(this, this.origin)
+    // Product HUD shell from the prototype fixture (joined to the bout by participant id only).
+    assertHudContextMatches(PROTOTYPE_HUD_FIXTURE, snapshot.participants.map((p) => p.id))
+    createBoutHud(this, PROTOTYPE_HUD_FIXTURE)
     this.boundaryLine = drawArenaBoundaryDebug(this, this.origin, this.pixelsPerMeter, snapshot.arena).setDepth(DEBUG_OVERLAY_DEPTH)
 
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -211,8 +203,9 @@ export class BoutScene extends Phaser.Scene {
       this.views.set(style.id, { wrestler, body, facingMarker, label, phaseText })
     }
     this.grappleLine = this.add.graphics().setDepth(DEBUG_OVERLAY_DEPTH)
-    this.modeText = this.add.text(24, 20, '', { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
-    this.engagementText = this.add.text(24, 60, '', { fontFamily: 'sans-serif', fontSize: '30px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
+    // Debug-only texts sit bottom-left, clear of the HUD blocks and the Action critical circle.
+    this.modeText = this.add.text(24, 1030, '', { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
+    this.engagementText = this.add.text(24, 986, '', { fontFamily: 'sans-serif', fontSize: '30px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
     this.resultText = this.add
       .text(this.scale.width / 2, 110, '', { fontFamily: 'sans-serif', fontSize: '64px', color: '#ffffff', stroke: '#000000', strokeThickness: 8 })
       .setOrigin(0.5, 0)
@@ -254,8 +247,9 @@ export class BoutScene extends Phaser.Scene {
     this.updateModeText()
   }
 
-  // Debug overlays (labels, phase text, engagement readout, contact outline, facing marker, grapple
-  // line, exact ring-out boundary) are hidden in the default game-readable view and shown with key 0.
+  // Debug overlays (labels, phase text, engagement readout, Dummy mode / control help, contact outline,
+  // facing marker, grapple line, exact ring-out boundary) are hidden in the default Product view and
+  // shown with key 0. The Product HUD stays visible either way.
   private setDebug(on: boolean): void {
     this.debug = on
     for (const view of this.views.values()) {
@@ -267,16 +261,13 @@ export class BoutScene extends Phaser.Scene {
     this.grappleLine?.setVisible(on)
     this.boundaryLine?.setVisible(on)
     this.engagementText?.setVisible(on)
+    this.modeText?.setVisible(on)
     this.updateModeText()
   }
 
   private updateModeText(): void {
     const dummy = this.dummyMode === 'push' ? 'DUMMY: PUSH' : 'DUMMY: STATIONARY'
-    this.modeText?.setText(
-      this.debug
-        ? `${dummy}  (1: stationary / 2: push / R: restart / Shift: grip / 0: debug off)`
-        : `${dummy}   WASD move  Up push/drive  Down counter  Shift grip  1/2 dummy  R restart  0 debug`,
-    )
+    this.modeText?.setText(`${dummy}   WASD move  Up push/drive  Down counter  Shift grip  1/2 dummy  R restart  0 debug off`)
   }
 
   private collectIntents(
@@ -318,7 +309,7 @@ export class BoutScene extends Phaser.Scene {
   private syncViews(dtMs: number): void {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
-    this.resultText?.setText(outcomeLabel(snapshot.outcome))
+    this.resultText?.setText(formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE))
     this.engagementText?.setText(
       snapshot.engagement.kind === 'grappled'
         ? `${engagementLabel(snapshot.engagement)}  pair v: ${pairSpeed.toFixed(2)} m/s`
