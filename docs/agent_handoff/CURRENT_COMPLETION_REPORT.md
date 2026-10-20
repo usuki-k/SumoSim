@@ -1,180 +1,87 @@
-Task-ID: ACTION-ART-02-HUD-PRODUCT-SPEC
+Task-ID: PRODUCT-VISUAL-BASELINE-SPEC-SYNC-01
 Result: PASS
 Branch: develop
-Source-Baseline: dc3df77c9d8e7463c53292b46b7d8e1c3d5bf4ae
-Agent-Start-Head: 0d30e1044e997a60af6da7fa2d4fa8529be55e66
+Source-Baseline: 8a6015643cccf253524f31f5ee3c027be27d3ec4
+Agent-Start-Head: 4198f58aac78e639c8b0a80419a5fd5f9b6d52ce
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS（Documentation only）。
-
-- `docs/ACTION_HUD_PRODUCT_SPEC.md` を新しく作り、Product HUDの正本とした
-- 内容
-  - 常時表示と取組前の比較表示を分けた情報の階層
-  - 各項目のdata ownership
-  - 1920×1080のzone案（推奨値。幾何から導いた禁止領域を含む）
-  - 肖像・出身地・staminaの扱い
-  - 既存のdebug textの分類
-  - 将来のdata contract
-  - 実装の段階
-- 公開パラメータは一切決めていない。件数が変わる前提の構造だけを定めた
-- `docs/ARCHITECTURE.md` に、HUDのmetadataをSimulationに入れないという1項目だけを追加した
-- Production Source / assets / package / lockfileは未変更
+PASS（Documentation only）。`docs/GAME_CONCEPT.md` の、古くなったvisual / resolutionの記述だけを同期した。Production Source、assets、package / lockfile、HUD specは未変更。
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 3`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
 - Remote CURRENT_TASKを確認した
   - Task-ID一致、Status READY、Target-Branch develop
-  - Source-Baseline `dc3df77`（ancestor）、Handoff-Mode GITHUB
-- `dc3df77..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
-- Agent-Start-Head = FF後の `0d30e10`
-- 既存の正式なHUD specはない（`docs/` にあるのはARCHITECTURE、GAME_CONCEPT、agent_handoffのみ）。衝突はない
+  - Source-Baseline `8a60156`（ancestor）、Handoff-Mode GITHUB
+- `8a60156..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` のみ → `merge --ff-only` 成功
+- Agent-Start-Head = FF後の `4198f58`
+- 読んだもの: AGENTS.md、CLAUDE.md、GAME_CONCEPT.md、ARCHITECTURE.md、ACTION_HUD_PRODUCT_SPEC.md、CURRENT_TASK / 直前のREPORT、`main.ts`（logical 1920×1080、`Scale.FIT`）、`productArena.ts`（1920×1080、中心(960, 540)、半径400px）
+- 他の現行SPECに、ドット絵をAction Product baselineとする記述はない（`docs/` と AGENTS.md / CLAUDE.md を検索。ドット絵への言及は GAME_CONCEPT の1行のみ）。STOP条件には該当しない
 
-# Source Findings Relevant to HUD
+# Stale Wording Found
 
-- `src/main.ts`: logical 1920×1080、`Scale.FIT`
-- `productArena.ts`: art中心 (960, 540)、基本半径400px、徳俵21px
-  - 徳俵の外縁は421px、力士の直径は約123px（半径約62px）
-- `BoutScene.ts` の `PARTICIPANT_PRESENTATION`
-  - `wrestler-a` = keyboard / 青 / `PLAYER` / **EAST**、spawnは x = −0.7（画面の左）
-  - `wrestler-b` = dummy / 赤 / `CPU` / **WEST**（画面の右）
-  - `name` は未設定で、結果の文言は `PLAYER` / `CPU` をfallbackにしている
-- 画面のtext
-  - modeText（Dummyのmodeと操作説明）、engagementText（debug）、頭上のlabel（debug）、phaseText（debug）、resultText（勝敗）
-  - 加えて、debugの図形（接触円、向き、組みの線、境界）
-- `BoutTypes.ts`
-  - `ParticipantState` にprofileやtournamentの情報はない
-  - `BoutSnapshot` = arena / participants / engagement / outcome
-- 東 = 左、西 = 右というTaskの前提は、Current Sourceと一致する。食い違いはない
+- 確定事項: `ドット絵・簡素な2D Presentationを基本方向とする`
+- 未決事項: `Art styleの詳細`、`Resolution`（修飾なしで未決とされていた）
 
-# Created / Changed Docs
+# Exact Concept Changes（`docs/GAME_CONCEPT.md`のみ）
 
-- `docs/ACTION_HUD_PRODUCT_SPEC.md`（新規。§1–§17）
-- `docs/ARCHITECTURE.md`（「Product HUD」の1項目を追加）
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+確定事項
+- 削除: `ドット絵・簡素な2D Presentationを基本方向とする`
+- 追加: Action Product presentationは、様式化したpainted 2D（見下ろし型のまま）。現在のarena / dohyo（暖色の伝統的な相撲の意匠）のProduct visual baselineは受理済み。Product HUDはこのarenaに合う方向で `docs/ACTION_HUD_PRODUCT_SPEC.md` に仕様化済み（実装は未着手）
+- 追加: Action Product presentationの現在のlogical基準は1920×1080（Product artはこの座標空間で制作・出力し、browser表示はここから縮尺する）。最終的なplatform / performance向けのresolution方針とは別
 
-# Accepted Product Decisions Captured
+未決事項
+- `Art styleの詳細` → 確定済みは上記のAction Product baselineのみ。最終的な力士のart処理、Management presentationの詳細、その他の未承認のvisualは未決。現在の力士visualは暫定でProduct artはDeferred
+- `Resolution` → `最終的なplatform / performance向けのresolution方針`。1920×1080は現在のAction Product presentation基準であり、最終・不変とは決めていない。制作側の最適化で内部のrenderingやexportの選択が将来変わる可能性は未決
 
-- 常時表示: 東西の四股名・番付・今場所の成績と、日目
-- 取組前の比較表示: 四股名・番付・成績・年齢・身長・体重・すべての公開パラメータ（件数は可変）
-- 公開の方針: パラメータは隠さずに見せる
-- 顔の肖像: v1では不要。肖像に依存しないlayoutにする
-- 出身地: Optional / Deferred
-- Stamina: realtimeのbarは置かない。公開パラメータになった場合は、その基本値を比較表示に出す
-- 意匠: 暖色、生成りのパネル、墨色の文字、控えめな赤と青。テレビ中継の写しやsponsor / logoは無し
-- 力士の大きさ（約123px）と、metersからpixelsへのscaleは変更しない
+# Confirmed Product Visual Baseline After Sync
 
-# Always-visible HUD Summary（spec §3、§7）
+- 見下ろし型の2D Action（変更なし）
+- Action Productは様式化したpainted 2D、暖色の伝統的な相撲の意匠。arena / dohyoのbaselineは受理済み
+- Action Productのlogical基準は1920×1080
+- Product HUDは、このarenaに合う方向（specは別文書が正本。本文書では複製していない）
 
-- 左上に東、右上に西の識別ブロック（Recommended (24, 24, 440, 150) / (1456, 24, 440, 150)）
-  - 内容: 方位tag + 番付 / 四股名 / 成績 + 操作中の印の枠
-- 中央上部に、小さなDay chip（Recommended (810, 10, 300, 44)）
-- **Action critical circle**: 中心から483px（徳俵の外縁421 + 力士の半径62）にはHUDを入れない
-  - 境界の上にいる力士の体まで含めて隠さないための制約
-  - zone案の配置は検算済み（East blockの角は616px、Day chipの下端は486px）
+# Remaining Unresolved Visual Items
 
-# Pre-bout Comparison Summary（spec §4、§8）
+- 最終的な力士のart処理（現在の手続き的な力士は暫定で、品質はProduct背景より低い。Product artはDeferred）
+- Management presentationの詳細
+- その他、まだ受理されていないvisualの詳細
+- 最終的なplatform / performance向けのresolution方針
 
-- 全画面のoverlayで、`東の値 | 項目名 | 西の値` の3列の表にする
-- 項目名は中央に1回だけ書く
-- 肖像の代わりに、方位tagと差し色の帯を使う
-- 行の高さは48px、パラメータは約12行（Prototypeの目安）
-  - それを超えた場合の扱いや比較barは、パラメータ一覧が決まってからにする（Deferred）
-- groupの見出しと行の順は、データ側から渡す
+# Resolution Wording After Sync
 
-# Data Ownership Matrix（spec §5の要約）
+現在のAction Product presentation基準 = 1920×1080（confirmed）。最終・不変とは書いていない。platform / performanceの方針は未決のまま。
 
-| 項目 | 現在 | 将来の持ち主 |
-|---|---|---|
-| participant id | BoutSetup / Snapshot（既存） | 同じ |
-| 東西 | BoutSceneのpresentation（暫定） | Tournamentの取組（未実装） |
-| 四股名 / 年齢 / 身長 / 体重 | 無し | Wrestler profile（未実装） |
-| 番付 | 無し | Management / 番付（未実装） |
-| 成績 / 日目 | 無し | Tournament state（未実装） |
-| 公開パラメータ | 無し | Wrestler / Management（一覧は未定） |
-| 勝敗 / engagement / action | BoutSnapshot（既存） | 同じ |
-| 操作者 | BoutScene（presentation / input） | 同じ |
-| 表示の文言 | Sceneに直書き | localization（presentation） |
+# Preserved
 
-原則: HUDのmetadataは `BoutSimulation` / `ParticipantState` に入れない。体格がgameplayに影響する場合も、`BoutSetup` へ変換して渡す。
+- 開発順序（超小型Loop → Actionを重点的に → Action成立後にSimulation / Management）は変更していない
+- gameplay、Ring-out、Tokudawara、HUD specの中身、力士のcode / assets、runtime assets、Phaserの解像度、Management / tournament / parameter / stamina / portraitの各決定には触れていない
 
-# Layout / Wireframe Summary
+# Other Stale Documentation / Unexpected Scope（報告のみ・未修正）
 
-- spec §7にASCIIの配置図、zone表、識別ブロックの中身（文字サイズの目安）を書いた
-- spec §8に比較表示の配置図を書いた
-- pixelの値はすべて **Recommended / Provisional**
-
-# Portrait / Birthplace / Stamina Decisions
-
-- 肖像: 不要。ランダム生成はDeferred（§11）
-- 出身地: 常時表示でも比較表示でも必須にしない。任意のprofile項目としてDeferred。生成ruleや国籍ruleは作らない（§12）
-- Stamina: realtime表示はしない。値は公開パラメータになった場合のみ比較表示に出す。計算式などはDeferred（§10）
-
-# Prototype Debug Text Classification（spec §13）
-
-- Debug / 開発専用: Dummyのmode、engagement、`pair v`、頭上の `PLAYER` / `CPU`、phaseの文字列、debugの図形
-- 暫定の操作説明: `WASD move ...`。Productの操作説明はDeferred
-- 実際のProduct情報（表示形式は暫定）: `EAST ... Win` / `Draw Rematch`（勝敗）
-
-これらを隠したり削除したりしても、gameplayには影響しない。
-
-# Deferred（spec §17）
-
-- パラメータの最終一覧、値の範囲、計算式
-- 四股名や番付の名称
-- 番付の昇降、場所の進行、成績の集計、日程
-- 出身地、国籍、肖像
-- staminaのgameplay、realtime表示
-- 比較表示で行が多い場合の扱い、比較bar
-- 結果画面、決まり手、演出
-- 操作説明・tutorial
-- mobile / touchのlayout
-- localization system、font
-- 音、animation
-
-# Recommended Implementation Sequence（spec §16）
-
-1. **ACTION-ART-02A**: HUD shell（pure view model + fixture + 識別ブロック・Day chip + debug textの整理）→ User Visual Check
-2. **ACTION-ART-02B**: 取組前の比較表示（fixtureで、仮であることが明確な行。件数を変えても崩れないことを確認）→ User Visual Check
-3. Management / Tournamentができてから、fixtureを実データに置き換える
-
-# User Decisions Required
-
-- **UD-1（§3.3）**: プレイヤーが操作している力士を、Productでどう示すか
-  - 現在はdebugの `PLAYER` / `CPU` labelだけ
-  - 推奨: 識別ブロックに小さな「操作中」の印の枠を用意し、表示するかどうかと表記はUserが決める
-  - 決まるまでは枠を空けたままでもlayoutが成り立つ
-  - HUD shellの実装（02A）の前に決めることが望ましいが、決まっていなくても始められる
+- GAME_CONCEPTの確定事項に、`将来的な方向として、Kairosoft系のようにキャラクターが施設内で動くManagement Presentationを目指す` がある
+  - 今回確定したAction Productのpainted 2Dとは別の層（Management）の方向だが、Management側のartがどの程度それに従うかは未決
+  - 本Taskの範囲外なので、変更していない
+- そのほかの古い記述や矛盾は見つからなかった
 
 # Design Deviations
 
 Design Deviations: NONE
 
-# Unexpected Scope（報告のみ・未修正）
-
-- `docs/GAME_CONCEPT.md` の確定事項にある「ドット絵・簡素な2D Presentationを基本方向とする」は、受理済みのProduct arena（描き込んだ暖色の背景）と方向が異なって見える
-  - また「Resolution」は未決事項に残っているが、ARCHITECTUREでは1920×1080がProductの基準になっている
-  - GAME_CONCEPTの更新はScope外なので、変更していない。整理が必要かどうかは、ChatGPTとUserで判断していただきたい
-
 # Verification
 
-- Current Sourceを直接読んだ（AGENTS.md、CLAUDE.md、ARCHITECTURE.md、GAME_CONCEPT.md、CURRENT_TASK / 直前のREPORT、`main.ts`、`BoutScene.ts`、`productArena.ts`、`BoutTypes.ts`）
-- 文書の整合を確認した
-  - 東西と左右の対応
-  - 幾何（421 / 62 / 483px）と、zoneの距離の検算
-  - Accepted / Recommended / Deferredの区分
-  - Task要求の§1–§16をすべて含めた
+- 現行のSource（`main.ts`、`productArena.ts`）と現行のSPEC（ARCHITECTURE、HUD spec）を直接確認し、追記した内容と一致している
+- 変更したのはtask-ownedの2ファイル（`docs/GAME_CONCEPT.md`、本Report）のみ
 - Production Source、assets、package / lockfileは未変更
 - `git diff --check`: PASS
 - tests / build: 不要（Sourceは未変更）
 
 # Git Delivery
 
-- Commit: `docs: specify product bout hud`
-  - `docs/ACTION_HUD_PRODUCT_SPEC.md` / `docs/ARCHITECTURE.md` / 本Report の3ファイル
+- Commit: `docs: sync product visual baseline`（`docs/GAME_CONCEPT.md` と本Reportのみ）
 - fetch → fast-forward safety確認 → push `origin/develop` → remote SHA確認 → clean tree確認
 - `main` は未変更

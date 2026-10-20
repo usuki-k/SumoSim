@@ -11,7 +11,8 @@
 - Actionが成立してからSimulation / Managementを拡張する
 - 最初のTargetはCrazyGames向け
 - Browser Game
-- ドット絵・簡素な2D Presentationを基本方向とする
+- Action Product presentationは、様式化したpainted 2D（見下ろし型のまま）。現在のarena / dohyo（暖色の伝統的な相撲の意匠）のProduct visual baselineは受理済み。Product HUDは、このarenaに合う方向で`docs/ACTION_HUD_PRODUCT_SPEC.md`に仕様化済み（実装は未着手）
+- Action Product presentationの現在のlogical基準は1920×1080（Product artはこの座標空間で制作・出力し、browser表示はここから縮尺する）。最終的なplatform / performance向けのresolution方針とは別
 - 将来的な方向として、Kairosoft系のようにキャラクターが施設内で動くManagement Presentationを目指す
 
 ## 未決事項（確定していない）
@@ -25,8 +26,8 @@
 - CrazyGames SDK導入時期
 - Poki対応
 - Mobileの最終仕様
-- Art styleの詳細
-- Resolution
+- Art styleの詳細（確定済みは上記のAction Product baselineのみ。最終的な力士のart処理、Management presentationの詳細、その他の未承認のvisualは未決。現在の力士visualは暫定でProduct artはDeferred）
+- 最終的なplatform / performance向けのresolution方針（1920×1080は現在のAction Product presentation基準であり、最終・不変とは決めていない。制作側の最適化で内部のrenderingやexportの選択が将来変わる可能性は未決）
 - Audio
 - exact gameplay formulas
 
