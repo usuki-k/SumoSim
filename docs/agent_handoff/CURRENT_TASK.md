@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-02A1-HUD-ENGLISH-LOCALIZATION-BASELINE
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT UI / ENGLISH-FIRST LOCALIZATION BASELINE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -564,3 +564,243 @@ Do NOT continue into the pre-bout comparison screen.
 After commit/push/report:
 
 「ACTION-ART-02A1-HUD-ENGLISH-LOCALIZATION-BASELINE が完了し、ChatGPT ReviewとUser Visual Check待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER VISUAL CHECK REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `f8ac92652a876b1ec82fe358ad9ed12e88fb91b7`
+- Agent-Start-Head:
+  `96f718e252761fb3ac45430a1103d8e44bd46c6a`
+- Diff is one implementation commit.
+- No gameplay changes.
+- No new dependencies.
+- No Product arena asset changes.
+
+## English-first Release Baseline
+
+PASS.
+
+The normal Product HUD is now English-first:
+
+- East / West
+- Maegashira 15 / Maegashira 16
+- Asuiryu / Toshinofuji fixture names
+- Day 3
+- numeric records
+- English win/rematch wording.
+
+The Japanese 02A fixture/release strings are no longer part of the shipping HUD copy path.
+
+Initial release language baseline is therefore:
+**English only.**
+
+Future additional languages remain Deferred.
+
+## Localization Boundary
+
+PASS.
+
+`src/game/presentation/boutHudCopy.ts` provides the smallest useful fixed-copy boundary:
+
+- side labels
+- rematch text
+- day formatting
+- win formatting.
+
+`BoutHudView` and `BoutScene` receive this copy explicitly.
+
+This is appropriately small:
+- no language selector
+- no locale detection
+- no translation catalog
+- no i18n dependency
+- no CrazyGames SDK coupling.
+
+Do Not Reopen by adding a localization framework until there is an actual additional shipping language / platform-locale integration task.
+
+## Presentation Data vs Fixed Copy
+
+PASS.
+
+The separation is correct:
+
+### Semantic / content presentation context
+- participant id
+- side
+- romanized display name
+- rank display label
+- record
+- day.
+
+### Fixed English UI copy
+- East / West
+- Day N
+- Wins
+- Rematch.
+
+Rank labels and wrestler names remain locale-resolved fixture display strings because rank/content systems and romanization rules do not exist yet.
+
+Do not invent rank enums or shikona-generation rules solely for localization.
+
+## HUD English Layout
+
+PASS structurally.
+
+Outer Product zones remain unchanged:
+
+- East block: (24,24,440,150)
+- West block: (1456,24,440,150)
+- Day chip: (810,10,300,44).
+
+The old one-character square side tag was correctly replaced with a dynamic-width horizontal pill for the full words:
+- East
+- West.
+
+Pill width is measured from the actual Phaser Text width, and rank fitting uses the remaining width.
+
+This is the right solution; do not abbreviate to E/W unless a later User Visual Check explicitly prefers it.
+
+## Long English Text Handling
+
+PASS.
+
+Existing shrink-then-ellipsis behavior remains.
+
+Focused tests cover:
+- Maegashira 15 / 16
+- fixture romanized names
+- longer romanized names
+- longer rank labels
+- shrink cases
+- ellipsis cases.
+
+This is sufficient for the current HUD shell.
+
+## Font Direction
+
+PASS for Prototype / first visual gate.
+
+HUD uses a Latin system-serif stack:
+- Georgia
+- Times New Roman
+- Times
+- serif.
+
+This removes the previous Japanese-font dependency.
+
+No font asset/dependency was added.
+
+Final Product typography/font licensing remains Deferred.
+
+## Result Text
+
+PASS for current scope.
+
+Current temporary result wording is English:
+- East <name> Wins
+- West <name> Wins
+- Rematch.
+
+This remains temporary Product information, not a final Result screen.
+
+## Architecture / Gameplay
+
+PASS.
+
+HUD/localization data remains outside:
+- BoutSimulation
+- ParticipantState
+- BoutSnapshot.
+
+The Simulation join remains participant id only.
+
+No movement / Push / Counter / Grip / Drive / Ring-out / Tokudawara / fixed-step behavior changed.
+
+## Verification
+
+Automated verification is complete for this task:
+
+- `pnpm test`: 249 PASS
+- `pnpm build`: PASS
+- `tsc --noEmit`: PASS
+- `git diff --check`: PASS
+- no new dependency.
+
+Browser graphical smoke:
+NOT RUN.
+
+Therefore Product visual acceptance is still pending.
+
+## Documentation Note — Non-blocking Correction Required
+
+`docs/GAME_CONCEPT.md` now correctly records:
+- initial release language = English only
+- future multilingual-ready structure.
+
+However, the existing Product visual sentence still says:
+
+`Product HUD ... 仕様化済み（実装は未着手）`
+
+That status is now stale.
+
+Current Source already contains:
+- ACTION-ART-02A HUD shell
+- ACTION-ART-02A1 English baseline.
+
+This does not invalidate the current implementation or language decision.
+
+Required:
+- next HUD-related Task must update that small phrase so GAME_CONCEPT does not claim Product HUD implementation has not started.
+
+Do not create a standalone framework/refactor for this wording.
+
+## User Visual Check — REQUIRED
+
+Run:
+
+`pnpm dev`
+
+Please provide a screenshot.
+
+Check:
+
+1. `East` pill looks natural
+2. `West` pill looks natural
+3. `Maegashira 15 / 16` are readable
+4. `Asuiryu / Toshinofuji` fit and remain the dominant text
+5. `Day 3` is balanced
+6. side pill does not crowd the rank
+7. English serif typography fits the Product arena
+8. no Japanese Product HUD strings remain
+9. panel dimensions still feel right
+10. Action / Tokudawara visibility is unchanged
+11. no noticeable performance regression.
+
+Key `0`:
+- debug tools remain available
+- Product HUD remains English
+- gameplay remains unchanged.
+
+## Acceptance State
+
+Technical English HUD/localization baseline:
+PASS.
+
+Product visual acceptance:
+PENDING USER VISUAL CHECK.
+
+## Next Step
+
+If User visually accepts the English shell:
+- record English HUD shell as Accepted Baseline
+- correct the stale GAME_CONCEPT “実装は未着手” wording in the next HUD task
+- proceed to `ACTION-ART-02B-PREBOUT-COMPARISON`.
+
+If English fit/style needs adjustment:
+- create a focused 02A1 visual-tuning follow-up first
+- do not combine it with the pre-bout comparison screen.
