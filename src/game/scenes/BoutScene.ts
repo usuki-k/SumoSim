@@ -10,6 +10,7 @@ import { ENGLISH_BOUT_HUD_COPY } from '../presentation/boutHudCopy.ts'
 import { PROTOTYPE_HUD_FIXTURE, assertHudContextMatches, formatOutcome } from '../presentation/boutHudPresentation.ts'
 import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
 import { createBoutHud } from './BoutHudView.ts'
+import { createPreBoutComparison } from './PreBoutComparisonView.ts'
 import { addProductDohyo, drawArenaBoundaryDebug, preloadProductDohyo } from './DohyoView.ts'
 import { WrestlerView } from './WrestlerView.ts'
 import type {
@@ -61,6 +62,10 @@ const TEXT_DEPTH = 4
 // Accumulator limits (provisional safety values).
 const MAX_FRAME_MS = 250
 const MAX_STEPS_PER_FRAME = 8
+
+// Scene-owned presentation phase (ACTION-ART-02B), not gameplay state: the pre-bout comparison is shown
+// and the Simulation does not advance until the prototype start input (Enter).
+type BoutPresentationPhase = 'pre-bout' | 'active'
 
 interface ParticipantView {
   readonly wrestler: WrestlerView
@@ -130,6 +135,9 @@ export class BoutScene extends Phaser.Scene {
   private grappleLine: Phaser.GameObjects.Graphics | null = null
   private boundaryLine: Phaser.GameObjects.Graphics | null = null
   private views = new Map<ParticipantId, ParticipantView>()
+  private phase: BoutPresentationPhase = 'pre-bout'
+  private hud: Phaser.GameObjects.Container | null = null
+  private comparison: Phaser.GameObjects.Container | null = null
   private pixelsPerMeter = 1
   // Prototype debug display toggle (key 0). Off = game-readable view.
   private debug = false
@@ -146,11 +154,7 @@ export class BoutScene extends Phaser.Scene {
 
   create(): void {
     this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
-    this.accumulator = new FixedStepAccumulator({
-      stepMs: 1000 / SIMULATION_HZ,
-      maxFrameMs: MAX_FRAME_MS,
-      maxStepsPerFrame: MAX_STEPS_PER_FRAME,
-    })
+    this.accumulator = this.newAccumulator()
 
     const keyboard = this.input.keyboard
     if (keyboard) {
@@ -171,6 +175,8 @@ export class BoutScene extends Phaser.Scene {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO).on('down', () => this.setDummyMode('push'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO).on('down', () => this.setDebug(!this.debug))
+      // Prototype-only start input for the pre-bout comparison (not the final control scheme).
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => this.startBout())
     }
 
     const snapshot = this.simulation.getSnapshot()
@@ -185,7 +191,8 @@ export class BoutScene extends Phaser.Scene {
     // Product HUD shell from the prototype fixture (joined to the bout by participant id only).
     assertHudContextMatches(PROTOTYPE_HUD_FIXTURE, snapshot.participants.map((p) => p.id))
     // Initial release ships English HUD copy only.
-    createBoutHud(this, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY)
+    this.hud = createBoutHud(this, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY)
+    this.comparison = createPreBoutComparison(this, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY)
     this.boundaryLine = drawArenaBoundaryDebug(this, this.origin, this.pixelsPerMeter, snapshot.arena).setDepth(DEBUG_OVERLAY_DEPTH)
 
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -214,10 +221,16 @@ export class BoutScene extends Phaser.Scene {
       .setDepth(TEXT_DEPTH)
     this.setDummyMode('stationary')
     this.setDebug(false)
+    this.enterPreBout()
     this.syncViews(0)
   }
 
   update(_time: number, deltaMs: number): void {
+    // Pre-bout: the Simulation does not step and no time is accumulated for a later burst.
+    if (this.phase === 'pre-bout') {
+      this.syncViews(deltaMs)
+      return
+    }
     const ticks = this.accumulator.advance(deltaMs)
     if (ticks > 0) {
       // A latched press goes to the first tick of this frame only; a frame with 0 ticks keeps it.
@@ -234,13 +247,44 @@ export class BoutScene extends Phaser.Scene {
     this.syncViews(deltaMs)
   }
 
+  private newAccumulator(): FixedStepAccumulator {
+    return new FixedStepAccumulator({
+      stepMs: 1000 / SIMULATION_HZ,
+      maxFrameMs: MAX_FRAME_MS,
+      maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+    })
+  }
+
+  // A new bout always begins at the pre-bout comparison.
   private restart(): void {
     this.simulation = new BoutSimulation(PROTOTYPE_SETUP)
+    this.clearPressLatches()
+    this.dummy.reset() // keeps the selected dummy mode
+    this.enterPreBout()
+    this.syncViews(0)
+  }
+
+  private enterPreBout(): void {
+    this.phase = 'pre-bout'
+    this.comparison?.setVisible(true)
+    this.hud?.setVisible(false)
+  }
+
+  // Enter during pre-bout: hide the comparison, show the Action HUD and start ticking from a fresh
+  // accumulator. Presses made while waiting are dropped so none fires on the first active tick.
+  private startBout(): void {
+    if (this.phase !== 'pre-bout') return
+    this.phase = 'active'
+    this.comparison?.setVisible(false)
+    this.hud?.setVisible(true)
+    this.clearPressLatches()
+    this.accumulator = this.newAccumulator()
+  }
+
+  private clearPressLatches(): void {
     this.pushLatch.clear()
     this.counterLatch.clear()
     this.gripLatch.clear()
-    this.dummy.reset() // keeps the selected dummy mode
-    this.syncViews(0)
   }
 
   private setDummyMode(mode: DummyMode): void {

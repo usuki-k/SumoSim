@@ -10,6 +10,15 @@ export interface BoutHudCopy {
   readonly rematch: string
   formatDay(day: number): string
   formatWin(side: BoutSide, wrestlerName: string): string
+  // Pre-bout comparison (ACTION-ART-02B).
+  readonly age: string
+  readonly height: string
+  readonly weight: string
+  // Prototype-only start input prompt (not the final control scheme).
+  readonly startPrompt: string
+  formatAge(years: number): string
+  formatHeight(cm: number): string
+  formatWeight(kg: number): string
 }
 
 const ENGLISH_EAST = 'East'
@@ -21,6 +30,13 @@ export const ENGLISH_BOUT_HUD_COPY: BoutHudCopy = {
   rematch: 'Rematch',
   formatDay: (day) => `Day ${day}`,
   formatWin: (side, wrestlerName) => `${side === 'east' ? ENGLISH_EAST : ENGLISH_WEST} ${wrestlerName} Wins`,
+  age: 'Age',
+  height: 'Height',
+  weight: 'Weight',
+  startPrompt: 'Press Enter to Start',
+  formatAge: (years) => `${years} yrs`,
+  formatHeight: (cm) => `${cm} cm`,
+  formatWeight: (kg) => `${kg} kg`,
 }
 
 export function sideLabel(copy: BoutHudCopy, side: BoutSide): string {

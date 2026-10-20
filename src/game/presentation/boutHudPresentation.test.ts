@@ -35,9 +35,9 @@ describe('Bout HUD presentation context (ACTION-ART-02A / 02A1)', () => {
   it('rejects contexts that do not match the participants or the sides', () => {
     const [east, west] = PROTOTYPE_HUD_FIXTURE.wrestlers
     const bad: BoutHudContext[] = [
-      { day: 1, wrestlers: [east, { ...west, side: 'east' }] },
-      { day: 1, wrestlers: [east, { ...west, participantId: 'wrestler-a' }] },
-      { day: 1, wrestlers: [east, { ...west, participantId: 'other' }] },
+      { day: 1, publicParameterRows: [], wrestlers: [east, { ...west, side: 'east' }] },
+      { day: 1, publicParameterRows: [], wrestlers: [east, { ...west, participantId: 'wrestler-a' }] },
+      { day: 1, publicParameterRows: [], wrestlers: [east, { ...west, participantId: 'other' }] },
     ]
     for (const context of bad) expect(() => assertHudContextMatches(context, BOUT_IDS)).toThrow()
     expect(() => assertHudContextMatches(PROTOTYPE_HUD_FIXTURE, ['wrestler-a'])).toThrow()

@@ -1,6 +1,6 @@
 # ACTION_HUD_PRODUCT_SPEC — Bout画面 Product HUD仕様
 
-Status: Product HUDの正本（ACTION-ART-02）。常時表示のHUD shellは実装済み（ACTION-ART-02A / 02A1）。取組前の比較表示は未実装。
+Status: Product HUDの正本（ACTION-ART-02）。常時表示のHUD shellは実装済みでUser受理済み（ACTION-ART-02A / 02A1、英語baseline）。取組前の比較表示は実装済み（ACTION-ART-02B。User Visual Check待ち）。比較表示のfixtureの公開パラメータ（`Sample Stat A`など）はlayout確認用の仮の行で、Productのパラメータの決定ではない。
 表示言語: **初回releaseは英語のみ**（Accepted）。Product HUDの見た目の調整は英語で行う。日本語は初回releaseに不要。将来の多言語化に備えた小さな文言の境界だけを持つ（§9）。
 対象: 現在のAction Prototype（1920×1080 logical、Product背景を統合した後のBout画面）。
 
