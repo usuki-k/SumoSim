@@ -757,3 +757,94 @@ Do NOT:
 After commit/push/report:
 
 「ACTION-ART-03-WRESTLER-PRODUCT-SPEC が完了し、ChatGPT Review待ちです」
+
+
+# User Decision — Wrestler Appearance Variation
+
+This decision was made after the Task was registered and MUST be included in the Product wrestler art specification.
+
+## Accepted Direction
+
+For the first Product wrestler-art architecture, support **presentation-only body-shape variation** driven by profile-like dimensions.
+
+Initial intent:
+
+- **Weight** should be able to affect visible wrestler width / bulk.
+- **Height** should be able to affect visible body length / reach, especially arm reach.
+- This variation is initially a PRESENTATION concern only.
+
+Do NOT change gameplay collision, Grip range, Push, bodyRadius, or Simulation formulas in this Task.
+
+The User explicitly considers visual-only variation valuable even before it affects gameplay.
+
+## Future Simulation Possibility — Deferred
+
+The User may later use height / weight to influence Simulation / Management parameter growth or wrestler characteristics.
+
+Examples discussed as possibilities only:
+- body weight affecting development/growth tendencies
+- height affecting arm strength / throwing strength or related growth tendencies.
+
+These are NOT accepted gameplay formulas.
+
+Do not:
+- define formulas
+- define stat names
+- define balance values
+- connect height/weight directly to BoutSimulation.
+
+Record only that future Simulation/Management influence is a possible design direction.
+
+## Product Art Consequence
+
+The Product part segmentation must leave room for appearance morphing without obviously distorting painted art.
+
+At minimum, explicitly investigate and recommend how to support:
+
+- torso width variation
+- shoulder / belly / hip width variation
+- torso length variation
+- upper-arm length variation
+- forearm length variation
+- leg/foot spacing or length variation as needed.
+
+Do NOT simply scale the entire wrestler uniformly.
+
+## Arm Segmentation Preference
+
+Because height-driven visible reach is now an accepted presentation goal, whole-arm single-sprite stretching has an additional Product-quality risk.
+
+The specification should therefore strongly evaluate:
+
+- upper arm + forearm/hand segmentation
+
+against:
+
+- single whole-arm sprite.
+
+If both remain viable, recommend the one that better preserves painted anatomy across visible height/reach variation.
+
+## Parameter Mapping Boundary
+
+Do not map raw kg/cm directly to Phaser scale values in the spec.
+
+Recommend a presentation-layer appearance model such as normalized factors, for example:
+
+- bodyWidthFactor
+- bodyLengthFactor
+- upperArmLengthFactor
+- forearmLengthFactor
+- legLengthFactor
+
+or a smaller equivalent set.
+
+Exact names are not mandated.
+
+Future Management/profile data may later be converted into those factors outside BoutSimulation.
+
+## Do Not Reopen
+
+Current accepted gameplay wrestler scale remains unchanged:
+- bodyRadius and meter-to-pixel mapping stay as-is.
+
+Variation should change the visible silhouette within a controlled Product-art range, not redefine current gameplay geometry in this Task.
