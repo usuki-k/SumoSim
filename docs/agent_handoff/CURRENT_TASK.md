@@ -1,5 +1,5 @@
 Task-ID: ART-TOOL-02-TOKUDAWARA-PREVIEW
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / ASSET-PRODUCTION TOOL / TOKUDAWARA PRODUCT PREVIEW
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -521,3 +521,218 @@ Do NOT begin HUD or wrestler Product art.
 
 After commit/push/report:
 「ART-TOOL-02-TOKUDAWARA-PREVIEW が完了し、ChatGPT ReviewとUser Product Visual Approval待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER PRODUCT VISUAL APPROVAL REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `0842987418a386df9ce9ce52bf3bd502e2f7bde3`
+- Agent-Start-Head:
+  `e2ad0d0e6c3a9f8a520cfcdf50720eacf9c2c539`
+- Task diff is one implementation commit.
+- Changed scope:
+  - `tools/dohyo_art/compose_dohyo.py`
+  - `tools/dohyo_art/tests/test_compose_dohyo.py`
+  - `tools/dohyo_art/README.md`
+  - `CURRENT_COMPLETION_REPORT.md`
+- no `src/` changes
+- no gameplay changes
+- no package/lock changes
+- Product inputs/outputs remain git-ignored.
+
+## Technical Assessment
+
+PASS.
+
+The compositor now supports exact deterministic Tokudawara preview geometry while preserving the accepted circular compositor path.
+
+Accepted implementation characteristics:
+
+- four cardinal Tokudawara sections
+- explicit depth / half-angle CLI controls
+- normal tawara removed inside each Tokudawara window
+- shifted section rendered at R + depth
+- deterministic side transition between normal and shifted sections
+- existing tawara source reused
+- geometry guide extended
+- manifest records Tokudawara parameters
+- disabled mode preserves the legacy circle output pixel-for-pixel.
+
+## Backward Compatibility
+
+PASS.
+
+The most important regression property is satisfied:
+
+- Tokudawara disabled -> existing circular Product outputs remain byte-identical
+- existing CLI remains valid
+- overlay geometry is still independent of arena alignment.
+
+This is the correct foundation for later Ring-out implementation because the no-Tokudawara gameplay branch can likewise preserve current behavior.
+
+## Geometry Direction
+
+The implemented visual geometry is compatible with the reviewed future gameplay abstraction:
+
+- normal boundary: radius R
+- Tokudawara window: radius R + depth
+- four cardinal windows
+- side boundaries at the angular window edges.
+
+The Python tool is still presentation-only in this Task.
+
+No gameplay semantic is inferred from the raster output.
+
+## Validation / Test Review
+
+Reported verification is sufficient:
+
+- Python tests: 50 / 50 PASS
+- 15 new Tokudawara-focused checks
+- all four cardinal sections exercised
+- mirror / rotational geometry checks
+- side-gap checks
+- exact normal / shifted radii
+- shikiri unchanged
+- arena alignment does not affect overlay
+- manifest / fail-closed checks
+- deterministic rerun
+- full-size CLI smoke
+- legacy circular output compatibility.
+
+No runtime test/build is required because `src/` is untouched.
+
+## Candidate A
+
+Parameters:
+
+- depth = 42 master px
+- halfAngle = 9°
+- accepted arena alignment:
+  - scale 1.072
+  - offset X 5.36
+  - offset Y 77.72.
+
+Technical geometry is valid.
+
+However, real Product output shows a material lower-frame collision:
+- lower Tokudawara extends into the painted inner frame/decorative area.
+
+Therefore Candidate A is NOT acceptable as the final Product composition with the current arena alignment.
+
+## Candidate B
+
+Parameters:
+
+- depth = 8 master px
+- halfAngle = 9°
+- accepted arena alignment unchanged.
+
+This avoids the lower collision but the visible extension is too small to clearly communicate Tokudawara.
+
+Candidate B is technically valid but not currently recommended for Product use.
+
+## Candidate C
+
+Parameters:
+
+- depth = 42 master px
+- halfAngle = 9°
+- alternate arena alignment:
+  - scale 1.0952
+  - offset X 5.48
+  - offset Y 95.28.
+
+The Agent reports:
+- all four Tokudawara fit inside the painted inner frame
+- approximately 3.5–4.5 master px visual buffer remains
+- 42 px one-bale-depth remains clearly readable
+- no obvious composition break from the additional zoom.
+
+Candidate C is therefore the strongest current recommendation.
+
+However:
+
+**Candidate C is NOT accepted until User visually reviews the actual preview.**
+
+Choosing C changes the previously accepted arena alignment, so the User must explicitly accept that Product-art baseline change.
+
+## Important Geometry Note
+
+The current visual side transition is an anti-aliased blend between the normal band and the shifted band around the exact angular boundary.
+
+This is suitable for the Product preview and preserves the intended outer gameplay boundary:
+- R outside the window
+- R + depth inside the window
+- radial side transition at the boundary.
+
+Do not interpret the raster anti-alias blend itself as gameplay geometry.
+
+The later TypeScript Ring-out implementation must use the reviewed analytic boundary and earliest IN→OUT crossing semantics, not sample this image.
+
+## Candidate values remain pending
+
+Do not yet lock as gameplay constants:
+
+- depth = 42 master px / approximately 0.1195 m
+- halfAngle = 9°
+- arena alignment = Candidate C values.
+
+These become accepted only after Product visual review.
+
+## Required User Visual Review
+
+Please inspect:
+
+### Candidate A
+`tools/dohyo_art/output-tokudawara-a.local/composite_preview_1920.png`
+
+### Candidate B
+`tools/dohyo_art/output-tokudawara-b.local/composite_preview_1920.png`
+
+### Candidate C
+`tools/dohyo_art/output-tokudawara-c.local/composite_preview_1920.png`
+
+Recommended comparison order:
+1. A — confirm the reported lower collision
+2. C — judge whether the extra arena zoom is visually acceptable
+3. B — only as reference for how weak a reduced depth becomes.
+
+Also inspect Candidate C's:
+- `composite_master.png` if connector/detail looks strange
+- `geometry_guide_master.png` to confirm exact boundary placement.
+
+## User Decisions Needed
+
+After viewing A/B/C, decide:
+
+1. Tokudawara depth
+2. halfAngle
+3. arena alignment:
+   - keep accepted 1.072 alignment
+   - or replace it with Candidate C 1.0952 alignment
+4. whether Candidate C geometry is ready to become the Ring-out core contract.
+
+## Recommended Outcome
+
+Unless the actual Candidate C image has an unforeseen visual problem:
+
+- choose Candidate C
+- depth 42 master px
+- halfAngle 9°
+- Product arena alignment 1.0952 / +5.48 / +95.28
+
+then proceed to:
+`TOKUDAWARA-01A-RINGOUT-CORE`.
+
+But this remains a recommendation, not an Accepted Decision until User visual approval.
+
+## Next Task Gate
+
+Do NOT start Ring-out core implementation before the User approves one Product candidate.
+
+Do NOT start Phaser integration, HUD, or wrestler Product art yet.
