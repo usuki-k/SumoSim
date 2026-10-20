@@ -956,3 +956,86 @@ If the shell is accepted:
 If visual changes are requested:
 - make a focused 02A visual-tuning task first
 - do not mix pre-bout comparison into that correction.
+
+
+# User Product Language Decision — 2026-10-21
+
+The User reviewed the first Product HUD shell in Japanese and accepted the general visual direction, then made the following Product language decision.
+
+## Accepted Decision
+
+SumoSim should be implemented with **future multilingual support in mind**, but the **initial release will support English only**.
+
+For the initial release:
+
+- English is the only required shipping language.
+- Japanese does NOT need to ship.
+- The Product HUD should be authored and visually tuned in English from the start.
+- Japanese fixture strings currently used by ACTION-ART-02A are temporary prototype content and are NOT the release baseline.
+
+## Architecture Constraint
+
+Do not hard-code Product UI structure around one language.
+
+Use semantic presentation data and a small presentation/localization boundary so future languages can be added without changing gameplay or Management state ownership.
+
+However, do NOT build a full localization framework yet.
+
+Prefer:
+- stable semantic fields / keys
+- one small English formatting/presentation layer
+- layout that tolerates longer English strings.
+
+Do not add:
+- language selector
+- translation files for languages not shipping
+- Japanese release strings
+- external localization library
+- browser auto-translation behavior.
+
+## Initial English HUD Direction
+
+The next HUD correction should convert the visible Product HUD to English.
+
+Expected semantic examples:
+
+- 東 / 西 -> `East` / `West`
+- 前頭十五枚目 -> `Maegashira 15`
+- 前頭十六枚目 -> `Maegashira 16`
+- 3日目 -> `Day 3`
+- 2-0 / 1-1 -> may remain numeric record format
+- result wording should also use English fixture names/side formatting.
+
+Wrestler shikona handling for the release should use an English/romanized display form.
+
+The exact final fictional wrestler names remain fixture/content decisions, not gameplay rules.
+
+## User Visual Feedback on Current HUD Shell
+
+- Current Japanese HUD shell is visually acceptable as a layout direction.
+- No request to change current panel size/position/color baseline was made in this feedback.
+- The next visual gate should therefore focus on:
+  - English text fit
+  - longer rank labels
+  - romanized wrestler names
+  - keeping the same Product arena readability.
+
+## Next Task Constraint
+
+Before implementing ACTION-ART-02B pre-bout comparison, perform a focused HUD language-baseline correction.
+
+Recommended next Task:
+
+`ACTION-ART-02A1-HUD-ENGLISH-LOCALIZATION-BASELINE`
+
+Scope:
+- convert the always-visible HUD fixture/display to English
+- add the smallest localization-ready semantic formatting boundary
+- verify long English text fits the accepted shell
+- keep Product layout/style otherwise unchanged unless English text requires small visual tuning
+- no full localization system
+- no additional shipping languages
+- no Management/Tournament implementation
+- no pre-bout comparison yet.
+
+User Visual Check is required after the English HUD update.
