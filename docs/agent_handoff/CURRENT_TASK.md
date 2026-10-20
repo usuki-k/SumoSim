@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-01B-PRODUCT-BACKGROUND-INTEGRATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT ART RUNTIME INTEGRATION / PHASER
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -547,3 +547,247 @@ Do NOT continue into:
 
 After commit/push/report:
 「ACTION-ART-01B-PRODUCT-BACKGROUND-INTEGRATION が完了し、ChatGPT ReviewとUser Visual Check待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER VISUAL + PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `dc3df77c9d8e7463c53292b46b7d8e1c3d5bf4ae`
+- Agent-Start-Head:
+  `0b515e407f7ae19becd59ea0faa1c1cbea3eb02f`
+- Diff is one implementation commit.
+- `main` unchanged.
+- No gameplay rule changes.
+- No package/lock changes.
+
+## Runtime Product Art Integration
+
+PASS.
+
+The accepted Candidate C Product art is now the default Bout background.
+
+Committed runtime assets:
+
+- `public/assets/action/background/arena_base_1920.png`
+- `public/assets/action/background/dohyo_ring_overlay_1920.png`
+
+Reported dimensions:
+- both 1920×1080
+
+Reported SHA-256:
+- arena base:
+  `07e7f5b2b25483ccc2578426a02045dd7653dd78083e2807ba560cc3392aeaa5`
+- overlay:
+  `d14ee82807763c1dcd8c20a749f1f52cc004de0f67c4678f2e0d339463a58680`
+
+The runtime files are reported to match the deterministic Candidate C regeneration.
+
+## Product Art Mapping
+
+PASS.
+
+`productArena.ts` defines a small Phaser-free presentation contract:
+
+- logical art space: 1920×1080
+- center: (960,540)
+- base ring radius: 400 px
+- Tokudawara depth: 21 px
+- halfAngle: π/20
+- meter-to-pixel mapping:
+  `400 / arena.radius`.
+
+For the current accepted Simulation arena:
+
+- 2.275 m -> 400 px
+- 0.1194375 m -> 21 px.
+
+This is the correct direct correspondence with Candidate C.
+
+## Phaser Logical Resolution
+
+Accepted for current Product baseline:
+
+- 1920×1080 logical canvas
+- Phaser Scale.FIT
+- CENTER_BOTH.
+
+This provides 1:1 art-to-logical pixels before browser scaling.
+
+This is still subject to User/runtime performance feedback; it is not an irreversible platform optimization decision.
+
+## Layering
+
+PASS.
+
+Runtime order:
+
+1. Product arena base depth 0
+2. exact Product dohyo/tokudawara overlay depth 0.5
+3. wrestler shadows depth 1
+4. wrestler bodies depth 2
+5. debug overlays depth 3
+6. text depth 4.
+
+No Product wrestler/HUD is baked into the background.
+
+## Old Graphics Dohyo
+
+PASS.
+
+The old full Graphics-based clay/tawara rendering is removed from default display.
+
+Retained:
+- boundary-outline helper
+- debug boundary renderer.
+
+Therefore there is no default double-ring source.
+
+## Debug Geometry
+
+PASS structurally.
+
+The debug boundary:
+- is derived from Simulation arena state
+- uses the same Product meter-to-pixel mapping
+- is rendered over the Product overlay
+- remains presentation only.
+
+This is the correct verification surface for User Play Test.
+
+The Report also includes numerical image-vs-Simulation validation across thousands of boundary angles and all Tokudawara side transitions.
+
+## Python Tool Export
+
+PASS.
+
+The compositor now adds:
+
+`arena_base_1920.png`
+
+as a deterministic 2× downscale from the aligned master.
+
+Reported Python suite:
+- 51 PASS.
+
+Existing Product/circle/Tokudawara deterministic tests remain PASS.
+
+## Runtime Verification
+
+Reported:
+
+- `pnpm test`: 240 PASS / 15 files
+- `pnpm build`: PASS
+- `tsc --noEmit`: PASS
+- Python tests: 51 PASS
+- `git diff --check`: PASS
+- Vite serves modules/assets successfully.
+
+Browser graphical smoke:
+**NOT RUN** due Agent environment limitation.
+
+Therefore technical integration is accepted, but Product/runtime visual acceptance is still pending.
+
+## Non-Blocking Notes
+
+### N1 — Product arena size
+
+`arena_base_1920.png` is reported around 2.5 MB as PNG.
+
+This is acceptable for the current visual integration gate.
+
+Do not optimize it in this Task.
+
+Before CrazyGames release, runtime image compression/download size should receive a separate asset-performance review.
+
+### N2 — Ring-radius historical comment
+
+`BoutScene.ts` still contains a comment tying 2.275 m to the approximately 4.55 m real dohyo inner diameter.
+
+The current Product visual contract uses R as the visible gameplay/tawara outer-edge boundary.
+
+This comment is not a runtime bug, but its historical-geometric wording should eventually be clarified.
+
+Do not change gameplay radius solely because of this comment.
+
+### N3 — Product art mapping is current-arena-specific
+
+The Product PNG is generated for the accepted Candidate C geometry.
+
+`productPixelsPerMeter` can scale another arena radius to 400 px, but a future arena with a different Tokudawara depth/radius ratio would not automatically match this fixed PNG.
+
+This is acceptable because the current Bout Product background is tied to the accepted arena geometry.
+
+Do not build a generic venue system now.
+
+## User Visual + Play Test — REQUIRED
+
+Run:
+
+`pnpm dev`
+
+### First: debug OFF
+
+Check:
+
+1. canvas appears 16:9
+2. Product arena fills the canvas correctly
+3. no horizontal/vertical stretching
+4. no black/blank area inside the canvas
+5. four Tokudawara match the accepted Candidate C appearance
+6. all four remain inside the painted platform
+7. old Graphics dohyo is not doubled underneath
+8. provisional wrestlers appear centered at the expected scale
+9. movement / Push / Counter / Grip / Drive still work
+10. R restart and 1/2 Dummy modes still work.
+
+### Then: press 0 for debug ON
+
+Check:
+
+11. magenta boundary lies on the Product tawara gameplay boundary
+12. +X Tokudawara aligns
+13. -X Tokudawara aligns
+14. +Y Tokudawara aligns
+15. -Y Tokudawara aligns
+16. diagonal normal-circle section aligns
+17. Ring-out occurs at that same visible/debug boundary.
+
+### Performance / visual feedback
+
+Please also report:
+
+- Is 1920×1080 noticeably heavy or choppy?
+- Does the background look too blurry or too sharp?
+- Does the Product background look materially better in actual runtime?
+- Do the current provisional wrestlers now look noticeably lower quality than the background?
+
+The last point determines how urgently to begin Product wrestler art after HUD.
+
+## Acceptance State
+
+Technical Product background integration:
+PASS.
+
+Product visual/runtime acceptance:
+PENDING USER TEST.
+
+Do not start Product HUD automatically until the User confirms this runtime background integration is acceptable.
+
+## Next Step
+
+If User accepts:
+- record Product arena/background runtime as Accepted Baseline
+- proceed to ACTION-ART-02 HUD specification.
+
+If User finds a mismatch:
+- classify it as:
+  - image alignment
+  - Phaser scaling
+  - Simulation/art geometry
+  - performance
+  - presentation layering
+- fix only that issue before HUD work.
