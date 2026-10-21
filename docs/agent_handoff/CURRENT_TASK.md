@@ -435,3 +435,17 @@ Technical PASS does not by itself mean the 1.5 s Game Feel is accepted.
 ## Next Task Constraint
 
 Do not create a follow-up implementation task solely from this review. First obtain the User Play Test result for the 1.5 s duration.
+
+
+## User Play Test Result — ACCEPTED
+
+User confirmed the ACTION-04A5 duration tuning at ~1.5 s feels good.
+
+Accepted Game Feel Baseline:
+- `COUNTER_TRANSITION_TICKS = 90` (~1.5 s at 60 Hz)
+
+Do Not Reopen unless explicitly requested:
+- do not revert to 120 ticks / ~2.0 s
+- do not retune the CounterTransition duration as part of unrelated future tasks.
+
+This closes the ACTION-04A5 User Play Test gate.
