@@ -1014,3 +1014,66 @@ Do NOT combine:
 - Grip/Morozashi art
 - Tsuri
 with that movement/state implementation.
+
+
+# User Decisions — Counter Transition D1–D4
+
+The User explicitly accepted the following implementation decisions.
+
+## D1 — Pusher stagger distance
+
+Accepted:
+- provisional Counter-transition forward stagger distance:
+  **1.0R = 0.35 m**
+- same provisional base distance for Success and Best.
+
+This is a tuning baseline, not final Game Feel.
+User Play Test may tune it later.
+
+## D2 — Post-transition Kuzushi
+
+Accepted:
+- after the approximately 2-second CounterTransition completes,
+- the pusher receives the existing full Kuzushi window again:
+  **KUZUSHI_TICKS (~0.5 s)**.
+
+Purpose:
+- preserve the existing Counter -> Grip / Morozashi follow-up opportunity after control returns to the successful Counter side.
+
+Failed Counter -> Kuzushi remains unchanged.
+
+## D3 — Pre-existing momentum
+
+Accepted:
+- on CounterTransition entry,
+- absorb/clear both participants' existing self/external momentum to zero
+- the deterministic transition path becomes the sole owner of pair movement during the transition.
+
+Do not carry the previous Push momentum as a second movement source.
+
+## D4 — Final relative placement
+
+Accepted:
+- after the pusher has completed its forward stagger movement:
+  - Success ends with the Counter user at the pusher's **true side**
+  - Best ends with the Counter user at the pusher's **true rear/back**
+- preserve exact contact-distance relative geometry at transition completion.
+
+Therefore the Counter user's absolute world endpoint moves together with the pusher's final stagger endpoint.
+
+## Implementation Readiness
+
+With D1–D4 resolved, the CounterTransition design is ready for a focused Heavy implementation Task.
+
+Implementation constraints from the review remain:
+
+- Simulation-owned pair transition
+- ~120 fixed ticks (~2.0 s)
+- pair input lock
+- canonical continuous positions
+- no Phaser-only tween
+- ordinary ring-out / Tokudawara every transition tick for BOTH participants
+- no Counter-user ring-out immunity
+- no action-art work in the same Task
+- no Grip/Morozashi art in the same Task
+- dedicated Counter attempt/whiff art remains separate.
