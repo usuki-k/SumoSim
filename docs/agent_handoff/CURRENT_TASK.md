@@ -1,488 +1,813 @@
-Task-ID: ACTION-04A3-COUNTER-TRANSITION-INVESTIGATION
-Status: REVIEWED
-Task-Type: INVESTIGATION / DESIGN / CORE GAMEPLAY MOVEMENT / COUNTER RESOLUTION
+Task-ID: ACTION-04A4-COUNTER-TRANSITION-IMPLEMENTATION
+Status: READY
+Task-Type: IMPLEMENTATION / CORE GAMEPLAY MOVEMENT / COUNTER RESOLUTION
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 190c50b37ad217b9597a64323f357ad396ecb903
+Source-Baseline: 8731b0e2ad64113f7942ecf0b841d8daa3138397
 Handoff-Mode: GITHUB
 
-# ACTION-04A3 — Counter Success / Best Continuous Transition Investigation
+# ACTION-04A4 — Counter Success / Best Continuous Transition Implementation
 
 ## Purpose
 
-Investigate and design the smallest deterministic Simulation-owned transition that replaces the current one-tick Counter relocation with an approximately 2-second continuous exchange.
+Implement the accepted Simulation-owned ~2.0 second Counter resolution transition.
 
-This is **Investigation / Design only**.
+The current Counter result positions are already correct:
 
-Do NOT implement Production changes.
+- Success -> Counter user ends at the pusher's true side
+- Best -> Counter user ends at the pusher's true rear/back.
 
-The User has already accepted the current Counter result semantics:
+The problem is only that the current implementation relocates the Counter user in one Simulation tick.
 
-- Counter **Success**:
-  successful Counter wrestler ends at the opponent's **side**
-- Counter **Best**:
-  successful Counter wrestler ends at the opponent's **rear / back**
+Replace that teleport-like resolution with a deterministic fixed-step pair transition in which:
 
-Those final positional semantics are correct and must be preserved unless a material conflict is found and reported.
+- the pusher/countered wrestler visibly staggers forward
+- the successful Counter user moves continuously to side/rear
+- both participants are input-locked during the transition
+- canonical Simulation position/facing remain the single source of truth
+- Phaser continues to render canonical positions/facing directly.
 
-The current problem is only the transition:
-
-- the successful Counter wrestler currently jumps to the side/rear target in one Simulation tick
-- the pushing / countered wrestler should visibly stagger forward
-- the successful Counter wrestler should move naturally into the side/rear result
-- both participants should be uncontrollable during the transition
-- target feel is approximately **2 seconds**
-- the User's `yoroke.mp4` is a feel reference for continuous stagger/movement, not a timing/formula source.
-
-The task must determine how this should be represented in Simulation state before implementation.
+Do NOT implement dedicated Counter art in this Task.
 
 ---
 
-# User-Confirmed Behavior
+# Accepted User Decisions — Do Not Reopen
 
-## Success case
+## D1 — Pusher stagger distance
 
-Opponent Push is caught by Down Counter.
+Use:
 
-Result:
-- current side-placement result remains
-- successful Counter wrestler moves continuously toward that side result
-- pushing/countered wrestler moves continuously forward in a stagger / loss-of-balance motion
-- approximate duration: 2 seconds
-- both participants ignore normal control input until the transition completes.
+```
+COUNTER_STAGGER_DISTANCE = 1.0R = 0.35 m
+```
 
-## Best case
+Same provisional base distance for Success and Best.
 
-Opponent Push is caught at Best timing.
+This is a tuning baseline subject to later User Play Test.
 
-Result:
-- current rear-placement result remains
-- successful Counter wrestler moves continuously around / behind toward that rear result
-- pushing/countered wrestler moves continuously forward in a stagger / loss-of-balance motion
-- approximate duration: 2 seconds
-- both participants ignore normal control input until the transition completes.
+## D2 — Post-transition Kuzushi
 
-## Failed Counter
+After the CounterTransition completes:
 
-Do NOT silently redesign failed Counter behavior in this Task.
+- pusher receives the full existing `KUZUSHI_TICKS` (~0.5 s) again
+- Counter user is stable and regains control.
 
-Current failed Counter -> Kuzushi behavior is separate unless source inspection shows an unavoidable shared-state issue.
+Purpose:
+preserve the existing Counter -> Grip / Morozashi follow-up opportunity.
 
-## Counter attempt art
+Failed Counter behavior remains unchanged.
 
-Dedicated Counter artwork for Down input / whiff readability is planned separately.
+## D3 — Existing momentum
 
-Do NOT design or implement those images here.
+At CounterTransition entry:
 
-This Task is about **successful Counter movement/state ownership only**.
+- set both participants' `selfVelocity` to zero
+- set both participants' `externalVelocity` to zero.
 
----
+The transition path becomes the sole owner of pair movement.
 
-# Terminology
+Do NOT carry prior Push/external momentum as a second position driver.
 
-Use the following terms consistently:
+## D4 — Final relative placement
 
-- **counter user / successful side**:
-  the participant who pressed Down and successfully caught the Push
-- **pusher / countered side**:
-  the participant whose active Push was caught
-- **Counter transition**:
-  the new time-bearing pair exchange after a Success/Best catch
-- **Kuzushi**:
-  the current Simulation posture state; do not use it as a synonym for the whole Counter transition.
+At transition completion, after the pusher has moved its 1.0R stagger distance:
 
-Current Source naming inside `resolveCounter()` uses `defender` for the Counter user and `attacker` for the pusher. Report that explicitly to avoid role confusion.
+- Success: Counter user is exactly at the pusher's true side
+- Best: Counter user is exactly at the pusher's true rear/back
+- distance between centers = current combined body radius/contact distance.
+
+The Counter user's absolute endpoint therefore moves with the pusher's final stagger endpoint.
 
 ---
 
-# Current Source Facts to Verify
+# Accepted Design Direction
 
-Inspect Current Source directly.
+Use a pair-level Simulation-owned Counter transition.
 
-At minimum verify:
+Do NOT use a Phaser tween as gameplay movement.
 
-- `BoutTypes.ts`
-- `BoutSimulation.ts`
-- Counter-focused tests in `BoutSimulation.test.ts`
-- `ringOut.ts` and ring-out integration in the Simulation tick
-- `grappleOrientation.ts`
-- `FixedStepAccumulator.ts`
-- `PushDummyController.ts`
-- `BoutScene.ts`
-- `wrestlerVisualState.ts`
-- current Product `WrestlerView.ts`
+Recommended conceptual shape:
+
+```
+CounterTransition
+  none
+  active {
+    tier
+    counterUserId
+    pusherId
+    ticksElapsed / ticksRemaining
+    entry geometry / path data
+  }
+```
+
+Exact internal field names may differ if a smaller explicit shape is cleaner.
+
+Expose only the minimum useful public Snapshot state:
+- none/active
+- tier
+- counterUserId
+- pusherId
+- ticksRemaining.
+
+Do not expose redundant path coordinates if canonical participant position already contains what presentation needs.
+
+---
+
+# Duration
+
+Add a named provisional constant:
+
+```
+COUNTER_TRANSITION_TICKS = 120
+```
+
+At current 60 Hz this is ~2.0 s.
+
+Tick semantics must be explicit and deterministic.
+
+Recommended:
+
+- capture tick = transition entry, progress 0
+- following 120 Simulation ticks advance the transition
+- completion occurs at the end of tick 120
+- normal input resumes on the next tick.
+
+No render-delta gameplay movement.
+
+---
+
+# Required Reading
+
+Read directly:
+
+- `AGENTS.md`
+- `CLAUDE.md`
+- current `CURRENT_TASK.md`
+- prior `CURRENT_COMPLETION_REPORT.md`
 - `docs/ARCHITECTURE.md`
-- relevant current SPEC / Handoff.
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- `src/game/sumo/ringOut.ts`
+- `src/game/sumo/BoutCounter.test.ts`
+- `src/game/sumo/BoutCounterPosition.test.ts`
+- `src/game/sumo/BoutGrip.test.ts`
+- `src/game/sumo/BoutOrientation.test.ts`
+- `src/game/sumo/BoutRingOut.test.ts`
+- `src/game/sumo/BoutTokudawara.test.ts`
+- `src/game/input/pushDummyController.ts`
+- `src/game/input/pushDummyController.test.ts`
+- `src/game/presentation/wrestlerVisualState.ts`
+- `src/game/scenes/BoutScene.ts`.
 
-Known current behavior to confirm:
-
-1. successful Counter computes a side/rear target using `counterRelocationTarget()`
-2. the Counter user is directly assigned to that target in the same tick
-3. the pusher enters Kuzushi
-4. the pusher receives `COUNTER_OVERSHOOT_SPEED` along its locked Push direction
-5. ordinary facing/contact/ring-out order continues according to the current step pipeline.
-
-Do not rely on the previous review summary in place of source inspection.
-
----
-
-# Architecture Constraint
-
-Most important question:
-
-**Should the ~2-second Counter transition be canonical Simulation state, or presentation-only smoothing?**
-
-The User explicitly wants:
-- both participants uncontrollable during the interval
-- both participants to move through the exchange
-- deterministic timing.
-
-That strongly suggests Simulation ownership, but the Agent must inspect consequences before recommending a design.
-
-Do NOT implement a Phaser-only tween as a shortcut.
-
-Preserve:
-
-```
-Pure TypeScript Simulation
-  -> canonical state / results
-  -> Phaser presentation
-```
-
-No second gameplay-position Source of Truth.
+Review Handoff does not replace Source inspection.
 
 ---
 
-# Investigation Questions
+# Role Naming
 
-The Completion Report must answer all of the following.
+Use consistent terminology:
 
-## 1. State ownership
+- **Counter user**:
+  participant who pressed Down and successfully caught the Push
+- **Pusher**:
+  participant whose active Push was caught.
 
-Compare at least these candidates:
+Current `resolveCounter()` variable names are historically:
+- Counter user = `defender`
+- Pusher = `attacker`.
 
-### Candidate A — pair-level Counter transition state
-Example concept only:
+Do not confuse these roles when implementing the transition.
+
+---
+
+# State / Snapshot
+
+Add a pair-level Counter transition to the canonical Bout runtime state.
+
+Recommended public type:
 
 ```
-BoutCounterTransition
-  tier
-  counterUserId
-  pusherId
-  ticksRemaining
-  start/target positions
-  motion basis / progress
+export type BoutCounterTransition =
+  | { readonly kind: 'none' }
+  | {
+      readonly kind: 'active'
+      readonly tier: 'best' | 'success'
+      readonly counterUserId: ParticipantId
+      readonly pusherId: ParticipantId
+      readonly ticksRemaining: number
+    }
 ```
 
-### Candidate B — participant action/posture extension
-Represent the transition through per-participant action/posture state.
+Add:
 
-### Candidate C — presentation-only interpolation
-Keep current instantaneous canonical result and visually interpolate.
+```
+BoutSnapshot.counterTransition
+```
 
-Evaluate:
-- single Source of Truth
-- input lock
-- deterministic fixed-step behavior
-- Snapshot clarity
-- contact/ring-out semantics
-- future dedicated Counter art
-- implementation size.
+Update all Snapshot-copy/isolation logic.
 
-Recommend one.
+Update every test that asserts exact top-level Snapshot keys.
 
-Do not treat the example shape as pre-approved design.
+Do NOT put the transition inside only one participant's action/posture.
 
-## 2. Duration
+---
 
-User target is approximately **2 seconds**.
+# Entry Semantics
 
-At current 60 Hz this is about 120 ticks.
+On successful Counter capture:
 
-Determine:
-- whether the design should expose a named provisional `COUNTER_TRANSITION_TICKS`
-- exact tick semantics:
-  - when tick 1 begins
-  - whether entry tick counts
-  - when input resumes.
+1. determine Push direction `d`
+2. determine tier exactly as current source does
+3. determine accepted side/rear candidate ordering exactly as current source does
+4. cancel the pusher's Push into Kuzushi as today
+5. Counter user's action becomes idle
+6. DO NOT directly assign Counter user's position to target
+7. DO NOT add current `COUNTER_OVERSHOOT_SPEED`
+8. clear both participants' self/external velocities to zero
+9. initialize the pair CounterTransition at progress 0.
 
-Do not tune final game feel numerically beyond what is needed for an implementable design.
+The capture tick should end with both canonical positions still at their resolved capture/contact positions.
 
-## 3. Input lock
+Ring-out for that capture tick still runs through the existing pipeline.
 
-Define exactly what happens during the transition to:
+---
 
-- WASD movement
+# Transition Paths
+
+Use a small deterministic path model.
+
+## Pusher path
+
+Pusher moves forward along the caught locked Push direction `d`.
+
+Final displacement:
+
+```
+L = COUNTER_STAGGER_DISTANCE = BODY_RADIUS = 0.35 m
+```
+
+Recommended provisional easing:
+
+```
+pusherEase(u) = 1 - (1 - u)^2
+```
+
+for `u ∈ [0,1]`.
+
+This gives stronger initial movement and a natural slowdown.
+
+Exact easing is presentation/game-feel tuning, but do not substitute a complex animation system.
+
+## Counter user path
+
+Move relative to the moving pusher.
+
+Use the pusher's fixed Push-axis basis:
+
+```
+d
+perp = (-d.y, d.x)
+```
+
+Represent the Counter user's relative vector in polar form around the pusher.
+
+Recommended:
+
+```
+s(u) = 3u^2 - 2u^3
+theta(u) = theta0 + (theta1 - theta0) * s(u)
+r(u) = r0 + (combined - r0) * s(u)
+```
+
+where:
+- `r0/theta0` come from the capture geometry
+- final radius = combined body radius
+- Success final theta = preferred ±π/2
+- Best final theta = π reached by rotating through the preferred side.
+
+This should create:
+- Success: natural side movement
+- Best: natural wrap-around toward rear.
+
+Do not let the Counter user's path pass through the pusher.
+
+---
+
+# Success / Best Candidate Ordering
+
+Preserve existing semantics.
+
+## Success
+
+Candidate order:
+- preferred side
+- opposite side.
+
+## Best
+
+Candidate order:
+- rear first
+- then preferred side
+- then opposite side.
+
+Preserve the current side preference rules:
+- existing lateral lean sign
+- on tie, ring-center-nearer side
+- then fixed side+ tie-break.
+
+Do not change tier classification or Counter timing window.
+
+---
+
+# Boundary / No-Valid-Target Handling
+
+This is a critical boundary case.
+
+Do not invent a new gameplay outcome.
+
+Preferred implementation approach:
+
+- compute the transition's final side/rear candidate using the accepted candidate ordering and final pusher endpoint
+- validate candidate final center using the same conservative current center-fit criterion used by Counter relocation
+- if a valid transition target exists, start CounterTransition
+- if no valid transition target exists, preserve the existing no-relocation fallback semantics as closely as possible and do NOT fabricate a new side/rear target.
+
+However:
+
+If preserving the existing null-target fallback while also satisfying D1/non-overlap cannot be implemented without a semantic change, STOP and report the exact conflict.
+
+Do not silently:
+- make Counter user ring-out-immune
+- force an invalid target
+- introduce a new special outcome
+- let participants pass through one another.
+
+This rare edge case must be explicitly tested.
+
+---
+
+# Input Lock
+
+During active CounterTransition:
+
+Ignore all normal participant intents:
+
+- movement
 - Push press
 - Counter press
 - Grip press
-- Drive held
-- dummy-controller intents.
+- Drive held.
 
-Required User behavior:
-- no normal action starts during the transition.
+Discrete presses during transition are discarded, not queued.
 
-Investigate whether:
-- press edges during transition are simply consumed/ignored
-- held movement begins immediately on the first post-transition tick
-- held Drive has any relevance while FREE.
+Held movement may begin on the first tick after transition completion.
 
-Recommend explicit semantics so no input is unintentionally queued.
+Only newly pressed discrete action edges after completion count.
 
-## 4. Canonical movement paths
+## Dummy harness
 
-Determine the minimal deterministic path representation for both participants.
+Update `PushDummyController` so:
 
-Successful Counter side:
-- Success ends at current side target
-- Best ends at current rear target.
+```
+snapshot.counterTransition.kind === 'active'
+```
 
-Countered pusher:
-- should move forward in a readable stagger / overshoot.
+returns NO_INPUT and keeps its Push cooldown full, analogous to waiting through existing blocked states.
 
-Compare simple deterministic options such as:
-- start->target interpolation
-- velocity profile
-- fixed easing curve in canonical Simulation coordinates.
-
-Do not design a full animation system.
-
-Key requirement:
-- both participants' canonical positions should evolve continuously if Simulation owns the transition.
-
-Report whether exact final side/rear target should be stored at transition start or recomputed during transition.
-
-## 5. Pusher final position
-
-Current source gives the pusher forward external velocity rather than an explicit final position.
-
-The User wants about 2 seconds of readable forward stagger.
-
-Investigate:
-- whether to retain the current overshoot impulse inside the new transition
-- replace it with an explicit transition target/path
-- or use another small deterministic rule.
-
-This is a potentially semantic gameplay change.
-
-Do NOT silently decide a new final displacement if Current Source does not already determine it.
-
-If User judgment is required for the pusher's final distance, report a concrete decision point instead of inventing one.
-
-## 6. Contact handling
-
-During the pair transition, decide whether ordinary contact resolution should:
-
-- run normally
-- be bypassed for the two transitioning participants
-- be replaced by transition-specific separation geometry.
-
-Analyze:
-- overlap
-- jitter
-- path interference
-- maintaining readable side/rear placement.
-
-Do not assume current contact correction can coexist with scripted canonical paths.
-
-## 7. Ring-out / Tokudawara
-
-This is mandatory.
-
-Determine how ring-out should work while canonical positions move for ~2 seconds.
-
-Questions:
-- run ring-out every transition tick?
-- can either wrestler lose during the transition before it completes?
-- what happens if the successful side's path would cross out and re-enter?
-- current target selection already validates the Counter user's final center; is that enough for the whole path?
-- how does Tokudawara-aware earliest crossing interact with a multi-tick path?
-
-Preserve current accepted ring-out semantics unless a design change is explicitly proposed for User decision.
-
-## 8. Facing
-
-Define candidate facing behavior during transition.
-
-Possible considerations:
-- pusher keeps locked Push facing while staggering
-- successful side rotates toward its movement path / opponent / final orientation
-- both face each other continuously.
-
-Do not invent a visually complex rule.
-
-Recommend the smallest deterministic behavior that supports:
-- Success side movement
-- Best rear movement
-- current rigid sprite presentation.
-
-If a User visual decision is needed, say so.
-
-## 9. Velocity state
-
-Current participant state has:
-- self velocity
-- external velocity
-- total Snapshot velocity.
-
-Determine what those should mean during the transition.
-
-Avoid contradictory states such as:
-- position moving by scripted interpolation while velocity reports zero or unrelated values, unless intentionally defined and justified.
-
-Specify:
-- whether transition velocity is reflected in Snapshot `velocity`
-- what happens to pre-existing self/external velocity on entry
-- what velocity remains on completion.
-
-## 10. Kuzushi interaction
-
-Current pusher enters `posture.kind === 'kuzushi'` for about 0.5 seconds.
-
-The proposed transition is about 2 seconds.
-
-Investigate:
-- keep Kuzushi nested/parallel to transition?
-- extend Kuzushi duration?
-- transition supersedes the posture?
-- posture remains semantic but input lock comes from pair transition?
-
-Do not change failed-Counter Kuzushi semantics accidentally.
-
-## 11. Action / engagement interaction
-
-Determine:
-- actions of both participants on transition entry
-- whether engagement must remain FREE
-- whether Grip can occur during transition (expected no)
-- completion state.
-
-Preserve current Push cancellation semantics.
-
-## 12. Outcome / freeze interaction
-
-If a ring-out occurs during transition:
-- does transition stop immediately?
-- does outcome freeze motion as current runtime does?
-
-Recommend explicit behavior.
-
-## 13. Snapshot / presentation needs
-
-The current rigid renderer can display canonical position/facing directly.
-
-Determine whether Snapshot also needs a pair-level transition state for:
-- debug labels
-- future dedicated Counter art
-- transition progress
-- User-facing presentation.
-
-Avoid exposing data the runtime does not need.
-
-## 14. Determinism / fixed-step
-
-The design must remain:
-- 60 Hz fixed-step
-- frame-rate independent
-- deterministic from the same intent sequence.
-
-No Scene delta-time gameplay movement.
+Do not let dummy immediately queue a Push for transition completion.
 
 ---
 
-# Required Design Output
+# Transition Tick Ownership
 
-The Completion Report must contain a concrete recommended design that is ready for ChatGPT review.
+When `counterTransition.kind === 'active'`, use a dedicated transition branch in the Simulation tick.
 
-At minimum include:
+The transition path must be the sole canonical position owner for both participants.
 
-## Recommended state shape
+Do NOT also run ordinary:
+- grounded movement integration
+- external momentum integration
+- pair contact correction
+- Push/Counter/Grip resolution
+- Grapple/Drive movement.
 
-Pseudotype / TypeScript-like shape for:
-- pair transition state if recommended
-- any Snapshot exposure.
+Recommended transition tick responsibilities:
 
-## Transition entry
+1. existing outcome freeze gate
+2. capture previous canonical positions
+3. ignore intents
+4. keep/pause pusher Kuzushi semantics as specified below
+5. advance deterministic transition progress
+6. update both canonical positions from path
+7. set velocity bookkeeping from actual path displacement
+8. update facing
+9. run ordinary arena ring-out for both participants
+10. if outcome decided: freeze with current transition state/position
+11. otherwise complete transition on final tick when appropriate.
 
-Exact current Counter-success pipeline point where transition begins.
-
-## Transition tick
-
-Ordered steps for one tick during transition.
-
-Example structure only:
-
-```
-input ignored
--> advance transition progress
--> update canonical positions
--> update canonical velocities/facing
--> contact policy
--> ring-out
--> transition completion
-```
-
-Do not copy this order blindly; derive it from current source.
-
-## Transition completion
-
-State of:
-- positions
-- actions
-- posture
-- velocities
-- facing
-- input eligibility.
-
-## Success vs Best
-
-Show what is shared and what differs.
-
-## Boundary cases
-
-Cover explicitly:
-- no valid Counter target
-- near ring edge
-- Tokudawara path
-- ring-out during transition
-- simultaneous/near-simultaneous boundary crossing
-- outcome already decided
-- transition completion on exact final tick.
+Derive exact code ordering from Current Source and document any deviation.
 
 ---
 
-# User Decisions vs Agent Recommendations
+# Contact Semantics
 
-Clearly separate:
+During active CounterTransition:
 
-## Already User-decided
+- do NOT run ordinary pair `resolveContact()`
+- do NOT let contact correction modify path-owned canonical positions.
 
-- Success final relative placement = side
-- Best final relative placement = rear
-- approximately 2-second visible transition
-- both participants uncontrollable during transition
+The path itself must maintain non-overlap/contact-distance geometry.
+
+At transition entry, ordinary contact resolution has already occurred earlier in the capture tick.
+
+There are only two participants.
+
+---
+
+# Ring-out / Tokudawara
+
+Important correction from Design Review:
+
+**Both participants remain subject to ordinary ring-out throughout the transition.**
+
+Do NOT grant Counter user ring-out immunity.
+
+Every transition tick:
+
+- use previous -> current canonical positions
+- call existing `resolveArenaRingOut`
+- preserve Tokudawara-aware earliest exit behavior
+- exact boundary remains IN
+- first exit loses
+- effectively simultaneous exits remain Rematch.
+
+If outcome becomes decided:
+- transition stops because post-outcome step remains no-op
+- no final-position warp
+- no forced transition completion.
+
+Do not change winner semantics.
+
+---
+
+# Facing
+
+Initial implementation:
+
+## Pusher
+
+Keep its caught Push-facing fixed during CounterTransition.
+
+This should make the pusher read as stumbling forward.
+
+## Counter user
+
+Face the pusher continuously as both canonical positions move.
+
+Use the existing canonical facing helper/rule if possible.
+
+Do not add a second presentation-only facing.
+
+Known Deferred issue:
+when pusher's post-transition Kuzushi later ends, current FREE facing may snap significantly toward Counter user after Best.
+
+Do not solve that in this Task unless it blocks the transition implementation.
+
+Report it for User Play Test.
+
+---
+
+# Velocity Bookkeeping
+
+Canonical positions are path-owned during transition, but Snapshot velocities should agree with those positions.
+
+During each transition tick:
+
+## Pusher
+
+- `selfVelocity = 0`
+- `externalVelocity = (currentPosition - previousPosition) / TICK_SECONDS`
+
+## Counter user
+
+- `selfVelocity = (currentPosition - previousPosition) / TICK_SECONDS`
+- `externalVelocity = 0`.
+
+Snapshot total velocity remains self + external.
+
+Do NOT re-integrate these velocities into positions during the same transition tick.
+
+At normal transition completion:
+- explicitly set both self/external velocities to zero.
+
+At ring-out freeze:
+- preserve exact deciding-tick state as current freeze semantics require.
+
+---
+
+# Kuzushi Interaction
+
+On Counter capture:
+- pusher enters Kuzushi as today
+- pusher action remains idle.
+
+During active CounterTransition:
+- pusher remains Kuzushi
+- do not count down the Kuzushi timer as the pair transition progresses
+- Counter user remains stable.
+
+On normal transition completion:
+- reset pusher posture to:
+  `{ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS }`
+- Counter user remains stable.
+
+Then:
+- Counter user can act on the next tick
+- pusher remains in existing ~0.5 s Kuzushi
+- existing Counter -> Grip / Morozashi opportunity remains.
+
+Failed Counter:
+- unchanged
+- no CounterTransition.
+
+---
+
+# Engagement / Actions
+
+CounterTransition only begins while FREE.
+
+During transition:
+- engagement stays FREE
+- both actions remain idle
+- no Grip attach
+- no Release
+- no Drive
+- no new Push/Counter.
+
+Completion:
+- engagement remains FREE.
+
+Do not combine with grapple state.
+
+---
+
+# Current COUNTER_OVERSHOOT_SPEED
+
+The successful-transition path supersedes the current pusher overshoot impulse for valid CounterTransition cases.
+
+Remove or retire `COUNTER_OVERSHOOT_SPEED` if no longer used.
+
+Update tests that currently depend on the old overshoot velocity.
+
+Do not leave dead gameplay tuning constants.
+
+---
+
+# Presentation
+
+The current rigid Product WrestlerView already renders:
+
+- canonical position
+- canonical facing.
+
+Therefore no Phaser movement tween should be necessary.
+
+Do not add:
+- scene-owned transition position
+- extra body offset
+- animation framework.
+
+Optional minimal presentation updates:
+- debug/phase text may display CounterTransition tier/role if useful.
+
+Do not change Product art in this Task.
+
+---
+
+# Tests — Heavy
+
+Verification Level:
+**Heavy + Browser/Runtime Smoke + User Play Test**
+
+Do not sample explicit boundary categories.
+
+## New CounterTransition focused tests
+
+Add a dedicated focused test file if useful.
+
+Must cover at least:
+
+### Entry / duration
+1. Success capture starts active CounterTransition
+2. Best capture starts active CounterTransition
+3. capture tick does not teleport Counter user
+4. `ticksRemaining` / duration is exactly 120 transition ticks
+5. same intent script reproduces identical transition path.
+
+### Input lock
+6. movement ignored for both participants
+7. Push press ignored/discarded
+8. Counter press ignored/discarded
+9. Grip press ignored/discarded
+10. Drive ignored
+11. held movement works on first post-transition tick
+12. old discrete press is not queued.
+
+### D1 / path
+13. pusher final stagger displacement = 1.0R for ordinary valid case
+14. Success final relative geometry = true side at combined distance
+15. Best final relative geometry = true rear at combined distance
+16. Counter user does not overlap/pass through pusher during transition
+17. Success both side preferences
+18. Best preferred wrap direction deterministic.
+
+### D3 momentum
+19. entry clears pre-existing self velocity
+20. entry clears pre-existing external velocity
+21. path movement is not affected by pre-entry momentum.
+
+### Velocity semantics
+22. pusher Snapshot external velocity matches per-tick displacement
+23. Counter user Snapshot self velocity matches per-tick displacement
+24. normal completion zeroes transition velocities.
+
+### Contact
+25. transition path not altered by ordinary contact correction
+26. pair separation remains valid every transition tick.
+
+### Ring-out / Tokudawara
+27. pusher can ring out mid-transition and loses immediately
+28. Counter user can ring out mid-transition and loses immediately
+29. both crossing same tick uses existing earliest-exit ordering
+30. effectively simultaneous crossing yields Rematch
+31. exact boundary remains IN
+32. Tokudawara cardinal extension respected during transition
+33. Tokudawara side-window path exit/re-entry uses existing first-exit semantics
+34. outcome freeze preserves deciding-tick transition state/position.
+
+### D2 Kuzushi
+35. pusher Kuzushi does not count down during transition
+36. completion resets full `KUZUSHI_TICKS`
+37. Counter user can start Grip after transition completion
+38. existing Counter -> Grip/Morozashi opportunity is preserved after completion.
+
+### Failed Counter
+39. failed Counter remains current Kuzushi-only behavior
+40. failed Counter does not create CounterTransition.
+
+### Null / invalid target
+41. preserve accepted current no-target fallback semantics or STOP if design conflict is discovered
+42. no NaN / overlap / invalid ring-out behavior in this case.
+
+### Snapshot
+43. `counterTransition` is deep-copied / isolated
+44. all exact top-level Snapshot-key assertions updated deliberately
+45. transition roles/tier/ticks are correct in Snapshot.
+
+### Symmetry / roles
+46. mirror participant IDs / left-right setup gives symmetric semantics
+47. player/dummy ownership does not change gameplay result.
+
+---
+
+# Existing Regression Tests
+
+Update affected existing tests intentionally, including:
+
+- `BoutCounterPosition.test.ts`
+- `BoutCounter.test.ts`
+- `BoutGrip.test.ts`
+- `BoutOrientation.test.ts`
+- `BoutRingOut.test.ts`
+- `BoutTokudawara.test.ts`
+- `pushDummyController.test.ts`
+- Snapshot shape assertions elsewhere.
+
+Do not weaken existing unrelated assertions just to make tests pass.
+
+Preserve:
+- Counter tier boundary
+- Success side preference
+- Best rear preference
+- failed Counter semantics
+- fixed-step determinism
+- ring-out winner semantics
+- Tokudawara semantics.
+
+---
+
+# Project Verification
+
+Run:
+
+```
+pnpm test
+pnpm build
+git diff --check
+```
+
+Focused tests first.
+
+No required Python art tests unless a touched file unexpectedly requires them; this Task does not change art assets/tooling.
+
+---
+
+# Browser / Runtime Smoke
+
+Required if environment supports it.
+
+Verify:
+
+- no runtime console errors
+- pre-bout/Enter flow works
+- blue/red rigid sprites still load
+- Counter Success visibly moves to side rather than teleport
+- Counter Best visibly moves behind rather than teleport
+- pusher moves forward continuously
+- both remain uncontrollable during transition
+- after transition Counter user can act
+- pusher remains Kuzushi briefly
+- R restart works
+- debug root/facing remain aligned.
+
+If Browser Smoke cannot be run:
+report NOT RUN and do not claim visual/runtime PASS.
+
+---
+
+# User Play Test — REQUIRED
+
+This is a Game Feel / Action transition.
+
+Technical PASS is not Product acceptance.
+
+User should specifically reproduce:
+
+## Success
+- opponent Push with Up
+- Down Counter at Success timing
+- observe ~2 s side transition.
+
+Check:
+- no teleport
+- successful side moves naturally
 - pusher visibly staggers forward
-- successful side also moves naturally
-- base rigid sprite may be reused for movement
-- Counter attempt art handled separately.
+- controls are locked
+- final side position still feels like current accepted behavior.
 
-## Agent may recommend
+## Best
+- opponent Push with Up
+- Down Counter at Best timing
+- observe ~2 s rear transition.
 
-- state ownership shape
-- tick bookkeeping
-- path representation
-- contact policy
-- facing policy
-- velocity bookkeeping
-- Snapshot exposure.
+Check:
+- no teleport
+- wrap-behind motion is readable
+- pusher stagger is readable
+- final rear position remains correct
+- no awkward spin/overlap.
 
-## Must STOP for User decision if discovered
+## Edge cases
+- near dohyo edge
+- Tokudawara direction if practical
+- observe ring-out during transition.
 
-- changing Success/Best final-placement meaning
-- changing ring-out winner semantics
-- inventing a materially different final pusher displacement
-- changing Counter timing window/tier classification
-- changing failed Counter penalty semantics.
+## Post-transition
+- confirm Counter -> Grip / Morozashi opening still exists
+- judge whether extra 0.5 s Kuzushi is too long/short.
+
+## Visual note
+Current same rigid sprite remains intentional during this Task.
+Dedicated Counter attempt/whiff art is separate.
+
+---
+
+# Acceptance Criteria
+
+PASS technically only if:
+
+1. Simulation-owned pair CounterTransition exists
+2. Success/Best no longer teleport for valid transition cases
+3. duration = 120 fixed ticks
+4. D1 = 1.0R pusher stagger
+5. D2 = full Kuzushi after transition
+6. D3 = old momentum absorbed/cleared
+7. D4 = final side/rear relative to final pusher position
+8. both participants input-locked
+9. canonical positions move continuously
+10. no presentation-only duplicate position
+11. contact does not fight scripted path
+12. ordinary ring-out/Tokudawara applies to both every transition tick
+13. outcome freeze works
+14. Snapshot exposes minimal transition state
+15. failed Counter unchanged
+16. Counter timing/tier unchanged
+17. tests/build/diff-check pass
+18. Browser Smoke PASS or honestly NOT RUN
+19. User Play Test marked REQUIRED.
+
+If null-target boundary semantics cannot be preserved without a material gameplay change:
+STOP/BLOCKED rather than inventing behavior.
 
 ---
 
@@ -490,101 +815,106 @@ Clearly separate:
 
 Do NOT:
 
-- edit Production TypeScript gameplay/source
-- add the transition state
-- change Counter relocation
-- add animation/tween code
-- add Counter art
-- add Grip/Morozashi art
-- change current rigid wrestler assets
-- change Push/Counter timing values
-- change ring-out logic
-- change input bindings
-- change HUD.
-
-This is Investigation / Design only.
+- create Counter attempt/whiff sprites
+- generate new art
+- implement Grip/Morozashi art
+- implement Tsuri
+- change rigid wrestler assets
+- change Push/Counter input bindings
+- change Counter timing window
+- change tier boundary
+- change failed Counter penalty
+- change accepted Success/Best meaning
+- add Phaser tween gameplay movement
+- change ring-out winner semantics
+- change Tokudawara geometry
+- refactor unrelated Simulation systems.
 
 ---
 
-# Verification Level
+# Documentation
 
-Investigation / Design with focused source/test inspection.
+Update minimally after implementation:
 
-Required:
+- `docs/ARCHITECTURE.md`
+  - CounterTransition ownership/tick order
+- relevant gameplay/SPEC documentation only if current docs would materially lie after implementation.
 
-- map current Counter success tick order from source
-- identify all existing Counter tests that depend on instantaneous relocation
-- identify ring-out/contact tests that the transition could affect
-- identify any current invariant that would be broken by a 2-second pair state
-- identify exact Production files likely touched by the later implementation
-- run no Production-changing command.
+Do not broadly rewrite historical art docs.
 
-Running existing tests is optional unless needed to confirm a source interpretation.
+---
 
-If tests are run, report them honestly.
+# Implementation Evidence
+
+Completion Report must include:
+
+| Design Requirement | Implementation Evidence | Verified By |
+|---|---|---|
+
+At minimum:
+- pair-level canonical transition
+- 120 ticks
+- D1
+- D2
+- D3
+- D4
+- input lock
+- contact bypass
+- ring-out/Tokudawara
+- velocity bookkeeping
+- Snapshot exposure
+- failed Counter unchanged.
 
 ---
 
 # Completion Report
 
-Write only:
-
-`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
-
-Use the Investigation-only Report Commit Exception in `AGENTS.md` if applicable.
-
-Required sections:
+Include:
 
 - Result
 - Preflight
-- Current Counter Pipeline
-- Current Instant-Relocation Evidence
-- Affected State / Tests
-- Candidate Designs
-- Recommended Design
-- Recommended State Shape
-- Entry / Tick / Completion Semantics
-- Success vs Best
-- Input Lock Semantics
-- Movement / Velocity Semantics
-- Contact Semantics
-- Ring-out / Tokudawara Semantics
-- Facing Semantics
-- Kuzushi Interaction
-- Snapshot / Presentation
-- Boundary Cases
-- User Decisions Preserved
-- User Decisions Still Needed
-- Expected Implementation Files
-- Verification
+- Current Source delta
+- State shape
+- Entry semantics
+- Transition tick order
+- Completion semantics
+- Success / Best path
+- null-target behavior
+- D1–D4 evidence
+- Input lock evidence
+- Contact evidence
+- Ring-out/Tokudawara evidence
+- Facing evidence
+- Velocity evidence
+- Kuzushi / Morozashi follow-up evidence
+- Snapshot/API changes
+- Changed Files
+- Tests
+- Build
+- Browser/Runtime Smoke
+- User Play Test Required
+- Implementation Evidence
 - Design Deviations
 - Unexpected Scope
 - Git delivery.
 
 ---
 
-# Acceptance Criteria
+# Design Deviations
 
-PASS if the Investigation produces a design that:
+Required.
 
-1. preserves Success side / Best rear final semantics
-2. owns the ~2-second no-input interval explicitly
-3. avoids duplicate canonical positions
-4. defines both participants' movement ownership
-5. defines input suppression
-6. defines contact behavior
-7. defines ring-out/Tokudawara behavior
-8. defines facing
-9. defines velocity bookkeeping
-10. defines Kuzushi interaction
-11. remains deterministic/fixed-step
-12. is narrow enough for a focused implementation Task
-13. clearly identifies any unresolved User decision instead of inventing it.
+If none:
 
-If a material design choice cannot be resolved without User judgment:
-Result may be `BLOCKED` with a concrete decision request.
+`Design Deviations: NONE`
 
-Do NOT implement a fix.
+STOP before semantic deviation if implementation would require:
+- changing D1–D4
+- changing Success/Best result meaning
+- changing ring-out winner rules
+- Counter-user ring-out immunity
+- new failed-Counter semantics
+- Phaser-owned gameplay movement.
 
 ---
 
@@ -592,488 +922,32 @@ Do NOT implement a fix.
 
 Follow `AGENTS.md`.
 
-Because this is Investigation / Design only:
+Expected Task-owned files may include:
 
-- Production/source files must remain unchanged
-- only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` may be committed/pushed under the Investigation-only Report Commit Exception
-- do not edit `CURRENT_TASK.md`
-- do not update Product SPEC yet
-- push to `origin/develop`
-- do not modify `main`.
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- focused CounterTransition tests
+- affected Counter/Grip/Orientation/RingOut/Tokudawara tests
+- `src/game/input/pushDummyController.ts` + test
+- optional minimal debug presentation wiring
+- `docs/ARCHITECTURE.md`
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
 
-Suggested report-only commit:
+Do not stage unrelated files.
 
-`docs(agent): investigate counter transition`
+Suggested commit:
+
+`feat: animate counter resolution in simulation`
+
+Push `origin/develop`.
+Do not modify `main`.
 
 # Final Instruction
 
-Investigate and design only.
+Implement only the accepted Simulation-owned Counter Success/Best transition.
 
-Do NOT implement the 2-second Counter transition.
+Do NOT add Counter art or Grip art.
 
-After report/commit/push:
+After commit/push/report:
 
-「ACTION-04A3-COUNTER-TRANSITION-INVESTIGATION が完了し、ChatGPT Design Review待ちです」
-
-
-# Final ChatGPT Design Review
-
-Overall Result: INVESTIGATION PASS / DESIGN CONDITIONALLY ACCEPTED / USER DECISIONS REQUIRED
-
-## Reviewed Delivery
-
-- Report-only commit:
-  `2ee911996c516808b4bf15443d449c2929256b76`
-- Agent-Start-Head:
-  `3f4adb0e1aa460fa063d187c2931c62d4c63b40e`
-- Diff contains only:
-  `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
-- No Production / source / test / SPEC change.
-
-Investigation-only Report Commit Exception was used correctly.
-
-## Current Source Reading
-
-PASS.
-
-The report correctly maps the current Counter-success pipeline.
-
-Important confirmed current facts:
-
-- Counter user = local variable `defender`
-- pusher/countered side = local variable `attacker`
-- Success / Best tier comes from the pusher's active Push timing
-- pusher enters Kuzushi
-- Counter user's action returns idle
-- current Counter user relocation is assigned directly in one tick
-- pusher receives forward external velocity
-- facing and ring-out are then resolved later in the same tick.
-
-The reported instant relocation is therefore a real canonical Simulation jump, not a Phaser artifact.
-
-## Candidate Design Review
-
-### Candidate A — pair-level Simulation-owned CounterTransition
-
-**ACCEPTED DIRECTION**
-
-This best matches the User requirement:
-
-- both participants move through the exchange
-- both participants are input-locked for about 2 s
-- movement is deterministic/fixed-step
-- canonical positions remain the single source of truth
-- Phaser only renders Snapshot position/facing
-- future Counter art can read tier / role / progress.
-
-### Candidate B — per-participant duplicated transition states
-
-Not preferred.
-
-The motion is a pair relationship and synchronizing two independent participant states adds unnecessary split ownership.
-
-### Candidate C — presentation-only tween
-
-REJECTED.
-
-It would create:
-- canonical gameplay position at the resolved location
-- a second visible presentation position still moving toward it.
-
-That conflicts with:
-- contact
-- ring-out
-- input lock
-- state ownership.
-
-Do Not Reopen unless architecture requirements change.
-
-## Recommended Pair State
-
-The reported conceptual shape is acceptable as the basis for implementation:
-
-- tier
-- counterUserId
-- pusherId
-- deterministic tick progress
-- fixed entry geometry / path data.
-
-Top-level Snapshot exposure is also reasonable because:
-- debug/presentation may need role/tier/progress
-- future Counter art can read it
-- the relationship is pair-level like engagement.
-
-Keep path internals private unless runtime actually needs them.
-
-## Duration
-
-Accept as provisional implementation baseline:
-
-`COUNTER_TRANSITION_TICKS = 120`
-
-at 60 Hz = approximately 2.0 s.
-
-This is a User-requested approximate duration, not final Game Feel tuning.
-
-User Play Test remains the final gate.
-
-## Input Lock
-
-The recommended semantics are accepted:
-
-During transition:
-- movement ignored
-- Push edge ignored / not queued
-- Counter edge ignored / not queued
-- Grip edge ignored / not queued
-- Drive irrelevant / ignored while FREE
-- dummy harness waits.
-
-On the first tick after completion:
-- held movement may act normally
-- only newly pressed discrete action edges count.
-
-This matches the existing no-queue principle.
-
-## Canonical Path Ownership
-
-Accepted principle:
-
-During active CounterTransition:
-- the transition path is the sole owner of canonical participant position for the pair
-- ordinary velocity integration does not also move them
-- ordinary pair contact correction does not alter the scripted pair path.
-
-This avoids two simultaneous position solvers.
-
-## Contact Policy
-
-Accepted direction:
-
-Skip ordinary contact resolution between the two participants during the transition.
-
-The transition path itself must maintain a valid/non-overlapping pair relationship.
-
-There are only two participants, so no third-party contact problem exists.
-
-## Ring-out / Tokudawara — CORRECTION
-
-The Agent report recommended preventing the Counter user from leaving the ring by validating the entire path conservatively before accepting a candidate.
-
-Do NOT adopt that as the default.
-
-Reason:
-- current accepted ring-out is based on actual canonical center movement
-- both participants should remain subject to the same ring-out rule while they move
-- path-wide immunity would introduce a new Counter-specific protection
-- it would also eliminate possible simultaneous/earlier-crossing cases by construction.
-
-### Corrected recommendation
-
-During every transition tick:
-
-- update both canonical positions
-- call the existing `resolveArenaRingOut` on previous -> current for both participants
-- use existing Tokudawara-aware `firstArenaExitFraction`
-- exact boundary remains IN
-- first exit loses
-- effectively simultaneous exits remain Rematch.
-
-If either participant exits during the 2-second exchange:
-- outcome resolves immediately
-- existing post-outcome freeze semantics stop further transition progress.
-
-Do not grant the Counter user ring-out immunity.
-
-### Candidate target validity
-
-Preserve the current final-target candidate rule as much as possible.
-
-Do not silently broaden or narrow candidate eligibility based on the entire future path.
-
-The designed curved movement path itself may create new boundary interactions compared with the current instantaneous straight resolved-state interpolation; that is an unavoidable consequence of making the movement canonical over time and must be covered by focused tests + User Play Test.
-
-## Facing
-
-The Agent recommendation is accepted as the initial implementation direction:
-
-- pusher:
-  keeps the caught Push-facing while in Kuzushi/transition
-- Counter user:
-  continues to face the pusher as canonical positions move.
-
-This naturally produces continuous Counter-user rotation during a side/rear move.
-
-Known Deferred risk:
-when pusher Kuzushi later ends, current FREE facing can snap toward the opponent, potentially by a large angle after Best.
-
-Do not broaden the next implementation Task to fix that unless required as a prerequisite.
-
-## Velocity Bookkeeping
-
-Accepted principle:
-
-Snapshot velocity must agree with actual canonical transition displacement.
-
-During transition:
-- counter user's transition motion may be represented as self velocity
-- pusher's forced stagger motion may be represented as external velocity
-- those values are reporting/state semantics; positions are still path-owned, not re-integrated from those velocities.
-
-Completion should not leave unintended residual transition velocity.
-
-## Kuzushi
-
-The transition lock must NOT rely on Kuzushi alone because:
-- Counter user is not Kuzushi
-- both participants must be locked.
-
-Pair transition owns the pair lock.
-
-Failed Counter -> Kuzushi remains separate and unchanged.
-
-## Critical Design Decisions Still Required
-
-The report correctly identified D1/D2 and also contains two additional material choices that must be explicit before implementation.
-
-### D1 — Pusher stagger distance
-
-Current pusher post-Counter displacement varies substantially with existing momentum and stops quickly.
-
-User wants a readable ~2-second forward stagger.
-
-A new canonical distance materially affects:
-- ring-out likelihood
-- final world positions.
-
-Agent recommendation:
-**fixed 1.0R = 0.35 m as a provisional first tuning value**, same for Success and Best.
-
-This is NOT accepted until User confirms.
-
-### D2 — Post-transition Kuzushi / Morozashi opportunity
-
-Options:
-
-A. After the 2-second transition, give the pusher the existing full `KUZUSHI_TICKS` (~0.5 s) window.
-- preserves existing Counter -> Grip / Morozashi opportunity
-- pusher remains unable to act for ~0.5 s after pair transition
-- Counter user regains input and can exploit the opening.
-
-B. Kuzushi expires during/with the transition.
-- total lock closer to exactly 2 s
-- existing immediate Counter -> Grip / Morozashi opportunity effectively disappears.
-
-Agent recommendation:
-**A**, to preserve existing follow-up gameplay.
-
-Not accepted until User confirms.
-
-### D3 — Pre-existing momentum on transition entry
-
-The proposed pair path cannot safely coexist with ordinary pre-existing self/external momentum as a second position driver.
-
-Options:
-
-A. Clear both participants' existing self/external velocity on Counter-transition entry; transition path absorbs the exchange.
-B. Carry old momentum into the path/final state, requiring a more complex model.
-
-Agent recommendation:
-**A — clear/absorb prior momentum**.
-
-This changes current momentum carry behavior and requires User confirmation.
-
-### D4 — Meaning of final Success / Best position while the pusher also moves
-
-Two reasonable interpretations exist:
-
-A. At transition completion, Counter user is still exactly:
-- Success: at the pusher's **current/final side**
-- Best: at the pusher's **current/final rear**.
-
-This means the Counter user's absolute world endpoint moves forward together with the pusher.
-
-B. Counter user moves to the **current pre-transition world target** computed at the catch moment, while pusher separately staggers forward.
-The final relative geometry may no longer be exact side/rear after the pusher advances.
-
-Based on the User wording:
-- successful side moves to side/rear
-- countered side also moves forward through the same exchange
-
-Agent recommendation:
-**D4-A — preserve side/rear as the final relative geometry after both have moved.**
-
-This is a material clarification and requires User confirmation.
-
-## Path Shape
-
-Conditionally accepted once D1/D4 are resolved.
-
-The Agent's minimal path idea is suitable:
-
-- pusher moves forward along fixed caught Push direction
-- Counter user moves around pusher in a deterministic polar path
-- Success rotates relative angle toward ±90°
-- Best rotates relative angle toward 180°
-- smooth deterministic easing
-- no body intersection.
-
-Do not lock exact easing as immutable Game Feel.
-It is a provisional first implementation and User Play Test tuning surface.
-
-## No-valid-target Edge Case
-
-The report's proposed fallback:
-- 2-second lock
-- both participants do not move
-
-is NOT accepted yet.
-
-It changes current no-target behavior and is visually/gameplay-significant.
-
-Implementation Task must preserve existing semantics as far as possible or STOP with a focused decision if this edge case cannot be reconciled cleanly.
-
-Do not invent Counter immunity or a new fallback outcome.
-
-## Outcome / Freeze
-
-Accepted:
-
-If ring-out resolves during transition:
-- current tick outcome becomes authoritative
-- transition stops because subsequent `step()` calls already no-op after outcome
-- final frozen state remains the exact state at deciding tick.
-
-No post-outcome completion warp.
-
-## Snapshot / Presentation
-
-Accepted:
-
-Expose a small top-level pair transition state with:
-- active/none
-- tier
-- participant roles
-- ticksRemaining.
-
-Do not expose redundant path positions because participant canonical position/facing already contains what rendering needs.
-
-This also gives future dedicated Counter art a clean presentation signal.
-
-## Affected Tests / Files
-
-The report correctly identifies significant existing dependencies:
-- Counter position tests
-- Counter/Kuzushi tests
-- Counter -> Grip/Morozashi tests
-- orientation tests
-- ring-out/Tokudawara
-- dummy harness
-- Snapshot-shape assertions.
-
-A later implementation Task must update all explicit Snapshot top-level key assertions when `counterTransition` is added.
-
-Do not sample only one Counter scenario.
-
-## Investigation Verification
-
-PASS.
-
-- Current Source inspected
-- relevant tests inspected
-- baseline `pnpm test`: 262 PASS
-- scratch measurement performed without Production modification
-- report-only commit only.
-
-## Overall Design Result
-
-Architecture direction:
-**ACCEPTED**
-
-Implementation readiness:
-**BLOCKED ON USER DECISIONS D1–D4**
-
-No Production implementation should start before those decisions are recorded.
-
-## Next Task Constraint
-
-After D1–D4 are decided, create one focused Heavy implementation Task for:
-
-- Simulation-owned pair CounterTransition
-- deterministic Success/Best paths
-- pair input lock
-- canonical continuous positions
-- velocity/facing bookkeeping
-- ordinary ring-out every transition tick
-- existing outcome freeze
-- focused regression tests
-- runtime User Play Test.
-
-Do NOT combine:
-- dedicated Counter attempt sprite
-- Grip/Morozashi art
-- Tsuri
-with that movement/state implementation.
-
-
-# User Decisions — Counter Transition D1–D4
-
-The User explicitly accepted the following implementation decisions.
-
-## D1 — Pusher stagger distance
-
-Accepted:
-- provisional Counter-transition forward stagger distance:
-  **1.0R = 0.35 m**
-- same provisional base distance for Success and Best.
-
-This is a tuning baseline, not final Game Feel.
-User Play Test may tune it later.
-
-## D2 — Post-transition Kuzushi
-
-Accepted:
-- after the approximately 2-second CounterTransition completes,
-- the pusher receives the existing full Kuzushi window again:
-  **KUZUSHI_TICKS (~0.5 s)**.
-
-Purpose:
-- preserve the existing Counter -> Grip / Morozashi follow-up opportunity after control returns to the successful Counter side.
-
-Failed Counter -> Kuzushi remains unchanged.
-
-## D3 — Pre-existing momentum
-
-Accepted:
-- on CounterTransition entry,
-- absorb/clear both participants' existing self/external momentum to zero
-- the deterministic transition path becomes the sole owner of pair movement during the transition.
-
-Do not carry the previous Push momentum as a second movement source.
-
-## D4 — Final relative placement
-
-Accepted:
-- after the pusher has completed its forward stagger movement:
-  - Success ends with the Counter user at the pusher's **true side**
-  - Best ends with the Counter user at the pusher's **true rear/back**
-- preserve exact contact-distance relative geometry at transition completion.
-
-Therefore the Counter user's absolute world endpoint moves together with the pusher's final stagger endpoint.
-
-## Implementation Readiness
-
-With D1–D4 resolved, the CounterTransition design is ready for a focused Heavy implementation Task.
-
-Implementation constraints from the review remain:
-
-- Simulation-owned pair transition
-- ~120 fixed ticks (~2.0 s)
-- pair input lock
-- canonical continuous positions
-- no Phaser-only tween
-- ordinary ring-out / Tokudawara every transition tick for BOTH participants
-- no Counter-user ring-out immunity
-- no action-art work in the same Task
-- no Grip/Morozashi art in the same Task
-- dedicated Counter attempt/whiff art remains separate.
+「ACTION-04A4-COUNTER-TRANSITION-IMPLEMENTATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
