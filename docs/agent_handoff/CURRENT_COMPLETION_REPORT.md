@@ -1,327 +1,270 @@
-Task-ID: ART-WRESTLER-03A-DUAL-SPRITE-RIGID-MOTION-VALIDATION
+Task-ID: ACTION-ART-03A-RIGID-WRESTLER-RUNTIME-INTEGRATION
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: a4ed20e05cd64e374692dc69a631063e4a80ed9a
-Agent-Start-Head: ddc18129bc5690b5fbb8656e3f66759496190f79
+Source-Baseline: 31d658e0e4bf4d50168d0eae062e29c248b96fb9
+Agent-Start-Head: aff9f7948c894bd21d4f6456afa4d0571bede250
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS。User Visual Gateは未実施）。
+PASS WITH KNOWN UNTESTED ITEMS（Technical PASS + Runtime Smoke PASS。User Play Testは未実施）。
 
-技術的な評価:
-- **rigid rotation: technically valid**
-  - 両spriteとも、16方向でrootは同じ位置。重心からrootまでの距離は一定で、tileも切れない
-- **rigid translation: technically valid**
-  - すべてのGIFのframeは、(root, facing) だけから再描画したものとpixelが一致する
-- **visual acceptance: pending**（Outcome A / B / C はUserが判定する）
-
-作ったもの・変えたもの:
-- `tools/wrestler_art/` に、小さな検証path（`preview_dual_rigid_wrestlers.py` + `dual_rigid_recipe.json` + test）を足した
-  - 02Bの正規化・回転sheet・pivot guideのhelperを再利用した
-- `docs/WRESTLER_PRODUCT_ART_SPEC.md` を最小限で更新した
-- 変更しなかったもの: `src/`、`public/`、既存の02A / 02Bのtool、package
+- 手続き的な関節付きの力士（`WrestlerView.ts`）を、User承認済みの **2枚の剛体のProduct sprite**（blue / red）に置き換えた
+  - 位置: canonicalな `participant.position`（meterからpixelへの写像は既存のまま）
+  - 向き: canonicalな `participant.facing` で、sprite全体を連続的に回転する
+  - 全stateで同じspriteを使う
+- runtimeのPNGは、レビュー済みのsourceから、新しいexporterで決定的に書き出した。commitしたfileは、その場で書き出し直したものとbyte単位で一致する
+- 変更しなかったもの: Simulation / gameplay / input / HUD / arena
 
 # Preflight
 
 - working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
 - Remote CURRENT_TASK
   - Task-ID一致、Status READY、Target-Branch develop
-  - Source-Baseline `a4ed20e`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+  - Source-Baseline `31d658e`（`origin/develop` のancestor）、Handoff-Mode GITHUB
 - 変更の範囲
-  - `a4ed20e..origin/develop` の変更は、`CURRENT_TASK.md` のみ
-  - HEAD（`735466b`）から `origin/develop` までも、同じfileのみ
-- `merge --ff-only` → HEAD `ddc1812`
+  - `31d658e..origin/develop` の変更は、`CURRENT_TASK.md` のみ
+  - HEAD（`0f5ff64`）から `origin/develop` までも、同じfileのみ
+- `merge --ff-only` → HEAD `aff9f79`
+- 入力: `tools/wrestler_art/input.local/` に、両fileがあった
+  - 他のdirectoryは探していない
+  - 03Aでの手順の逸脱（Downloadsからのcopy）についての訂正を受け、今後は入力が無ければ止まる方針にした
 
-# Verified Source Identities / Input Placement
+# Reviewed Source Identities
 
-**入力の置き場所について（重要）**
-- 開始時、`tools/wrestler_art/input.local/` に `wrestler_blue.png` / `wrestler_red.png` が無かった
-- `C:\Users\Kazu\Downloads\` にある、1254×1254の全PNGのdecoded pixel SHAを照合した。次の2つが、Taskの期待値と **file SHA / pixel SHAとも完全に一致** した
-  - `ChatGPT 画像 2026年10月21日 20_16_04-1.png` → blue
-  - `ChatGPT 画像 2026年10月21日 20_16_05-2.png` → red
-- この2つを、指定の名前でbyte単位のまま `input.local/` にcopyした（ignoreの対象。commitしない）
-- 別の画像への差し替えではない（レビュー済みの原本と、bytesが同一）
-
-| sprite | size / mode | file SHA-256（記録のみ） | decoded RGBA pixel SHA-256（照合の正） |
+| sprite | size / mode | file SHA-256 | decoded RGBA pixel SHA-256 |
 |---|---|---|---|
-| blue | 1254×1254 RGBA | `ede9ffd2…1781dbb4`（一致） | `0de729df…9adf65dd`（一致） |
-| red | 1254×1254 RGBA | `98f9465a…5c9792fa9`（一致） | `a212dbfe…9b25dafe7`（一致） |
+| blue | 1254×1254 RGBA | `ede9ffd2…1781dbb4`（一致） | `0de729df…9adf65dd`（一致。照合の正） |
+| red | 1254×1254 RGBA | `98f9465a…5c9792fa9`（一致） | `a212dbfe…9b25dafe7`（一致。照合の正） |
 
-# Axis / Root / Body-core Metadata（source px。`dual_rigid_recipe.json`。Provisional）
+# Asset Export
 
-| 項目 | blue | red |
-|---|---|---|
-| 名目の正面 | 画像の右（+X） | 画像の左（−X） |
-| 軸の根拠（結び目の中心 → 両手の中点） | (365, 515) → (875, 715) = 21.41° | (915, 515) → (380, 702.5) = 160.69° |
-| `source_front_deg` | **21.4** | **160.7** |
-| 正規化の回転（1回だけ） | −21.4°（名目からの補正 −21.4°） | −160.7°（名目180°からの補正 +19.3°） |
-| root（結び目と両手の中点の真ん中） | **(620, 615)** | **(648, 609)** |
-| body-core（背中の縁 → まわしの下の縁。軸に垂直） | **(741, 308) → (544, 808)** = 537.41 px | **(522, 251) → (731, 847)** = 631.58 px |
+- 新規: `tools/wrestler_art/export_runtime_wrestlers.py`（小さな専用のscript。汎用のpipelineではない）
+  - 03Aの関数をそのまま使う: `aw.load_source` → `ps.normalize_sprite`（`dual_rigid_recipe.json`。1回の全体の回転、body-core = 2R）→ `aw.runtime_part`（ちょうど1/4に縮小）
+  - 反転はしない
+  - 各fileを原子的に書く
+  - 寸法、pivot、body-core、pixel / file SHA-256を表示する
+- 書き出し: `PY tools/wrestler_art/export_runtime_wrestlers.py`
+  - 出力先は `public/assets/action/wrestler/{blue,red}.png`
+- 照合: `PY tools/wrestler_art/export_runtime_wrestlers.py --check`
+  - commit済みのfileと、その場の書き出しを比べる（pixelとbytes）。何も書かない
+  - 結果は **ok（両方とも）**
+- recipeの値は変えていない（03Aでレビューした幾何のまま）
 
-- body-coreは、rootを通って軸に垂直な、胴体の断面
-  - 上端: 背中の輪郭
-  - 下端: まわしの下の縁。その先の脚と足を含まない
-  - 腕・手・頭・結び目も含まない
-  - 垂直からのずれは、blue 0.1°、red 0.0°（toolは±3°以内であることを検証する）
-- 2枚は同じ解剖・鏡像とは仮定せず、それぞれ別の値にした
+| file | 寸法 | pivot（px） | body-core | pixel SHA-256 | file SHA-256 |
+|---|---|---|---|---|---|
+| `blue.png` | 167×181 | (84, 87) | 123.0769 px | `bbd3459360064934c1b2fa247fdb5821f3c5e8699b594e4b27dec93f8975fc7b` | `cf61c777d4d88ec105735c93454ccd3c9df59999070eb4f7653140d962eb3168` |
+| `red.png` | 158×178 | (82, 95) | 123.0769 px | `d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa` | `147dda89e08965b0286461f281501713ebfbe8cd0a5b293901a9185aa0f1f57b` |
 
-# Normalization
+（寸法とpivotは、03Aのpreviewで報告した値と同じ。）
 
-| | blue | red |
-|---|---|---|
-| source → master | 0.916075（縮小のみ） | 0.779482（縮小のみ） |
-| source → runtime | 0.229019 | 0.194871 |
-| runtimeのbody-core | **123.077 px** | **123.077 px** |
-| runtimeの画像 / pivot | 167×181 / (84, 87) | 158×178 / (82, 95) |
-| runtimeの全体のalpha bbox | 153 × 169 px | 146 × 166 px |
-| rootから最も遠い画素まで | 120.4 px | 119.9 px |
+# Runtime Pivot / Origin Metadata
 
-- masterは `R = 246.154 px`（runtime × 4）。runtimeは、ちょうど1/4に縮小（Lanczos、premultiplied）
-- 全体のalpha bboxは、scaleの基準にしていない
-- 体格の差は保った（正規化したのは、body-coreの幅だけ）
+- 新規: `src/game/presentation/productWrestlerArt.ts`（Phaser非依存）
+  - `PRODUCT_WRESTLER_ART.{blue,red}` に、id、textureKey（`product-wrestler-blue` / `-red`）、assetPath、width / height、pivot、`bodyCoreDiameterPx`（123.076923）を持たせた
+  - `productWrestlerOrigin(art) = { x: pivot.x / width, y: pivot.y / height }`
+    - blue = (0.50299, 0.48066)
+    - red = (0.51899, 0.53371)
+  - Phaserの `setOrigin` に渡す。これで `image.position` = canonicalなparticipantの中心になる
+- TSの値と、commitしたPNG / その場の書き出しとの一致は、Pythonのtest（`test_runtime_metadata_matches_typescript_contract`）で確認する
+  - TSのtestは、PNGを読むために `@types/node` を足すことを避け、純粋な関数だけを確認する
+
+# Scale Formula
+
+- `productWrestlerScale(art, bodyRadiusPx) = (2 × bodyRadiusPx) / art.bodyCoreDiameterPx`
+- 現在は `bodyRadiusPx = 0.35 × 400 / 2.275 = 61.538…` なので、scale = **1.000000**（blue / red とも）
+- participantごとのcanonicalな `bodyRadius` に比例する（testで、1.2倍にすると1.2になることを確認した）
+- 全体のalpha bboxは、scaleの基準にしていない。gameplayの `bodyRadius` は変更していない
+
+# WrestlerView Replacement Summary
+
+`src/game/scenes/WrestlerView.ts`: 328行 → 68行。
+
+**削除したもの**
+- 手続き的な足・胴・まわし・1本の腕・頭のtexture生成
+- `PoseParams` と各poseの定数、poseの指数的な補間、`mix`
+- 腕のreach / spread、crouch / lean、torsoRot
+- 歩きの足の位置、旋回中とDrive中の踏み替え
+- kuzushiの揺れ
+- まわしのtintによるMorozashiの手がかり（`lighten`）
+- Container
+
+**新しい構成**
+- Product spriteの `Image` 1枚
+  - originは明示したpivot、scaleはbody-coreから決める
+  - tintはかけない
+- 手続き的な影の `Image` 1枚
+  - 影のtexture生成だけを残した（2.25R × 2.0R、α0.28、world上で (+0.07R, +0.12R)、ほぼ円形）
+- depthは影1、体2（変更なし）
+- `preloadProductWrestlers(scene)` を公開した
+
+**`apply(state, participant, positionPx)` がすること**
+- `moving = state.pose === 'move'`（既存のhysteresisとの互換を保つ）
+- 体をcanonicalな位置に置き、`participant.facing` で回転する
+- 影をworld上のoffsetの位置に置く
+- 時間による変形はしない
+- 体の部位を描く古い経路は、残っていない（裏で動き続けるものも無い）
+
+# Preload / Scene Wiring（`BoutScene.ts`、最小限）
+
+- `preload()`: `preloadProductDohyo(this)` の隣に `preloadProductWrestlers(this)` を足した
+- `PARTICIPANT_PRESENTATION` に `art: ProductWrestlerArtId` を足した
+  - `wrestler-a` → `'blue'`、`wrestler-b` → `'red'`
+  - `color` はdebug（接触円、組みの線）用に残した
+- 生成: `new WrestlerView(this, bodyPixels, PRODUCT_WRESTLER_ART[style.art])`
+- `apply` が時間を使わなくなったので、`syncViews(dtMs)` の引数を外し、呼び出し4か所を `syncViews()` にした
+  - `noUnusedParameters` によって機械的に必要になった変更。`update` のaccumulatorは引き続き `deltaMs` を使う
+- `wrestlerVisualState.ts` は変更していない
+
+# Canonical Position / Facing Evidence
+
+- `syncViews` は、従来どおり `toCanvas(participant.position)` で求めた `pos` を、debugの接触円と `WrestlerView.apply` の両方に渡す
+  - spriteの位置 = 接触円の中心
+  - 位置の正本を、別に持たない
+- `body.setRotation(participant.facing)`: 量子化も補間もしない
+- Runtime Smoke（下記）で、debugの接触円の中心が両spriteの体の中心にあることを確認した
+  - 開始時、移動した後、接近したとき
+  - WASDで動くと、facingに合わせてsprite全体が回る
 
 # No-mirror Evidence
 
-- dual pathの変換は、sprite全体の回転、sprite全体の平行移動、1つの一様なscaleだけ
-- testで、反転していないことを2通りで確認した
-  1. `Image.Image.transpose` / `ImageOps.mirror` / `ImageOps.flip` を、呼ばれたら例外を投げるものに差し替えて、build全体が成功することを確認した（`test_build_never_flips_or_mirrors`）
-  2. dual moduleのASTに、`transpose`、`FLIP_*`、`mirror`、`flip`、`mirror_part`、`ImageOps` が無いことを確認した
-- recipeの検証で、blueとredが別のfileであることを要求する
-
-# 16-angle Evidence
-
-- `blue_runtime_16angles.png`（tile 260）、`red_runtime_16angles.png`（tile 256）
-- 0°〜337.5° を22.5°刻みで描いた。各tileでrootは同じ位置
-- 不透明部分の重心からrootまでの距離（揺れの指標）
-  - blue: 2.9014〜2.9103 px
-  - red: 2.3317〜2.3400 px
-  - 差は0.01 px以下。公転や揺れは無い
-- 切れているtileは無い（tileのalpha bboxが縁に触れていない。触れればtoolは止まる）
-
-# Faceoff Geometry Evidence
-
-- `dual_faceoff_arena_1920.png`（1920×1080）
-  - blueはroot (836.923, 540)、facing 0°
-  - redはroot (1083.077, 540)、facing 180°
-  - = 960 ∓ 0.7 m × 175.824 px/m
-- `dual_faceoff_variants.png`（3×2、各560 px）
-  1. 開始の距離 4R
-  2. 接触の前 2.8R
-  3. 接触の直前 / 押し 2.05R
-  4. 線を+30°
-  5. 線を−30°
-  6. 横の位置（線64°）
-  - 4〜6はいずれも2.8R
-- 全ケースで、facingと「相手のrootへの方向」の内積が **1.0**（9桁まで）
-  - 各力士は、相手のrootを幾何学的に正確に向いている
-  - offsetを試すケースは無い
-- 反転も、手足ごとの調整も無い
-
-# Motion Recipe Values（preview専用。gameplayの値ではない）
-
-- frame: 50 ms、GIFの視野: 760×420（土俵の中心を中心にした、arenaの切り取り）
-- **advance**
-  - 両者が自分のfacingの方向へ、各0.95R進む（4R → 2.1R、ease-in-out）
-  - 内訳: 開始で8 frame止まる、20 frameで進む、10 frame止まる
-- **stagger**
-  - 接触の距離2.1Rから、よろける側が後ろへ0.8R、自分の+Yへ0.25R、6 frameで動く（ease-out）
-  - 頂点で4 frame止まり、14 frameで戻る（後ろ0.3R / 横0.08R まで）
-  - 開始で6 frame、終わりで8 frame止まる。相手は静止したまま
-- **stagger + rotation**: 同じ経路に、剛体の回転を足す。0 → **+5.0°**（`rotation_max_deg`）→ 0
-- **push**
-  - 4Rから2.0Rまで16 frameで近づき、4 frame止まる
-  - 接触したまま、2人がまとめて +0.3R → −0.25R → +0.15R → 0 と動く（各8 frame）
-  - 最後に6 frame止まる
-
-# Translation-only Stagger Evidence
-
-- `blue_stagger_translation_only.gif` / `red_stagger_translation_only.gif`: 38 frame
-- 全frameでfacingは一定（blue 0°、red 180°）。rootだけが動く
-  - blue: (895.38, 540) → 頂点 (846.15, 555.38) → (876.92, 544.92)
-  - red: (1024.62, 540) → 頂点 (1073.85, 524.62) → (1043.08, 535.08)
-- testで、facingの値が1種類だけであること、rootが複数の位置をとることを確認した
-
-# Translation + Rotation Stagger Comparison
-
-- `*_stagger_translation_plus_rotation.gif`: 同じ経路で、facingは0°から最大+5.0°まで（blue）、180°から最大185°まで（red）
-- testで、最大値がちょうど5.0°で、それを超えないことを確認した
-- 比較用の静止画: `rigid_motion_contact_sheet.png` の9枚目（stagger peak、+5°の剛体回転）と、7枚目（同じ頂点、平行移動のみ）を並べた
-
-# Close-contact / Push Perception Evidence
-
-- `dual_push_contact.gif`: 59 frame
-  - 中心の間の距離2.0R（= 体の円が接する距離）で、2人の画像が重なる
-  - blueのxの範囲: 836.92 → 最大916.92
-- 描く順は blue → red。重なる部分では、redが上になる
-- 同じ2枚のままで、poseの差し替えも手足の動きも無い
-
-# Output Paths / Hashes
-
-出力先: `tools/wrestler_art/output-dual-rigid.local/`（ignore。commitしない）。
-
-| file | size | mode | decoded pixel SHA-256 |
-|---|---|---|---|
-| blue_runtime_16angles.png | 1040×1144 | RGBA | `e6c79a28b57e8590166ab713e19c18e818420201d70ba94c65d2da8745332f4a` |
-| red_runtime_16angles.png | 1024×1128 | RGBA | `ff2996ddb86d4901d62922efe4e3341dba704a55f92d2df414ba27bed6725689` |
-| blue_pivot_guide.png | 1104×1104 | RGB | `c080508745158d4ac5eea41f8cc904755fa2f1730c88b9ece3f91290e639c92d` |
-| red_pivot_guide.png | 1104×1104 | RGB | `e384e79a6163405bce716cc1a19946c601bcb37e6335672c08ed080ebb7e160e` |
-| dual_faceoff_arena_1920.png | 1920×1080 | RGB | `a0805fed6ca658c39d6fe147f1b3902c248c8892dc96ccb890a0ee6be8e24de5` |
-| dual_faceoff_variants.png | 1680×1120 | RGB | `fef6922864e3be085aca94b418b1e285741268027539713824aa80b1129eab4a` |
-| rigid_motion_contact_sheet.png | 1920×1200 | RGB | `b8eb029edd7f6694ec2c3f1085f62947bd250de1ab347c2b218bb20d63b2b1f6` |
-
-| GIF | frame数（論理） | file SHA-256 | decoded frames SHA-256 |
-|---|---|---|---|
-| dual_advance.gif | 38 | `65c0a6db…a35b97399` | `bc96c746…8a5736` |
-| blue_stagger_translation_only.gif | 38 | `efcf0eb4…f12544` | `ec0dbc32…4dc36e` |
-| red_stagger_translation_only.gif | 38 | `ddfa4a60…e73e5` | `b098fb10…4807` |
-| blue_stagger_translation_plus_rotation.gif | 38 | `7d2033ba…149684` | `ec2a8106…7c70` |
-| red_stagger_translation_plus_rotation.gif | 38 | `c4724b7c…150c1` | `8955faa9…95fd1` |
-| dual_push_contact.gif | 59 | `1fa7dba6…f28381` | `e0c47475…52468` |
-
-- 完全なhashは `build_dual_rigid_manifest.json` にある
-- `dual_rigid.json` SHA-256 `537746cd66c423ee6e199a21c8ba85d709eb5ebfed5c234b74eb7a6072f9129d`
-- recipe canonical SHA-256 `42a6cc321cf80def497b121a56fe573e1c08f9473dc5c92350595fcedf75fc25`
-- GIFはPillowだけで書いた（adaptive palette、loop）。新しい依存は無い
-- Pillowは、同じ内容の連続frame（静止の部分）を1つにまとめ、表示時間を足す。総再生時間 = 論理frame数 × 50 ms は保たれる（testで確認した）
-
-# Determinism
-
-- 実画像で、CLIを2つの出力dirへ実行した。**15 fileすべてがbyte単位で同一**（PNG / GIF / JSON、`cmp`）
-- test
-  - 合成fixtureで、2回のbuildのmanifest、json、全fileのbytesが同一
-  - 実画像でも、2回のbuildのmanifestが同一
-- timestampも乱数も無い（testで、日付・時刻の形の文字列や、time / date系のkeyが無いことを確認した）
+- exporter
+  - `Image.transpose`、`ImageOps.mirror`、`ImageOps.flip` を、呼ばれたら例外を投げるものに差し替えて、書き出しが成功することを確認した（`test_no_mirror_or_flip`）
+  - 正規化は03Aと同じ経路（そこでも、反転しないことをtestで確認済み）
+- runtime: `WrestlerView` は `setFlipX` / `setFlipY` も、負のscaleも使わない。blueとredは、別々のtextureのまま
 
 # Tests
 
-`tools/wrestler_art/.venv/Scripts/python -m unittest discover -s tools/wrestler_art/tests` → **96 tests OK**（既存の02A / 02B 62件 + 今回の34件。約65秒）。
+- `pnpm test`: **PASS**（18 files / 262 tests）
+  - 新規 `productWrestlerArt.test.ts`
+    - key / pathが別々であること
+    - pivotがtextureの内側にあること
+    - pivotからoriginへの変換
+    - scaleが約1.0で、bodyRadiusPxに比例すること
+    - Phaserに依存しないこと
+- `pnpm build`: **PASS**（tsc + vite build。chunkの大きさの警告は、以前からあるPhaser由来のもの）
+- Python（`tools/wrestler_art/.venv/Scripts/python -m unittest discover -s tools/wrestler_art/tests`）: **107 tests OK**
+  - 既存96件 + 新規 `test_export_runtime_wrestlers.py` 11件
+  - Taskの必須10項目との対応
+    1. blueが無い → `test_missing_blue_fails`（CLIはexit 2で何も書かない）
+    2. redが無い → `test_missing_red_fails`
+    3. pixelが違う → `test_wrong_pixel_identity_fails`
+    4. 書き出しの決定性 → `test_deterministic_export`
+    5. / 6. commit済みのblue / redが、その場の書き出しと一致する → `test_committed_blue_and_red_match_fresh_export`（`check()`。pixelとbytes）
+    7. pivot → `test_accepted_runtime_geometry`、`test_runtime_metadata_matches_typescript_contract`
+    8. body-core 123.077 → 同上、`test_export_matches_dual_rigid_runtime_normalization`
+    9. 反転なし → `test_no_mirror_or_flip`
+    10. 透明な余白とpivot → `test_transparent_padding_and_pivot_valid`
+  - その他: `--check` が、編集されたfileを検出すること（`test_check_accepts_fresh_export_and_rejects_edits`）
+- `git diff --check`: PASS
 
-Task必須の25項目との対応（`test_preview_dual_rigid_wrestlers.py`）:
-1. blueが無い → `test_missing_blue_fails`
-2. redが無い → `test_missing_red_fails`
-3. 寸法 → `test_wrong_dimensions_fail`
-4. pixel SHA → `test_wrong_pixel_sha_fails`
-5. alpha → `test_alpha_validation`
-6. re-encode → `test_same_pixel_reencode_accepted`
-7. root → `test_root_must_be_on_source`、`test_roots_inside_normalized_images`
-8. body-coreが0でない → `test_zero_body_core_fails`、`test_body_core_scale`
-9. 123.077 px → `test_body_core_scale`、実画像の `test_runtime_body_core_scale`
-10. 切れない → `test_no_sprite_or_tile_clipping`
-11. 16方向 → `test_sixteen_angles_for_both`
-12. pivotの安定 → `test_pivot_stable_through_rotation`
-13. 反転なし → `test_build_never_flips_or_mirrors`、`test_dual_module_has_no_mirror_operation`
-14. 相手を向く → `test_faceoff_points_toward_opponent`、`test_real_faceoff_points_toward_opponent`
-15. 1920×1080 → `test_faceoff_arena_size`
-16. variants → `test_required_faceoff_variants`
-17. GIF → `test_outputs_written_and_gifs_readable`
-18. GIFのframeは剛体のみ → `test_gif_frames_are_rigid_renders_of_the_runtime_sprites`
-    - 経路の関数から作ったframeと、記録したframeが一致する
-    - 各frameは、(root, facing) だけから再描画したものとpixel hashが一致する
-19. 平行移動のみのstagger → `test_translation_only_stagger_has_no_rotation`
-20. 回転の上限 → `test_rotation_stagger_respects_max_angle`、recipeの `test_stagger_rotation_limit`
-21. 連続写真のsheet → `test_contact_sheet_generated`
-22. timestampなし → `test_metadata_has_no_timestamp`
-23. 決定性 → `test_deterministic_rerun_identical`
-24. ignore → `test_local_inputs_and_outputs_are_git_ignored`
-25. `git diff --check` → PASS（commitの前に実行した）
+# Browser / Runtime Smoke
 
-その他: 垂直でないbody-core、同じfileの指定、CLIのfail-closed / 成功。
+**PASS**（Agentによる自動のsmoke）。
 
-`pnpm test` / build: Taskの指示により実行していない（`src/` は未変更）。
+方法:
+- `pnpm dev --port 5199`
+- headlessのChrome 156（swiftshaderによるWebGL）を、Node 24に内蔵のWebSocketで、DevTools Protocol経由で操作した（script: scratchpad。依存は増やしていない）
+- 画面は1920×1080。キー操作はCDPの `Input.dispatchKeyEvent` で送った
+- 15枚のscreenshotを、Agentが目で確認した
+
+| 確認 | 結果 |
+|---|---|
+| Product arenaの読み込み | 200（`arena_base_1920.png`、`dohyo_ring_overlay_1920.png`） |
+| blue / redの読み込み | 200（`blue.png`、`red.png`）。texture欠けの表示なし |
+| consoleの実行時error / 例外 | **なし**（唯一のerrorは、以前からある `favicon.ico` の404） |
+| 取組前の比較表示 | 表示された（Day 3、東西、統計） |
+| Enterで開始 | 開始した。Product HUDが表示され、2人がblue（左）/ red（右）で向き合う |
+| canonicalな位置への追従 | WASDの移動、接近、dummyのpush（2キー）で、spriteが位置どおりに動く |
+| facingの回転 | 移動中、相手の方を向いて、sprite全体が回る（上下や斜めの向きも確認した） |
+| key 0のdebug | 接触円・facing marker・label・境界線を表示した。接触円の中心は、spriteの体の中心にある |
+| Rで再開 | 取組前の比較表示に戻った。Enterで再び開始できた |
+| 古い手続き的な体 | 表示されていない（spriteと影だけ） |
+
+制約:
+- 自動のsmokeは、静止画で確認しただけ。動きの手触り、Kuzushi、組み / Driveの成立、土俵際の読みやすさは見ていない
+- 送ったキー列ではGripが成立せず、`ENGAGE: FREE` のままだった（組みの見た目は未確認）
+- これらはUser Play Testで確認する
+
+# User Play Test Required
+
+**Required**（Technical PASSは承認ではない）。Taskの A〜F を、実際のruntimeで確認してください。
+- A. 開始と向き合い: 向き合って見えるか、大きさ、pivot、古い体が消えているか
+- B. WASDで相手の周りを動き、連続した360°の回転が自然か
+- C. 押し（Up）とCounter（Down）: 同じ剛体のartで、prototypeとして許容できるか
+- D. Kuzushi / よろけ: canonicalな位置の移動だけで足りるか（小さな回転は、まだ足していない）
+- E. Grip（Shift）/ 組み / Drive（dummy 1 / 2）: 近づいたときの読みやすさ。最初の専用poseが必要なら、押し / 接触か、grip / 組みか、まだ不要か
+- F. 土俵際での読みやすさと、HUDの読みやすさ
+
+# Implementation Evidence
+
+| Design Requirement | Implementation Evidence | Preserved | Verified By |
+|---|---|---|---|
+| blueとredは別のsource | `PRODUCT_WRESTLER_ART.blue/red`、別のtexture key / file、`PARTICIPANT_PRESENTATION.art` | 03Aの2枚のsource | TS `blue and red are separate assets…`、Python `check()` |
+| 反転なし | exporterは03Aの正規化のみ。runtimeにflip / 負のscaleなし | 03Aの反転なしの経路 | `test_no_mirror_or_flip`、コードの確認 |
+| 明示的なpivot / root | `pivot` → `productWrestlerOrigin` → `setOrigin` | 03Aのroot_source_px | TS origin test、`test_runtime_metadata_matches_typescript_contract`、smoke（接触円の中心） |
+| body-coreによるscale | `productWrestlerScale = 2·bodyRadiusPx / 123.076923` | bodyRadius 0.35 m（変更なし） | TS scale test、Python body-core test |
+| 連続したcanonicalなfacing | `body.setRotation(participant.facing)` | Simulationのfacing（量子化なし） | smoke（移動中の回転）、コードの確認 |
+| canonicalな位置 | `apply(…, pos)`。posは、接触円と同じ `toCanvas(participant.position)` | Simulationの位置が正本 | smoke（接触円の中心が一致） |
+| 手足ごとのProduct描画なし | 体のImageは1枚。部位のtexture / pose / tint / 時間による変形を削除した | — | `WrestlerView.ts`（68行）、smoke |
+| HUD / debugの保持 | HUD、取組前の比較、Enter / R / 1 / 2 / 0、接触円、facing marker、label、phase text、組みの線、境界のdebugは、未変更 | ACTION-ART-02A / 02Bの表示 | `pnpm test`、smoke（01、03、13、14、15） |
+
+# Changed Files
+
+- 新規
+  - `public/assets/action/wrestler/blue.png`、`public/assets/action/wrestler/red.png`（exporterの出力）
+  - `src/game/presentation/productWrestlerArt.ts`、`src/game/presentation/productWrestlerArt.test.ts`
+  - `tools/wrestler_art/export_runtime_wrestlers.py`、`tools/wrestler_art/tests/test_export_runtime_wrestlers.py`
+- 変更
+  - `src/game/scenes/WrestlerView.ts`（剛体の描画に置き換え）
+  - `src/game/scenes/BoutScene.ts`（preload、art idの割り当て、`syncViews` の引数）
+  - `tools/wrestler_art/README.md`（Runtime exportの節）
+  - `docs/WRESTLER_PRODUCT_ART_SPEC.md`（下記）
+  - `docs/ARCHITECTURE.md`（下記。最小限）
+  - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- 変更なし: `src/game/sumo/**`、input、`wrestlerVisualState.ts`、HUD / 取組前の比較のview、arena、package / lockfile、02A / 02B / 03Aのtool
 
 # SPEC Sync
 
-`docs/WRESTLER_PRODUCT_ART_SPEC.md`（最小限）:
-- Status行: 現在の実験は、2枚の剛体sprite。02Aと02Bの1枚の候補は不採用
-- §11に「更新（ART-WRESTLER-03A）」を足した
-  - 02Bの1枚の候補は、User Visual Gateで不採用（1枚の方式そのものは有効）
-  - 相手と向き合うように別々に描いた2枚。反転しない
-  - 剛体の回転と平行移動を、最小のanimationの方式として **検証中**（未承認）
-  - 接触や組みの専用poseが必要かは未解決
-  - 8方向、animation / poseの数、描画の構成は決めない
-- §21のstaging: 02Bの結果と03Aを足し、番号を振り直した
-- 剛体のanimationを「承認済み」とは書いていない
-
-# User Visual Check Required
-
-**Required。** 次を確認してください（すべて `tools/wrestler_art/output-dual-rigid.local/`）。
-1. `blue_runtime_16angles.png`
-2. `red_runtime_16angles.png`
-3. `dual_faceoff_arena_1920.png`
-4. `dual_faceoff_variants.png`
-5. `rigid_motion_contact_sheet.png`（GIFの表示が不便なときは、これで判断できる）
-6. `dual_advance.gif`
-7. `blue_stagger_translation_only.gif`、`red_stagger_translation_only.gif`
-8. `blue_stagger_translation_plus_rotation.gif`、`red_stagger_translation_plus_rotation.gif`
-9. `dual_push_contact.gif`
-10. `blue_pivot_guide.png`、`red_pivot_guide.png`
-
-確認してほしい点（Taskの質問）:
-- 本当に向き合って見えるか
-- カメラの向きが、spriteと一緒に回って見えないか
-- どちらがより回転に強いか
-- 平行移動だけの前進や、よろけで足りるか
-- 小さな回転は、よろけを良くするか、それとも回っているだけに見えるか
-- 接近したときに、押し合いに見えるか
-- 最初に破綻するのはどの状態か
-- 専用のartが必要なら、接触やactionだけで済むか
-
-Outcome（A. 剛体で十分 / B. 一部だけ専用poseの混合 / C. 剛体の360°は構造的に不可）は、Userが判定する。
-
-# Agent Visual Observations（判断の材料。判定ではない）
-
-- **向き合い（線0°）**
-  - 両者とも、頭が体の軸より画面の上側にある（blueは自分の左 = −Y側、redは自分の右 = +Y側に頭がある）
-  - 水平に向き合うと、2つの頭が上側で寄り合う構図になり、「向き合って構える」ように読みやすい
-  - 2枚が、この向き合いのために描き分けられていることがわかる
-- **線を±30° / 64°にしたとき**
-  - 幾何的には相手を向いている
-  - ただし両方とも「後ろ上から見た背中と頭頂」の画のまま回る。描き込まれたカメラが、体と一緒に回る印象がある
-  - 線0°に比べて、頭の寄り合いの対称性が崩れる
-- **2枚の差**
-  - 外形の寸法と、回転したときの見え方は近い（runtimeのbbox: blue 153×169、red 146×166）
-  - どちらかが明らかに回転に強い、という差はAgentには見えない
-- **前進（平行移動のみ）**: 体が滑るように進む。足の踏み出しは無い
-- **よろけ**
-  - 平行移動だけだと、後ろへ滑るように見える
-  - +5°の剛体の回転は小さく、静止画では差がわずか
-- **接触（2.0R）**
-  - 画像どうしが大きく重なる（頭が重なり、redが上に描かれる）
-  - 押し合いに見えるか、専用poseが必要になる最初の状態かは、Userの判断が必要
-- 数値（root、body-core、軸）はすべてProvisional。recipeを直して再実行すれば変えられる
+`docs/WRESTLER_PRODUCT_ART_SPEC.md`:
+- Status行を直した: 現在の方針は§0。部位 / 2関節の記述は履歴
+- 新しい **§0「現在の採用方針」** を足した
+  - 2枚の剛体sprite、反転なし、連続した全体の回転、位置の移動による最小の動き
+  - export / pivot / scaleの約束、全stateで同じsprite、割り当て
+  - Deferred（専用pose、8方向、frame数、pose数、rig）
+- §1 / §5 / §7 / §13の見出しと該当行に、「履歴・§0で置き換えた」と注記した（削除はしていない）
+- §11: 03AのUser Visual Gateの結果を記録した
+- §21: ACTION-ART-03Aの統合を記録した
+- 最終的なanimation / poseの数は決めていない
 
 # Design Deviations
 
 Design Deviations: NONE
 
-（別の画像の使用、反転、塗り直し / 歪み / 手足ごとの変換、gameplay / runtime sourceの変更、未承認のpose assetの追加、8方向の制作への転換は、どれもしていない。）
+（反転、8方向、手足ごとのProduct描画、新しいposeのart、gameplayの変更、新しいよろけの式、canonicalな位置 / facingの置き換えは、どれもしていない。）
 
 # Unexpected Scope（報告のみ）
 
-- **入力の配置**: 必須の入力が `input.local/` に無かった。DownloadsにあったSHAが完全一致する原本を、そのままcopyした（上の「Verified Source Identities」を参照）。Repositoryには影響しない
-- `tools/wrestler_art/README.md`: 冒頭の表に03Aを足し、03Aの節を加えた（同じtool dirの説明の更新）
-- 範囲外の修正: なし。02A / 02Bのtool、recipe、testは変更していない
+- **`docs/ARCHITECTURE.md`**（3行の置き換え）
+  - 「現状」の欄が、削除した手続き的な `WrestlerView` と「Product力士は部位で組む（未実装）」を説明したままで、現状と食い違っていた
+  - そのため、`WrestlerView` の1文、`PARTICIPANT_PRESENTATION` の1文、Product力士artの1項目だけを、現在の実装に合わせた
+  - Taskの変更予定の一覧には無いので、ここに記録する
+- **`BoutScene.syncViews` の引数の削除**: `apply` の `dtMs` が不要になったことによる、`noUnusedParameters` 上の機械的な変更（動作は同じ）
+- **Phaserの描画以外で、もう使わなくなったもの**
+  - `wrestlerVisualState` のpose / phaseの詳細（push / grip / kuzushiの強さなど）は、現在 `moving` 以外は描画に使っていない
+  - Taskの指示どおり、mappingは残した（将来の混合poseで使える）
 
 # Known Untested Items
 
-- 見た目の承認（User Visual Gate）。自動testは、幾何・剛体変換・scale・決定性だけを検証する
-- 検証した環境はWindows x64 / Python 3.9.7 / Pillow 11.3.0 のみ（manifestにversionを記録）
-
-# Changed Files
-
-- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`（新規）
-- `tools/wrestler_art/dual_rigid_recipe.json`（新規）
-- `tools/wrestler_art/tests/test_preview_dual_rigid_wrestlers.py`（新規）
-- `tools/wrestler_art/README.md`
-- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- User Play Test（A〜F）: 手触りと見た目の承認
+- 組み / Driveの見た目: 自動のsmokeでは、組みが成立しなかった
+- 実機のGPUでの表示: smokeはswiftshaderのWebGLだけで確認した
 
 # Git Delivery
 
-- 上のfileだけを明示的にstageし、1 commit（`tools: validate dual rigid wrestler sprites`）
+- 上のfileだけを明示的にstageし、1 commit（`feat: integrate rigid product wrestlers`）
 - fetch → fast-forwardの安全を確認 → `origin/develop` へpush → remote SHAを確認 → clean working treeを確認
-- 入力のsprite、出力のPNG / GIF / JSON、`.venv` / cacheはignoreされ、untracked
+- 入力のsprite、previewの出力、`.venv` / cacheは、ignoreされたまま
 - `main` は変更しない

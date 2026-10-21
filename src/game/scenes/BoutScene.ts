@@ -9,10 +9,11 @@ import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.
 import { ENGLISH_BOUT_HUD_COPY } from '../presentation/boutHudCopy.ts'
 import { PROTOTYPE_HUD_FIXTURE, assertHudContextMatches, formatOutcome } from '../presentation/boutHudPresentation.ts'
 import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
+import { PRODUCT_WRESTLER_ART, type ProductWrestlerArtId } from '../presentation/productWrestlerArt.ts'
 import { createBoutHud } from './BoutHudView.ts'
 import { createPreBoutComparison } from './PreBoutComparisonView.ts'
 import { addProductDohyo, drawArenaBoundaryDebug, preloadProductDohyo } from './DohyoView.ts'
-import { WrestlerView } from './WrestlerView.ts'
+import { WrestlerView, preloadProductWrestlers } from './WrestlerView.ts'
 import type {
   BoutEngagement,
   BoutSetup,
@@ -39,20 +40,22 @@ const PROTOTYPE_SETUP: BoutSetup = {
   ],
 }
 
-// Outside the simulation: which controller drives which participant, its provisional wrestler color and
-// its debug label. Simulation participant ids are plain identities; roles live only here. Side / name /
-// rank / record / day come only from the HUD presentation context (PROTOTYPE_HUD_FIXTURE).
+// Outside the simulation: which controller drives which participant, its Product wrestler art, its debug
+// color and its debug label. Simulation participant ids are plain identities; roles live only here.
+// Side / name / rank / record / day come only from the HUD presentation context (PROTOTYPE_HUD_FIXTURE).
 type Controller = 'keyboard' | 'dummy'
 interface ParticipantPresentation {
   readonly id: ParticipantId
   readonly controller: Controller
+  // Authored rigid Product sprite (never tinted; the color is for debug overlays only).
+  readonly art: ProductWrestlerArtId
   readonly color: number
   // Debug-only role label (key 0), not a wrestler name.
   readonly label: string
 }
 const PARTICIPANT_PRESENTATION: readonly ParticipantPresentation[] = [
-  { id: 'wrestler-a', controller: 'keyboard', color: 0x2f6fdb, label: 'PLAYER' },
-  { id: 'wrestler-b', controller: 'dummy', color: 0xd93f3f, label: 'CPU' },
+  { id: 'wrestler-a', controller: 'keyboard', art: 'blue', color: 0x2f6fdb, label: 'PLAYER' },
+  { id: 'wrestler-b', controller: 'dummy', art: 'red', color: 0xd93f3f, label: 'CPU' },
 ]
 
 // Depths above the wrestler bodies (see WrestlerView): debug overlays, then texts.
@@ -150,6 +153,7 @@ export class BoutScene extends Phaser.Scene {
 
   preload(): void {
     preloadProductDohyo(this)
+    preloadProductWrestlers(this)
   }
 
   create(): void {
@@ -198,7 +202,7 @@ export class BoutScene extends Phaser.Scene {
     for (const style of PARTICIPANT_PRESENTATION) {
       const radius = snapshot.participants.find((q) => q.id === style.id)?.bodyRadius ?? 0
       const bodyPixels = radius * this.pixelsPerMeter
-      const wrestler = new WrestlerView(this, bodyPixels, style.color)
+      const wrestler = new WrestlerView(this, bodyPixels, PRODUCT_WRESTLER_ART[style.art])
       const body = this.add.circle(0, 0, bodyPixels).setStrokeStyle(2, style.color).setDepth(DEBUG_OVERLAY_DEPTH)
       const facingMarker = this.add.circle(0, 0, bodyPixels * 0.2, 0xffffff).setDepth(DEBUG_OVERLAY_DEPTH)
       const label = this.add
@@ -222,13 +226,13 @@ export class BoutScene extends Phaser.Scene {
     this.setDummyMode('stationary')
     this.setDebug(false)
     this.enterPreBout()
-    this.syncViews(0)
+    this.syncViews()
   }
 
   update(_time: number, deltaMs: number): void {
     // Pre-bout: the Simulation does not step and no time is accumulated for a later burst.
     if (this.phase === 'pre-bout') {
-      this.syncViews(deltaMs)
+      this.syncViews()
       return
     }
     const ticks = this.accumulator.advance(deltaMs)
@@ -244,7 +248,7 @@ export class BoutScene extends Phaser.Scene {
         )
       }
     }
-    this.syncViews(deltaMs)
+    this.syncViews()
   }
 
   private newAccumulator(): FixedStepAccumulator {
@@ -261,7 +265,7 @@ export class BoutScene extends Phaser.Scene {
     this.clearPressLatches()
     this.dummy.reset() // keeps the selected dummy mode
     this.enterPreBout()
-    this.syncViews(0)
+    this.syncViews()
   }
 
   private enterPreBout(): void {
@@ -352,7 +356,7 @@ export class BoutScene extends Phaser.Scene {
   }
 
   // One-way sync: simulation snapshot -> persistent GameObjects (wrestler visuals + debug overlays).
-  private syncViews(dtMs: number): void {
+  private syncViews(): void {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
     this.resultText?.setText(formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY))
@@ -386,7 +390,7 @@ export class BoutScene extends Phaser.Scene {
       const opponent = snapshot.participants.find((q) => q.id !== participant.id)
       if (opponent) {
         const visual = resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving)
-        view.wrestler.apply(visual, participant, pos, dtMs)
+        view.wrestler.apply(visual, participant, pos)
       }
       const label = phaseLabel(participant.action, participant.posture)
       view.phaseText.setText(label !== '' || !opponent ? label : grappleLabel(participant, opponent, snapshot.engagement))

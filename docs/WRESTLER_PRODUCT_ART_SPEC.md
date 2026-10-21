@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本（ACTION-ART-03、設計）。現在の制作の実験は **別々に描いた2枚の全身sprite（青・赤）を剛体として扱う方式**（ART-WRESTLER-03A、§11）。部位を組み立てる方式（02A）と、02Bの1枚の候補は、User Visual Gateで不採用になった。assetのcommitとPhaserへの統合はまだ無い。
+Status: Product力士artの正本。**現在の採用方針は §0**（別々に描いた2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合済み）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -13,7 +13,34 @@ Status: Product力士artの正本（ACTION-ART-03、設計）。現在の制作�
 
 ---
 
-## 1. Purpose / Accepted baseline
+## 0. 現在の採用方針（ART-WRESTLER-03A User Visual Gate → ACTION-ART-03A）
+
+**Accepted（現在のprototype）**
+- 別々に描いた **2枚の全身sprite**（青まわし・赤まわし）を、剛体として使う
+  - `public/assets/action/wrestler/blue.png` / `red.png`
+  - `tools/wrestler_art/export_runtime_wrestlers.py` が、レビュー済みのsourceから決定的に書き出す（手での加工はしない）
+- **反転（左右・上下）はしない**
+- sourceは、sprite全体を1回だけ回転して、local +X = 前にそろえる。明示したbody-coreを2Rに正規化する（`dual_rigid_recipe.json`）
+- runtimeでは、次のとおりに描く
+  - 位置: canonicalなparticipantの位置に、明示したpivotを置く
+  - 向き: canonicalな `participant.facing` で、sprite全体を連続的に回転する
+  - 表示scale: `2 × bodyRadiusPx / bodyCoreDiameterPx`（現在は約1.0）
+- idle・移動・push・counter・grip・組み・drive・崩し: すべて同じspriteを使う
+  - 動きは、canonicalな位置の移動（平行移動）だけ。これを最小の基準とする
+  - presentation専用のよろけのoffsetや回転は、足さない
+- 影は手続き的な、ほぼ円形のもの（world上で右下へずらす）
+- 割り当て（presentation）: `wrestler-a` → blue、`wrestler-b` → red
+
+**Deferred**
+- push・接触・grip・組みの専用pose: runtimeのUser Play Testで必要とわかったときだけ、後の混合poseのTaskで足す
+- 8方向のsprite、animationのframe数、poseの数、skeletal rig、手足ごとのanimation: 決めない・作らない
+
+**履歴**
+- 02Aの部位の組み立て: 不採用
+- 02Bの1枚の候補: 作り直し
+- 以下の§1〜§21にある部位の組み立て・2関節の腕・mawashiの色の別版などは、設計時点の案として残す
+
+## 1. Purpose / Accepted baseline（履歴: ACTION-ART-03時点。現在は§0）
 
 - 目的: 暫定の手続き的な力士（`WrestlerView.ts`）を、受理済みのarenaと同じ品質の、**部位ごとの画像を組み合わせた** Product力士に置き換えるための仕様と制作順を決める
 - Accepted
@@ -21,7 +48,7 @@ Status: Product力士artの正本（ACTION-ART-03、設計）。現在の制作�
   - 厳密な真上視点
   - 1920×1080 logical
   - R ≈ 61.5 px（直径約123 px）の表示scale
-  - 部位の画像を組み合わせる方式（part-based composition）
+  - 部位の画像を組み合わせる方式（part-based composition）→ **§0で置き換えた**（2枚の剛体sprite）
   - 制作の順序: 背景 → HUD → 力士の部位
 - 変えないもの: `bodyRadius`、meterからpixelへの写像、接触・Gripの範囲・Pushなどgameplayのすべて
 - 力士artはpresentationである。経路は次のとおりで、poseの判断・animationの時間・spriteやassetの状態をSimulationへ移さない
@@ -93,7 +120,7 @@ Product WrestlerView（Phaser。asset、pose、animation）
 
 新しいgameplayのactionは作らない。全stateを、**部位のtransformだけ**で表せる（§13）。
 
-## 5. 推奨する部位（Recommended）
+## 5. 推奨する部位（履歴。現在の方式ではない: §0）
 
 **Option B（腕を2つに分ける）を推奨する。**
 
@@ -128,7 +155,7 @@ Product WrestlerView（Phaser。asset、pose、animation）
 | C2. 脚（太もも・脛）も部位にする | 真上からは腹の下にほとんど隠れる。足の位置だけで十分。IKは不要。**不採用** |
 | skeletal animationのmiddleware | 不要。**不採用** |
 
-## 7. ローカル座標とpivotの約束（Accepted contractとして提案）
+## 7. ローカル座標とpivotの約束（座標の約束 +X = 前、+Y = 右は有効。部位ごとのpivotは履歴: §0）
 
 - 共通
   - root = participantの正確な中心
@@ -248,6 +275,8 @@ ChatGPTの画像生成と、localの決定的な処理だけで実行できる�
   - idleの検証の後も、未解決のまま残る
   - §5・§13の部位の2関節の方式は、この結論が出るまで前提にしない
 
+**結果（ART-WRESTLER-03A User Visual Gate）**: 2枚の剛体sprite、反転なし、連続した全体の回転、位置の移動による最小の動きを、現在のprototypeで採用した（§0）。ACTION-ART-03AでPhaserへ統合した。専用のposeはDeferred。
+
 **更新（ART-WRESTLER-03A）: 2枚の剛体spriteで、最小のanimationの方式を試す**
 - 02Bの1枚の候補（`wrestler_single.png`）は、User Visual Gateで **不採用**（画像の作り直し）。1枚の方式そのものは、まだ有効
 - 新しい実験では、相手と向き合うように **別々に描いた2枚**（青まわし・赤まわし）を使う
@@ -284,7 +313,7 @@ ChatGPTの画像生成と、localの決定的な処理だけで実行できる�
 
 **作らないもの**: atlasの詰め込み（v1は10枚程度なので、個別のPNGで十分。Deferred）、汎用のart framework
 
-## 13. Pose / 関節の対応表
+## 13. Pose / 関節の対応表（履歴。現在は全stateで同じspriteを使う: §0）
 
 腕は、`spread` を腕の方向、`reach × 1.2R`（現在のcapsuleの長さ）を肩から手までの目標距離 d として、2関節で解く。
 - L1、L2は §5の値 × 外見の係数（§18）
@@ -458,7 +487,7 @@ toolを先に作る案（Sequence B）は採用しない。生成画像が型ど
 3. **ART-WRESTLER-02B**: 1枚の全身spriteの評価（正規化、16方向の回転、arena上のpreview）→ toolはPASS、候補の画像は作り直し
 4. **ART-WRESTLER-03A**: 別々に描いた2枚の剛体sprite（反転なし）の、360°回転、向かい合い、最小の剛体の動き（前進、よろけ、接触）の検証 → User Visual Gate（剛体で十分 / 一部だけ専用pose / 剛体の360°は不可）
 5. 次: 03Aの結果によって、actionのposeの方式を調べる（方式は未決定）
-6. ACTION-ART-03A: Phaserへの統合（Product previewの承認後）
+6. **ACTION-ART-03A**: 2枚の剛体spriteをPhaserへ統合した（§0）→ User Play Test。専用のposeは、その結果しだいで後の混合poseのTaskで扱う
 
 ## 22. Deferred / Unresolved
 

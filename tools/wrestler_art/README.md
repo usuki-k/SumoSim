@@ -255,3 +255,23 @@ is blue then red, with the near-circular preview shadow under both.
 Tests: `test_preview_dual_rigid_wrestlers.py` (includes a build with
 `Image.transpose` / `ImageOps.mirror` / `ImageOps.flip` patched to fail, and a
 check that every GIF frame equals a re-render from only (root, facing)).
+
+## Runtime export (ACTION-ART-03A)
+
+The accepted rigid Product wrestlers are committed as
+`public/assets/action/wrestler/blue.png` and `red.png`. They are only ever
+written by this script (no manual resize / rotate / edit):
+
+```bash
+PY tools/wrestler_art/export_runtime_wrestlers.py           # write public/assets/action/wrestler/
+PY tools/wrestler_art/export_runtime_wrestlers.py --check   # verify committed files, write nothing
+```
+
+It validates `input.local/wrestler_blue.png` / `wrestler_red.png` (size, alpha,
+decoded RGBA pixel SHA-256), applies the 03A normalization from
+`dual_rigid_recipe.json` (one whole-sprite rotation to FRONT = +X, body core =
+2R) and writes the exact /4 runtime image (1× Product scale). It never mirrors.
+It prints size, pivot, body core and pixel / file SHA-256 per file. The runtime
+metadata in `src/game/presentation/productWrestlerArt.ts` must match this
+output; `tests/test_export_runtime_wrestlers.py` checks the committed PNGs and
+that TypeScript contract against a fresh export (when the sources are present).
