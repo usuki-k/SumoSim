@@ -1,440 +1,702 @@
-Task-ID: ART-WRESTLER-04B-RED-MASTER-RUNTIME-PROMOTION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / PRODUCT ART WORKFLOW / RUNTIME ASSET PROMOTION
+Task-ID: ACTION-07A-TSUPPARI-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / CORE GAMEPLAY DESIGN / INPUT / ART INTEGRATION
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 89b1e7c86402229d0489849637b7920f8560d8df
+Source-Baseline: 7357788bd9b9091e50ef44859874cec4ae128671
 Handoff-Mode: GITHUB
 
-# ART-WRESTLER-04B — Promote Red-Master Mirror/Recolor Workflow to Runtime
+# ACTION-07A — Tsuppari Investigation / Implementation Design
 
 ## Purpose
 
-Promote the User-accepted ART-WRESTLER-04A mirror workflow into the current Product idle wrestler runtime/export contract.
+Design the smallest correct implementation of **Tsuppari（突っ張り）** against the current BoutSimulation / input / Product-art architecture before writing Production gameplay code.
 
-Accepted User Visual Decision:
-- canonical idle master = **authored red wrestler**
-- red runtime sprite remains the canonical authored/master appearance
-- blue runtime sprite is derived from the red master by the validated local-Y reflection
-- local +X remains FRONT
-- blue mawashi is produced by the validated deterministic recolor
-- the previous requirement "blue and red are separately authored and never mirrored" is withdrawn.
-
-This Task changes the idle Product art workflow only.
+This is an **Investigation / Design only** Task.
 
 Do NOT implement Tsuppari yet.
+Do NOT modify Production gameplay behavior.
+Do NOT tune unrelated systems.
+
+The output must be a concrete implementation design that can be handed directly to the next Implementation Task.
 
 ---
 
-# Accepted Baseline — Do Not Reopen
+# Terminology
 
-From ART-WRESTLER-04A User Visual Gate:
+For SumoSim, use **Tsuppari / 突っ張り** as the action name.
 
-## Master
-Use:
-- **RED MASTER**
+Do not create a separate "Harite" action.
+The User has defined the previously discussed 張り手 action as Tsuppari for this project.
 
-Do not choose blue master instead.
+---
 
-## Reflection
-Use the validated normalized-local reflection:
+# Accepted Current Baseline
+
+Current Product idle art baseline is accepted through User Play Test:
+
+- authored red idle sprite is the canonical master
+- blue idle sprite is derived offline by local-Y reflection + mawashi recolor
+- runtime uses ordinary PNGs; no dynamic mirror/recolor in Phaser
+- this baseline is accepted and must not be reopened.
+
+Current gameplay source must be inspected directly.
+
+Known current technical facts to verify from source include:
+- fixed Simulation at 60 Hz
+- Push phases: startup / active / recovery
+- current Push external-force model
+- current Counter window / Kuzushi behavior
+- Counter transition for Push
+- ParticipantIntent same-tick priority
+- ArrowLeft / ArrowRight availability
+- current rigid Product wrestler view.
+
+---
+
+# User-Accepted Tsuppari Gameplay Decisions
+
+These are accepted requirements. Do not redesign them.
+
+## Input / hand
+
+Prototype keyboard binding:
+
+- **ArrowLeft = left-hand Tsuppari**
+- **ArrowRight = right-hand Tsuppari**
+
+Meaning:
+- ArrowLeft fires the wrestler's left hand
+- ArrowRight fires the wrestler's right hand.
+
+Both are discrete press edges, not held repeat.
+
+If Left and Right are pressed on the same logical tick:
+- **Left wins**
+- Right is dropped
+- do not queue Right.
+
+Tsuppari is not allowed to have two simultaneous hand actions.
+
+---
+
+# Independent Hand Cooldowns
+
+Initial Prototype value:
+
+- left hand cooldown = **1.0 second**
+- right hand cooldown = **1.0 second**
+- at 60 Hz, investigate/design around **60 ticks per hand**.
+
+Cooldowns are independent.
+
+Example semantics:
+- after using Left, Left cannot start again until its cooldown is ready
+- Right may still start if Right is ready and the participant is otherwise allowed to start a Tsuppari
+- after using Right, the same applies in reverse.
+
+This is intended to reward alternating:
+- Left -> Right -> Left -> Right
+
+and allow approximately twice the sustained Tsuppari rate compared with repeatedly using only one hand.
+
+The User delegates the exact cooldown-start convention to the implementation design:
+- start-at-action-accept
+- or start-at-action-end
+
+Choose the simpler, deterministic model **only if it preserves the intended left/right alternating behavior**.
+Report the exact semantics and an example tick timeline.
+
+Cooldown is Bout runtime state only.
+It resets for a new Bout.
+
+Do not invent persistence / Management ownership.
+
+---
+
+# Tsuppari Movement / Lock
+
+Tsuppari is fired **in place**.
+
+- the attacker does not intentionally advance from the Tsuppari action
+- WASD self-movement is fully locked while the Tsuppari action is active
+- ordinary existing external momentum behavior must be inspected; do not silently erase unrelated momentum unless required by a clearly stated rule.
+
+This distinguishes it from Push:
+- Push = committed forward drive
+- Tsuppari = stationary hand strike.
+
+---
+
+# Reach / Hit Rule
+
+Tsuppari has its own fixed gameplay reach.
+
+The reach is:
+- Simulation-owned
+- based on participant center geometry
+- NOT a sprite-pixel collision
+- NOT Phaser-owned
+- NOT dependent on the currently rendered hand image.
+
+Initial reach is provisional for User Play Test.
+
+The User wants the provisional reach chosen so the supplied Tsuppari pose does not look obviously disconnected from the opponent.
+
+Important:
+- the user-provided Tsuppari candidate images may not exist in the Repository.
+- if they are unavailable to the Agent, do not invent a fake image measurement.
+- design a clear center-distance reach rule and propose a provisional numeric value from current gameplay scale/body radius, explicitly marked **Provisional / User Play Test**.
+- explain how the value should be adjusted once the actual Tsuppari runtime pose is normalized.
+
+Determine whether the cleanest rule is:
+- direct center-to-center threshold
+- or attacker center reach + opponent body radius
+
+but keep the externally meaningful behavior a fixed Simulation distance, not sprite collision.
+
+---
+
+# Tsuppari Action Timing
+
+The User delegates initial timing to the implementation design.
+
+Design provisional:
+- startup
+- active
+- recovery
+
+ticks.
+
+Constraints:
+- deterministic integer ticks
+- Tsuppari should feel lighter / lower commitment than Push
+- WASD locked through the Tsuppari action
+- hit resolution should be simple and explicit
+- timing must work with the independent 60-tick hand cooldowns
+- do not make animation timing the gameplay source of truth.
+
+The visual pose is one-frame / one-pose, not multi-frame animation.
+
+Provide the proposed tick values and rationale.
+
+Do not modify Push timing in this Investigation unless a conflict is discovered; report such a conflict instead of silently changing accepted Push timing.
+
+---
+
+# Push vs Tsuppari Force Baseline
+
+The User explicitly requests the next implementation to change the force relationship.
+
+Current Push strength in Current Source must be measured / identified first.
+
+Accepted target:
+
+- **new Push knockback strength ~= 2 × current Push**
+- **Tsuppari knockback strength ~= current Push**
+
+Therefore initial intended relationship:
 
 ```
-(x, y) -> (x, H - y)
+new Push > Tsuppari
+approximately:
+new Push : Tsuppari = 2 : 1
 ```
 
-Semantics:
-- reflect local Y / wrestler left-right asymmetry
-- preserve local +X = FRONT
-- reflect pivot and body-core points with the same mapping
-- do not introduce a second facing convention.
+The User's goal is gameplay feel / displacement, not merely changing one constant.
 
-## Recolor
-Use the accepted deterministic mawashi-only recolor behavior from ART-WRESTLER-04A.
+Current source appears to use external acceleration + external-speed clamp rather than a literal fixed displacement.
+Investigate the consequences.
 
-The conservative anti-aliased mawashi fringe observed in diagnostics is visually accepted at runtime scale.
+Required design:
+- identify the current Push force constants and clamp/decay interactions
+- specify the smallest safe way to make Push feel about 2x stronger while Tsuppari starts around the old Push strength
+- do NOT casually change `MAX_EXTERNAL_SPEED` or global external decay unless necessary
+- if the speed clamp prevents a meaningful 2:1 result, report it and propose the smallest targeted model adjustment.
 
-Do not broaden the mask into skin just to eliminate that fringe.
+The next Implementation Task must be able to verify representative actual displacement, not only constant values.
 
-## Visual result
-The User accepted:
-- `red master -> derived blue`
-- same-body / color-variant appearance
-- runtime-scale visual result.
+All tuning remains **Provisional / User Play Test**.
 
 ---
 
-# Required Runtime Result
+# Tsuppari Hit Effect
 
-After this Task:
+On an ordinary successful Tsuppari hit:
 
-- `public/assets/action/wrestler/red.png`
-  - remains the red canonical runtime sprite
-  - should remain pixel-identical to the current accepted red runtime asset if the normalization path is unchanged.
+- attacker does not advance because of Tsuppari
+- opponent is pushed backward by the weaker Tsuppari force
+- ordinary hit does not automatically enter Kuzushi
+- successful hit increments that attacker's Tsuppari Kuzushi buildup.
 
-- `public/assets/action/wrestler/blue.png`
-  - is no longer exported from a separately authored blue source
-  - is generated deterministically from the normalized red runtime master:
-    1. normalize/export red master
-    2. reflect local Y while preserving FRONT = +X
-    3. recolor only the mawashi to blue
-    4. write the derived blue runtime asset.
+A whiff:
+- does not push
+- does not increment Kuzushi buildup.
 
-The runtime filenames should remain:
-- `red.png`
-- `blue.png`
-
-Do not force Scene/Bout code to care how the files were produced.
+Do not add damage / HP.
 
 ---
 
-# Important Workflow Constraint
+# Deterministic Kuzushi Buildup
 
-The **runtime exporter must prove this is a one-master workflow**.
+Kuzushi from Tsuppari is required in the first implementation.
 
-The current separately authored high-resolution blue source must no longer be required to build/check the current runtime idle assets.
+Do NOT use randomness.
 
-A clean runtime export/check should succeed with:
-- canonical red source present
-- separately authored blue source absent.
+Initial Prototype behavior:
 
-Historical / comparison preview tools may continue to use the old blue source when available.
+- each participant has Bout-local Tsuppari successful-hit buildup
+- initial buildup = 0
+- successful Tsuppari hits increment it
+- whiffs do not increment it
+- after **5 ordinary successful hits**, the **next successful hit (the 6th)** causes:
+  - ordinary Tsuppari push
+  - plus Kuzushi on the receiver
+- then reset the buildup for the next cycle.
 
-Do not delete historical tools or old comparison evidence merely because they are no longer the runtime baseline.
+So the initial threshold semantics are:
+
+```
+hits 1..5: normal Tsuppari
+hit 6: Tsuppari + Kuzushi
+then reset
+```
+
+This threshold is provisional.
+
+Future direction:
+- a future Tsuppari-related Simulation/combat parameter may change:
+  - Tsuppari push strength
+  - Kuzushi buildup threshold.
+
+Do NOT invent the final Management stat, progression rule, ability name, persistence model, or save format in this Task.
+
+Investigation must recommend the smallest current ownership that:
+- keeps this Bout-local and deterministic now
+- does not block a future per-participant parameter
+- avoids prematurely building a generic stats framework.
+
+Buildup must reset between Bouts.
 
 ---
 
-# Source of Truth / Recipe Direction
+# Counter vs Tsuppari
 
-Avoid having two live copies of the same mirror/recolor tuning constants.
+Use the current Push Counter timing/window as the initial Prototype reference.
 
-There must be one clear current source of truth for:
-- accepted master = red
-- reflection rule
-- blue recolor mask parameters
-- target blue recolor values
-- runtime pivot/body-core derivation.
+User decision:
+- Counter can catch Tsuppari
+- if Tsuppari is countered:
+  - the Tsuppari user enters Kuzushi **in place**
+  - use the same Kuzushi duration as current Push Counter
+  - **NO side relocation**
+  - **NO rear relocation**
+  - **NO CounterTransition wrap**
+  - no Success/Best positional reward.
 
-Preferred direction:
-- promote/evolve the ART-WRESTLER-04A mirror recipe into the accepted runtime mirror recipe,
-  OR
-- create one small explicit runtime recipe and make the preview/export tests read that same config.
+The Investigation must determine the cleanest Simulation resolution order and whether Counter tier should:
+- be computed but ignored for positional effect
+- or not be meaningful for Tsuppari.
 
-Do not duplicate the same recolor constants independently in multiple production-current recipe files.
+Do not change the User-visible result:
+**countered Tsuppari = attacker Kuzushi in place.**
 
-Historical `dual_rigid_recipe.json` may remain for old dual-sprite preview/reference, but it must not remain the semantic source of truth that requires a blue runtime source.
-
-If the smallest safe implementation differs, report the exact ownership clearly in Completion Report.
+The Counter user's behavior after a successful Tsuppari catch should also be explicitly specified.
 
 ---
 
-# Current Source to Inspect
+# Tsuppari vs Tsuppari
+
+If both participants' Tsuppari hit on the same tick:
+
+- **both hits succeed**
+- **both participants are pushed slightly backward / apart**
+- do NOT simply net the two equal Tsuppari forces to zero.
+
+This is intentionally different from current equal Push-vs-Push cancellation.
+
+The design must explain how to represent this without making the same State source-of-truth exist twice.
+
+Also specify:
+- whether both successful hits increment each attacker's Kuzushi buildup
+- if one/both hit is the threshold Kuzushi hit, how both results resolve symmetrically.
+
+Preferred principle:
+- symmetric / order-independent pair resolution.
+
+---
+
+# Push vs Tsuppari
+
+User decision:
+
+Push and Tsuppari should visibly **contest / push against each other**.
+
+But Push is stronger.
+
+Desired feel:
+- both are contributing force
+- Tsuppari partially resists Push
+- Push normally wins the exchange because its force is larger
+- result should look like Push pushing through weaker Tsuppari pressure
+- do not model this as "Push has priority so Tsuppari simply disappears."
+
+This is distinct from the **input start priority** below.
+
+Investigation must inspect the current pair Push resolution and propose an order-independent pair-force model for:
+
+- Push vs Push
+- Push vs Tsuppari
+- Tsuppari vs Push
+- Tsuppari vs Tsuppari
+- one active action vs idle.
+
+Preserve current equal Push-vs-Push contest behavior unless the new model requires an equivalent refactor.
+
+Do not introduce mass / traction systems.
+
+---
+
+# Same-Participant Input Priority
+
+For multiple action edges from the same participant on the same tick, initial priority is:
+
+```
+Push
+> Tsuppari
+> Counter
+> Grip
+> Move
+```
+
+Within Tsuppari:
+- Left > Right if both hand edges occur on the same tick.
+
+"Move" means ordinary movement is only used when no higher-priority action state locks it.
+
+Do not confuse same-participant input priority with pair-vs-pair force contest:
+- Push edge beating Tsuppari edge on one participant does NOT mean an opponent's active Tsuppari is ignored.
+
+---
+
+# Grapple / CounterTransition / Non-Free State
+
+Investigate and recommend minimal behavior for Tsuppari during:
+- grappled state
+- current CounterTransition
+- Kuzushi
+- another action
+- decided/frozen bout.
+
+Default direction unless Current Source gives a material reason otherwise:
+- Tsuppari is a FREE-state action
+- cannot start while grappled
+- cannot start during CounterTransition
+- cannot start during Kuzushi
+- cannot start while another action is active
+- inputs during those states are dropped, not queued.
+
+Do not add Tsuppari inside grapple in this Task.
+
+---
+
+# Art / Presentation Direction
+
+Tsuppari needs a dedicated one-frame pose.
+
+User has candidate images outside the Repository.
+
+Accepted art direction:
+- no multi-frame limb animation for the first version
+- Tsuppari action displays one pose while active
+- existing red-master -> derived-blue color workflow should remain the default color-variant principle.
+
+Open visual question:
+- whether left-hand and right-hand Tsuppari should be:
+  1. two separately accepted red pose masters
+  2. one hand pose master + local mirror to create the other hand.
+
+Do NOT decide this from theory alone.
+
+The User wants to compare the visual result first.
+
+Therefore this Investigation must propose a later Art Visual Gate that compares:
+- separately supplied left/right poses
+- one-side mirrored candidate
+
+before locking left/right art production.
+
+Important:
+- blue counterpart should be derived from the accepted red pose master(s) using the established offline color workflow where applicable.
+- do not revert to separately generated blue Product art as a requirement.
+
+Do not import the user images into the Repository in this Investigation.
+
+---
+
+# Architecture Constraints
+
+Maintain:
+
+```
+Pure TypeScript Game / Simulation
+-> State / Results
+-> Phaser Rendering / Input / Animation
+```
+
+Simulation owns:
+- Tsuppari action state
+- timing
+- per-hand cooldown
+- reach
+- successful hit
+- push effect
+- Kuzushi buildup
+- Counter result
+- Push/Tsuppari pair contest
+- deterministic outcome.
+
+Phaser owns:
+- ArrowLeft / ArrowRight press capture
+- pose selection/rendering
+- texture loading
+- presentation only.
+
+Do NOT put Tsuppari hit/reach/force formulas in `BoutScene.update()`.
+Do NOT use sprite overlap as gameplay collision.
+Do NOT let animation decide whether a hit occurred.
+
+Keep fixed-step determinism.
+
+Do not add ECS, DI, global event bus, generic rule engine, physics engine, or generic stats framework.
+
+---
+
+# Investigation Questions / Required Output
+
+Return a concrete design answering at least:
+
+1. Exact ParticipantIntent extension for Left / Right Tsuppari.
+2. Exact same-tick input priority.
+3. Exact MutableAction / public ParticipantActionState shape.
+4. Where per-hand cooldown state lives.
+5. Cooldown start/countdown semantics with an example tick timeline.
+6. Proposed startup / active / recovery tick counts.
+7. Exact tick(s) on which Tsuppari can hit.
+8. Proposed provisional center-based reach and formula.
+9. How facing/direction is captured for Tsuppari.
+10. Whether Tsuppari hit can occur when not in ordinary body contact.
+11. Proposed Tsuppari force constant/model based on current Push.
+12. Proposed Push change giving approximately 2x old Push displacement.
+13. Interaction with current external speed clamp / decay.
+14. Symmetric Tsuppari-vs-Tsuppari pair resolution.
+15. Push-vs-Tsuppari force contest resolution.
+16. Current Push-vs-Push equivalence preservation.
+17. Successful-hit buildup state and 1..5 -> 6th Kuzushi semantics.
+18. Threshold-hit reset semantics.
+19. Counter-vs-Tsuppari resolution and Counter user's post-action state.
+20. Counter tier treatment for Tsuppari.
+21. Tsuppari during grapple / CounterTransition / Kuzushi / other actions.
+22. Ring-out implications: Tsuppari push must feed normal ring-out resolution.
+23. Snapshot fields presentation needs.
+24. WrestlerVisualState extension.
+25. BoutScene input/latch changes.
+26. Dummy / test harness changes needed for verification.
+27. Art asset path/metadata strategy without implementing it.
+28. Focused tests required in the Implementation Task.
+29. Browser/runtime smoke cases.
+30. User Play Test cases.
+
+---
+
+# Explicit Boundary Cases to Design
+
+Do not sample these away. Address each:
+
+- Left ready / Right ready
+- Left cooldown / Right ready
+- Left ready / Right cooldown
+- both cooldown
+- Left + Right same tick
+- Push + Left same tick
+- Left + Counter same tick
+- Left + Grip same tick
+- Left during WASD
+- Tsuppari whiff
+- Tsuppari ordinary hit
+- 5th ordinary hit
+- 6th threshold Kuzushi hit
+- threshold hit after prior whiff
+- new Bout reset
+- Counter catches left Tsuppari
+- Counter catches right Tsuppari
+- Tsuppari vs Tsuppari same tick
+- Tsuppari threshold hit vs Tsuppari ordinary hit same tick
+- both Tsuppari threshold hits same tick
+- Push vs Tsuppari
+- equal Push vs Push after any resolver refactor
+- Tsuppari at ring edge causing receiver ring-out
+- Tsuppari attacker at ring edge receiving simultaneous Tsuppari
+- input during CounterTransition
+- input while grappled
+- input during Kuzushi
+- input during action recovery.
+
+---
+
+# Current Push Increase Is In Scope for the NEXT Implementation Design
+
+The following User request is accepted and must be designed now so the next implementation can include it:
+
+- current Push knockback feels too small
+- increase Push knockback to approximately **2x the current feel**
+- initial Tsuppari knockback should be approximately **the current Push feel**.
+
+Do not implement the change in this Investigation.
+
+Do not reinterpret this as an exact 2x mathematical displacement across all states if clamp/decay make that impossible.
+Instead:
+- define representative verification fixtures
+- identify expected actual displacement/velocity relationship
+- mark final feel as User Play Test gated.
+
+---
+
+# Required Reading
 
 Read directly:
 - `AGENTS.md`
 - `CLAUDE.md`
 - current `CURRENT_TASK.md`
 - current `CURRENT_COMPLETION_REPORT.md`
-- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
 - `docs/ARCHITECTURE.md`
-- `tools/wrestler_art/README.md`
-- `tools/wrestler_art/preview_idle_mirror_workflow.py`
-- `tools/wrestler_art/idle_mirror_recipe.json`
-- `tools/wrestler_art/export_runtime_wrestlers.py`
-- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
-- `tools/wrestler_art/dual_rigid_recipe.json`
-- relevant `tools/wrestler_art/tests/`
-- `src/game/presentation/productWrestlerArt.ts`
+- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
+- relevant Action/Counter/Grip specs if present
+- `src/game/sumo/BoutTypes.ts`
+- `src/game/sumo/BoutSimulation.ts`
+- relevant BoutSimulation tests
+- `src/game/input/pressLatch.ts`
+- `src/game/input/pushDummyController.ts`
+- relevant input tests
+- `src/game/scenes/BoutScene.ts`
+- `src/game/presentation/wrestlerVisualState.ts`
 - `src/game/scenes/WrestlerView.ts`
-- `src/game/scenes/BoutScene.ts`.
+- `src/game/presentation/productWrestlerArt.ts`
+- current wrestler art tools/recipes only as needed for presentation boundary.
 
-Review Handoff does not replace Current Source inspection.
-
----
-
-# Implementation Direction
-
-## 1. Export red master
-
-Keep the current accepted red authored source normalization:
-- explicit source identity
-- one whole-sprite orientation normalization to FRONT = local +X
-- explicit root/pivot
-- body-core = 2R
-- exact runtime downscale.
-
-Prefer preserving current red runtime pixels exactly.
-
-If the red runtime output changes unexpectedly, STOP and report rather than silently accepting a new red appearance.
-
-## 2. Derive blue from the normalized runtime red
-
-The derivation should happen from the normalized runtime red image/geometry so the runtime result matches the ART-WRESTLER-04A User-approved candidate.
-
-Use:
-- local-Y reflection
-- reflected pivot/body-core metadata
-- accepted mawashi recolor.
-
-Do not derive blue from a separately authored blue source.
-
-## 3. Runtime metadata
-
-Update `productWrestlerArt.ts` deliberately.
-
-Expected if the accepted ART-WRESTLER-04A candidate is reproduced exactly:
-
-- red:
-  - current metadata unchanged
-- derived blue:
-  - dimensions match normalized red runtime dimensions
-  - pivot = reflected red pivot
-  - body-core diameter unchanged.
-
-From the validated preview evidence, the expected candidate was approximately:
-- red: 158×178, pivot (82,95), body-core 123.076923
-- derived blue: 158×178, pivot (82,83), body-core 123.076923
-
-Do not copy these values blindly; verify them from the actual exporter output.
-
-## 4. Presentation
-
-Keep:
-- same texture keys / public paths if practical
-- `WrestlerView` canonical position/facing behavior
-- canonical facing unquantized
-- gameplay body radius and Simulation completely independent.
-
-No runtime `setFlipX/setFlipY` should be necessary if the exporter writes the derived blue PNG.
-
-Prefer offline deterministic derivation.
+Review Handoff is not a substitute for Current Source inspection.
 
 ---
 
-# Product Art SPEC Update
+# Scope In
 
-Update `docs/WRESTLER_PRODUCT_ART_SPEC.md` so §0 becomes truthful.
-
-New Accepted baseline should state, in substance:
-
-- canonical authored idle master = red
-- blue counterpart = deterministic local-Y reflection + blue mawashi recolor
-- both are exported as normal runtime PNGs
-- runtime still rotates the whole sprite by canonical facing
-- gameplay geometry is unchanged
-- separate authored blue/red requirement is withdrawn
-- historical ART-WRESTLER-03A two-source/no-mirror workflow remains history/reference only.
-
-Do not rewrite unrelated historical sections beyond what is needed to remove contradictions about the current baseline.
-
----
-
-# ARCHITECTURE Update
-
-Update the Product wrestler art paragraph minimally so Current Architecture no longer claims the two runtime wrestlers are separately authored.
-
-Document the one-master derivation boundary as presentation/art tooling only.
-
-Do not alter gameplay architecture.
-
----
-
-# Tests
-
-Verification Level:
-Standard Art Tool / Presentation Asset Promotion + Browser Runtime Smoke + User Visual Check
-
-Add/update tests intentionally.
-
-At minimum verify:
-
-## Export contract
-1. runtime export uses red as the single canonical authored source
-2. runtime export succeeds when separate blue source is absent
-3. runtime `red.png` matches a fresh red-master export
-4. runtime `blue.png` matches a fresh derived export
-5. red output remains pixel-identical to the pre-Task accepted red runtime
-6. blue output equals the accepted red-master mirror/recolor algorithm result
-7. repeated export is deterministic
-8. `--check` writes nothing and detects stale/changed runtime assets
-9. invalid red source fails closed
-10. missing red source fails closed.
-
-## Geometry
-11. derived blue preserves local +X = FRONT
-12. blue pivot is the reflected red pivot
-13. body-core diameter remains unchanged
-14. runtime scale contract in `productWrestlerArt.ts` matches fresh exporter output
-15. no extra presentation-only gameplay offset is introduced.
-
-## Recolor
-16. alpha preserved
-17. pixels outside the mawashi mask equal the reflected red source
-18. accepted conservative mask/fringe behavior remains unchanged
-19. recolor output is deterministic.
-
-## Repository / presentation
-20. current Product paths/textures load
-21. current red/blue metadata matches generated assets
-22. gameplay / Simulation source is unchanged.
-
-Run the full wrestler-art suite after focused tests.
-
----
-
-# Required Verification
-
-Run, as applicable:
-
-```
-python -m unittest discover -s tools/wrestler_art/tests -v
-pnpm test
-pnpm build
-git diff --check
-```
-
-Use the repository's documented Python environment/tool command on the actual machine.
-
-Why pnpm test/build are required this time:
-- committed runtime Product assets and TypeScript presentation metadata are changing.
-
-Report actual counts/results.
-
----
-
-# Browser / Runtime Smoke
-
-Required if environment supports it.
-
-Verify:
-- pre-bout comparison still opens
-- Enter starts Bout
-- red wrestler loads
-- derived blue wrestler loads
-- no missing texture / console errors
-- both pivots align with canonical debug body circles
-- both rotate correctly with canonical facing
-- start faceoff looks like the User-approved red-master preview
-- movement / Push / Counter / Grip still render with the same rigid-sprite mechanics
-- R restart works.
-
-Do not claim visual Product acceptance solely from headless rendering.
-
----
-
-# User Visual Check — REQUIRED
-
-Although the preview candidate is already accepted, this Task changes the actual runtime assets.
-
-The final integration check should confirm:
-- actual Phaser red/blue faceoff matches the accepted preview
-- derived blue does not visibly jump in size/pivot
-- blue mawashi looks natural in runtime
-- rotation remains natural
-- no unexpected texture filtering/artifact was introduced.
-
-If those are good, the red-master runtime workflow becomes the accepted integrated Product baseline.
+- inspect Current Source
+- design Tsuppari Simulation state/rules
+- design input boundary
+- design per-hand cooldowns
+- design deterministic buildup/Kuzushi
+- design pair-force interaction matrix
+- design provisional timing/reach/force constants
+- design current Push force increase
+- design Counter interaction
+- design presentation state boundary
+- design test and runtime verification plan
+- identify exact files/modules expected for implementation
+- write `CURRENT_COMPLETION_REPORT.md`.
 
 ---
 
 # Scope Out
 
 Do NOT:
-- implement Tsuppari
-- use the four uploaded Tsuppari images in this Task
-- change input bindings
-- add new action states
-- change Simulation / Bout rules
-- change bodyRadius/contact geometry
-- change Counter / Push / Grip / Drive
-- create skeletal/limb animation
-- add runtime dynamic recoloring if offline export is sufficient
-- redesign arena/HUD
-- modify Management state.
+- implement Tsuppari Production code
+- change Push Production tuning yet
+- modify runtime assets
+- commit user-uploaded Tsuppari images
+- add final Management/ability stats
+- add stamina/balance
+- add CPU AI
+- add Touch/Gamepad
+- implement throws/lifts
+- modify Counter transition behavior for Push
+- modify Grip/Drive rules
+- refactor unrelated Simulation architecture
+- change ring-out rules
+- change idle red-master art baseline.
 
-Do not opportunistically fix unrelated art issues.
+Investigation Only / No Fixes.
 
 ---
 
 # Stop Conditions
 
-STOP / BLOCKED if:
-- reproducing the accepted derived blue requires a material visual change from the User-approved preview
-- red runtime output changes unexpectedly
-- a separate blue authored source is still technically required for the current runtime exporter and cannot be removed without a larger architecture change
-- mirror/recolor rules would need to change materially from the User-approved candidate
-- gameplay/Simulation changes become necessary
-- Current Source materially conflicts with this accepted design.
+STOP / report rather than implementing if:
 
-Do not silently substitute a different mirror or recolor algorithm.
+- the requested symmetric Tsuppari-vs-Tsuppari behavior fundamentally conflicts with the current external-velocity ownership in a way requiring a broad physics rewrite
+- approximately 2:1 Push/Tsuppari feel cannot be achieved without changing global movement/physics semantics
+- Counter-vs-Tsuppari cannot be added without materially changing accepted Push Counter semantics
+- a new long-term stats/Management architecture is required to represent the prototype parameter
+- Current Source materially contradicts the accepted decisions above
+- a required prerequisite outside this Task is discovered.
 
----
-
-# Expected Changed Files
-
-May include:
-- `tools/wrestler_art/export_runtime_wrestlers.py`
-- accepted runtime mirror recipe/config
-- related wrestler_art tests
-- `tools/wrestler_art/README.md`
-- `public/assets/action/wrestler/blue.png`
-- possibly `public/assets/action/wrestler/red.png` only if byte re-export is identical; no visual change accepted
-- `src/game/presentation/productWrestlerArt.ts`
-- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
-- `docs/ARCHITECTURE.md`
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
-
-Do not edit `CURRENT_TASK.md`.
+A small explicit extension to pair-force resolution is acceptable to propose.
+A broad physics rewrite is not.
 
 ---
 
-# Implementation Evidence
+# Verification Level
 
-Completion Report should include a compact table:
+Investigation only.
 
-| Design Requirement | Implemented As | Verified By |
-|---|---|---|
+Required evidence:
+- Current Source inspection
+- exact current Push constants / timing / clamp behavior
+- relevant current tests identified
+- no Production source changes
+- `git diff --check` for documentation/report changes.
 
-At minimum:
-- red single master
-- separate blue source no longer required
-- exact reflection convention
-- mawashi recolor ownership
-- red pixel preservation
-- derived blue output
-- pivot/body-core metadata
-- deterministic export/check
-- runtime presentation unchanged
-- gameplay source untouched.
+Do not run or claim Implementation verification that does not exist.
 
 ---
 
 # Completion Report
 
 Include:
+
 - Result
-- Preflight
-- Current Source delta
-- final recipe/source-of-truth ownership
-- red master source/export path
-- blue derivation path
-- exact generated dimensions/pivots/body-core
-- old vs new runtime asset hashes
-- proof red did not visually change
-- proof blue matches accepted derived candidate
-- test results
-- pnpm test/build
-- Browser/Runtime Smoke
-- User Visual Check Required
-- Changed Files
-- Files explicitly not changed
+- Current Source findings
+- exact current Push model
+- proposed Tsuppari state model
+- proposed constants:
+  - startup
+  - active
+  - recovery
+  - each-hand cooldown
+  - reach
+  - Tsuppari force
+  - new Push force
+  - Kuzushi threshold
+  - Kuzushi duration
+- force interaction matrix
+- Counter interaction matrix
+- same-tick input priority
+- cooldown timeline example
+- buildup timeline example
+- state ownership
+- expected changed files for Implementation
+- explicit boundary-case test matrix
+- Browser/runtime smoke plan
+- User Play Test checklist
+- Art Visual Gate plan
 - Design Deviations
 - Unexpected Scope
-- Known Untested Items
-- Git delivery.
+- unresolved decisions, if any
+- recommendation whether Implementation is READY or BLOCKED.
 
-If none:
+If no design deviation:
 `Design Deviations: NONE`
+
+Do not implement Production changes.
 
 ---
 
@@ -442,160 +704,20 @@ If none:
 
 Follow `AGENTS.md`.
 
-Normal successful Task:
-- stage only Task-owned files
-- one implementation commit
-- fetch / fast-forward safety check
-- push `origin/develop`
-- verify remote SHA
-- clean working tree.
+Expected repository change:
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` only, unless a very small investigation note is explicitly required by AGENTS.md.
+
+Do not modify `CURRENT_TASK.md`.
+Do not modify Production source.
+Do not modify `PROJECT_HANDOFF.md`.
+Do not modify `main`.
 
 Suggested commit:
-`refactor(art): derive blue wrestler from red master`
-
-Do not modify `main`.
+`docs(action): design tsuppari prototype`
 
 # Final Instruction
 
-Promote only the accepted red-master idle mirror/recolor workflow into the runtime/export baseline.
+Investigate and design Tsuppari against Current Source.
 
+Return a concrete, implementation-ready design.
 Do not implement Tsuppari yet.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-22
-Overall Result: TECHNICAL PASS / USER VISUAL CHECK REQUIRED
-Accepted Technical Baseline: 7357788bd9b9091e50ef44859874cec4ae128671
-
-## Reported Implementation vs Design
-
-Accepted as aligned with ART-WRESTLER-04B.
-
-- Runtime idle art now uses one authored red master.
-- Red runtime output remains the accepted existing red asset.
-- Blue runtime output is derived offline from normalized red by the accepted local-Y reflection and mawashi recolor.
-- Separate authored blue source is no longer required by the current runtime exporter.
-- Runtime paths/texture keys remain stable.
-- Product metadata, Product art SPEC and ARCHITECTURE were updated.
-- Simulation / input / Bout gameplay / WrestlerView / BoutScene were not changed.
-- Tsuppari was not implemented.
-
-## Source / Ownership Review
-
-Confirmed from Current Source:
-
-- current config source of truth:
-  - `tools/wrestler_art/runtime_wrestler_recipe.json`
-- master:
-  - red only
-- derived:
-  - blue
-  - reflection = `local_y`
-  - accepted red-to-blue mawashi recolor values live in the runtime recipe
-- historical `dual_rigid_recipe.json` is not read by the runtime exporter.
-- historical 04A comparison recipe no longer contains a second live red-to-blue recolor copy.
-
-The exporter normalizes the red source, derives blue from the normalized runtime red, and checks/writes both runtime PNGs deterministically.
-
-## Technical Baseline Accepted
-
-Expected runtime contract confirmed:
-
-- red:
-  - 158 x 178
-  - pivot (82, 95)
-  - body core 123.076923 px
-- blue:
-  - 158 x 178
-  - pivot (82, 83)
-  - body core 123.076923 px
-
-Blue pivot is the reflected red pivot:
-- `83 = 178 - 95`
-
-The TypeScript presentation metadata matches this contract.
-
-## Verification Review
-
-Reported:
-- wrestler_art Python suite: 125 PASS
-- pnpm test: 293 PASS
-- pnpm build: PASS
-- git diff --check: PASS
-- Browser / Runtime Smoke: PASS
-
-Coverage includes:
-- red-only source export
-- missing/invalid red fail-closed
-- no blue authored source requirement
-- deterministic export
-- read-only `--check`
-- stale runtime detection
-- local-Y reflection only
-- pivot/body-core mapping
-- alpha preservation
-- recolor mask isolation
-- accepted mask/fringe preservation
-- TypeScript metadata match
-- Product texture loading.
-
-No required A4/A5 gameplay verification was reopened because gameplay source was untouched.
-
-## Design Deviations
-
-Design Deviations: NONE
-
-The exporter reuses the 04A mirror/recolor algorithm implementation from `preview_idle_mirror_workflow.py` while the accepted values are owned by `runtime_wrestler_recipe.json`. This is not a semantic deviation and avoids duplicating the algorithm. Do not refactor it merely for cleanliness unless a later Task requires it.
-
-## User Visual Check
-
-REQUIRED before final integrated Product acceptance.
-
-User should verify in the actual Phaser game:
-
-- red / blue faceoff matches the previously accepted red-master preview
-- blue body size does not jump relative to red
-- blue pivot stays centered on the canonical body/debug circle
-- blue mawashi looks natural
-- whole-sprite rotation looks natural
-- no new texture filtering/artifact is visible
-- movement / Push / Counter / Grip presentation remains visually normal.
-
-If accepted, the integrated Product art baseline becomes:
-
-- one authored red master
-- offline derived blue via local-Y reflection + mawashi recolor
-- normal runtime PNGs for both participants.
-
-## Do Not Reopen
-
-Unless explicitly requested:
-- do not restore separately authored blue as a runtime requirement
-- do not switch master back to blue
-- do not change the accepted local-Y reflection convention
-- do not dynamically mirror/recolor in Phaser
-- do not alter gameplay geometry because of art.
-
-## Next Task Constraint
-
-Do not start Tsuppari implementation until the User confirms the integrated runtime visual check.
-
-After User acceptance, Tsuppari art/workflow may use the same one-master red -> derived blue principle, followed by Tsuppari gameplay design/investigation.
-
-
----
-
-# User Play Test Result — ACCEPTED
-
-User tested the ART-WRESTLER-04B integrated runtime in Phaser and reported no visual discomfort.
-
-Accepted integrated Product baseline:
-- authored red idle sprite is the canonical master
-- blue idle sprite is derived offline from red by the accepted local-Y reflection + mawashi recolor
-- current runtime dimensions / pivots / filtering / whole-sprite rotation are visually accepted
-- do not restore a separately authored blue runtime requirement unless explicitly requested.
-
-ART-WRESTLER-04B User Visual Check: ACCEPTED.
