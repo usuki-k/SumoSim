@@ -1433,3 +1433,41 @@ Use it only as a reference for:
 
 Do not copy its gameplay rules or frame timing blindly.
 Do not treat it as proof that one static sprite is sufficient; that remains a User visual gate after implementation.
+
+
+# Clarification — Recorded Instant-Jump Evidence
+
+The User clarified that the previously mentioned timestamps 0:00:25 / 0:00:29 referred to the newly uploaded gameplay recording:
+
+`画面録画 2026-10-21 215220.mp4`
+
+ChatGPT inspected the actual 30 fps file frame-by-frame.
+
+Observed:
+- a clear abrupt pair-position/orientation discontinuity occurs around **25.4–25.5 s**
+- another clear abrupt discontinuity occurs around **30.2 s** in the uploaded file
+- these read visually as instant relocation rather than a short continuous stagger/yoroke transition.
+
+This corrects the earlier situation where those timestamps had been discussed before the gameplay recording itself was attached.
+
+## Source correlation
+
+Current Source independently shows that successful Counter resolution can directly assign the defender's canonical position in one Simulation tick:
+
+```
+if (target) {
+  defender.position.x = target.x
+  defender.position.y = target.y
+}
+```
+
+inside `BoutSimulation.resolveCounter()`.
+
+This source behavior is **consistent with** the abrupt jump visible in the recording and remains the leading implementation cause.
+
+However, the recording by itself does not expose internal action/debug state, so do not phrase the video alone as formal proof that each exact visible jump was a Counter-success event without additional instrumentation.
+
+For the next Investigation:
+- use Source/event evidence to correlate the visible jump with Counter resolution
+- do not rely only on approximate video timestamps
+- preserve the User's visual requirement: replace the teleport-like presentation with a short continuous exchange in which both the displaced wrestler and successful wrestler move naturally.
