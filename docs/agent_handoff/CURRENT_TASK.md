@@ -1,5 +1,5 @@
 Task-ID: ART-WRESTLER-02B-SINGLE-SPRITE-EVALUATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / OFFLINE PRODUCT ART PREVIEW / SINGLE-SPRITE VALIDATION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -615,3 +615,244 @@ Do NOT begin Phaser integration or action-pose production.
 After commit/push/report:
 
 「ART-WRESTLER-02B-SINGLE-SPRITE-EVALUATION が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / PRODUCT CANDIDATE REVISE IMAGE
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `735466bee386de62f9e3e21991d529c139339d84`
+- Agent-Start-Head:
+  `03bde4c7a4d7156a32fa2069f9495832aa9f6153`
+- Delivery is one implementation commit.
+- No `src/` changes.
+- No `public/` wrestler runtime asset committed.
+- No gameplay or package changes.
+
+## Reported Implementation vs Design
+
+PASS.
+
+The implementation follows the Task:
+- exact reviewed source identity validation
+- one whole-sprite orientation correction only
+- explicit participant root
+- explicit body-core scale reference
+- deterministic uniform normalization
+- 16-angle rotation preview
+- arena 0/180 preview
+- arena 8-facing comparison
+- deterministic manifest/metadata
+- no perspective warp / repaint / per-limb edits.
+
+No material Design Deviation was found.
+
+## Verification Completeness
+
+PASS.
+
+Reported:
+- 62 Python tests PASS
+- real reviewed source identity PASS
+- deterministic rerun PASS
+- 16 directions produced and unclipped
+- 8 arena facings produced
+- runtime body-core = ~123.077 px
+- `git diff --check` PASS.
+
+No pnpm test/build was required because Product Source was not modified.
+
+## Tool / Geometry Acceptance
+
+The single-sprite preview path is accepted as a useful Product-art validation tool.
+
+Accepted technical baseline:
+- +X = FRONT
+- root_source_px = (620, 655), Provisional presentation metadata
+- body-core reference = 595 source px -> 2R runtime
+- whole-sprite correction = -8.8°
+- runtime body-core ≈123 px
+- runtime full alpha bbox ≈179×219 px
+- facing remains continuous; preview angle sampling does not quantize gameplay.
+
+Do not change gameplay `bodyRadius` to fit the image.
+
+## User-Provided Visual Review Material
+
+ChatGPT directly reviewed the uploaded outputs:
+- `single_pivot_guide.png`
+- `single_runtime.png`
+- `single_runtime_16angles.png`
+- `single_master.png`
+- `single_on_arena_8facings.png`
+- `single_on_arena_1920.png`.
+
+## Visual Result
+
+### Product candidate verdict: REVISE IMAGE
+
+Do NOT accept the current source image as the Product idle baseline.
+
+Do NOT reject the one-piece strategy itself.
+
+The current one-piece image is substantially better than the rejected 02A parts assembly:
+- coherent authored anatomy
+- coherent upper/lower body axis
+- good anime/game rendering quality
+- strong readable silhouette
+- acceptable arena scale.
+
+However, the rotation test exposes a material camera-space problem.
+
+## Blocking Visual Issue — Camera Bias Rotates With Sprite
+
+The authored source is not sufficiently orthographic / vertically top-down for free 360° rotation.
+
+The source visually reads as if the camera is somewhat behind/above the wrestler rather than directly above.
+
+When the whole sprite rotates:
+- the apparent camera bias rotates with the wrestler
+- 90° / 270° make this especially visible
+- back/head/chest foreshortening that should belong to the world/camera instead behaves as part of the character orientation.
+
+This is exactly the failure the 16-angle and arena-8-facing previews were intended to expose.
+
+The tool must NOT perspective-correct or warp this away.
+
+The source art needs another generation iteration.
+
+## Lighting Risk
+
+The sprite also contains directional painted highlights/shadows.
+
+When the entire sprite rotates, that painted lighting rotates with the wrestler.
+
+This is visible but is a secondary issue compared with the camera bias.
+
+Next source generation should prefer:
+- nearly vertical overhead camera
+- orthographic / near-orthographic projection
+- very weak perspective
+- near-overhead neutral body lighting
+- minimal camera-direction-specific shading.
+
+## Root / Pivot
+
+PASS for evaluation.
+
+The visual does not appear to orbit around the arena when rotated.
+
+The 16-angle sheet supports the reported stable pivot.
+
+The head being offset from the body axis is an authored-pose feature and makes 0°/180° opponents look somewhat asymmetric, but this is not the main blocker.
+
+Do not spend another Task tuning the pivot to solve the camera problem.
+
+## Scale / Arena Fit
+
+PASS as a provisional Product scale.
+
+The current 2R body-core normalization gives a wrestler that reads at a plausible scale in the accepted Product arena.
+
+The whole 179×219 px silhouette is larger than the gameplay circle because arms/legs extend beyond it; that is presentation and is not by itself a gameplay mismatch.
+
+Do not shrink the sprite merely because the full alpha bbox exceeds 123 px.
+
+## 02A vs 02B Decision
+
+Accepted correction:
+
+- 02A parts assembly:
+  - Technical PASS
+  - Visual REJECTED
+  - not Product baseline.
+
+- 02B one-piece method:
+  - validation tool Technical PASS
+  - current source image REVISE IMAGE
+  - one-piece method remains viable.
+
+Therefore the next action is **new image generation**, not Phaser integration and not another geometry-tuning implementation.
+
+## Required Direction for Next Image
+
+Preserve what worked:
+- anime/game style
+- round/heavy sumo body
+- coherent single full-body anatomy
+- blue mawashi
+- transparent background
+- one coherent facing direction
+- right-facing source convention.
+
+Change:
+- camera much closer to true vertical top-down
+- orthographic / near-orthographic
+- weak perspective
+- show mainly top surfaces
+- reduce visible front face/chest/belly surfaces
+- neutralize baked directional light.
+
+A new generated candidate must be run through this same 16-angle / arena-facing validation before Product acceptance.
+
+## User Goal Attainment
+
+PARTIAL.
+
+The Task successfully determined whether this candidate survives free rotation.
+
+Answer:
+**No, this specific image does not yet survive continuous 360° rotation well enough for Product acceptance.**
+
+The evaluation goal was achieved even though the art candidate itself needs revision.
+
+## Product / Gameplay Acceptance State
+
+Single-sprite preview tool:
+**ACCEPTED**
+
+Current wrestler source image:
+**REVISE IMAGE**
+
+One-piece Product-art approach:
+**STILL VIABLE / NOT REJECTED**
+
+Phaser integration:
+**NOT READY**
+
+Action-pose strategy:
+**UNRESOLVED / DEFERRED**
+
+## Next Task Constraint
+
+Do not create a new Agent implementation task merely to regenerate the image.
+
+First generate a revised one-piece source image in ChatGPT / image-generation workflow.
+
+After the User selects a new candidate:
+- either reuse the existing 02B tool locally with a source-specific recipe update in a small focused Task
+- or create a minimal candidate-update Task if repository metadata/hash/recipe must change.
+
+Do not begin:
+- Phaser integration
+- Push/Grip/Grapple production poses
+- body-shape variation
+until one-piece idle camera neutrality passes this visual gate.
+
+## Do Not Reopen
+
+- gameplay bodyRadius 0.35 m
+- Product ring mapping / accepted arena
+- continuous facing
+- rejected 02A assembled art
+- current Product scale target ~123 px body core.
+
+## Final State
+
+Overall Result:
+**TECHNICAL PASS / VISUAL GATE = REVISE IMAGE**
+
+No further Agent work should start until a new source image candidate is selected.
