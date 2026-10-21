@@ -1255,3 +1255,181 @@ Architecture / Scope:
 
 Product Game Feel:
 **PENDING USER PLAY TEST**
+
+
+# User Play Test Result — 2026-10-21
+
+User Play Test has now been completed for the ACTION-ART-03A rigid Product-wrestler runtime baseline.
+
+## Accepted
+
+### 360° rigid rotation
+**USER ACCEPTED**
+
+- continuous whole-sprite facing rotation is acceptable
+- no 8-direction authored set is required for the current baseline.
+
+### Normal movement
+**USER ACCEPTED**
+
+- canonical participant position -> rigid sprite translation is acceptable for normal movement.
+
+### Sprite size / root alignment
+**USER ACCEPTED**
+
+- current Product size and root/pivot alignment are acceptable.
+
+These are now the current Product visual baseline and should not be reopened without an explicit task.
+
+## Push / Counter
+
+### Push
+Current same-sprite Push is **acceptable enough to continue for now**.
+
+Do not create a Push-specific image automatically.
+
+### Counter
+Current same-sprite Counter is **NOT accepted**.
+
+User decision:
+- pressing Down / Counter should use dedicated authored art
+- the dedicated visual must also support a Counter whiff / failed attempt being readable.
+
+Do not lock the exact number of Counter frames/images yet.
+
+A future focused Counter-art task is required before Counter visuals are Product-accepted.
+
+## Counter Success Relocation / Stagger
+
+User observed obvious instant-position jumps around the tested Counter-success moments and rejected the current visual.
+
+Current Source inspection shows this is not merely the `posture.kind === 'kuzushi'` state.
+
+On successful Counter, `BoutSimulation.resolveCounter()` currently calls `counterRelocationTarget(...)` and then directly assigns:
+
+```
+defender.position.x = target.x
+defender.position.y = target.y
+```
+
+in one Simulation tick.
+
+Therefore the rigid Product sprite correctly exposes an existing **instant canonical Counter relocation**.
+
+User goal:
+- the displaced / broken wrestler should visibly stagger through a short continuous position animation
+- the successful wrestler should also move naturally during the exchange
+- the same base sprite may be reused for the stagger if position-only animation is visually sufficient
+- reference feel: the uploaded `yoroke.mp4`
+- do NOT assume new stagger artwork is required.
+
+Important:
+This is now a Movement / State-ownership issue, not just an art swap.
+
+Do NOT implement presentation smoothing blindly.
+
+A focused Investigation / Design must decide whether:
+1. Counter positional resolution becomes time-based canonical Simulation movement, or
+2. gameplay relocation remains instantaneous and Phaser derives a temporary presentation transition.
+
+The architecture consequences and contact/ring-out semantics must be reviewed before implementation.
+
+Do not silently change accepted Counter gameplay semantics.
+
+## Terminology Correction
+
+For User-facing discussion:
+
+- `Kuzushi` = internal gameplay posture/state in current Source
+- the visually rejected instant jump = successful Counter's direct position relocation
+- do not use “Kuzushi” as shorthand for that teleport-like relocation.
+
+## Grip / Grapple / Drive
+
+Current non-Grip rigid image:
+**USER ACCEPTED as the non-Grip/base state.**
+
+Current same-sprite Grip/Grapple visuals:
+**USER REJECTED.**
+
+User direction:
+- create a dedicated **Grip state** authored image
+- create a separate dedicated **Grip / Morozashi state** authored image.
+
+Do not assume the exact runtime mapping yet between:
+- `action.kind === 'grip'` reach/recovery
+- established neutral `engagement.kind === 'grappled'`
+- Morozashi holder/disadvantaged.
+
+That mapping needs a focused art/state design task so “Grip state” is not interpreted incorrectly.
+
+### Tsuri / lift
+
+User direction:
+- if a future Tsuri/lift state can be communicated clearly using position-only motion, prefer that
+- if it is visually unclear, dedicated Tsuri art may be added.
+
+Tsuri is Deferred.
+Do not implement it as part of the current Counter/Grip follow-up unless explicitly tasked.
+
+## Updated Product Art Strategy
+
+Current accepted strategy is now **hybrid minimal-pose**, not “one sprite for every action”.
+
+Accepted minimum:
+
+- Base / non-Grip:
+  - current blue/red rigid sprites
+  - 360° rotation
+  - normal translation.
+
+Future dedicated art is justified only where User Play Test found a concrete failure:
+
+- Counter: dedicated art required
+- Grip established state: dedicated art required
+- Grip Morozashi state: dedicated art required.
+
+Potentially no new art:
+- normal movement
+- Push, for now
+- Counter-success stagger displacement, if continuous position animation with existing art is sufficient
+- future Tsuri, if position-only motion is readable.
+
+Do NOT expand this into an 8-direction × every-state sprite matrix.
+
+## Next Work Ordering Constraint
+
+Before generating/implementing all dedicated art, first address the Counter visual/movement problem carefully.
+
+Recommended next sequence:
+
+1. focused Investigation / Design:
+   Counter success relocation + stagger motion ownership
+   - why instant relocation exists
+   - Simulation-time movement vs presentation-only transition
+   - successful-side movement
+   - contact/ring-out/facing implications
+   - preserve Counter outcome semantics unless User approves a gameplay change.
+
+2. after design is accepted:
+   implement the smallest continuous Counter-success movement/stagger representation.
+
+3. separately:
+   define/generate dedicated Counter art and map Counter active/whiff states.
+
+4. separately:
+   define/generate dedicated Grip neutral and Morozashi art and map them to canonical state.
+
+Do not combine Counter movement semantics + Counter new art + Grip new art into one large implementation task.
+
+## User Reference Video
+
+The User uploaded `yoroke.mp4` as a feel reference.
+
+Use it only as a reference for:
+- short continuous displacement
+- loser stagger/readability
+- successful side also moving naturally through the exchange.
+
+Do not copy its gameplay rules or frame timing blindly.
+Do not treat it as proof that one static sprite is sufficient; that remains a User visual gate after implementation.
