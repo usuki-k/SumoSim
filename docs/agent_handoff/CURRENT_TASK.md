@@ -584,3 +584,18 @@ Unless explicitly requested:
 Do not start Tsuppari implementation until the User confirms the integrated runtime visual check.
 
 After User acceptance, Tsuppari art/workflow may use the same one-master red -> derived blue principle, followed by Tsuppari gameplay design/investigation.
+
+
+---
+
+# User Play Test Result — ACCEPTED
+
+User tested the ART-WRESTLER-04B integrated runtime in Phaser and reported no visual discomfort.
+
+Accepted integrated Product baseline:
+- authored red idle sprite is the canonical master
+- blue idle sprite is derived offline from red by the accepted local-Y reflection + mawashi recolor
+- current runtime dimensions / pivots / filtering / whole-sprite rotation are visually accepted
+- do not restore a separately authored blue runtime requirement unless explicitly requested.
+
+ART-WRESTLER-04B User Visual Check: ACCEPTED.
