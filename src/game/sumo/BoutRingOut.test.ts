@@ -33,6 +33,8 @@ interface Input {
 const one = (i: Input): ParticipantIntent => ({
   move: { x: i.move?.[0] ?? 0, y: i.move?.[1] ?? 0 },
   pushPressed: i.push ?? false,
+  tsuppariLeftPressed: false,
+  tsuppariRightPressed: false,
   counterPressed: i.counter ?? false,
   gripPressed: i.grip ?? false,
   driveHeld: i.drive ?? false,
@@ -314,7 +316,7 @@ describe('Ring-out / BoutOutcome (ACTION-06A)', () => {
     expect(Object.keys(after).sort()).toEqual(['arena', 'counterTransition', 'engagement', 'outcome', 'participants'])
     for (const p of after.participants) {
       expect(Object.keys(p).sort()).toEqual(
-        ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'velocity'].sort(),
+        ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'tsuppariBuildup', 'tsuppariCooldown', 'velocity'].sort(),
       )
     }
     expect(ringOutSource).not.toMatch(/from ['"]phaser['"]/)

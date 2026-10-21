@@ -42,10 +42,15 @@ export interface ParticipantIntent {
   readonly move: Vec2
   // A new Push press edge for this tick (one press = one Push), not the held key state.
   readonly pushPressed: boolean
-  // A new Counter press edge for this tick. If pushPressed is also true, Push wins and this is dropped.
+  // New Tsuppari press edges for this tick (the wrestler's own left / right hand), not the held key state.
+  // Same-tick priority: Push > Tsuppari > Counter > Grip; within Tsuppari a ready Left beats Right, and an
+  // edge for a hand still on cooldown is dropped before priority. Losing edges are dropped, not queued.
+  readonly tsuppariLeftPressed: boolean
+  readonly tsuppariRightPressed: boolean
+  // A new Counter press edge for this tick. Dropped when a Push or Tsuppari starts on the same tick.
   readonly counterPressed: boolean
   // A new Grip press edge for this tick: starts a Grip while free, releases while grappled.
-  // Lowest same-tick priority (Push > Counter > Grip).
+  // Lowest same-tick priority (Push > Tsuppari > Counter > Grip).
   readonly gripPressed: boolean
   // Held Drive effort (the same key as Push, as a held state). Used only while grappled and READY;
   // ignored while free (where the Push edge applies instead).
@@ -54,6 +59,10 @@ export interface ParticipantIntent {
 
 export type PushPhase = 'startup' | 'active' | 'recovery'
 export type GripPhase = 'reach' | 'recovery'
+export type TsuppariHand = 'left' | 'right'
+export type TsuppariPhase = 'startup' | 'active' | 'recovery'
+// Pending until the active (hit) tick; then hit or whiff for the rest of the action.
+export type TsuppariStrike = 'pending' | 'hit' | 'whiff'
 
 export type ParticipantActionState =
   | { readonly kind: 'idle' }
@@ -75,6 +84,14 @@ export type ParticipantActionState =
       readonly phase: GripPhase
       // Ticks left in the current phase, including the next tick (always >= 1).
       readonly ticksRemaining: number
+    }
+  | {
+      readonly kind: 'tsuppari'
+      readonly hand: TsuppariHand
+      readonly phase: TsuppariPhase
+      // Ticks left in the current phase, including the next tick (always >= 1).
+      readonly ticksRemaining: number
+      readonly strike: TsuppariStrike
     }
   // Grappled only: actually contributing Drive this tick (timerless; re-decided every tick).
   | { readonly kind: 'drive' }
@@ -103,6 +120,10 @@ export interface ParticipantState {
   readonly facing: number
   // Gameplay contact radius in meters (simulation-owned; presentation reads it from the snapshot).
   readonly bodyRadius: number
+  // Ticks until each hand can start a Tsuppari again (0 = ready). Bout-local.
+  readonly tsuppariCooldown: { readonly left: number; readonly right: number }
+  // Ordinary successful Tsuppari hits since the last Kuzushi hit (0..TSUPPARI_KUZUSHI_BUILDUP). Bout-local.
+  readonly tsuppariBuildup: number
 }
 
 export type GrappleAdvantage =

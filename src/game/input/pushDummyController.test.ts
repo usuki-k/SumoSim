@@ -6,9 +6,10 @@ import {
   PUSH_ACTIVE_TICKS,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
+  TSUPPARI_HAND_REACH,
 } from '../sumo/BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
-import { DUMMY_PUSH_COOLDOWN_TICKS, PushDummyController } from './pushDummyController.ts'
+import { DUMMY_PUSH_COOLDOWN_TICKS, DUMMY_TSUPPARI_RANGE, PushDummyController } from './pushDummyController.ts'
 
 const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS
 const COMBINED = 2 * BODY_RADIUS
@@ -23,7 +24,7 @@ function setup(ax: number, bx: number): BoutSetup {
   }
 }
 
-const IDLE_INTENT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
+const IDLE_INTENT: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
 
 function newDummy(mode: 'stationary' | 'push' = 'push'): PushDummyController {
   const dummy = new PushDummyController('b', 'a')
@@ -36,7 +37,7 @@ function tick(sim: BoutSimulation, dummy: PushDummyController, playerPush = fals
   const dummyIntent = dummy.nextIntent(sim.getSnapshot())
   sim.step(
     new Map<ParticipantId, ParticipantIntent>([
-      ['a', { move: { x: 0, y: 0 }, pushPressed: playerPush, counterPressed: false, gripPressed: false, driveHeld: false }],
+      ['a', { move: { x: 0, y: 0 }, pushPressed: playerPush, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }],
       ['b', dummyIntent],
     ]),
   )
@@ -89,7 +90,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
   it('T52: in Contact, idle and ready: zero move and exactly one edge, not repeated', () => {
     const sim = new BoutSimulation(setup(-COMBINED / 2, COMBINED / 2))
     const dummy = newDummy()
-    expect(tick(sim, dummy)).toEqual({ move: { x: 0, y: 0 }, pushPressed: true, counterPressed: false, gripPressed: false, driveHeld: false })
+    expect(tick(sim, dummy)).toEqual({ move: { x: 0, y: 0 }, pushPressed: true, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: false, gripPressed: false, driveHeld: false })
     expect(b(sim.getSnapshot()).action.kind).toBe('push')
     expect(tick(sim, dummy).pushPressed).toBe(false)
   })
@@ -223,7 +224,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
       }
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
-          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: t === playerCounterAt, gripPressed: false, driveHeld: false }],
+          ['a', { move: { x: 0, y: 0 }, pushPressed: false, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: t === playerCounterAt, gripPressed: false, driveHeld: false }],
           ['b', intent],
         ]),
       )
@@ -241,7 +242,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
           ['a', { ...dummyIntent, counterPressed: t === 0 }],
-          ['b', { move: { x: 0, y: 0 }, pushPressed: t === 0, counterPressed: false, gripPressed: false, driveHeld: false }],
+          ['b', { move: { x: 0, y: 0 }, pushPressed: t === 0, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }],
         ]),
       )
     let t = 0
@@ -285,7 +286,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
       }
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
-          ['a', { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: t === 0 || t === releaseAt, driveHeld: false }],
+          ['a', { move: { x: 0, y: 0 }, pushPressed: false, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: false, gripPressed: t === 0 || t === releaseAt, driveHeld: false }],
           ['b', intent],
         ]),
       )
@@ -293,5 +294,86 @@ describe('PushDummyController (ACTION-03B2)', () => {
     }
     expect(firstFree).toBe(releaseAt + 1)
     expect(nextEdge - firstFree).toBe(DUMMY_PUSH_COOLDOWN_TICKS)
+  })
+})
+
+describe('PushDummyController TSUPPARI mode (ACTION-07B)', () => {
+  // The player input for one tick (counter edge only), the dummy intent from the pre-step Snapshot.
+  function tickT(sim: BoutSimulation, dummy: PushDummyController, playerCounter = false): ParticipantIntent {
+    const dummyIntent = dummy.nextIntent(sim.getSnapshot())
+    sim.step(
+      new Map<ParticipantId, ParticipantIntent>([
+        ['a', { ...IDLE_INTENT, counterPressed: playerCounter }],
+        ['b', dummyIntent],
+      ]),
+    )
+    return dummyIntent
+  }
+
+  function tsuppariDummy(): PushDummyController {
+    const dummy = new PushDummyController('b', 'a')
+    dummy.setMode('tsuppari')
+    return dummy
+  }
+
+  it('TD1: beyond DUMMY_TSUPPARI_RANGE it only approaches with a unit move and no edge', () => {
+    const sim = new BoutSimulation(setup(-2, 2))
+    const intent = tsuppariDummy().nextIntent(sim.getSnapshot())
+    expect(intent).toEqual({ ...IDLE_INTENT, move: { x: -1, y: 0 } })
+  })
+
+  it('TD2: in range it strikes with a ready hand (Left first), never during an action, and every strike lands', () => {
+    expect(DUMMY_TSUPPARI_RANGE).toBeLessThan(TSUPPARI_HAND_REACH + BODY_RADIUS) // harness stays inside the reach
+    const sim = new BoutSimulation(setup(-0.4, 0.4))
+    const dummy = tsuppariDummy()
+    const accepted: string[] = []
+    const strikes: string[] = []
+    for (let t = 0; t < 400; t++) {
+      const before = b(sim.getSnapshot())
+      const intent = tickT(sim, dummy)
+      expect(intent.pushPressed || intent.counterPressed || intent.gripPressed).toBe(false)
+      expect(intent.tsuppariLeftPressed && intent.tsuppariRightPressed).toBe(false)
+      if (before.action.kind !== 'idle') expect(intent).toEqual(IDLE_INTENT)
+      if (intent.tsuppariLeftPressed) expect(before.tsuppariCooldown.left).toBe(0)
+      if (intent.tsuppariRightPressed) {
+        expect(before.tsuppariCooldown.left).toBeGreaterThan(0) // Left is preferred when ready
+        expect(before.tsuppariCooldown.right).toBe(0)
+      }
+      const after = b(sim.getSnapshot())
+      if (before.action.kind === 'idle' && after.action.kind === 'tsuppari') accepted.push(after.action.hand)
+      if (before.action.kind === 'tsuppari' && before.action.strike === 'pending' && after.action.kind === 'tsuppari' && after.action.strike !== 'pending') {
+        strikes.push(after.action.strike)
+      }
+    }
+    expect(accepted.length).toBeGreaterThanOrEqual(6)
+    expect(accepted.slice(0, 4)).toEqual(['left', 'right', 'left', 'right'])
+    const last = b(sim.getSnapshot()).action
+    const unresolved = last.kind === 'tsuppari' && last.strike === 'pending' ? 1 : 0
+    expect(strikes.length).toBe(accepted.length - unresolved)
+    expect(strikes.every((x) => x === 'hit')).toBe(true)
+  })
+
+  it('TD3: Player Counter catches the dummy Tsuppari: the dummy is in Kuzushi in place and then emits nothing', () => {
+    const sim = new BoutSimulation(setup(-0.4, 0.4))
+    const dummy = tsuppariDummy()
+    tickT(sim, dummy) // dummy Left accepted at tick 0 (hit tick 6)
+    for (let t = 1; t < 6; t++) tickT(sim, dummy, t === 3)
+    const before = sim.getSnapshot()
+    tickT(sim, dummy)
+    const after = sim.getSnapshot()
+    expect(b(after).posture.kind).toBe('kuzushi')
+    expect(b(after).position).toEqual(b(before).position)
+    expect(a(after).action.kind).toBe('idle')
+    expect(a(after).externalVelocity).toEqual({ x: 0, y: 0 })
+    expect(after.counterTransition.kind).toBe('none')
+    for (let t = 0; t < 10; t++) expect(tickT(sim, dummy)).toEqual(IDLE_INTENT)
+  })
+
+  it('TD4: switching to TSUPPARI leaves STATIONARY / PUSH unchanged and is reported by getMode', () => {
+    const dummy = tsuppariDummy()
+    expect(dummy.getMode()).toBe('tsuppari')
+    dummy.setMode('push')
+    const sim = new BoutSimulation(setup(-COMBINED / 2, COMBINED / 2))
+    expect(dummy.nextIntent(sim.getSnapshot())).toEqual({ ...IDLE_INTENT, pushPressed: true })
   })
 })

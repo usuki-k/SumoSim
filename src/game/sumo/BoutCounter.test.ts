@@ -39,6 +39,8 @@ function intents(a: Input = {}, b: Input = {}): Map<ParticipantId, ParticipantIn
   const one = (i: Input): ParticipantIntent => ({
     move: { x: i.move?.[0] ?? 0, y: i.move?.[1] ?? 0 },
     pushPressed: i.push ?? false,
+    tsuppariLeftPressed: false,
+    tsuppariRightPressed: false,
     counterPressed: i.counter ?? false,
     gripPressed: false,
     driveHeld: false,

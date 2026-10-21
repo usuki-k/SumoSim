@@ -36,6 +36,8 @@ function intents(a: Input = {}, b: Input = {}): Map<ParticipantId, ParticipantIn
   const one = (i: Input): ParticipantIntent => ({
     move: { x: i.move?.[0] ?? 0, y: i.move?.[1] ?? 0 },
     pushPressed: i.push ?? false,
+    tsuppariLeftPressed: false,
+    tsuppariRightPressed: false,
     counterPressed: i.counter ?? false,
     gripPressed: i.grip ?? false,
     driveHeld: false,
@@ -97,7 +99,7 @@ describe('Grip / Engagement foundation (ACTION-05A)', () => {
     expect(sim.getSnapshot().engagement).toEqual({ kind: 'grappled', advantage: { kind: 'neutral' } })
     // no duplicate grapple flags on participants
     expect(Object.keys(A(s)).sort()).toEqual(
-      ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'velocity'].sort(),
+      ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'tsuppariBuildup', 'tsuppariCooldown', 'velocity'].sort(),
     )
   })
 

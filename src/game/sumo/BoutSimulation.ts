@@ -15,6 +15,9 @@ import type {
   ParticipantPosture,
   ParticipantState,
   PushPhase,
+  TsuppariHand,
+  TsuppariPhase,
+  TsuppariStrike,
   Vec2,
 } from './BoutTypes.ts'
 import { GRAPPLE_TURN_RATE, canActInGrapple, turnFacingTowardGrapple } from './grappleOrientation.ts'
@@ -39,8 +42,9 @@ export const CONTACT_SLOP = 0.002 // m
 export const PUSH_STARTUP_TICKS = 6 // ~100 ms: steering suppressed, braking, no force yet
 export const PUSH_ACTIVE_TICKS = 8 // ~133 ms: short locked drive; pushes only while in contact
 export const PUSH_RECOVERY_TICKS = 10 // ~167 ms: steering suppressed, braking, no force
-// Pair acceleration along the contact normal per net active Push (+1 / -1).
-export const PUSH_EXTERNAL_ACCELERATION = 20 // m/s^2
+// Pair acceleration along the contact normal per net active Push (+1 / -1). ACTION-07B: 20 -> 26.25, about
+// twice the old representative Push displacement (0.267 m -> 0.533 m) without touching the clamp / decay.
+export const PUSH_EXTERNAL_ACCELERATION = 26.25 // m/s^2
 // External (received) momentum decays toward zero independently of grounded footwork damping.
 export const EXTERNAL_DECELERATION = 8 // m/s^2
 export const MAX_EXTERNAL_SPEED = 3 // m/s
@@ -62,6 +66,21 @@ export const COUNTER_SIDE_EPSILON = 1e-6
 export const COUNTER_TRANSITION_TICKS = 90 // ~1.5 s pair exchange after a Best / Success catch
 // The pusher's forward stagger along its locked Push direction over the transition (1.0 R).
 export const COUNTER_STAGGER_DISTANCE = BODY_RADIUS // m
+
+// Tsuppari (ACTION-07B, design ACTION-07A). Provisional Prototype tuning, subject to User Play Test.
+export const TSUPPARI_STARTUP_TICKS = 6 // ~100 ms: same as Push startup, so simultaneous presses contest
+export const TSUPPARI_ACTIVE_TICKS = 1 // the single hit tick
+export const TSUPPARI_RECOVERY_TICKS = 9 // ~150 ms (whole action 16 ticks; Push is 24)
+// Per hand, counted from the tick the Tsuppari is accepted (that hand is ready again 60 ticks later).
+export const TSUPPARI_HAND_COOLDOWN_TICKS = 60
+// Attacker center -> palm (m). Hit iff center distance <= this + receiver body radius (0.875 m now).
+export const TSUPPARI_HAND_REACH = 0.525
+// External velocity given to the receiver only, once, on the hit tick (m/s). Idle receiver: ~0.266 m.
+export const TSUPPARI_IMPULSE = 2.13
+// Share of a Tsuppari impulse that goes into the pair while a Push is active in contact (equal-body split).
+export const TSUPPARI_COUPLED_SHARE = 0.5
+// Ordinary successful hits before the Kuzushi hit (the 6th hit also gives the receiver Kuzushi).
+export const TSUPPARI_KUZUSHI_BUILDUP = 5
 
 // Grip / Engagement (ACTION-05A). Provisional Prototype tuning, subject to User Play Test.
 export const GRIP_REACH_TICKS = 6 // ~100 ms: waits for an in-range idle target
@@ -88,6 +107,7 @@ type MutableAction =
   | { kind: 'counter'; ticksRemaining: number }
   | { kind: 'grip'; phase: GripPhase; ticksRemaining: number }
   | { kind: 'drive' }
+  | { kind: 'tsuppari'; hand: TsuppariHand; phase: TsuppariPhase; ticksRemaining: number; strike: TsuppariStrike }
 
 type MutablePosture = { kind: 'stable' } | { kind: 'kuzushi'; ticksRemaining: number }
 
@@ -103,6 +123,10 @@ interface MutableParticipant {
   posture: MutablePosture
   facing: number
   bodyRadius: number
+  // Ticks until each hand can start a Tsuppari again (0 = ready); counts down every progressing tick.
+  tsuppariCooldown: { left: number; right: number }
+  // Ordinary successful Tsuppari hits since the last Kuzushi hit.
+  tsuppariBuildup: number
 }
 
 interface ContactResult {
@@ -140,13 +164,31 @@ function nextPushPhase(phase: PushPhase): { phase: PushPhase; ticks: number } | 
   return null
 }
 
-// Effective self-movement intent: free steering only while idle and stable. Kuzushi, Counter and Grip
-// brake (zero intent); Push owns movement during its phases. Grappled steering is handled by the caller.
+function nextTsuppariPhase(phase: TsuppariPhase): { phase: TsuppariPhase; ticks: number } | null {
+  if (phase === 'startup') return { phase: 'active', ticks: TSUPPARI_ACTIVE_TICKS }
+  if (phase === 'active') return { phase: 'recovery', ticks: TSUPPARI_RECOVERY_TICKS }
+  return null
+}
+
+// Effective self-movement intent: free steering only while idle and stable. Kuzushi, Counter, Grip and
+// Tsuppari (fired in place) brake (zero intent); Push owns movement during its phases. Grappled steering
+// is handled by the caller.
 function effectiveMove(p: MutableParticipant, move: Vec2): Vec2 {
   if (p.posture.kind === 'kuzushi') return ZERO_MOVE
   if (p.action.kind === 'idle') return move
-  if (p.action.kind === 'counter' || p.action.kind === 'grip' || p.action.kind === 'drive') return ZERO_MOVE
+  if (p.action.kind !== 'push') return ZERO_MOVE
   return p.action.phase === 'active' ? p.action.direction : ZERO_MOVE
+}
+
+// The Tsuppari hit tick: its single active tick, before the hit / whiff is decided.
+function isTsuppariHitTick(p: MutableParticipant): boolean {
+  return p.action.kind === 'tsuppari' && p.action.phase === 'active' && p.action.strike === 'pending'
+}
+
+// Center-based Tsuppari reach (no sprite geometry): the attacker's palm reaches the receiver's body.
+function inTsuppariReach(attacker: MutableParticipant, receiver: MutableParticipant): boolean {
+  const distance = Math.hypot(receiver.position.x - attacker.position.x, receiver.position.y - attacker.position.y)
+  return distance <= TSUPPARI_HAND_REACH + receiver.bodyRadius
 }
 
 function isGripReaching(p: MutableParticipant): boolean {
@@ -292,6 +334,19 @@ function advancePosture(p: MutableParticipant): void {
   else p.posture.ticksRemaining -= 1
 }
 
+// Runs at the start of every progressing tick (also during a Counter transition, Kuzushi or a grapple).
+// A hand accepted at tick t0 is set to the full cooldown there and reaches 0 at the start of t0 + 60.
+function advanceTsuppariCooldown(p: MutableParticipant): void {
+  if (p.tsuppariCooldown.left > 0) p.tsuppariCooldown.left -= 1
+  if (p.tsuppariCooldown.right > 0) p.tsuppariCooldown.right -= 1
+}
+
+// Accepts a Tsuppari: the hand's cooldown starts now, independent of the other hand.
+function startTsuppari(p: MutableParticipant, hand: TsuppariHand): void {
+  p.action = { kind: 'tsuppari', hand, phase: 'startup', ticksRemaining: TSUPPARI_STARTUP_TICKS, strike: 'pending' }
+  p.tsuppariCooldown[hand] = TSUPPARI_HAND_COOLDOWN_TICKS
+}
+
 // Brakes external momentum toward exact zero (no reversal).
 function decayExternal(v: MutableVec2): void {
   const speed = Math.hypot(v.x, v.y)
@@ -325,6 +380,15 @@ function copyAction(action: MutableAction): ParticipantActionState {
     return { kind: 'grip', phase: action.phase, ticksRemaining: action.ticksRemaining }
   }
   if (action.kind === 'drive') return { kind: 'drive' }
+  if (action.kind === 'tsuppari') {
+    return {
+      kind: 'tsuppari',
+      hand: action.hand,
+      phase: action.phase,
+      ticksRemaining: action.ticksRemaining,
+      strike: action.strike,
+    }
+  }
   return {
     kind: 'push',
     phase: action.phase,
@@ -473,20 +537,24 @@ export class BoutSimulation {
       posture: { kind: 'stable' },
       facing: 0,
       bodyRadius: BODY_RADIUS,
+      tsuppariCooldown: { left: 0, right: 0 },
+      tsuppariBuildup: 0,
     }))
     this.updateFacing()
   }
 
   // Advances exactly one logical tick (TICK_SECONDS). Participants without an intent have zero move.
-  // Order: posture timers -> tick-start grapple readiness -> release (if the tick began grappled) ->
-  // FREE action start / grappled Drive decision -> effective move -> grounded self velocity ->
-  // external update (FREE decay / grappled shared Drive update) -> integrate (self + external) ->
-  // contact -> grapple bond (grappled) -> Counter / Grip / Push resolution (free) -> action timers ->
-  // facing -> ring-out (once, from the previous and final resolved centers).
-  // While a Counter transition is active the tick is stepCounterTransition instead (intents ignored).
-  // Once the outcome is decided the bout is frozen: step() is an exact no-op.
+  // Order: Tsuppari hand cooldowns -> posture timers -> tick-start grapple readiness -> release (if the
+  // tick began grappled) -> FREE action start / grappled Drive decision -> effective move -> grounded self
+  // velocity -> external update (FREE decay / grappled shared Drive update) -> integrate (self + external)
+  // -> contact -> grapple bond (grappled) -> Counter / Grip / Push + Tsuppari forces (free) -> action
+  // timers -> facing -> ring-out (once, from the previous and final resolved centers).
+  // While a Counter transition is active the tick is stepCounterTransition instead (intents ignored; the
+  // hand cooldowns still count down). Once the outcome is decided the bout is frozen: step() is an exact
+  // no-op.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     if (this.outcome.kind !== 'ongoing') return
+    for (const p of this.participants) advanceTsuppariCooldown(p)
     if (this.counterTransition.kind === 'active') {
       this.stepCounterTransition(this.counterTransition)
       return
@@ -528,7 +596,8 @@ export class BoutSimulation {
       const move = sanitizeMove(intent?.move ?? ZERO_MOVE)
 
       // FREE actions start only from idle + stable; presses during an action or Kuzushi are ignored
-      // (not queued). Same-tick priority: Push > Counter > Grip; the losing edges are dropped.
+      // (not queued). Same-tick priority: Push > Tsuppari (ready Left > ready Right) > Counter > Grip; a
+      // Tsuppari edge for a hand on cooldown is dropped first, and the losing edges are dropped.
       if (!grappled && !released && p.action.kind === 'idle' && p.posture.kind === 'stable') {
         if (intent?.pushPressed === true) {
           p.action = {
@@ -537,6 +606,10 @@ export class BoutSimulation {
             ticksRemaining: PUSH_STARTUP_TICKS,
             direction: { x: Math.cos(p.facing), y: Math.sin(p.facing) },
           }
+        } else if (intent?.tsuppariLeftPressed === true && p.tsuppariCooldown.left === 0) {
+          startTsuppari(p, 'left')
+        } else if (intent?.tsuppariRightPressed === true && p.tsuppariCooldown.right === 0) {
+          startTsuppari(p, 'right')
         } else if (intent?.counterPressed === true) {
           p.action = { kind: 'counter', ticksRemaining: COUNTER_WINDOW_TICKS }
         } else if (intent?.gripPressed === true) {
@@ -558,9 +631,9 @@ export class BoutSimulation {
     if (grappled) {
       this.resolveGrappleBond()
     } else {
-      if (contact) this.resolveCounter()
+      this.resolveCounter(contact)
       this.resolveGrip()
-      if (contact && this.engagement.kind === 'free') this.resolvePush(contact)
+      if (this.engagement.kind === 'free') this.resolveForces(contact)
     }
     for (const p of this.participants) this.advanceAction(p)
     this.updateFacing()
@@ -658,6 +731,8 @@ export class BoutSimulation {
           posture: copyPosture(p.posture),
           facing: p.facing,
           bodyRadius: p.bodyRadius,
+          tsuppariCooldown: { left: p.tsuppariCooldown.left, right: p.tsuppariCooldown.right },
+          tsuppariBuildup: p.tsuppariBuildup,
         }),
       ),
       engagement: copyEngagement(this.engagement),
@@ -829,13 +904,24 @@ export class BoutSimulation {
   // rear, Success: side, reached over COUNTER_TRANSITION_TICKS). Without one the ACTION-04A2 fallback
   // is unchanged: the defender stays put and the attacker alone gets the overshoot carry, existing
   // external momentum kept. Returns the tier, or null.
-  private resolveCounter(): CounterTier | null {
+  // Tsuppari (ACTION-07B): a Counter window catches a Tsuppari on its hit tick when the strike would reach
+  // (no body contact needed). The attacker enters Kuzushi in place (positions and existing momentum
+  // untouched, no strike / impulse / buildup change, no transition) and the defender returns to idle. No
+  // tier is decided for Tsuppari (returns null).
+  private resolveCounter(contact: ContactResult | null): CounterTier | null {
     const [a, b] = this.participants
     for (const [defender, attacker] of [
       [a, b],
       [b, a],
     ]) {
       if (defender.action.kind !== 'counter') continue
+      if (isTsuppariHitTick(attacker) && inTsuppariReach(attacker, defender)) {
+        enterKuzushi(attacker)
+        defender.action = { kind: 'idle' }
+        return null
+      }
+      // Push Counter needs actual body contact this tick.
+      if (!contact) continue
       if (attacker.action.kind !== 'push' || attacker.action.phase !== 'active') continue
       // Captured before enterKuzushi cancels the Push.
       const d: Vec2 = { x: attacker.action.direction.x, y: attacker.action.direction.y }
@@ -889,16 +975,70 @@ export class BoutSimulation {
     return null
   }
 
+  // The one place Push and Tsuppari forces are resolved (FREE), order-independently:
+  //  1. Every Tsuppari on its hit tick is decided from the same state: in reach = hit (buildup +1, or the
+  //     Kuzushi hit after TSUPPARI_KUZUSHI_BUILDUP ordinary hits, which resets it), otherwise whiff.
+  //  2. Forces. A Push active in contact couples the pair: resolvePush adds the hits' coupled share into
+  //     the shared pair delta. Otherwise each hit gives only its receiver TSUPPARI_IMPULSE along
+  //     attacker -> receiver (no netting, so equal strikes push both apart; the attacker never moves).
+  //  3. Kuzushi from Kuzushi hits, only after every hit and force of the tick is settled.
+  private resolveForces(contact: ContactResult | null): void {
+    const [a, b] = this.participants
+    const hits: MutableParticipant[] = []
+    const kuzushiReceivers: MutableParticipant[] = []
+    for (const [attacker, receiver] of [
+      [a, b],
+      [b, a],
+    ]) {
+      if (attacker.action.kind !== 'tsuppari' || !isTsuppariHitTick(attacker)) continue
+      if (!inTsuppariReach(attacker, receiver)) {
+        attacker.action.strike = 'whiff'
+        continue
+      }
+      attacker.action.strike = 'hit'
+      hits.push(attacker)
+      if (attacker.tsuppariBuildup >= TSUPPARI_KUZUSHI_BUILDUP) {
+        attacker.tsuppariBuildup = 0
+        kuzushiReceivers.push(receiver)
+      } else {
+        attacker.tsuppariBuildup += 1
+      }
+    }
+
+    if (contact && (isPushActive(a) || isPushActive(b))) {
+      const strikeNet = (hits.includes(a) ? 1 : 0) - (hits.includes(b) ? 1 : 0)
+      this.resolvePush(contact, strikeNet)
+    } else if (hits.length > 0) {
+      // Axis A -> B; same-center fallback: A's facing (as in resolveContact).
+      const dx = b.position.x - a.position.x
+      const dy = b.position.y - a.position.y
+      const distance = Math.hypot(dx, dy)
+      const nx = distance > MIN_CONTACT_DISTANCE ? dx / distance : Math.cos(a.facing)
+      const ny = distance > MIN_CONTACT_DISTANCE ? dy / distance : Math.sin(a.facing)
+      for (const attacker of hits) {
+        const receiver = attacker === a ? b : a
+        const sign = attacker === a ? 1 : -1
+        receiver.externalVelocity.x += sign * nx * TSUPPARI_IMPULSE
+        receiver.externalVelocity.y += sign * ny * TSUPPARI_IMPULSE
+        clampExternal(receiver.externalVelocity)
+      }
+    }
+    for (const p of kuzushiReceivers) enterKuzushi(p)
+  }
+
   // Active Pushes in contact: +1 for A along A->B, -1 for B. The same external velocity delta goes
   // to both participants so the pair moves together; equal Pushes cancel. A driven-back participant
-  // in Kuzushi receives KUZUSHI_PUSH_SUSCEPTIBILITY times the acceleration.
-  private resolvePush(contact: ContactResult): void {
+  // in Kuzushi receives KUZUSHI_PUSH_SUSCEPTIBILITY times the acceleration. `strikeNet` (+1: A's Tsuppari
+  // hit B, -1: B's hit A) adds the coupled share TSUPPARI_COUPLED_SHARE * TSUPPARI_IMPULSE to the same
+  // pair delta (no susceptibility); without a Tsuppari hit the Push-only delta is computed exactly as before.
+  private resolvePush(contact: ContactResult, strikeNet: number): void {
     const [a, b] = this.participants
     const net = (isPushActive(a) ? 1 : 0) - (isPushActive(b) ? 1 : 0)
-    if (net === 0) return
+    if (net === 0 && strikeNet === 0) return
     const receiver = net > 0 ? b : a
     const susceptibility = receiver.posture.kind === 'kuzushi' ? KUZUSHI_PUSH_SUSCEPTIBILITY : 1
-    const dv = net * PUSH_EXTERNAL_ACCELERATION * susceptibility * TICK_SECONDS
+    let dv = net * PUSH_EXTERNAL_ACCELERATION * susceptibility * TICK_SECONDS
+    if (strikeNet !== 0) dv += strikeNet * TSUPPARI_IMPULSE * TSUPPARI_COUPLED_SHARE
     for (const p of this.participants) {
       p.externalVelocity.x += contact.nx * dv
       p.externalVelocity.y += contact.ny * dv
@@ -906,7 +1046,7 @@ export class BoutSimulation {
     }
   }
 
-  // Counts down the current action. Push: startup -> active -> recovery -> idle. Counter: an
+  // Counts down the current action. Push / Tsuppari: startup -> active -> recovery -> idle. Counter: an
   // expired window is a failed Counter and the user enters Kuzushi.
   private advanceAction(p: MutableParticipant): void {
     if (p.action.kind === 'counter') {
@@ -920,6 +1060,19 @@ export class BoutSimulation {
       if (p.action.ticksRemaining > 0) return
       if (p.action.phase === 'reach') {
         p.action = { kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS }
+      } else {
+        p.action = { kind: 'idle' }
+      }
+      return
+    }
+    // Tsuppari: startup -> active (the hit tick; hit / whiff is already decided) -> recovery -> idle.
+    if (p.action.kind === 'tsuppari') {
+      p.action.ticksRemaining -= 1
+      if (p.action.ticksRemaining > 0) return
+      const next = nextTsuppariPhase(p.action.phase)
+      if (next) {
+        p.action.phase = next.phase
+        p.action.ticksRemaining = next.ticks
       } else {
         p.action = { kind: 'idle' }
       }

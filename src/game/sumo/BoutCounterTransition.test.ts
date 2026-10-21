@@ -32,6 +32,8 @@ interface Input {
 const one = (i: Input): ParticipantIntent => ({
   move: { x: i.move?.[0] ?? 0, y: i.move?.[1] ?? 0 },
   pushPressed: i.push ?? false,
+  tsuppariLeftPressed: false,
+  tsuppariRightPressed: false,
   counterPressed: i.counter ?? false,
   gripPressed: i.grip ?? false,
   driveHeld: i.drive ?? false,
@@ -378,7 +380,8 @@ describe('Counter transition (ACTION-04A4)', () => {
     arena: { radius: 2.275, tokudawara: TOKUDAWARA },
     counterTick: 0,
   }
-  const COUNTER_USER_OUT: Scenario = { mid: { x: 1.75, y: 0 }, phi: Math.PI, arena: { radius: 2.275 }, counterTick: SUCCESS_TICK }
+  // mid.x 1.75 -> 1.73 (ACTION-07B): the stronger Push carries the Counter user further before the catch.
+  const COUNTER_USER_OUT: Scenario = { mid: { x: 1.73, y: 0 }, phi: Math.PI, arena: { radius: 2.275 }, counterTick: SUCCESS_TICK }
 
   function runTransition(o: Scenario) {
     const { sim, after } = catchCounter(o)

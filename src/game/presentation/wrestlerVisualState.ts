@@ -8,11 +8,31 @@ import {
   PUSH_ACTIVE_TICKS,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
+  TSUPPARI_ACTIVE_TICKS,
+  TSUPPARI_RECOVERY_TICKS,
+  TSUPPARI_STARTUP_TICKS,
 } from '../sumo/BoutSimulation.ts'
-import type { BoutEngagement, BoutOutcome, GripPhase, ParticipantState, PushPhase } from '../sumo/BoutTypes.ts'
+import type {
+  BoutEngagement,
+  BoutOutcome,
+  GripPhase,
+  ParticipantState,
+  PushPhase,
+  TsuppariHand,
+  TsuppariPhase,
+} from '../sumo/BoutTypes.ts'
 import { canActInGrapple } from '../sumo/grappleOrientation.ts'
 
-export type WrestlerVisualPose = 'idle' | 'move' | 'push' | 'counter' | 'kuzushi' | 'grip' | 'grapple' | 'drive'
+export type WrestlerVisualPose =
+  | 'idle'
+  | 'move'
+  | 'push'
+  | 'tsuppari'
+  | 'counter'
+  | 'kuzushi'
+  | 'grip'
+  | 'grapple'
+  | 'drive'
 
 export type GrappleVisualRole = 'none' | 'neutral' | 'morozashi-holder' | 'morozashi-disadvantaged'
 
@@ -20,6 +40,9 @@ export interface WrestlerVisualState {
   readonly pose: WrestlerVisualPose
   readonly pushPhase: PushPhase | null
   readonly gripPhase: GripPhase | null
+  // Tsuppari only: the striking hand and its phase (the later pose art picks its texture from these).
+  readonly tsuppariHand: TsuppariHand | null
+  readonly tsuppariPhase: TsuppariPhase | null
   // 0 at the start of the current gameplay phase, approaching 1 at its end (from ticksRemaining).
   readonly phaseProgress: number
   readonly grappleRole: GrappleVisualRole
@@ -53,8 +76,13 @@ const PUSH_PHASE_TICKS: Record<PushPhase, number> = {
   recovery: PUSH_RECOVERY_TICKS,
 }
 const GRIP_PHASE_TICKS: Record<GripPhase, number> = { reach: GRIP_REACH_TICKS, recovery: GRIP_RECOVERY_TICKS }
+const TSUPPARI_PHASE_TICKS: Record<TsuppariPhase, number> = {
+  startup: TSUPPARI_STARTUP_TICKS,
+  active: TSUPPARI_ACTIVE_TICKS,
+  recovery: TSUPPARI_RECOVERY_TICKS,
+}
 
-// Priority: (outcome = freeze modifier) > kuzushi > FREE push / counter / grip > grappled drive >
+// Priority: (outcome = freeze modifier) > kuzushi > FREE push / tsuppari / counter / grip > grappled drive >
 // grappled turning / ready role > locomotion (with hysteresis on `wasMoving`) > idle.
 export function resolveWrestlerVisualState(
   self: ParticipantState,
@@ -72,6 +100,8 @@ export function resolveWrestlerVisualState(
   const base = {
     pushPhase: null,
     gripPhase: null,
+    tsuppariHand: null,
+    tsuppariPhase: null,
     phaseProgress: 0,
     grappleRole: role,
     turning,
@@ -90,6 +120,15 @@ export function resolveWrestlerVisualState(
       pose: 'push',
       pushPhase: action.phase,
       phaseProgress: progress(action.ticksRemaining, PUSH_PHASE_TICKS[action.phase]),
+    }
+  }
+  if (action.kind === 'tsuppari') {
+    return {
+      ...base,
+      pose: 'tsuppari',
+      tsuppariHand: action.hand,
+      tsuppariPhase: action.phase,
+      phaseProgress: progress(action.ticksRemaining, TSUPPARI_PHASE_TICKS[action.phase]),
     }
   }
   if (action.kind === 'counter') return { ...base, pose: 'counter' }

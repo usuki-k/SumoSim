@@ -6,6 +6,8 @@ import {
   COUNTER_WINDOW_TICKS,
   PUSH_ACTIVE_TICKS,
   PUSH_STARTUP_TICKS,
+  TSUPPARI_RECOVERY_TICKS,
+  TSUPPARI_STARTUP_TICKS,
 } from '../sumo/BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, ParticipantState } from '../sumo/BoutTypes.ts'
 import { MOVE_ENTER_SPEED, MOVE_EXIT_SPEED, resolveWrestlerVisualState } from './wrestlerVisualState.ts'
@@ -29,11 +31,15 @@ interface Input {
   counter?: boolean
   grip?: boolean
   drive?: boolean
+  left?: boolean
+  right?: boolean
 }
 
 const one = (i: Input): ParticipantIntent => ({
   move: { x: i.move?.[0] ?? 0, y: i.move?.[1] ?? 0 },
   pushPressed: i.push ?? false,
+  tsuppariLeftPressed: i.left ?? false,
+  tsuppariRightPressed: i.right ?? false,
   counterPressed: i.counter ?? false,
   gripPressed: i.grip ?? false,
   driveHeld: i.drive ?? false,
@@ -88,6 +94,25 @@ describe('wrestler visual state (VISUAL-01A)', () => {
     expect(vis(sim.getSnapshot(), 0).pushPhase).toBe('recovery')
     for (let k = 0; k < 20; k++) sim.step(intents())
     expect(vis(sim.getSnapshot(), 0).pose).toBe('idle')
+  })
+
+  it('tsuppari (ACTION-07B) maps hand and startup / active / recovery with progress; other fields stay null', () => {
+    const sim = new BoutSimulation(setupAt(-2, 0, 2, 0))
+    expect(vis(sim.getSnapshot(), 0)).toMatchObject({ tsuppariHand: null, tsuppariPhase: null })
+    sim.step(intents({ right: true }))
+    let v = vis(sim.getSnapshot(), 0)
+    expect(v).toMatchObject({ pose: 'tsuppari', tsuppariHand: 'right', tsuppariPhase: 'startup', pushPhase: null, gripPhase: null })
+    expect(v.phaseProgress).toBeCloseTo(1 / TSUPPARI_STARTUP_TICKS, 12)
+    for (let k = 1; k < TSUPPARI_STARTUP_TICKS; k++) sim.step(intents())
+    expect(vis(sim.getSnapshot(), 0)).toMatchObject({ tsuppariPhase: 'active', phaseProgress: 0 })
+    sim.step(intents())
+    v = vis(sim.getSnapshot(), 0)
+    expect(v).toMatchObject({ pose: 'tsuppari', tsuppariHand: 'right', tsuppariPhase: 'recovery' })
+    for (let k = 0; k < TSUPPARI_RECOVERY_TICKS; k++) sim.step(intents())
+    expect(vis(sim.getSnapshot(), 0)).toMatchObject({ pose: 'idle', tsuppariHand: null, tsuppariPhase: null })
+    const left = new BoutSimulation(setupAt(-2, 0, 2, 0))
+    left.step(intents({ left: true }))
+    expect(vis(left.getSnapshot(), 0)).toMatchObject({ pose: 'tsuppari', tsuppariHand: 'left' })
   })
 
   it('counter window, grip reach and grip recovery', () => {

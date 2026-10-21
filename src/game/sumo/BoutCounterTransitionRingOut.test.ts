@@ -15,7 +15,7 @@ const ringOut = await import('./ringOut.ts')
 const resolver = vi.mocked(ringOut.resolveArenaRingOut)
 
 const COMBINED = 2 * BODY_RADIUS
-const idle: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
+const idle: ParticipantIntent = { move: { x: 0, y: 0 }, pushPressed: false, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: false, gripPressed: false, driveHeld: false }
 
 function caught() {
   const sim = new BoutSimulation({

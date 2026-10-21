@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { movementVectorFromKeys } from '../input/movementVector.ts'
 import { PressLatch } from '../input/pressLatch.ts'
 import { PushDummyController, type DummyMode } from '../input/pushDummyController.ts'
-import { BoutSimulation, SIMULATION_HZ } from '../sumo/BoutSimulation.ts'
+import { BoutSimulation, SIMULATION_HZ, TSUPPARI_KUZUSHI_BUILDUP } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
 import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
@@ -90,6 +90,11 @@ function counterTransitionLabel(transition: BoutCounterTransition, id: Participa
 // Kuzushi takes priority (entering it cancels the action anyway).
 function phaseLabel(action: ParticipantActionState, posture: ParticipantPosture): string {
   if (posture.kind === 'kuzushi') return 'KUZUSHI'
+  if (action.kind === 'tsuppari') {
+    const hand = action.hand === 'left' ? 'L' : 'R'
+    if (action.strike === 'pending') return `TSU ${hand}`
+    return `TSU ${hand} ${action.strike === 'hit' ? 'HIT' : 'WHIFF'}`
+  }
   if (action.kind === 'counter') return 'COUNTER'
   if (action.kind === 'grip') return action.phase === 'reach' ? 'GRIP' : 'GRIP REC'
   if (action.kind === 'drive') return 'DRIVE'
@@ -97,6 +102,14 @@ function phaseLabel(action: ParticipantActionState, posture: ParticipantPosture)
   if (action.phase === 'startup') return 'STARTUP'
   if (action.phase === 'active') return 'PUSH'
   return 'RECOVERY'
+}
+
+// Debug-only Tsuppari readout per participant: each hand's cooldown (seconds) and the successful-hit buildup.
+function tsuppariLabel(participant: ParticipantState): string {
+  const hand = (ticks: number) => (ticks === 0 ? 'ok' : `${(ticks / SIMULATION_HZ).toFixed(1)}s`)
+  const { left, right } = participant.tsuppariCooldown
+  const label = PARTICIPANT_PRESENTATION.find((style) => style.id === participant.id)?.label ?? participant.id
+  return `${label} TSU  L ${hand(left)}  R ${hand(right)}  hits ${participant.tsuppariBuildup}/${TSUPPARI_KUZUSHI_BUILDUP}`
 }
 
 // Presentation-only engagement label (holder shown by its presentation label).
@@ -114,6 +127,19 @@ function grappleLabel(self: ParticipantState, opponent: ParticipantState, engage
   if (canActInGrapple(self, opponent, engagement)) return 'READY'
   const degrees = Math.round((Math.abs(grappleFacingError(self.position, self.facing, opponent.position)) * 180) / Math.PI)
   return `TURNING ${degrees}°`
+}
+
+// The keyboard participant's press edges for one tick (consumed latches).
+type ActionEdges = Pick<
+  ParticipantIntent,
+  'pushPressed' | 'tsuppariLeftPressed' | 'tsuppariRightPressed' | 'counterPressed' | 'gripPressed'
+>
+const NO_EDGES: ActionEdges = {
+  pushPressed: false,
+  tsuppariLeftPressed: false,
+  tsuppariRightPressed: false,
+  counterPressed: false,
+  gripPressed: false,
 }
 
 interface MovementKeys {
@@ -137,10 +163,15 @@ export class BoutScene extends Phaser.Scene {
   private readonly counterLatch = new PressLatch()
   // Prototype binding: Shift (either side) = Grip while free / Release while grappled.
   private readonly gripLatch = new PressLatch()
-  // Prototype test harness (not CPU AI): drives the CPU participant; mode keys 1 / 2.
+  // Prototype binding: ArrowLeft / ArrowRight = left-hand / right-hand Tsuppari (temporary).
+  private readonly tsuppariLeftLatch = new PressLatch()
+  private readonly tsuppariRightLatch = new PressLatch()
+  // Prototype test harness (not CPU AI): drives the CPU participant; mode keys 1 / 2 / 3.
   private readonly dummy = new PushDummyController('wrestler-b', 'wrestler-a')
   private modeText: Phaser.GameObjects.Text | null = null
   private engagementText: Phaser.GameObjects.Text | null = null
+  // Debug-only Tsuppari cooldown / buildup line (key 0).
+  private tsuppariText: Phaser.GameObjects.Text | null = null
   private resultText: Phaser.GameObjects.Text | null = null
   private grappleLine: Phaser.GameObjects.Graphics | null = null
   private boundaryLine: Phaser.GameObjects.Graphics | null = null
@@ -181,10 +212,13 @@ export class BoutScene extends Phaser.Scene {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.counterLatch.press())
       // SHIFT matches both the left and right Shift keys.
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT).on('down', () => this.gripLatch.press())
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down', () => this.tsuppariLeftLatch.press())
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => this.tsuppariRightLatch.press())
       // Prototype convenience: R restarts from the prototype setup.
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R).on('down', () => this.restart())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO).on('down', () => this.setDummyMode('push'))
+      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE).on('down', () => this.setDummyMode('tsuppari'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO).on('down', () => this.setDebug(!this.debug))
       // Prototype-only start input for the pre-bout comparison (not the final control scheme).
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => this.startBout())
@@ -226,6 +260,7 @@ export class BoutScene extends Phaser.Scene {
     // Debug-only texts sit bottom-left, clear of the HUD blocks and the Action critical circle.
     this.modeText = this.add.text(24, 1030, '', { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
     this.engagementText = this.add.text(24, 986, '', { fontFamily: 'sans-serif', fontSize: '30px', color: '#ffffff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
+    this.tsuppariText = this.add.text(24, 944, '', { fontFamily: 'sans-serif', fontSize: '28px', color: '#b8f0ff', stroke: '#000000', strokeThickness: 4 }).setDepth(TEXT_DEPTH)
     this.resultText = this.add
       .text(this.scale.width / 2, 110, '', { fontFamily: 'sans-serif', fontSize: '64px', color: '#ffffff', stroke: '#000000', strokeThickness: 8 })
       .setOrigin(0.5, 0)
@@ -245,14 +280,16 @@ export class BoutScene extends Phaser.Scene {
     const ticks = this.accumulator.advance(deltaMs)
     if (ticks > 0) {
       // A latched press goes to the first tick of this frame only; a frame with 0 ticks keeps it.
-      const pushPressed = this.pushLatch.consume()
-      const counterPressed = this.counterLatch.consume()
-      const gripPressed = this.gripLatch.consume()
+      const edges: ActionEdges = {
+        pushPressed: this.pushLatch.consume(),
+        tsuppariLeftPressed: this.tsuppariLeftLatch.consume(),
+        tsuppariRightPressed: this.tsuppariRightLatch.consume(),
+        counterPressed: this.counterLatch.consume(),
+        gripPressed: this.gripLatch.consume(),
+      }
       // Intents (incl. the dummy's) are built per tick from the current Snapshot, never reused per frame.
       for (let i = 0; i < ticks; i++) {
-        this.simulation.step(
-          this.collectIntents(i === 0 && pushPressed, i === 0 && counterPressed, i === 0 && gripPressed),
-        )
+        this.simulation.step(this.collectIntents(i === 0 ? edges : NO_EDGES))
       }
     }
     this.syncViews()
@@ -296,6 +333,8 @@ export class BoutScene extends Phaser.Scene {
     this.pushLatch.clear()
     this.counterLatch.clear()
     this.gripLatch.clear()
+    this.tsuppariLeftLatch.clear()
+    this.tsuppariRightLatch.clear()
   }
 
   private setDummyMode(mode: DummyMode): void {
@@ -318,20 +357,20 @@ export class BoutScene extends Phaser.Scene {
     this.grappleLine?.setVisible(on)
     this.boundaryLine?.setVisible(on)
     this.engagementText?.setVisible(on)
+    this.tsuppariText?.setVisible(on)
     this.modeText?.setVisible(on)
     this.updateModeText()
   }
 
   private updateModeText(): void {
-    const dummy = this.dummyMode === 'push' ? 'DUMMY: PUSH' : 'DUMMY: STATIONARY'
-    this.modeText?.setText(`${dummy}   WASD move  Up push/drive  Down counter  Shift grip  1/2 dummy  R restart  0 debug off`)
+    const dummy =
+      this.dummyMode === 'push' ? 'DUMMY: PUSH' : this.dummyMode === 'tsuppari' ? 'DUMMY: TSUPPARI' : 'DUMMY: STATIONARY'
+    this.modeText?.setText(
+      `${dummy}   WASD move  Up push/drive  Left/Right tsuppari  Down counter  Shift grip  1/2/3 dummy  R restart  0 debug off`,
+    )
   }
 
-  private collectIntents(
-    pushPressed: boolean,
-    counterPressed: boolean,
-    gripPressed: boolean,
-  ): Map<ParticipantId, ParticipantIntent> {
+  private collectIntents(edges: ActionEdges): Map<ParticipantId, ParticipantIntent> {
     const intents = new Map<ParticipantId, ParticipantIntent>()
     const snapshot = this.simulation.getSnapshot()
     for (const style of PARTICIPANT_PRESENTATION) {
@@ -343,9 +382,7 @@ export class BoutScene extends Phaser.Scene {
             left: this.keys.left.isDown,
             right: this.keys.right.isDown,
           }),
-          pushPressed,
-          counterPressed,
-          gripPressed,
+          ...edges,
           driveHeld: this.upKey?.isDown ?? false,
         })
       } else if (style.controller === 'dummy') {
@@ -367,6 +404,7 @@ export class BoutScene extends Phaser.Scene {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
     this.resultText?.setText(formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY))
+    this.tsuppariText?.setText(snapshot.participants.map(tsuppariLabel).join('     '))
     this.engagementText?.setText(
       snapshot.engagement.kind === 'grappled'
         ? `${engagementLabel(snapshot.engagement)}  pair v: ${pairSpeed.toFixed(2)} m/s`

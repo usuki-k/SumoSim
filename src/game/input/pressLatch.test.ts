@@ -68,7 +68,7 @@ function runFrames(plan: { ticks: number; pressDown?: boolean; pressUp?: boolean
       const before = sim.getSnapshot().participants[0].action.kind
       sim.step(
         new Map<ParticipantId, ParticipantIntent>([
-          ['a', { move: { x: 0, y: 0 }, pushPressed: i === 0 && pushPressed, counterPressed: i === 0 && counterPressed, gripPressed: i === 0 && gripPressed, driveHeld: false }],
+          ['a', { move: { x: 0, y: 0 }, pushPressed: i === 0 && pushPressed, tsuppariLeftPressed: false, tsuppariRightPressed: false, counterPressed: i === 0 && counterPressed, gripPressed: i === 0 && gripPressed, driveHeld: false }],
         ]),
       )
       const after = sim.getSnapshot().participants[0].action.kind
