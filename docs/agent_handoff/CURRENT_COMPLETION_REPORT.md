@@ -1,270 +1,461 @@
-Task-ID: ACTION-ART-03A-RIGID-WRESTLER-RUNTIME-INTEGRATION
-Result: PASS WITH KNOWN UNTESTED ITEMS
+Task-ID: ACTION-04A3-COUNTER-TRANSITION-INVESTIGATION
+Result: PASS
 Branch: develop
-Source-Baseline: 31d658e0e4bf4d50168d0eae062e29c248b96fb9
-Agent-Start-Head: aff9f7948c894bd21d4f6456afa4d0571bede250
+Source-Baseline: 190c50b37ad217b9597a64323f357ad396ecb903
+Agent-Start-Head: 3f4adb0e1aa460fa063d187c2931c62d4c63b40e
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS + Runtime Smoke PASS。User Play Testは未実施）。
+PASS（Investigation / Design。Production変更なし）。
 
-- 手続き的な関節付きの力士（`WrestlerView.ts`）を、User承認済みの **2枚の剛体のProduct sprite**（blue / red）に置き換えた
-  - 位置: canonicalな `participant.position`（meterからpixelへの写像は既存のまま）
-  - 向き: canonicalな `participant.facing` で、sprite全体を連続的に回転する
-  - 全stateで同じspriteを使う
-- runtimeのPNGは、レビュー済みのsourceから、新しいexporterで決定的に書き出した。commitしたfileは、その場で書き出し直したものとbyte単位で一致する
-- 変更しなかったもの: Simulation / gameplay / input / HUD / arena
+**推奨: Candidate A — Simulationが持つpair-levelの `CounterTransition`**
+- 120 tickの、決定的なpathによる移動
+- Pusherの基準: 押した側（Pusher）の位置を基準にした、極座標のpath
+- 入力: 完全にlockする
+- 接触の補正: 2人の間では行わない
+- Ring-out: 毎tick、既存の判定をそのまま使う
+
+設計は実装Taskに渡せる粒度まで決めた。ただし実装の前に、**Userの判断が2つ必要**（D1: Pusherの前への距離、D2: 遷移の後の崩しとMorozashiの機会）。どちらも推奨案を付けたが、値や意味は勝手に決めていない（§User Decisions Still Needed）。
+
+役割名の対応:
+- Taskの用語: **counter user**（Downで捕えた側）/ **pusher**（Pushを捕えられた側）
+- `resolveCounter()` の中の名前: counter user = **`defender`**、pusher = **`attacker`**
+- 以下ではTaskの用語を使う
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 5`
 - Remote CURRENT_TASK
   - Task-ID一致、Status READY、Target-Branch develop
-  - Source-Baseline `31d658e`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+  - Source-Baseline `190c50b`（`origin/develop` のancestor）、Handoff-Mode GITHUB
 - 変更の範囲
-  - `31d658e..origin/develop` の変更は、`CURRENT_TASK.md` のみ
-  - HEAD（`0f5ff64`）から `origin/develop` までも、同じfileのみ
-- `merge --ff-only` → HEAD `aff9f79`
-- 入力: `tools/wrestler_art/input.local/` に、両fileがあった
-  - 他のdirectoryは探していない
-  - 03Aでの手順の逸脱（Downloadsからのcopy）についての訂正を受け、今後は入力が無ければ止まる方針にした
+  - `190c50b..origin/develop`、HEAD（`f6f006d`）から `origin/develop` までのどちらも、`docs/agent_handoff/CURRENT_TASK.md` のみ
+- `merge --ff-only` → HEAD `3f4adb0`
+- source / SPEC / testは変更していない
+  - 調査用のscript（scratchpadの `counter_probe.ts`）で、変更していないSimulationを実行した
 
-# Reviewed Source Identities
+# Current Counter Pipeline（`BoutSimulation.step`。source上の順序）
 
-| sprite | size / mode | file SHA-256 | decoded RGBA pixel SHA-256 |
+1. `outcome !== ongoing` なら、何もしない（freeze）
+2. `previousA/B` を記録する
+3. `advancePosture`: 崩しのtimerを1減らす。0なら次のtickでstableに戻る
+4. 組みの解除 / Drive（組んでいるとき）
+5. FREEのaction開始
+   - `idle && stable` のときだけ始まる（Push > Counter > Grip）
+   - 押しっぱなしの入力は無視され、溜められない
+6. `applyGroundedVelocity(selfVelocity, effectiveMove)`、`decayExternal`
+   - 崩し / Counter / Gripのときは、移動の意図が0になる
+7. 積分: `position += (self + external) × dt`
+8. `resolveContact()`: 近づく方向のself速度を消し、めり込みを分け合って直す。法線を返す
+9. FREEかつ接触しているとき: **`resolveCounter()`** → `resolveGrip()` → `resolvePush(contact)`
+10. `advanceAction`: Counterの窓が切れたら失敗 → `enterKuzushi`
+11. `updateFacing`
+    - FREE: 崩しでない者は、相手へ瞬時に向く
+    - 崩しの者は、向きを固定する
+12. `resolveArenaRingOut`: 直前と最終の中心を結ぶ線分で判定する。Tokudawaraに対応している
+
+**`resolveCounter()`**（`BoutSimulation.ts:699-730`）
+- 条件: counter userの `action.kind === 'counter'`、pusherがactiveのPush、接触している
+- 処理
+  1. `d` = pusherの固定されたPushの向き
+  2. `tier = counterTier(ticksRemaining)`（activeの最初の3 tickがBest）
+  3. `target = counterRelocationTarget(tier, pusher.position, d, combined, cu.position, radius − bodyRadius)`
+  4. `enterKuzushi(pusher)`（Pushは取り消し、30 tick）
+  5. `cu.action = idle`
+  6. targetがあれば **`cu.position = target`**（同じtickのうちに直接代入）
+  7. `pusher.externalVelocity += d × COUNTER_OVERSHOOT_SPEED(1.0 m/s)` → clamp
+  8. 既存の外力の勢いは残す
+- その後の同じtick
+  - `resolveGrip`（何も起きない）
+  - `resolvePush(contact)`: Pushは取り消されたので、net 0
+  - `updateFacing`: counter userは新しい位置からpusherへ瞬時に向く。pusherは向きを固定する
+  - Ring-out: 直前の位置からtargetへの直線で判定する
+
+Taskの「既知の動作 1〜5」は、sourceと一致した。
+
+# Current Instant-Relocation Evidence
+
+変更していないSimulationで測った値（2人が接した状態から開始。Bが−x方向へ押す）:
+
+| ケース | 捕えたtick | counter userの1 tickでの移動 | pusherの外力（捕えた直後） | pusherが前へ流れる距離（捕えた後） |
+|---|---|---|---|---|
+| Best（activeの1 tick目） | 6 | **1.400 m = 4.0R**（正面 → 背後） | 1.0 m/s | 0.054 m（0.16R） |
+| Success（activeの4 tick目） | 10 | **0.981 m = 2.8R**（正面 → 横） | 1.8 m/s | 0.188 m（0.54R） |
+| Success（activeの最後の tick） | 13 | 0.974 m = 2.8R | 2.4 m/s | 0.340 m（0.97R） |
+| Success（counter userが+yへ寄る） | 10 | 0.957 m = 2.7R（+y側へ） | 1.8 m/s | 0.188 m |
+
+- counter userは、1 tick（16.7 ms）で最大4R動く。これが、Userの見た瞬間移動の正体
+- pusherが前へ流れる距離は、overshoot（1 m/s）と、Pushで溜まった2人の勢いを外力の減衰（8 m/s²）で止めたもの
+  - **0.05〜0.34 m で、tierとタイミングによって変わる**。約0.1〜0.3秒で止まる
+  - 「2秒かけて読み取れるほど前へよろける」には、明らかに足りない（→ D1）
+
+# Affected State / Tests
+
+**瞬間的な位置の移動とovershootに依存するtest**（実装時に、意図して書き換えが必要）:
+
+| file | test | 依存していること |
+|---|---|---|
+| `BoutCounterPosition.test.ts` | T78、T79、T80（統合部分）、T81 / T82 の統合、T83 | 捕えた同じtickに、target（接する距離）にいる |
+| 同 | T84（2件）、T85、T86、T87 | `COUNTER_OVERSHOOT_SPEED` による外力、前からの勢いが残る、減衰 |
+| 同 | T88、T89、T91 | 失敗時の動作（維持）、tierの境界（維持）、再現性（期待値は変わる） |
+| `BoutCounter.test.ts` | T67、T68、T69、T70、T76 | 捕えた後の崩しの長さ（D2で変わる）、入力の無視、向き、再現性 |
+| `BoutGrip.test.ts` | **T101、T108** | **Counter成功の次のtickにGrip → Morozashi**（入力lock中は不可。→ D2） |
+| `BoutOrientation.test.ts` | T117、T118、T119 | Counter → Gripの後のTURNINGの量（背後 / 横の幾何は保たれる。開始のtickがずれる） |
+| `BoutRingOut.test.ts` | T165 | 土俵際でのtargetの有効性。fixtureの意図は保たれるが、判定はpathの全体になる |
+| `BoutTokudawara.test.ts:538` | 移動はcircleの保守的な条件のまま | 維持する（同じ条件をpathの全点に適用） |
+| `pushDummyController.test.ts` | T74 | 崩しの間、dummyは何も送らない（遷移中も同じ扱いが必要） |
+| `wrestlerVisualState.test.ts` | 崩しの優先度と強さ | 崩しの長さがD2で変わると、強さの計算の分母に影響する |
+
+**壊れる、または拡張が必要な不変条件**
+1. FREEのactionは、`idle && stable` なら始められる → 遷移中のcounter userは `idle && stable` でも始められないようにする（新しいgate）
+2. 位置は、積分・接触・組みの結合・Counterの移動だけで変わる → 遷移中は「決定的なpath」が唯一の情報源になる。積分と接触は止める
+3. FREEでは毎tick、接触を補正する → 遷移中の2人には行わない
+4. 外力は独立に減衰する → 遷移中は、pathで上書きする
+5. Counterの移動は、同じtickの中の内部処理（ring-outのeventではない）→ 複数tickの移動になる。ring-outは毎tickの線分で判定する（既存の判定のまま）
+
+# Candidate Designs
+
+| 観点 | **A. pair-levelの遷移状態** | B. participantのaction / postureを拡張 | C. presentationだけの補間 |
 |---|---|---|---|
-| blue | 1254×1254 RGBA | `ede9ffd2…1781dbb4`（一致） | `0de729df…9adf65dd`（一致。照合の正） |
-| red | 1254×1254 RGBA | `98f9465a…5c9792fa9`（一致） | `a212dbfe…9b25dafe7`（一致。照合の正） |
+| 正本が1つ | ◎ 2人の幾何をpairとして1か所に持つ（`engagement` と同じ考え方） | △ 2人の半分ずつを同期させる必要がある。相対pathは本来pairのもの | ✗ 正本の位置（瞬間移動後）と表示の位置が2つになる |
+| 入力のlock | ◎ 遷移の有無で一括して判定する | ○ 2つの状態から判定する | ✗ Simulationは移動後すぐ入力を受け付ける。表示が遅れる |
+| 決定性 / 固定step | ◎ tickの数で進める | ◎ | △ Sceneのdelta時間に依存する |
+| Snapshotの分かりやすさ | ◎ `counterTransition` を1つ見ればよい | △ pusherとcounter userの状態を突き合わせる | ✗ 表示と接触円がずれる |
+| 接触 / ring-out | ◎ 正本の位置が連続して動く。ring-outは実際の経路で判定する | ○ | ✗ ring-outは瞬間移動した位置で判定され、見た目と食い違う |
+| 将来のCounterのart | ◎ tier、役割、進み具合をそのまま読める | ○ | △ |
+| 実装の大きさ | 中（型1つ、stepに1つの分岐、開始と完了の処理） | 中〜大（各actionの分岐が増える） | 小。ただし要件を満たさない |
 
-# Asset Export
+**推奨: A**。Cは、2つの要件（両者とも約2秒操作できない、決定的なtiming）を満たせない。また「正本の位置を2つ持たない」に反するので、却下する。
 
-- 新規: `tools/wrestler_art/export_runtime_wrestlers.py`（小さな専用のscript。汎用のpipelineではない）
-  - 03Aの関数をそのまま使う: `aw.load_source` → `ps.normalize_sprite`（`dual_rigid_recipe.json`。1回の全体の回転、body-core = 2R）→ `aw.runtime_part`（ちょうど1/4に縮小）
-  - 反転はしない
-  - 各fileを原子的に書く
-  - 寸法、pivot、body-core、pixel / file SHA-256を表示する
-- 書き出し: `PY tools/wrestler_art/export_runtime_wrestlers.py`
-  - 出力先は `public/assets/action/wrestler/{blue,red}.png`
-- 照合: `PY tools/wrestler_art/export_runtime_wrestlers.py --check`
-  - commit済みのfileと、その場の書き出しを比べる（pixelとbytes）。何も書かない
-  - 結果は **ok（両方とも）**
-- recipeの値は変えていない（03Aでレビューした幾何のまま）
+# Recommended Design
 
-| file | 寸法 | pivot（px） | body-core | pixel SHA-256 | file SHA-256 |
-|---|---|---|---|---|---|
-| `blue.png` | 167×181 | (84, 87) | 123.0769 px | `bbd3459360064934c1b2fa247fdb5821f3c5e8699b594e4b27dec93f8975fc7b` | `cf61c777d4d88ec105735c93454ccd3c9df59999070eb4f7653140d962eb3168` |
-| `red.png` | 158×178 | (82, 95) | 123.0769 px | `d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa` | `147dda89e08965b0286461f281501713ebfbe8cd0a5b293901a9185aa0f1f57b` |
+**推奨する状態の形**（Simulationの内部）:
 
-（寸法とpivotは、03Aのpreviewで報告した値と同じ。）
+```ts
+type MutableCounterTransition =
+  | { kind: 'none' }
+  | {
+      kind: 'active'
+      tier: 'best' | 'success'
+      counterUserId: ParticipantId
+      pusherId: ParticipantId
+      ticksElapsed: number            // 0 = 開始tickの終わり。1..N = 遷移のtick
+      // 開始時に固定（以後は再計算しない）
+      pusherStart: Vec2               // p0
+      direction: Vec2                 // d（固定したPushの単位方向）
+      staggerDistance: number         // L（D1）
+      counterUserStartRel: { r: number; theta: number } // (d, perp) 系での極座標（pusherを中心）
+      counterUserTargetRel: { r: number; theta: number } | null // null = 有効な候補なし（下記）
+    }
+```
 
-# Runtime Pivot / Origin Metadata
+**Snapshotに公開するもの**（pair-level。`engagement` と同じくtopに置く）:
 
-- 新規: `src/game/presentation/productWrestlerArt.ts`（Phaser非依存）
-  - `PRODUCT_WRESTLER_ART.{blue,red}` に、id、textureKey（`product-wrestler-blue` / `-red`）、assetPath、width / height、pivot、`bodyCoreDiameterPx`（123.076923）を持たせた
-  - `productWrestlerOrigin(art) = { x: pivot.x / width, y: pivot.y / height }`
-    - blue = (0.50299, 0.48066)
-    - red = (0.51899, 0.53371)
-  - Phaserの `setOrigin` に渡す。これで `image.position` = canonicalなparticipantの中心になる
-- TSの値と、commitしたPNG / その場の書き出しとの一致は、Pythonのtest（`test_runtime_metadata_matches_typescript_contract`）で確認する
-  - TSのtestは、PNGを読むために `@types/node` を足すことを避け、純粋な関数だけを確認する
+```ts
+export type BoutCounterTransition =
+  | { readonly kind: 'none' }
+  | {
+      readonly kind: 'active'
+      readonly tier: 'best' | 'success'
+      readonly counterUserId: ParticipantId
+      readonly pusherId: ParticipantId
+      readonly ticksRemaining: number // 1..N。次のtickを含む（既存のtimerと同じ約束）
+    }
+// BoutSnapshot に `counterTransition: BoutCounterTransition` を足す
+```
 
-# Scale Formula
+- path（p0、d、L、極座標）は公開しない（正本の位置と向きが、すでに表示に足りる）
+- 使い道
+  - debugのlabel
+  - dummyのharnessが待つ判定
+  - 将来のCounterのart（tierと役割）
 
-- `productWrestlerScale(art, bodyRadiusPx) = (2 × bodyRadiusPx) / art.bodyCoreDiameterPx`
-- 現在は `bodyRadiusPx = 0.35 × 400 / 2.275 = 61.538…` なので、scale = **1.000000**（blue / red とも）
-- participantごとのcanonicalな `bodyRadius` に比例する（testで、1.2倍にすると1.2になることを確認した）
-- 全体のalpha bboxは、scaleの基準にしていない。gameplayの `bodyRadius` は変更していない
+**名前つきの暫定定数**
+- `COUNTER_TRANSITION_TICKS = 120`（60 Hzで2.0秒）
+- `COUNTER_STAGGER_DISTANCE`（D1）
+- `COUNTER_OVERSHOOT_SPEED` は、遷移で置き換えるので削除する（実装Taskで）
 
-# WrestlerView Replacement Summary
+# Entry / Tick / Completion Semantics
 
-`src/game/scenes/WrestlerView.ts`: 328行 → 68行。
+**開始（entry）**: 既存の `resolveCounter()` の中で、捕えたtick（tick T）に置き換える
+1. `d`、`tier` を取る（既存と同じ）。`enterKuzushi(pusher)`、`cu.action = idle`（既存と同じ）
+2. counter userの位置は動かさない（**瞬間移動を削除する**）。overshootの外力も足さない
+3. 2人の `selfVelocity` と `externalVelocity` を0にする（前からの2人の勢いは、遷移に吸収する。→ D3）
+4. 候補を選ぶ（下記の「Path」）。遷移を `active`、`ticksElapsed = 0` にする
+5. このtickの残り（Grip / Push / timer / 向き / ring-out）は、既存のとおり
+   - Pushは取り消されているので、net 0
+   - 誰もGripのreachをしていないので、Gripは起きない
+   - 位置は捕えた時のまま
 
-**削除したもの**
-- 手続き的な足・胴・まわし・1本の腕・頭のtexture生成
-- `PoseParams` と各poseの定数、poseの指数的な補間、`mix`
-- 腕のreach / spread、crouch / lean、torsoRot
-- 歩きの足の位置、旋回中とDrive中の踏み替え
-- kuzushiの揺れ
-- まわしのtintによるMorozashiの手がかり（`lighten`）
-- Container
+**遷移中のtick**（T+k、k = 1..N。stepの順序を、この分岐で置き換える）:
+1. freezeの判定（既存）→ `previous` を記録（既存）
+2. `advancePosture`: pusherの崩しのtimerは、遷移中は減らさない（D2(a)の場合）。counter userはstableのまま
+3. **入力はすべて無視する**: 解除 / Drive / FREE actionの開始 / 移動。intentは読まない
+4. `ticksElapsed += 1`、`u = ticksElapsed / N`
+   - pusher: `P(u) = p0 + d · L · ease_p(u)`
+   - counter user: `C(u) = P(u) + polar(r(u), θ(u))`（下記）
+5. 速度は、報告用にpathの差分を書く（積分には使わない）
+   - pusher: `externalVelocity = (P_k − P_{k−1}) / dt`、`self = 0`
+   - counter user: `selfVelocity = (C_k − C_{k−1}) / dt`、`external = 0`
+6. 接触 / 組みの結合 / Counter / Grip / Push の解決、`advanceAction` は行わない（2人ともidleのまま）
+7. `updateFacing`（既存の規則のまま。下記）
+8. Ring-out（既存の `resolveArenaRingOut`。`previous` → `current`）
+9. `ticksElapsed === N` かつまだongoingなら、**完了**
 
-**新しい構成**
-- Product spriteの `Image` 1枚
-  - originは明示したpivot、scaleはbody-coreから決める
-  - tintはかけない
-- 手続き的な影の `Image` 1枚
-  - 影のtexture生成だけを残した（2.25R × 2.0R、α0.28、world上で (+0.07R, +0.12R)、ほぼ円形）
-- depthは影1、体2（変更なし）
-- `preloadProductWrestlers(scene)` を公開した
+**完了（tick T+N の終わり）**
+- 位置: `P(1) = p0 + d·L`、`C(1)` = 既存の候補の式を `P(1)` で評価したもの（下記）
+- action: 2人ともidle
+- posture
+  - pusher: 崩しをもう一度、`KUZUSHI_TICKS` から始める（D2(a)）
+  - counter user: stable
+- 速度: 2人とも、selfもexternalも0
+- 向き: その時の値のまま（既存の規則）
+- engagement: FREE
+- 遷移の状態: `none`
+- **入力は、tick T+N+1 から戻る**
+  - 押しっぱなしのWASDは、T+N+1から効く
+  - 押した瞬間の入力（Push / Counter / Grip）は、そのtickに新しく来たものだけが有効
 
-**`apply(state, participant, positionPx)` がすること**
-- `moving = state.pose === 'move'`（既存のhysteresisとの互換を保つ）
-- 体をcanonicalな位置に置き、`participant.facing` で回転する
-- 影をworld上のoffsetの位置に置く
-- 時間による変形はしない
-- 体の部位を描く古い経路は、残っていない（裏で動き続けるものも無い）
+# Success vs Best
 
-# Preload / Scene Wiring（`BoutScene.ts`、最小限）
+**共通**
+- tick数N、pusherのpath、入力のlock、接触の扱い、ring-out、向き、速度、崩し
+- 候補の有効性の検査、候補が無いときの扱い
 
-- `preload()`: `preloadProductDohyo(this)` の隣に `preloadProductWrestlers(this)` を足した
-- `PARTICIPANT_PRESENTATION` に `art: ProductWrestlerArtId` を足した
-  - `wrestler-a` → `'blue'`、`wrestler-b` → `'red'`
-  - `color` はdebug（接触円、組みの線）用に残した
-- 生成: `new WrestlerView(this, bodyPixels, PRODUCT_WRESTLER_ART[style.art])`
-- `apply` が時間を使わなくなったので、`syncViews(dtMs)` の引数を外し、呼び出し4か所を `syncViews()` にした
-  - `noUnusedParameters` によって機械的に必要になった変更。`update` のaccumulatorは引き続き `deltaMs` を使う
-- `wrestlerVisualState.ts` は変更していない
+**違い**: counter userの目標の角度θ1と、候補の順序だけ（既存の `counterRelocationTarget` と同じ）
+- Success: 好みの側 → 反対の側。θ1 = ±π/2
+- Best: 背後 → 好みの側 → 反対の側。背後は θ1 = ±π
+  - 回り込む向きは、好みの側と同じ符号
+  - 好みの側の決め方は、既存の規則のまま: 横方向のずれの符号。同点なら土俵の中心に近い側、それも同じなら+
 
-# Canonical Position / Facing Evidence
+**Path（Agentの推奨。決定的で、最小限）**
+- 基準の座標系: pusherの `(d, perp)`、`perp = (−d.y, d.x)`
+- counter user: `polar(r, θ) = d·r·cosθ + perp·r·sinθ`
+  - 開始: `r0 = |c0 − p0|`（≈ 接する距離）、`θ0 = atan2(perp·(c0−p0), d·(c0−p0))`（ほぼ正面なので ≈ 0）
+  - 終わり: `r1 = combined`（接する距離）、θ1は上記
+  - `θ(u) = θ0 + (θ1 − θ0)·s(u)`、`r(u) = r0 + (r1 − r0)·s(u)`、`s(u) = 3u² − 2u³`（smoothstep）
+- pusher: `ease_p(u) = 1 − (1 − u)²`（まず大きく前へ出て、だんだん止まる）
+- 最終の位置: `C(1) = P(1) + polar(combined, θ1)`
+  - これは既存の候補の式（rear = p − d·R、side± = p ± perp·R）を、**pusherの最終の位置** `P(1)` で評価したものと一致する
+  - Success = 横、Best = 背後、という最終の相対配置の意味は保たれる
+- targetは **開始時に一度だけ** 選び、固定する（途中で選び直さない）
+  - pusherの最終の位置も開始時に決まるので、最終の相対配置は厳密
+- 2人の間の距離は常に `r(u) ≥ min(r0, combined) ≥ combined` で、重ならない
+  - 正面から回り込むので、pusherの体を通り抜けない
+  - Bestの「回り込んで背後へ」になる
 
-- `syncViews` は、従来どおり `toCanvas(participant.position)` で求めた `pos` を、debugの接触円と `WrestlerView.apply` の両方に渡す
-  - spriteの位置 = 接触円の中心
-  - 位置の正本を、別に持たない
-- `body.setRotation(participant.facing)`: 量子化も補間もしない
-- Runtime Smoke（下記）で、debugの接触円の中心が両spriteの体の中心にあることを確認した
-  - 開始時、移動した後、接近したとき
-  - WASDで動くと、facingに合わせてsprite全体が回る
+# Input Lock Semantics
 
-# No-mirror Evidence
+| 入力 | 遷移中（T+1〜T+N） | T+N+1 |
+|---|---|---|
+| WASD | 無視（移動の意図は使わない） | 押しっぱなしなら、すぐ効く（通常の加速） |
+| Pushを押した瞬間 | 無視して捨てる（溜めない） | 新しく押したものだけが有効 |
+| Counterを押した瞬間 | 同上 | 同上 |
+| Gripを押した瞬間 | 同上（組みは起きない） | 同上 |
+| Driveの押しっぱなし | FREEなので、もともと関係ない | 同上 |
+| dummyのintent | Simulationが無視する | — |
 
-- exporter
-  - `Image.transpose`、`ImageOps.mirror`、`ImageOps.flip` を、呼ばれたら例外を投げるものに差し替えて、書き出しが成功することを確認した（`test_no_mirror_or_flip`）
-  - 正規化は03Aと同じ経路（そこでも、反転しないことをtestで確認済み）
-- runtime: `WrestlerView` は `setFlipX` / `setFlipY` も、負のscaleも使わない。blueとredは、別々のtextureのまま
+- Sceneの `PressLatch` は、そのframeの最初のtickに渡されたあと、消費される
+- 遷移中に押されたものは、そのtickで無視されて消える（既存の「action中の入力は溜めない」と同じ）
+- **dummyのharness**: `snapshot.counterTransition.kind === 'active'` のときは、`NO_INPUT` を返し、cooldownを満杯に保つ（崩しのときと同じ）
+  - こうしないと、counter user側のdummyが、遷移が終わった直後のtickにPushを始める
+  - 小さな変更で済む
 
-# Tests
+# Movement / Velocity Semantics
 
-- `pnpm test`: **PASS**（18 files / 262 tests）
-  - 新規 `productWrestlerArt.test.ts`
-    - key / pathが別々であること
-    - pivotがtextureの内側にあること
-    - pivotからoriginへの変換
-    - scaleが約1.0で、bodyRadiusPxに比例すること
-    - Phaserに依存しないこと
-- `pnpm build`: **PASS**（tsc + vite build。chunkの大きさの警告は、以前からあるPhaser由来のもの）
-- Python（`tools/wrestler_art/.venv/Scripts/python -m unittest discover -s tools/wrestler_art/tests`）: **107 tests OK**
-  - 既存96件 + 新規 `test_export_runtime_wrestlers.py` 11件
-  - Taskの必須10項目との対応
-    1. blueが無い → `test_missing_blue_fails`（CLIはexit 2で何も書かない）
-    2. redが無い → `test_missing_red_fails`
-    3. pixelが違う → `test_wrong_pixel_identity_fails`
-    4. 書き出しの決定性 → `test_deterministic_export`
-    5. / 6. commit済みのblue / redが、その場の書き出しと一致する → `test_committed_blue_and_red_match_fresh_export`（`check()`。pixelとbytes）
-    7. pivot → `test_accepted_runtime_geometry`、`test_runtime_metadata_matches_typescript_contract`
-    8. body-core 123.077 → 同上、`test_export_matches_dual_rigid_runtime_normalization`
-    9. 反転なし → `test_no_mirror_or_flip`
-    10. 透明な余白とpivot → `test_transparent_padding_and_pivot_valid`
-  - その他: `--check` が、編集されたfileを検出すること（`test_check_accepts_fresh_export_and_rejects_edits`）
-- `git diff --check`: PASS
+- 遷移中の位置は、pathだけが決める（積分しない）。正本の位置は1つで、毎tick連続して動く
+- 速度は、pathの差分を報告用に書く
+  - counter userは自分の足運びなので **self**
+  - pusherは不本意な前への崩れなので **external**
+  - Snapshotの `velocity` = self + external（位置の動きと矛盾しない）
+  - presentationの `locomotionSpeed`（= velocity − external）: counter userは動いている、pusherは足運び0として、正しく扱われる
+- 開始時: 2人のself / externalを0にする（D3）
+- 完了時: 2人とも0
+  - smoothstepとease-outは、u=1で微分が0。離散の最後の差分を残さないように、明示的に0にする
 
-# Browser / Runtime Smoke
+# Contact Semantics
 
-**PASS**（Agentによる自動のsmoke）。
+**推奨: 遷移中は、2人の間の `resolveContact` を行わない**（積分と同時に止める）。
 
-方法:
-- `pnpm dev --port 5199`
-- headlessのChrome 156（swiftshaderによるWebGL）を、Node 24に内蔵のWebSocketで、DevTools Protocol経由で操作した（script: scratchpad。依存は増やしていない）
-- 画面は1920×1080。キー操作はCDPの `Input.dispatchKeyEvent` で送った
-- 15枚のscreenshotを、Agentが目で確認した
+理由:
+- pathはもともと `|C − P| ≥ combined` を保つ（重ならない）
+- 接触の補正（近づくself速度の除去、めり込みの分配）を、path上の位置にかけると、位置を2つの源で決めることになる。jitterや、pathからのずれ（横・背後の配置の崩れ）が起きる
+- 参加者は2人だけなので、それ以外との接触は存在しない
 
-| 確認 | 結果 |
+開始tickでは、既存のとおり、`resolveCounter` の前に接触の補正が済んでいる。そのため `r0` は、接する距離〜それに `CONTACT_SLOP` を足した範囲にある。
+
+# Ring-out / Tokudawara Semantics
+
+- **毎tick、既存の `resolveArenaRingOut` をそのまま使う**
+  - `previous` → `current` は、pathの隣り合う2点を結ぶ線分
+  - Tokudawaraに対応した最初の出る位置（`firstArenaExitFraction`）も、同じtickの中で出て戻る場合を扱える
+  - **勝敗の意味は変えない**
+- **pusherは、遷移の途中で負けうる**
+  - 前へのよろけで外へ出たtickに、outcomeが決まる
+  - 現在のovershootで外へ流れて負けるのと、同じ種類の結果
+- **counter userは、遷移中に外へ出ない**
+  - 候補の有効性を「pathの全点」に広げる
+    - `k = 0..k_end` のすべての `C(k)` が、`|C| ≤ radius − bodyRadius`（既存の保守的な円の条件。Tokudawaraの張り出しは使わない）
+    - `k_end` = N。ただし、pusherのpathが先に外へ出るなら、そのtick（そこでfreezeする）
+    - この `k_end` は、開始時に `firstArenaExitFraction` をpusherの各tickの線分に当てて決める。決定的
+  - 有効な候補の順序と、無いときの扱いは、既存と同じ
+  - この拡張の理由: targetがpusherの最終の位置を基準にしたので、捕えた時の位置だけを検査すると、pathの途中や最後が外へ出うる
+  - 最終の相対配置の意味（横 / 背後、接する距離）は変えない（Taskで止める条件ではない、と判断した。レビューで確認してほしい）
+- **有効な候補が無いとき**（例: 土俵際で、横にも背後にも余地が無い）
+  - Agentの推奨: 遷移はそのまま行う（2人ともN tick、入力lock、pusherは崩し）
+  - ただし **2人とも動かない**（L = 0、counter userはその場）
+  - 理由: counter userがよけられないと、pusherの前へのpathがcounter userと重なる
+  - 現在の「移動しないが、overshootはする」とは少し違う。→ D1と一緒に確認する
+- **同時に外へ出る場合**: counter userは外へ出ないので、遷移からは同時の出（rematch）は起きない
+- **すでに勝敗が決まっている**: stepは何もしないので、遷移も始まらない、進まない
+- **途中で勝敗が決まったとき**: そのtickでfreezeする
+  - 遷移は途中のまま止まる（Snapshotには、`active` とその `ticksRemaining` のまま残る）
+  - 既存の「勝敗が決まった後は、最終の状態をそのまま保つ」（T166 / T167）と同じ
+  - 完了の処理は行わない
+
+# Facing Semantics
+
+**推奨: 既存の `updateFacing` の規則を変えない**（新しい規則を作らない）。
+
+- pusher: 崩しなので、向きを固定する
+  - 捕えた時の向きは、Pushの方向とほぼ同じ
+  - 前へよろけながら、前を向いたまま
+- counter user: FREEで崩しでないので、毎tick、pusherの中心へ瞬時に向く
+  - 位置が連続して動くので、向きも連続して回る
+  - 横へ回るとき、背後へ回り込むときも、相手を見続ける
+  - 剛体のspriteには、そのまま使える
+- 完了時: Bestでは、counter userはpusherの背中を見る。pusherは前を向いたまま（崩し）
+- **既存の、範囲外の注意点**
+  - 崩しが終わったtickに、pusherの向きはFREEの規則で、相手へ **瞬時に** 回る（Bestでは約180°が1 tickで）
+  - これは現在もある挙動で、剛体のspriteでは目立つ可能性がある
+  - この調査の範囲外なので、User Play Testで確認し、必要なら別のTaskで扱う（Unexpected Scopeに記録した）
+
+# Kuzushi Interaction
+
+- pusherは、既存のとおり捕えたtickに `enterKuzushi` する（actionはidle。崩しのときactionはidle、という不変条件はそのまま）
+- 遷移中の入力lockは、遷移の状態から来る（崩しのpostureには頼らない。counter userは崩していないので）
+- **崩しの長さ（D2）**: 遷移（120 tick）は、現在の崩し（30 tick）より長い
+- 崩しがあると、Counter成功 → Grip → Morozashiの連携（T101、T108、T117〜T119）が成り立つ。遷移中は入力がlockされるので、選び方でこの連携が成り立つかどうかが変わる
+  - (a) **推奨**: 遷移中は崩しを保ち、timerを止める。完了時に、`KUZUSHI_TICKS` から改めて始める
+    - 操作が戻った後に、今と同じ約0.5秒の「崩しの間にGripすればMorozashi」の機会が残る
+  - (b) 崩しを捕えた時から30 tick数える → 遷移の途中で切れる。Counter成功からのMorozashiの連携は、実質なくなる
+  - (c) 遷移中もGripだけは受け付ける → 「両者とも操作できない」に反する
+- **失敗したCounter → 崩し** は、`advanceAction` の別の経路で、遷移を作らない。意味は変わらない（T62、T65、T88を維持）
+
+# Snapshot / Presentation
+
+- 正本の位置と向きは、すでに剛体のspriteにそのまま渡されている → 遷移中も、追加の処理なしに連続して動いて見える（Phaserにtweenは不要）
+- `snapshot.counterTransition` の使い道
+  - debugのphase label（例: `COUNTER BEST` / `COUNTERED`）
+  - dummyのharnessが待つ判定
+  - 将来のCounter artの判定（counter userかどうか、tier）
+- 進み具合は `ticksRemaining` から出せる（`wrestlerVisualState` と同じ約束）
+- `wrestlerVisualState.ts`
+  - 必須の変更は無い
+  - pusherは崩しのpose、counter userは移動のpose（足運びの速度 > 0）になる
+  - 将来のCounter artのためのfieldは、そのart Taskで足す
+
+# Boundary Cases
+
+| ケース | 動作 |
 |---|---|
-| Product arenaの読み込み | 200（`arena_base_1920.png`、`dohyo_ring_overlay_1920.png`） |
-| blue / redの読み込み | 200（`blue.png`、`red.png`）。texture欠けの表示なし |
-| consoleの実行時error / 例外 | **なし**（唯一のerrorは、以前からある `favicon.ico` の404） |
-| 取組前の比較表示 | 表示された（Day 3、東西、統計） |
-| Enterで開始 | 開始した。Product HUDが表示され、2人がblue（左）/ red（右）で向き合う |
-| canonicalな位置への追従 | WASDの移動、接近、dummyのpush（2キー）で、spriteが位置どおりに動く |
-| facingの回転 | 移動中、相手の方を向いて、sprite全体が回る（上下や斜めの向きも確認した） |
-| key 0のdebug | 接触円・facing marker・label・境界線を表示した。接触円の中心は、spriteの体の中心にある |
-| Rで再開 | 取組前の比較表示に戻った。Enterで再び開始できた |
-| 古い手続き的な体 | 表示されていない（spriteと影だけ） |
+| 有効な候補が無い | 遷移は行う。2人とも動かず、入力lock、pusherは崩し（D1と一緒に確認） |
+| 土俵際 | 候補の有効性は、pathの全点（pusherが外へ出るtickまで）で検査する。外へ出る候補は飛ばす |
+| Tokudawaraの方向 | counter userは保守的な円の条件（張り出しを使わない。既存のtestを維持）。pusherの外への出は、各tickの線分をTokudawaraに対応した `firstArenaExitFraction` で判定 |
+| 遷移中のring-out | 外へ出たtickにoutcomeが決まり、freeze。遷移は途中のまま止まる |
+| 同時 / ほぼ同時に外へ出る | counter userは外へ出ないので起きない。候補が無い場合も、2人とも動かないので起きない |
+| すでに勝敗が決まっている | 何もしない（遷移は始まらない） |
+| 最後のtick T+N | 位置 = pathの最終値（相対配置は厳密）。同じtickでring-outを判定してから完了。T+N+1から入力が戻る |
+| 遷移中のCounter / Push / Gripの入力 | 無視して捨てる |
+| 開始tickのGrip / Push | 既存のとおり、何も起きない（Pushは取り消し、reachしている者はいない） |
 
-制約:
-- 自動のsmokeは、静止画で確認しただけ。動きの手触り、Kuzushi、組み / Driveの成立、土俵際の読みやすさは見ていない
-- 送ったキー列ではGripが成立せず、`ENGAGE: FREE` のままだった（組みの見た目は未確認）
-- これらはUser Play Testで確認する
+# User Decisions Preserved
 
-# User Play Test Required
+- Successの最終の相対配置 = **横**、Best = **背後**（接する距離。候補の順序と好みの側の規則も維持）
+- 見て分かる遷移は **約2秒**（120 tick）
+- 遷移中は **両者とも操作できない**
+- pusherは **前へよろける**、counter userも自然に動く
+- 基本の剛体spriteを、そのまま使う（新しいartは作らない）
+- Counterを試すときのartは、別のTaskで扱う
+- Counterのtimingの窓とtierの区分、失敗したCounterの罰、ring-outの勝敗の意味: **変更しない**
 
-**Required**（Technical PASSは承認ではない）。Taskの A〜F を、実際のruntimeで確認してください。
-- A. 開始と向き合い: 向き合って見えるか、大きさ、pivot、古い体が消えているか
-- B. WASDで相手の周りを動き、連続した360°の回転が自然か
-- C. 押し（Up）とCounter（Down）: 同じ剛体のartで、prototypeとして許容できるか
-- D. Kuzushi / よろけ: canonicalな位置の移動だけで足りるか（小さな回転は、まだ足していない）
-- E. Grip（Shift）/ 組み / Drive（dummy 1 / 2）: 近づいたときの読みやすさ。最初の専用poseが必要なら、押し / 接触か、grip / 組みか、まだ不要か
-- F. 土俵際での読みやすさと、HUDの読みやすさ
+# User Decisions Still Needed（実装の前に必要）
 
-# Implementation Evidence
+**D1. pusherが前へよろける距離 L（と、候補が無いときの扱い）**
+- 現在の実際の流れは 0.05〜0.34 m（0.16〜0.97R）で、tierとタイミングで変わる。約0.1〜0.3秒で止まる
+- 2秒の読み取れるよろけには、新しい明示的な距離が必要。これはgameplayの意味の変更（土俵際では、Counter成功で押し出されやすくなる）
+- 選択肢
+  - (a) tierに関係なく、固定の距離（Agentの推奨。暫定値の例: 1.0R = 0.35 m。現在の最大値と同じくらい）
+  - (b) tierごとに変える（例: Bestを長く）
+  - (c) 現在と同じ「前からの勢い + overshoot」に応じて変える（2秒に引き伸ばすと、ほとんど動かない）
+- 候補が無いときに「2人とも動かない」でよいか
 
-| Design Requirement | Implementation Evidence | Preserved | Verified By |
-|---|---|---|---|
-| blueとredは別のsource | `PRODUCT_WRESTLER_ART.blue/red`、別のtexture key / file、`PARTICIPANT_PRESENTATION.art` | 03Aの2枚のsource | TS `blue and red are separate assets…`、Python `check()` |
-| 反転なし | exporterは03Aの正規化のみ。runtimeにflip / 負のscaleなし | 03Aの反転なしの経路 | `test_no_mirror_or_flip`、コードの確認 |
-| 明示的なpivot / root | `pivot` → `productWrestlerOrigin` → `setOrigin` | 03Aのroot_source_px | TS origin test、`test_runtime_metadata_matches_typescript_contract`、smoke（接触円の中心） |
-| body-coreによるscale | `productWrestlerScale = 2·bodyRadiusPx / 123.076923` | bodyRadius 0.35 m（変更なし） | TS scale test、Python body-core test |
-| 連続したcanonicalなfacing | `body.setRotation(participant.facing)` | Simulationのfacing（量子化なし） | smoke（移動中の回転）、コードの確認 |
-| canonicalな位置 | `apply(…, pos)`。posは、接触円と同じ `toCanvas(participant.position)` | Simulationの位置が正本 | smoke（接触円の中心が一致） |
-| 手足ごとのProduct描画なし | 体のImageは1枚。部位のtexture / pose / tint / 時間による変形を削除した | — | `WrestlerView.ts`（68行）、smoke |
-| HUD / debugの保持 | HUD、取組前の比較、Enter / R / 1 / 2 / 0、接触円、facing marker、label、phase text、組みの線、境界のdebugは、未変更 | ACTION-ART-02A / 02Bの表示 | `pnpm test`、smoke（01、03、13、14、15） |
+**D2. 遷移の後の崩し / Morozashiの機会**
+- (a) 推奨: 完了後に、崩しを改めて `KUZUSHI_TICKS` 与える（Counter成功 → GripでMorozashi、の連携を保つ）
+- (b) 捕えた時から数える（連携は実質なくなる）
 
-# Changed Files
+**D3（確認）. 捕えた時の2人の前からの勢いを捨てる**
+- pathが動きを持つので、Pushで溜まった勢い（最大約2.4 m/s）は遷移に吸収する
+- T85の「前からの勢いを保つ」は置き換わる
+- pusherの距離はD1で決まる
 
-- 新規
-  - `public/assets/action/wrestler/blue.png`、`public/assets/action/wrestler/red.png`（exporterの出力）
-  - `src/game/presentation/productWrestlerArt.ts`、`src/game/presentation/productWrestlerArt.test.ts`
-  - `tools/wrestler_art/export_runtime_wrestlers.py`、`tools/wrestler_art/tests/test_export_runtime_wrestlers.py`
-- 変更
-  - `src/game/scenes/WrestlerView.ts`（剛体の描画に置き換え）
-  - `src/game/scenes/BoutScene.ts`（preload、art idの割り当て、`syncViews` の引数）
-  - `tools/wrestler_art/README.md`（Runtime exportの節）
-  - `docs/WRESTLER_PRODUCT_ART_SPEC.md`（下記）
-  - `docs/ARCHITECTURE.md`（下記。最小限）
-  - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
-- 変更なし: `src/game/sumo/**`、input、`wrestlerVisualState.ts`、HUD / 取組前の比較のview、arena、package / lockfile、02A / 02B / 03Aのtool
+（D4・任意: Bestで回り込む向きは、好みの側。これはAgentの推奨で、User Play Testの見た目で調整できる。）
 
-# SPEC Sync
+# Expected Implementation Files
 
-`docs/WRESTLER_PRODUCT_ART_SPEC.md`:
-- Status行を直した: 現在の方針は§0。部位 / 2関節の記述は履歴
-- 新しい **§0「現在の採用方針」** を足した
-  - 2枚の剛体sprite、反転なし、連続した全体の回転、位置の移動による最小の動き
-  - export / pivot / scaleの約束、全stateで同じsprite、割り当て
-  - Deferred（専用pose、8方向、frame数、pose数、rig）
-- §1 / §5 / §7 / §13の見出しと該当行に、「履歴・§0で置き換えた」と注記した（削除はしていない）
-- §11: 03AのUser Visual Gateの結果を記録した
-- §21: ACTION-ART-03Aの統合を記録した
-- 最終的なanimation / poseの数は決めていない
+- `src/game/sumo/BoutTypes.ts`: `BoutCounterTransition`、`BoutSnapshot.counterTransition`
+- `src/game/sumo/BoutSimulation.ts`
+  - 遷移の状態
+  - `resolveCounter` の開始の処理（瞬間移動とovershootを削除）
+  - 候補の選択とpathの検査（`counterRelocationTarget` をpath版にするか、その周りに検査を足す）
+  - `step` の中の遷移の分岐、完了
+  - `getSnapshot` でのcopy
+  - 定数: `COUNTER_TRANSITION_TICKS`、`COUNTER_STAGGER_DISTANCE`。`COUNTER_OVERSHOOT_SPEED` を削除
+- `src/game/sumo/ringOut.ts`: 変更なし（export済みの `firstArenaExitFraction` を使う）
+- `src/game/input/pushDummyController.ts`（+ test）: 遷移中は崩しと同じく待つ
+- `src/game/scenes/BoutScene.ts`: 任意。debugのphase labelのみ
+- test
+  - 新しい `BoutCounterTransition.test.ts`
+  - 書き換え: `BoutCounterPosition.test.ts`、`BoutCounter.test.ts`、`BoutGrip.test.ts`（T101 / T108）、`BoutOrientation.test.ts`（T117〜T119）、`BoutRingOut.test.ts`（T165）、`BoutTokudawara.test.ts`、`wrestlerVisualState.test.ts`（D2の場合）
+- `docs/ARCHITECTURE.md`: Counterの段落と、stepの順序
+- 変更しないもの: `wrestlerVisualState.ts`、`WrestlerView.ts`、`FixedStepAccumulator.ts`、`grappleOrientation.ts`、HUD、art
+
+# Verification
+
+- sourceを直接確認した
+  - `BoutTypes.ts`、`BoutSimulation.ts`（全体）、`ringOut.ts`、`grappleOrientation.ts`、`FixedStepAccumulator.ts`、`pushDummyController.ts`、`wrestlerVisualState.ts`
+  - `BoutScene.ts`（入力のlatchとsync）、`WrestlerView.ts`（正本の位置 / facingを直接描くこと）
+  - 関係するtest（Counter / Counter Position / Grip / Orientation / Ring-out / Tokudawara / dummy / visual state）
+- 測定: scratchpadの `counter_probe.ts` で、変更していない `BoutSimulation` をNode 24で実行した（結果は上の表）
+- `pnpm test`（変更前のbaseline）: **262 passed**
+- Production / source / test / SPECは変更していない。commitするのは `CURRENT_COMPLETION_REPORT.md` だけ
 
 # Design Deviations
 
 Design Deviations: NONE
 
-（反転、8方向、手足ごとのProduct描画、新しいposeのart、gameplayの変更、新しいよろけの式、canonicalな位置 / facingの置き換えは、どれもしていない。）
+（実装はしていない。Success / Bestの最終配置、ring-outの勝敗の意味、Counterの窓とtier、失敗の罰は、変更の提案もしていない。pusherの距離と崩しの延長は、勝手に決めずにD1 / D2とした。）
 
 # Unexpected Scope（報告のみ）
 
-- **`docs/ARCHITECTURE.md`**（3行の置き換え）
-  - 「現状」の欄が、削除した手続き的な `WrestlerView` と「Product力士は部位で組む（未実装）」を説明したままで、現状と食い違っていた
-  - そのため、`WrestlerView` の1文、`PARTICIPANT_PRESENTATION` の1文、Product力士artの1項目だけを、現在の実装に合わせた
-  - Taskの変更予定の一覧には無いので、ここに記録する
-- **`BoutScene.syncViews` の引数の削除**: `apply` の `dtMs` が不要になったことによる、`noUnusedParameters` 上の機械的な変更（動作は同じ）
-- **Phaserの描画以外で、もう使わなくなったもの**
-  - `wrestlerVisualState` のpose / phaseの詳細（push / grip / kuzushiの強さなど）は、現在 `moving` 以外は描画に使っていない
-  - Taskの指示どおり、mappingは残した（将来の混合poseで使える）
-
-# Known Untested Items
-
-- User Play Test（A〜F）: 手触りと見た目の承認
-- 組み / Driveの見た目: 自動のsmokeでは、組みが成立しなかった
-- 実機のGPUでの表示: smokeはswiftshaderのWebGLだけで確認した
+- **崩しが終わったときの、向きの瞬時の回転**（既存の挙動）
+  - 崩しが終わると、FREEの規則で相手へ1 tickで回る
+  - Best（背後）では約180°の瞬間回転になり、剛体のspriteでは目立つ可能性がある
+  - 今回の遷移の設計では変えていない。User Play Testで確認し、必要なら別のTaskで扱う
+- **候補の有効性を「pathの全点」に広げる点**
+  - 最終の配置の意味は変えないが、有効性の判定の範囲が広がる（土俵際で、現在は有効な候補が、新しい方式では無効になりうる）
+  - レビューで確認してほしい
 
 # Git Delivery
 
-- 上のfileだけを明示的にstageし、1 commit（`feat: integrate rigid product wrestlers`）
-- fetch → fast-forwardの安全を確認 → `origin/develop` へpush → remote SHAを確認 → clean working treeを確認
-- 入力のsprite、previewの出力、`.venv` / cacheは、ignoreされたまま
+- Investigation-only Report Commit Exception（AGENTS.md §13）の条件をすべて満たす
+  - GitHub HandoffのInvestigation / Design Task
+  - Preflightは正常
+  - 結論まで完了
+  - Production変更は不許可で、実際に変更していない
+  - 変更するfileは `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` のみ
+- report-onlyのcommit（`docs(agent): investigate counter transition`）→ fetch → fast-forwardの安全を確認 → `origin/develop` へpush → remote SHAを確認 → clean working treeを確認
 - `main` は変更しない
