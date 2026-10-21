@@ -1,5 +1,5 @@
 Task-ID: ART-WRESTLER-04A-IDLE-MIRROR-WORKFLOW-VALIDATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / ART WORKFLOW / VISUAL VALIDATION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -415,3 +415,101 @@ Validate the idle mirror + mawashi recolor workflow only.
 Do not implement Tsuppari.
 Do not replace the current Product runtime wrestler assets.
 Do not declare the mirror workflow accepted until the User Visual Gate.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: 334a5e181c4197cbd7a87e08c98af6029d19c894
+
+## Reported Implementation vs Design
+
+Accepted as technically aligned with this Investigation / Visual Validation Task.
+
+- Added a preview-only deterministic mirror/recolor workflow.
+- Runtime Product assets remain unchanged.
+- TypeScript / Phaser / Simulation / input remain unchanged.
+- Tsuppari was not implemented.
+- The previous no-mirror constraint was treated as reopened, not silently replaced.
+- Mirror workflow remains Candidate / Pending User Visual Gate.
+
+## Technical Review
+
+Confirmed from Current Source / commit diff:
+
+- reflection is across the normalized local X axis:
+  - image pixels reflect local Y
+  - semantic local +X = FRONT remains unchanged
+  - pivot and body-core points are reflected consistently
+- no hidden second facing convention was introduced
+- mawashi recolor:
+  - uses deterministic HSV selection + largest 4-connected component
+  - changes only selected mask pixels
+  - preserves alpha
+  - leaves pixels outside the mask identical to the mirrored source
+  - uses Pillow / standard library only
+- current authored runtime blue/red assets are read-only inputs
+- Product runtime source and gameplay source were not modified
+- comparison / rotation / arena / diagnostic previews are generated in git-ignored local output
+- focused test coverage includes reflection, pivot/body-core, FRONT preservation, mask isolation, recolor isolation, determinism, read-only runtime assets and fail-closed behavior.
+
+Reported verification:
+- focused ART-WRESTLER-04A tests: 14 PASS
+- full wrestler_art suite: 121 PASS
+- deterministic rerun: reported byte-identical outputs
+- git diff scope matches the Task.
+
+## Review Notes
+
+No material Design Deviation found.
+
+One known visual detail remains intentionally unresolved:
+- anti-aliased mawashi fringe outside the conservative mask:
+  - blue-master -> red: 113 pixels
+  - red-master -> blue: 67 pixels
+
+Do not expand the mask into skin merely to remove those pixels without a separate visual decision.
+
+## User Visual Gate
+
+REQUIRED before accepting the mirror workflow as Product baseline.
+
+Git-ignored preview outputs are not available through GitHub review, so ChatGPT has not directly visually approved them.
+
+User should inspect, at minimum:
+
+- `tools/wrestler_art/output-idle-mirror.local/idle_mirror_comparison.png`
+- `tools/wrestler_art/output-idle-mirror.local/idle_mirror_faceoff_arena.png`
+- `tools/wrestler_art/output-idle-mirror.local/derived_red_from_blue_rotations.png`
+- `tools/wrestler_art/output-idle-mirror.local/derived_blue_from_red_rotations.png`
+- `tools/wrestler_art/output-idle-mirror.local/diagnostics_blue_master.png`
+- `tools/wrestler_art/output-idle-mirror.local/diagnostics_red_master.png`
+
+Decision needed:
+1. accept or reject the mirror workflow
+2. if accepted, choose blue master or red master (or explicitly state no visual preference).
+
+Technical evidence alone does not justify choosing a master. The Completion Report's EITHER recommendation is accepted only as a technical conclusion.
+
+## Do Not Reopen / Do Not Change Yet
+
+Until User Visual Gate:
+- do not replace `public/assets/action/wrestler/blue.png` / `red.png`
+- do not change `productWrestlerArt.ts`
+- do not change `WrestlerView`
+- do not rewrite `WRESTLER_PRODUCT_ART_SPEC.md` as though mirror is accepted
+- do not implement Tsuppari on top of an unaccepted art workflow.
+
+## Next Task Constraint
+
+First obtain the User Visual Gate result.
+
+If accepted:
+- next Task may promote the chosen one-master mirror/recolor workflow into the runtime/export contract and update Product art SPEC.
+- Tsuppari implementation should follow after that baseline is settled.
+
+If rejected:
+- retain the current two-authored-sprite runtime baseline and decide Tsuppari art production separately.
