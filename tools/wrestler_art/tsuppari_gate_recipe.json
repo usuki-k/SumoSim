@@ -1,0 +1,132 @@
+{
+  "recipe_schema": 1,
+  "name": "tsuppari-visual-gate-07c",
+  "status": "Visual Gate candidate (ACTION-07C). Not an accepted Product art contract: the User Visual Gate chooses the final Tsuppari art strategy.",
+  "note": "Two authored red Tsuppari poses are the only runtime sources. Each is normalized like the accepted idle red (one whole-sprite rotation so FRONT = local +X, explicit root, body core = 2R, exact /4 downscale). Blue variants reuse the accepted red -> blue rule of runtime_wrestler_recipe.json (single owner): local-Y reflection ((x, y) -> (x, H - y)) swaps the wrestler's hand, the mawashi-only recolor keeps it. The authored blue candidates are normalized only for reference sheets and never become runtime textures.",
+  "runtime_recipe": "runtime_wrestler_recipe.json",
+  "alpha_threshold": 8,
+  "measurement": {
+    "method": "The pose body is registered to the accepted idle red master (runtime_wrestler_recipe.json) with two torso landmarks measured on the source at 1/2 scale: H = hair blob centroid (dark opaque pixels, 7 px erosion drops outlines, largest component), B = mawashi centroid (hue-band pixels of every component >= 5% of the largest). rotation delta = angle(H -> B) - idle angle(H -> B); scale s = mean(sqrt(hair area ratio), sqrt(mawashi area ratio)); the idle root and body-core points are carried by s * Rot(delta) about the H/B midpoint. source_front_deg = idle 160.7 + delta. Blue references are measured against the screen-mirrored idle red (front 19.3, x -> 1254 - x). Values rounded: front 0.1 deg, points 1 px.",
+    "idle_reference": {
+      "hair_centroid": [429.2, 542.8],
+      "mawashi_centroid": [878.6, 565.5],
+      "hair_px": 42496,
+      "mawashi_px": 56028
+    }
+  },
+  "masters": {
+    "red_left": {
+      "hand": "left",
+      "file": "candidate_red_tsuppari_left.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "219d66dcf13585e7149382f01c964fdd9074bf61e615b5d3f9bbb15b38cb84b3",
+      "reviewed_file_sha256": "24a00ca64c448dcd53c1705e424a3d893fb57bc07893cfdebcc02cd26fb917af",
+      "hand_evidence": "Faces image left like the idle master; the extended arm is the screen-lower one = the wrestler's LEFT (-Y after normalization).",
+      "source_front_deg": 160.7,
+      "root_source_px": [704, 620],
+      "body_core_source_px": [[575, 253], [790, 864]],
+      "body_core_target_r": 2.0,
+      "measurement_evidence": {
+        "hair_centroid": [479.5, 552.2],
+        "mawashi_centroid": [941.1, 575.1],
+        "hair_px": 43948,
+        "mawashi_px": 59800,
+        "rotation_delta_deg": -0.052,
+        "scale": 1.025
+      }
+    },
+    "red_right": {
+      "hand": "right",
+      "file": "candidate_red_tsuppari_right.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "d0e6070e2359a8309b07e7c3d76eba905c50fd379cf7e4b4d50bf14c1816d33b",
+      "reviewed_file_sha256": "f94a6e5a084f08194a3d97f2a498958ed32644edfcc73e6f4d2bdf5ecbc9fc8b",
+      "hand_evidence": "Faces image left like the idle master; the extended arm is the screen-upper one = the wrestler's RIGHT (+Y after normalization).",
+      "source_front_deg": 160.1,
+      "root_source_px": [768, 640],
+      "body_core_source_px": [[637, 281], [854, 880]],
+      "body_core_target_r": 2.0,
+      "measurement_evidence": {
+        "hair_centroid": [557.5, 576.5],
+        "mawashi_centroid": [989.3, 593.7],
+        "hair_px": 42680,
+        "mawashi_px": 57884,
+        "rotation_delta_deg": -0.611,
+        "scale": 1.0093
+      }
+    }
+  },
+  "references": {
+    "blue_left": {
+      "hand": "left",
+      "file": "candidate_blue_tsuppari_left.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "060bfbf4319ed4fbb79d030f9dc6ae90c378f5b8968a28a8ad1d195913e68777",
+      "reviewed_file_sha256": "1b4763367b27f7ad788825e5fec916a97ccd7300e44522177c6c021ba0af5f2b",
+      "hand_evidence": "Faces image right; the extended arm is the screen-upper one = the wrestler's LEFT.",
+      "source_front_deg": 26.4,
+      "root_source_px": [567, 642],
+      "body_core_source_px": [[736, 303], [456, 867]],
+      "body_core_target_r": 2.0,
+      "measurement_evidence": {
+        "hair_centroid": [793.1, 603.0],
+        "mawashi_centroid": [343.0, 570.3],
+        "hair_px": 39644,
+        "mawashi_px": 58980,
+        "rotation_delta_deg": 7.047,
+        "scale": 0.9959
+      }
+    },
+    "blue_right": {
+      "hand": "right",
+      "file": "candidate_blue_tsuppari_right.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "17782b1155f86ad249f4af1a3704f3ea34f89a6e0e06b86447b924f47f4a1071",
+      "reviewed_file_sha256": "b5a9d8ef8dbe2e211b662479d6ba1a414e0b96005b6b8d5237ed828675bf9345",
+      "hand_evidence": "Faces image right; the extended arm is the screen-lower one = the wrestler's RIGHT.",
+      "source_front_deg": 29.7,
+      "root_source_px": [583, 639],
+      "body_core_source_px": [[762, 326], [464, 848]],
+      "body_core_target_r": 2.0,
+      "measurement_evidence": {
+        "hair_centroid": [787.8, 613.1],
+        "mawashi_centroid": [384.9, 560.1],
+        "hair_px": 35724,
+        "mawashi_px": 54500,
+        "rotation_delta_deg": 10.386,
+        "scale": 0.9516
+      }
+    }
+  },
+  "modes": {
+    "separate": {
+      "red_left": {"master": "red_left", "reflect": false},
+      "red_right": {"master": "red_right", "reflect": false},
+      "blue_left": {"master": "red_right", "reflect": true},
+      "blue_right": {"master": "red_left", "reflect": true}
+    },
+    "mirror_l": {
+      "red_left": {"master": "red_left", "reflect": false},
+      "red_right": {"master": "red_left", "reflect": true},
+      "blue_left": {"master": "red_left", "reflect": false},
+      "blue_right": {"master": "red_left", "reflect": true}
+    },
+    "mirror_r": {
+      "red_left": {"master": "red_right", "reflect": true},
+      "red_right": {"master": "red_right", "reflect": false},
+      "blue_left": {"master": "red_right", "reflect": true},
+      "blue_right": {"master": "red_right", "reflect": false}
+    }
+  },
+  "mask_limits": {
+    "note": "Per-pose validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component.",
+    "min_mask_px": 1500,
+    "max_missed_px": 60,
+    "max_fringe_px": 120
+  },
+  "angles_deg": [0, 45, 90, 180, 270],
+  "faceoff": [
+    {"label": "contact 0.70 m", "distance_m": 0.7},
+    {"label": "tsuppari reach 0.875 m", "distance_m": 0.875}
+  ]
+}

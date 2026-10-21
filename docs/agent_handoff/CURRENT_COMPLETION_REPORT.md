@@ -1,311 +1,291 @@
-Task-ID: ACTION-07B-TSUPPARI-GAMEPLAY-IMPLEMENTATION
+Task-ID: ACTION-07C-TSUPPARI-ART-VISUAL-GATE
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 7357788bd9b9091e50ef44859874cec4ae128671
-Agent-Start-Head: 915bd35f809558df455d3569d71a3cebc72440ef
+Source-Baseline: 7b38c3ac3cef62115a7082f824b3eb56f29493d5
+Agent-Start-Head: ecdebc8e365f678b76ef09dd1a12cc0e972f6a85
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS + Browser Smoke PASS。Game Feelは未受理で、User Play Testが必要）。
+PASS WITH KNOWN UNTESTED ITEMS（Technical PASS + Browser Smoke 38/38 PASS。Tsuppari artの方式は未選択で、User Visual Gateが必要）。
 
-- ACTION-07Aの設計どおりに、Tsuppariを実装した。対象は、Simulationの状態とルール、ArrowLeft / ArrowRightの入力、手ごとのcooldown、中心基準のreach、impulse、6回目のKuzushi、Counter、Push / Tsuppariの勝負、debug表示、dummy mode 3
-- `PUSH_EXTERNAL_ACCELERATION` を 20 → 26.25 にした。代表fixtureで、Pushの変位は 0.5325 m（旧0.267 mの2.00倍）、Tsuppariの変位は 0.2658 m
-- Taskが列挙した境界Case 1〜44は、すべて自動Testで確かめた（新規 `BoutTsuppari.test.ts`、42件）
-- `pnpm test`: 340 / 340 PASS。`pnpm build`: PASS。`git diff --check`: PASS
-- Product Tsuppari poseの画像は入れていない。Tsuppari中も、idleのspriteを表示する
+- User提供の4枚の候補PNGから、比較できるTsuppari Art Visual Gateを作った
+  - 3方式（SEPARATE / MIRROR-L / MIRROR-R）× red / blue × 左右 = 12枚のruntime texture
+  - 生成は決定的なtoolとrecipeで行い、出力は `public/assets/action/wrestler/tsuppari-gate/`
+- browserでは、key `4` で3方式を切り替える。presentationだけの切り替えで、key 0のdebug行に `TSU ART: SEPARATE` などと表示する
+- Tsuppariの行動中（startup / active / recovery の全体）は、押した手のposeを1枚で保持する。行動が終われば、承認済みのidle spriteに戻る
+- ACTION-07Bのgameplayは変えていない（`src/game/sumo/`、`src/game/input/` の差分は0行）。idleの `red.png` / `blue.png` も不変
+- 3方式のどれも、受理済みとして扱っていない
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `7357788`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `7357788..origin/develop` の変更は `docs/agent_handoff/` の2 file（07AのReportとCURRENT_TASK）のみ。`HEAD..origin/develop` は `CURRENT_TASK.md` のみ → `merge --ff-only` → `915bd35`
+- 1回目の開始指示では、required pathの4枚が無かった（実体は `*.png.png` の二重拡張子）。Preflight STOPとして、repositoryには何も書かずに報告した。Userがリネームした後に再開した
+- 再開時: working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `7b38c3a`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+- `7b38c3a..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `ecdebc8`
 
-# Current Source Delta
+## 4枚のlocal input（`tools/wrestler_art/input.local/`、commitしない）
 
-## Constants（`BoutSimulation.ts`。すべてProvisional / User Play Test）
+すべて1254×1254、PNG RGBA。透過は使える（alpha 0 の画素が68〜71%。不透明部の分布は承認済みの `wrestler_red.png` と同じ傾向）。
 
-| 定数 | 値 |
-|---|---|
-| `PUSH_EXTERNAL_ACCELERATION` | 20 → **26.25** m/s² |
-| `TSUPPARI_STARTUP_TICKS` | 6 |
-| `TSUPPARI_ACTIVE_TICKS` | 1 |
-| `TSUPPARI_RECOVERY_TICKS` | 9（合計16） |
-| `TSUPPARI_HAND_COOLDOWN_TICKS` | 60 |
-| `TSUPPARI_HAND_REACH` | 0.525 m（数値で定義。命中は `中心距離 ≤ 0.525 + receiver.bodyRadius` = 0.875 m） |
-| `TSUPPARI_IMPULSE` | 2.13 m/s |
-| `TSUPPARI_COUPLED_SHARE` | 0.5 |
-| `TSUPPARI_KUZUSHI_BUILDUP` | 5（6回目でKuzushi） |
-| Kuzushiの長さ | 既存の `KUZUSHI_TICKS`（30）を再利用 |
-
-変えていない: `MAX_EXTERNAL_SPEED`（3）、`EXTERNAL_DECELERATION`（8）、`KUZUSHI_PUSH_SUSCEPTIBILITY`（1.5）、Pushのtiming（6 / 8 / 10）、Counter window、CounterTransition、Grip / Drive、ring-out / Tokudawara（TS36で値を確認）。
-
-## State shape
-
-```ts
-// BoutTypes.ts
-readonly tsuppariLeftPressed: boolean   // ParticipantIntent（必須）
-readonly tsuppariRightPressed: boolean
-export type TsuppariHand = 'left' | 'right'
-export type TsuppariPhase = 'startup' | 'active' | 'recovery'
-export type TsuppariStrike = 'pending' | 'hit' | 'whiff'
-// ParticipantActionState / MutableAction
-{ kind: 'tsuppari'; hand; phase; ticksRemaining; strike }
-// ParticipantState（Snapshotにcopyを公開）/ MutableParticipant（正本）
-tsuppariCooldown: { left: number; right: number }   // 0 = ready
-tsuppariBuildup: number
-```
-
-topレベルに、Tsuppariの重複したStateは作っていない。
-
-## Tick order（実装）
-
-1. 勝敗が決まっていれば何もしない
-2. **両者の手のcooldownを1ずつ減らす**（`advanceTsuppariCooldown`。CounterTransitionの分岐より前なので、CounterTransition中も減る）
-3. CounterTransition中なら、既存の `stepCounterTransition` だけを行う（intentは読まない）
-4. posture timer → 組みのreadiness → release
-5. FREEのaction開始。優先順: Push → 使える左のTsuppari → 使える右のTsuppari → Counter → Grip
-6. 実効move（Tsuppariの全phaseで0 = 制動）→ self velocity → external減衰 → 積分
-7. contact
-8. GRAPPLED: bond。FREE: `resolveCounter(contact)` → `resolveGrip()` → `resolveForces(contact)`
-9. action timer → facing → ring-out（既存）
-
-受け付けたtickでcooldownを60にし、次のtickの先頭から減らす。そのため、同じ手は `t0 + 60` でちょうど再び使える（TS12で確認）。
-
-## 同じtickの入力優先順
-
-Push > Tsuppari（使える左 > 使える右）> Counter > Grip > Move。cooldown中の手のedgeは、優先順を決める前に捨てる（Taskの「Left is unavailable … Right may start」のとおり）。負けたedgeと開始できないedgeは捨てる（queueしない。cooldownも変えない）。開始の条件は既存と同じ（FREE、release tickでない、idle、stable）。
-
-## 力の解決（`resolveForces`、1か所、順序に依存しない）
-
-1. 両者の命中tick（active、`strike: 'pending'`）を、同じ状態から判定する: reach内なら `hit`（buildup +1。buildup ≥ 5なら6回目の命中として、受け手を後でKuzushiにし、buildupを0に戻す）、reach外なら `whiff`
-2. 力:
-   - 接触していて、どちらかのPushがactive（組のtick）: `resolvePush(contact, strikeNet)` が、`net·P·s·dt + strikeNet·J·0.5` を2人に同じ量だけ加える。Tsuppariの命中が無いtickは、従来とまったく同じ計算（`strikeNet !== 0` のときだけ項を足す。`net === 0` かつ命中なしなら、従来どおり何もしない）
-   - それ以外: 命中ごとに、受け手のexternalへだけ、攻撃側 → 受け手の向き × `J` を加え、clampする（打ち消し合わない）
-3. 6回目の命中を受けた側を `enterKuzushi`（すべての命中と力が決まった後）
-
-Tsuppariには `KUZUSHI_PUSH_SUSCEPTIBILITY` を掛けない。
-
-## Counter（`resolveCounter(contact)`）
-
-- FREEのtickで毎回呼ぶ。先に「defenderのCounter window × attackerのTsuppariの命中tick × reach内」を確かめ、成立すれば `enterKuzushi(attacker)`、`defender.action = idle` として、tierを返さない（null）。位置、velocity、buildup、transitionには触れない
-- Pushの分岐は、`if (!contact) continue` で接触を明示的に確かめる。それ以降の処理は変えていない（Best / Success、CounterTransition、fallback）
-
-## Force interaction matrix（実装どおり）
-
-| A ＼ B | idle / Counter / Grip / Kuzushi | Pushがactive（接触中） | Tsuppariの命中tick |
+| file | bytes | file SHA-256 | decoded RGBA pixel SHA-256 |
 |---|---|---|---|
-| idle / その他 | なし | 組: 2人に `−P·s·dt`（従来） | Aだけ `−J` |
-| Pushがactive（接触中） | 組: 2人に `+P·s·dt`（従来） | net 0（従来） | 組: 2人に `+P·dt − J/2` |
-| Tsuppariの命中tick | Bだけ `+J` | 組: 2人に `+J/2 − P·dt` | Aに `−J`、Bに `+J` |
+| candidate_red_tsuppari_left.png | 750,627 | `24a00ca64c448dcd53c1705e424a3d893fb57bc07893cfdebcc02cd26fb917af` | `219d66dcf13585e7149382f01c964fdd9074bf61e615b5d3f9bbb15b38cb84b3` |
+| candidate_red_tsuppari_right.png | 759,683 | `f94a6e5a084f08194a3d97f2a498958ed32644edfcc73e6f4d2bdf5ecbc9fc8b` | `d0e6070e2359a8309b07e7c3d76eba905c50fd379cf7e4b4d50bf14c1816d33b` |
+| candidate_blue_tsuppari_left.png | 737,222 | `1b4763367b27f7ad788825e5fec916a97ccd7300e44522177c6c021ba0af5f2b` | `060bfbf4319ed4fbb79d030f9dc6ae90c378f5b8968a28a8ad1d195913e68777` |
+| candidate_blue_tsuppari_right.png | 702,315 | `b5a9d8ef8dbe2e211b662479d6ba1a414e0b96005b6b8d5237ed828675bf9345` | `17782b1155f86ad249f4af1a3704f3ea34f89a6e0e06b86447b924f47f4a1071` |
 
-Pushのstartup中、active後、または接触していないときは、組のtickではない。その場合、Tsuppariは受け手（Pushの使用者）だけに `J` で入る。
+Toolは、recipeにあるpixel SHA-256との一致を確かめる。一致しなければ、何も書かずにexit 2で止まる。
 
-# Representative Measured Displacements（実装で計測）
+# Normalization Measurements
 
-F1 = 接触（中心距離0.70 m）、受け手はidleで入力なし、action edgeはtick 0の1回だけ。externalが0に戻るまでを測る:
+方法（`tsuppari_gate_recipe.json` の `measurement`）:
 
-| 場面 | 受け手 | 攻撃側 | 最大速度 |
+- 各poseの体を、承認済みのidle red masterに合わせる。sourceの1/2 scaleで、胴体のlandmarkを2つ測った
+  - H = 髪の塊の重心（暗い不透明画素を7 pxで収縮して輪郭線を除き、最大の成分）
+  - B = まわしの重心（hue bandに入る画素のうち、最大成分の5%以上の成分すべて）
+- 回転差 = angle(H→B) − idleのangle(H→B)
+- scale s = 平均(√髪の面積比, √まわしの面積比)
+- idleのroot / body coreの点を、H/Bの中点を中心に s·Rot(差) で運ぶ。`source_front_deg` = idleの160.7 + 回転差
+- idleの値はそのまま流用していない。候補の体は、idleより右に50〜120 px（source px）ずれていた
+
+最初は、まわし+髪のIoUを最大にする相似変換を試した。しかし、回転が探索範囲の端（−12°）に張り付いた。overlayで見ても誤りだったため、使っていない。
+
+| pose | 役割 | front (deg) | root (source px) | body core (source px) | 回転差 | s |
+|---|---|---|---|---|---|---|
+| red_left | runtime source | 160.7 | (704, 620) | (575, 253)–(790, 864) | −0.05° | 1.025 |
+| red_right | runtime source | 160.1 | (768, 640) | (637, 281)–(854, 880) | −0.61° | 1.009 |
+| blue_left | referenceだけ | 26.4 | (567, 642) | (736, 303)–(456, 867) | +7.05°（左右反転したidle基準） | 0.996 |
+| blue_right | referenceだけ | 29.7 | (583, 639) | (762, 326)–(464, 848) | +10.39° | 0.952 |
+
+正規化はidleと同じ03Aの手順で行う。全体の1回回転 → body core = 2R → master /4。limbのwarp、骨格の操作、塗り直しはしていない。
+
+runtimeでの照合（runtime px、idle redとの差。preview `tsuppari_gate.json`）:
+
+- red_left: 髪 (+0.02, +0.05)、まわし (−0.03, +0.16)。ほぼ完全に一致
+- red_right: 髪 (−1.9, −1.0)、まわし (+2.0, +0.7)。2 px程度
+- body coreは、全12枚が123.0769 px（= idleと同じ2R。runtime scaleは1.0）
+
+# Hand / Reflection Mapping（全runtime texture）
+
+規約: local +X = FRONT、+Y = wrestlerのRIGHT。local-Yの反転 `(x, y) → (x, H − y)` で手が入れ替わる。
+
+- source側の手は絵で確かめた。red_leftは画面下側の腕を伸ばしている（idleと同じく左向き）＝本人の左手。red_rightは上側の腕＝本人の右手
+- runtimeでも確かめた。red_leftの伸ばした手は −Y、red_rightは +Y にある
+- recipeのloaderは、各textureについて「masterの手 XOR 反転」がtextureの手と一致することを検査する。違えば拒否する
+
+| texture | separate | mirror_l | mirror_r |
 |---|---|---|---|
-| Push（26.25） | **0.5325 m** | 0.5325 m（組） | 2.567 m/s |
-| Tsuppari | **0.2658 m** | **0.0000 m** | 2.130 m/s |
-| Tsuppari（0.85 m、接触なし） | 0.2658 m | 0.0000 m | 2.130 m/s |
-| Push / Tsuppari | **2.00** | | |
+| red left | red L | red L | red R 反転 |
+| red right | red R | red L 反転 | red R |
+| blue left | red R 反転 + recolor | red L + recolor（二重反転 = 恒等） | red R 反転 + recolor |
+| blue right | red L 反転 + recolor | red L 反転 + recolor | red R + recolor |
 
-Push（A）× Tsuppari（B）。接触から開始し、BはAの `k` tick後に押す:
+同じ導出のfileは同一のpixelになる（自動Testで確認）:
 
-| k | Bの変位 | Aの変位 | 最初の30 tickで離れたtick数 |
-|---|---|---|---|
-| −1（命中はPushのstartup中） | 0.000 | −0.139 | 24（Pushは空振り） |
-| 0（同じtick） | 0.291 | 0.291 | 0（組の勝負。Pushが勝つ） |
-| 2 / 4 / 6（active中） | 0.223 / 0.217 / 0.253 | 同じ | 0 |
-| 8（activeの後） | 0.533 | 0.186 | 15（普通の命中） |
+- separate_red_left = mirror_l_red_left
+- separate_red_right = mirror_r_red_right
+- separate_blue_right = mirror_l_blue_right
+- separate_blue_left = mirror_r_blue_left
 
-Tsuppari同士（0.80 m）: A −0.2658 m、B +0.2658 m（対称）。
+authored blueの2枚は、比較sheetにだけ使った。runtime textureの元にはしていない（exportはred 2枚しか読まない。自動Testで確認）。
 
-いずれもACTION-07Aの試作の値と一致した。
+# Recolor / Mask Result（poseごと、runtime scale）
 
-# Explicit Boundary-Case Results（`src/game/sumo/BoutTsuppari.test.ts`）
+規則は、承認済みのred→blue（`runtime_wrestler_recipe.json` が唯一の持ち主）。hue band + 最大の4連結成分。alphaは保つ。mask外の画素は変えない（自動Testで全画素を照合）。
 
-すべてPASS。番号はTaskの一覧と同じ。
+| source | mask px | 最大成分の外のband px | fringe px | 結果の手 |
+|---|---|---|---|---|
+| red_left | 2239 | 17 | 48 | left |
+| red_left 反転 | 2239 | 17 | 48 | right |
+| red_right | 2265 | 10 | 61 | right |
+| red_right 反転 | 2265 | 10 | 61 | left |
+| （参考）承認済みidle | 2196 | 16 | 67 | — |
 
-| # | Case | Test | 結果 |
-|---|---|---|---|
-| 1 | Left ready / Right ready → Left | TS01 | PASS（L cd 60、R cd 0） |
-| 2 | Left cd中 + Leftだけ → なし | TS02 | PASS |
-| 3 | Left cd中 + Right → Right | TS03 | PASS |
-| 4 | Right cd中 + Rightだけ → なし | TS04 | PASS |
-| 5 | 両方cd中 → なし。Counter / Gripは始まる | TS05 | PASS |
-| 6 | Left + Right（両方ready）→ Left、Rはready のまま、queueしない | TS06 | PASS |
-| 7 | Left cd中 + Right → Right | TS07 | PASS |
-| 8 | Push + Left → Push、Lのcdは0 | TS08 | PASS |
-| 9 | Left + Counter → Left | TS09 | PASS |
-| 10 | Left + Grip → Left | TS10 | PASS |
-| 11 | WASD + Tsuppari → 16 tick制動、その後WASDが戻る | TS11 | PASS |
-| 12 | `t0+59` まで拒否、`t0+60` で受付。左右の連打 `0 L, 16 R, 60 L, 76 R, 120 L, 136 R` | TS12 | PASS |
-| 13 | 新しいBoutはcd 0 / 0、buildup 0 | TS13 | PASS |
-| 14 | reach外でwhiff（impulseなし、buildupなし） | TS14 | PASS |
-| 15 | 接触での命中: 受け手のexternalがちょうど `(J, 0)`、攻撃側は0で位置も不変、buildup 1 | TS15 | PASS |
-| 16 | 0.85 m（接触なし）での命中 | TS16 | PASS |
-| 17 | reach ± 1e-6 で hit / whiff | TS17 | PASS |
-| 18 / 19 | 1〜5回目は普通、6回目は普通のimpulse + Kuzushi（30）+ buildup 0、7回目は1 | TS18 / TS19 | PASS |
-| 20 | 5回命中 → whiff → 次の命中がKuzushi | TS20 | PASS |
-| 21 / 22 | Counterが左 / 右のTsuppariを捕える（攻撃側はその場でKuzushi、Counterの使用者はidle / stable）。位置とexternalは、Counterしなかった場合と一致（既存の勢いは0にしない）。Bへのimpulseなし | TS21 / TS22 | PASS |
-| 23 | CounterTransitionが起きない | TS21 / TS22 | PASS |
-| 24 | buildupを変えない（0のまま、および1のまま） | TS21 / TS22 / TS24 | PASS |
-| 25 | Counter window × whiffでは捕えない。windowが切れるとFail | TS25 | PASS |
-| 26 | Push Counterは従来どおり（Best → transition、pusherがKuzushi）。既存のCounter系Testもすべて通過 | TS26 + 既存 | PASS |
-| 27 | Tsuppari同士: 両方命中、`(−J, 0)` と `(J, 0)`、両方buildup 1、対称に離れる | TS27 | PASS |
-| 28 | 参加者の配列の順序を入れ替えても、140 tickの全Snapshotが一致（`toEqual`） | TS28 | PASS |
-| 29 | 6回目 × 普通（同じtick）: 両方のimpulse、6回目を受けた側だけKuzushi、Bのbuildupは3になる | TS29 | PASS |
-| 30 | 6回目 × 6回目: 両方のimpulse、両方Kuzushi、両方0 | TS30 | PASS |
-| 31 | Push × Tsuppari（k = 0 / 2 / 4 / 6）: 2人に同じ `decayed + P·dt − J/2`、離れない、Bの変位は 0.15 < d < 0.6 × 抵抗なしの値 | TS31 | PASS |
-| 32 | Pushのstartup中の命中: Pushの使用者だけ `−J`、Bは不変、Pushは空振り | TS32 | PASS |
-| 33 | Pushのactive後の命中: 普通の命中（Tsuppariが無い場合と比べて、Aだけ `−J`） | TS33 | PASS |
-| 34 | 等しいPush同士は、40 tickのあいだexternalが0 | TS34 | PASS |
-| 35 | Push 0.50〜0.57、Tsuppari 0.25〜0.285、比 1.8〜2.2、攻撃側の変位0 | TS35 | PASS |
-| 36 | clamp / decay / 受けやすさ / Pushのtimingは不変 | TS36 | PASS |
-| 37 | Tsuppariで受け手がring-out（既存の判定） | TS37 | PASS |
-| 38 | 土俵際のTsuppari同士 → Rematch | TS38 | PASS |
-| 39 | CounterTransition中のedgeは捨てる。cdは `max(0, 60 − 経過tick)` で減り続ける | TS39 | PASS |
-| 40 | 組み中のedgeは捨てる | TS40 | PASS |
-| 41 | Kuzushi中のedgeは捨てる（queueしない） | TS41 | PASS |
-| 42 | Push / Grip / 自分のTsuppariのrecovery中のedgeは捨てる（queueしない） | TS42 | PASS |
-| 43 | 勝敗が決まった後は何もしない（cdもSnapshotも不変） | TS43 | PASS |
-| 44 | Snapshotのcd / buildup / actionはdeep copy | TS44 | PASS |
+- 肌、腕、髪への混入は無い（`mawashi_mask_diagnostics.png` で目視確認）。まわしの取り残しも無い
+- source解像度では、red_rightの帯の下半分が別の成分に分かれる。しかしmaskをかけるruntime scaleでは1つの成分になり、問題は出ない
+- recipeの `mask_limits`（mask ≥ 1500、外のband ≤ 60、fringe ≤ 120）で、poseごとにfail-closedで検査する
 
-その他の新しいTest:
+# Runtime Visual-Gate Assets
 
-- `pushDummyController.test.ts` に TD1〜TD4（mode `tsuppari`）を追加
-  - 範囲外では近づくだけ
-  - 範囲内では使える手で打つ（左が優先、action中は何も出さない、400 tickの打撃がすべて命中）
-  - PlayerのCounterで、dummyがその場でKuzushiになり、その後は何も出さない
-  - 他のmodeは不変
-- `wrestlerVisualState.test.ts` に、Tsuppariのpose / 手 / phase / 進み具合の対応を追加
+`public/assets/action/wrestler/tsuppari-gate/` の12枚（`export_tsuppari_gate.py` だけが書く）:
 
-# Existing Regression Suite
+| file | size | pivot |
+|---|---|---|
+| separate_red_left / mirror_l_red_left / mirror_l_blue_left | 198×177 | (83, 94) |
+| separate_blue_right / mirror_l_red_right / mirror_l_blue_right | 198×177 | (83, 83) |
+| separate_red_right / mirror_r_red_right / mirror_r_blue_right | 197×205 | (79, 88) |
+| separate_blue_left / mirror_r_red_left / mirror_r_blue_left | 197×205 | (79, 117) |
 
-- `pnpm test`: **21 files / 340 tests PASS**（変更前は293件。新規47件）
-- `pnpm build`（`tsc && vite build`）: PASS（既存のchunk size警告のみ）
-- `git diff --check`: PASS
+pixel SHA-256（exportの出力）:
 
-既存Testへの変更:
+- separate_red_left `ab5043bf…3f2f`、separate_red_right `633ecd86…a5b1`、separate_blue_left `83efd9c7…99b6`、separate_blue_right `c9369b4b…b1ef`
+- mirror_l_red_right `b5ee0bfb…0833`、mirror_l_blue_left `11625cc7…b194`
+- mirror_r_red_left `d0aae241…45c9`、mirror_r_blue_right `082f9479…d836`
+- 全文は `export_tsuppari_gate.py --check` の出力に出る
 
-1. intentを作るhelper / literal（13 file）に、`tsuppariLeftPressed: false, tsuppariRightPressed: false` を追加した（機械的な変更）
-2. **CounterTransitionのfixture（guardrailの範囲内）**: `BoutCounterTransition.test.ts` の `COUNTER_USER_OUT.mid.x` を **1.75 → 1.73** にした（1行。コメントあり）
-   - Pushが強くなり、1.75では捕える前にCounterの使用者が押し出されて「decided before catch」になっていた
-   - 1.72〜1.74を調べ、同じ場面（Success、Counterの使用者が遷移の途中で土俵外、直前のtickはIN、Bはpeakより内側）が成り立つ範囲の中央の1.73にした
-   - 主張は変えていない。これで、失敗していた3件（no immunity / shared resolver / freeze）が、すべて元の主張のままPASSする
-3. 参加者のkey一覧を確かめるTest 3件（`BoutGrip` T92、`BoutOrientation` T126、`BoutRingOut` T172）に、`tsuppariBuildup` / `tsuppariCooldown` を加えた
-   - Taskが要求したSnapshotの追加によるもの
-   - 「組み / 勝敗のflagを参加者に持たせない」という主張は、そのまま保っている
+texture sizeは揃えていない（Taskのとおり）。各textureが自分のpivotとbody coreを持つ。
 
-# Browser / Runtime Smoke
+# Presentation State Ownership
 
-`pnpm dev` + headless Chrome（CDP、SwiftShader）。Simulationの `step()` を読み取り専用で包み、毎tickのSnapshotを記録した。scratchpadの `smoke_tsu.mjs`。結果は `smoke_07b*` に残した（全6回の実行）。
+- `TsuppariArtMode = 'separate' | 'mirror-left' | 'mirror-right'`: 新しいpure module `src/game/presentation/tsuppariGateArt.ts` が持つ。Phaserにも `BoutSimulation` にも依存しない
+- 現在のmodeは `BoutScene.tsuppariArtMode` が持つ（Scene内のpresentation状態）
+  - key `4` → `nextTsuppariArtMode`
+  - Rでrestartしてもmodeは保つ（presentationの選択なので）
+- 流れ: `Snapshot → resolveWrestlerVisualState`（既存。`pose === 'tsuppari'` と `tsuppariHand`）→ `selectWrestlerArt(idleArt, visual, mode)` → `WrestlerView.show(art)`
+  - textureが変わったときだけ、setTexture / setOrigin（そのtextureのpivot）/ setScale（そのtextureのbody core）を行う
+- 位置と回転は、これまでどおりSnapshotのcenter / facingをそのまま使う
+- Simulation、Snapshotの型、gameplayの値は一切変えていない
 
-| 確認 | 結果 |
-|---|---|
-| pre-bout（待っている間のtickは0）、Enterで開始 | PASS |
-| 1.40 mでArrowLeft → left Tsuppari、cd {60, 0}、whiff | PASS |
-| 歩いて近づき、ArrowRight → right Tsuppari、hit、受け手のexternal 2.130、buildup 1 | PASS |
-| 同じframeにLeft + Right（両方ready）→ Left、Rはready | PASS |
-| 左右を交互に打つ → 6回目の命中（buildup 5 → 0）で、CPUがKUZUSHI | PASS |
-| debug表示: phase text `TSU R` / `TSU L HIT` / `WHIFF`、左下に `PLAYER TSU L ok R 0.7s hits 1/5   CPU TSU …`（screenshotで確認） | PASS |
-| R → Enter: 両者のcd {0, 0}、buildup 0 | PASS |
-| dummy mode 3 × PlayerのCounter（dummyのstartup中にDown）→ dummyがKUZUSHI、位置は不変、transition none | PASS（全6回） |
-| PlayerのPush × dummyのTsuppari | 組の勝負を2回確認（命中tickにPushがactiveで接触中、両者のexternalが同じ値。例: −0.323 と −0.019）。別の実行では、命中が接触の外（0.702 m）で普通の命中になった（設計どおり）。押すtimingがCDPの遅延に左右されるため、実行ごとに場面が変わる |
-| 既存の操作: Push（受け手0.533 m）、Counter、Grip（grappled）、組み中のArrowLeftは無視 | PASS |
-| console error / exception | なし（1回目の実行の `favicon.ico` 404は既知で、gameとは無関係） |
+# Mode Toggle Key
 
-Tsuppari専用のposeは無い（idleのspriteのまま。仕様どおり）。
+`4`（Current Sourceでは未使用）。key 0のdebug表示で、左下の行の先頭に `TSU ART: SEPARATE / MIRROR-L / MIRROR-R` と出る。操作ヘルプ行に `4 tsu art` を足した。
 
 # Changed Files
 
-- `src/game/sumo/BoutTypes.ts`
-- `src/game/sumo/BoutSimulation.ts`
-- `src/game/sumo/BoutTsuppari.test.ts`（新規）
-- `src/game/input/pushDummyController.ts`
-- `src/game/input/pushDummyController.test.ts`
-- `src/game/input/pressLatch.test.ts`（intent literalのみ）
-- `src/game/presentation/wrestlerVisualState.ts`
-- `src/game/presentation/wrestlerVisualState.test.ts`
-- `src/game/scenes/BoutScene.ts`
-- intent helperだけを直したもの: `src/game/sumo/BoutCounter.test.ts`、`BoutCounterPosition.test.ts`、`BoutCounterTransitionRingOut.test.ts`、`BoutDrive.test.ts`、`BoutPush.test.ts`、`BoutSimulation.test.ts`、`BoutTokudawara.test.ts`
-- 上記 + key一覧: `BoutGrip.test.ts`、`BoutOrientation.test.ts`、`BoutRingOut.test.ts`
-- 上記 + fixtureの位置: `BoutCounterTransition.test.ts`
-- `docs/ARCHITECTURE.md`
+- `tools/wrestler_art/tsuppari_gate_recipe.json`（新規）: Visual-Gateのrecipe。測定値、hand mapping、mask_limits、preview設定
+- `tools/wrestler_art/export_tsuppari_gate.py`（新規）: 決定的なexportと `--check`
+- `tools/wrestler_art/preview_tsuppari_gate.py`（新規）: offlineの比較sheet
+- `tools/wrestler_art/tests/test_export_tsuppari_gate.py`（新規）: 19件
+- `tools/wrestler_art/README.md`: 表に1行、ACTION-07Cの節を追加
+- `public/assets/action/wrestler/tsuppari-gate/*.png`（新規12枚）
+- `src/game/presentation/tsuppariGateArt.ts`（新規）、`src/game/presentation/tsuppariGateArt.test.ts`（新規、7件）
+- `src/game/scenes/WrestlerView.ts`: gate textureのpreload、poseに応じたtexture / origin / scaleの切り替え
+- `src/game/scenes/BoutScene.ts`: key 4、`tsuppariArtMode`、debug行の表示、`apply` へmodeを渡す
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
 # Files Explicitly Not Changed
 
-`CURRENT_TASK.md`、`PROJECT_HANDOFF.md`、`WrestlerView.ts`、`productWrestlerArt.ts`、`public/assets/**`、`tools/wrestler_art/**`、`ringOut.ts`、`grappleOrientation.ts`、`pressLatch.ts`、`movementVector.ts`、`docs/WRESTLER_PRODUCT_ART_SPEC.md`、`docs/GAME_CONCEPT.md`、package files、`main` branch。
+- `src/game/sumo/*`（BoutSimulation、BoutTypesなど）、`src/game/input/*`
+  - Push / Tsuppariの力、reach、cooldown、timing、buildup、Counter、組の力、ring-out、Grip / Drive は変えていない
+- `public/assets/action/wrestler/red.png` / `blue.png`（`export_runtime_wrestlers.py --check` OK。pixel `d66895bf…` / `9d5feead…` は承認値のまま）
+- `runtime_wrestler_recipe.json`、`productWrestlerArt.ts`、`docs/WRESTLER_PRODUCT_ART_SPEC.md`
+- `CURRENT_TASK.md`、`PROJECT_HANDOFF.md`
+- `input.local/` のfile（commitしていない）
 
-# Implementation Evidence
+# Verification
 
-| Design Requirement | Implemented As | Verified By |
-|---|---|---|
-| Left / Rightのsemantic intent | `ParticipantIntent.tsuppariLeftPressed / tsuppariRightPressed`（必須） | TS01〜10、tsc、smoke |
-| 手ごとのcooldown | `MutableParticipant.tsuppariCooldown`、`startTsuppari`（受け付けたtickで60）、`advanceTsuppariCooldown`（tickの先頭、transitionより前） | TS02〜07、TS12、TS39、smoke |
-| 固定のtiming | `TSUPPARI_STARTUP/ACTIVE/RECOVERY_TICKS` 6 / 1 / 9、`nextTsuppariPhase`、`advanceAction` | TS11、TS12、TS15、TS42、visual-state test |
-| 中心基準のreach | `inTsuppariReach`: `distance ≤ TSUPPARI_HAND_REACH + receiver.bodyRadius` | TS14〜17 |
-| impulse | `resolveForces`: 受け手だけ `±n·J` + clamp。Kuzushiの受けやすさなし | TS15、TS16、TS35 |
-| 決定的なbuildup | `tsuppariBuildup`、`TSUPPARI_KUZUSHI_BUILDUP` = 5、6回目でKuzushi + 0 | TS18〜20、TS29、TS30、smoke |
-| Counterでその場のKuzushi | `resolveCounter(contact)` のTsuppari分岐（transition / 移動 / tier / buildupなし） | TS21〜25、TD3、smoke |
-| Tsuppari同士の対称性 | 判定 → 力 → Kuzushi、受け手ごとのimpulse | TS27〜30 |
-| Push × Tsuppariの勝負 | 組のtickは `resolvePush(contact, strikeNet)`（`J·0.5`）、それ以外は受け手だけ | TS31〜33、smoke |
-| Pushの変位の増加 | `PUSH_EXTERNAL_ACCELERATION` = 26.25 | TS35、TS36、既存のPush Test |
-| Push × Pushの保持 | Tsuppariが無いtickは従来の式そのまま | TS34、既存のPush / Counter Test |
-| ring-outの経路 | externalVelocity → 既存の積分 / `resolveArenaRingOut` | TS37、TS38、TS43 |
-| Stateの所有 | Simulationだけが正本。Snapshotはdeep copy | TS44、key一覧のTest |
-| 入力のlatch | `tsuppariLeftLatch / tsuppariRightLatch`、KeyCodes.LEFT / RIGHTの `down`、最初のtickだけ、`clearPressLatches` | smoke（同じframe、R / Enter） |
-| dummy mode | `DummyMode 'tsuppari'`（key 3）、`DUMMY_TSUPPARI_RANGE` 0.8、`DUMMY_TSUPPARI_RECEDE_SPEED` 0.1、Snapshotのcdを使う | TD1〜TD4、smoke |
-| presentation / debugの境界 | `wrestlerVisualState`: pose `tsuppari` + `tsuppariHand / tsuppariPhase`。Scene: phase textと、左下のdebug行（key 0のときだけ） | visual-state test、smokeのscreenshot |
+| 項目 | 結果 |
+|---|---|
+| focused wrestler-art test（`test_export_tsuppari_gate.py`） | 19 / 19 PASS（合成fixture、および実際の候補での committed `--check`、TSのmetadata一致、mask値、idle不変、previewの決定性） |
+| full wrestler-art suite（`unittest discover`） | 144 / 144 PASS |
+| focused presentation test（`tsuppariGateArt.test.ts`） | 7 / 7 PASS（mode循環、12 file、pivot / scale、hand mapping、全行動中の保持とidleへの復帰、Snapshot不変、Phaser-free） |
+| `pnpm test` | 347 / 347 PASS（22 files） |
+| `pnpm build` | PASS（`tsc && vite build`。chunk sizeの警告は以前からのもの）。dist に12枚がコピーされる |
+| `git diff --check` | PASS（新規fileも含む） |
+| 決定的な再生成 | exportを再実行 → 12枚の file SHA-256 が完全一致。`--check` OK |
+| idleの `red.png` / `blue.png` 不変 | `export_runtime_wrestlers.py --check` OK、git diffなし |
+| Simulationのgameplay file不変 | `git diff -- src/game/sumo src/game/input` = 0行 |
+
+# Browser / Runtime Smoke
+
+方法:
+
+- `pnpm dev` + headless Chrome（CDP、SwiftShader）
+- Vite devでは同じmoduleを共有するので、`import('/src/game/scenes/WrestlerView.ts')` で `WrestlerView.prototype.apply` を読み取りだけで包んだ。毎frame、表示中のtexture key、origin、scale、位置、回転と、Snapshotのcenter / facingを記録した
+- 待ちは、壁時計ではなくSimulationの状態で行った
+- script: scratchpadの `smoke_07c.mjs`。結果は `smoke/smoke_07c_results.json` とscreenshot 10枚
+
+結果: **38 / 38 PASS**（3回目の実行。1〜2回目のFAILは、どれもscript側の原因だった。固定待ちによるcooldown中の押下、決着後の操作確認、faviconの404 を直した）。
+
+| 確認 | 結果 |
+|---|---|
+| gate textureが12枚とも読み込まれる | PASS |
+| pre-boutが動く（Simulationは進まない） | PASS |
+| pre-bout中のkey 4: SEPARATE→MIRROR-L→MIRROR-R→SEPARATE、Snapshotは不変 | PASS |
+| Enterで開始。debug行に `TSU ART: SEPARATE`、ヘルプに `4 tsu art` | PASS |
+| 3 mode × ArrowLeft / ArrowRight: Tsuppariの全frameで、押した手の `<mode>_blue_<hand>` が出る（startup / active / recoveryを観測） | PASS（6 / 6） |
+| 行動の後は `product-wrestler-blue` に戻る | PASS（6 / 6） |
+| 全frameで、image位置 = Snapshot center、rotation = facing。scaleはidleもposeも1.0 | PASS |
+| bout中にmodeを切り替える: 同じframeのSnapshot JSONが完全に同じ | PASS（3 mode） |
+| dummy mode 3: CPUのTsuppariで `separate_red_left / right` が出る | PASS |
+| Push / Counter / Grip（組みに入る）が使える | PASS |
+| idle / moveはidle spriteのまま | PASS |
+| R restart: pre-bout、位置 −0.7、buildup 0、art modeは保つ | PASS |
+| console error / 失敗したrequestが無い（faviconの404だけ除外。以前からある） | PASS |
+
+screenshot（`smoke/03_<mode>_blue_<hand>.png`）で、pose spriteが実際に描かれていることを確かめた。
+
+# Offline Preview Output
+
+`tools/wrestler_art/output-tsuppari-gate.local/`（git-ignored、約7秒）:
+
+- `pivot_guide_red_left / red_right / blue_left / blue_right.png`: 正規化したsourceとpivotのguide（authored候補4枚）
+- `mode_separate.png`、`mode_mirror_l.png`、`mode_mirror_r.png`: 各modeのred / blue × 左右と、idle
+- `idle_tsuppari_alignment.png`: 12枚それぞれに、同じ色のidleの輪郭（cyan）を重ねたもの
+- `rotations_<mode>.png`: 0 / 45 / 90 / 180 / 270°
+- `faceoff_<mode>.png`: 0.70 m（接触）と0.875 m（Tsuppariの到達閾値）。blue L / R、red L / R、両者L、両者R
+- `mawashi_mask_diagnostics.png`: 4つの導出ごとに、source、mask、recolor後
+- `blue_reference_vs_derived.png`: authored blueの参照、各modeの派生blue、idle blue
+- `tsuppari_gate.json`、`build_tsuppari_gate_manifest.json`（timestampなし）
+
+# Authored-Blue-Reference Comparison Findings
+
+- 青の色調: 派生blueのまわし（hue 215.9°、sat 0.887、value p50 0.447）は、承認済みidle blue（215.8° / 0.870 / 0.451）とほぼ同じ。authored参照（215–216° / 0.96–0.98 / 0.51–0.52）よりは少しだけ暗く、彩度も少し低い。これはidleで受理した色と同じ傾向
+- 体型とシルエット: separateの派生blue（red Rの反転 / red Lの反転）は、authoredの参照と腕の向き、体の太さ、頭の位置がほぼ同じに見える。red-masterからの導出で、目に見えて悪くなった点は見つからなかった
+- 反転による問題: 単体のspriteで、反転が明らかに破綻している所は無い。ただし、下の「modeごとの注目点」にある「頭がidleと逆側に出る」点がある
+- authored参照のregistrationは、回転差が+7〜+10°と大きい。参照の絵は、もともと胴体の向きが少し違う（参照だけの話で、runtimeには影響しない）
+
+## User Visual Gateで判断してほしい点（観察した事実。採否は判断していない）
+
+- **mirror modeでの頭の跳び**: idleの頭は、local +Y側（本人の右前）に描かれている（runtimeで +25.8 px）
+  - mirror_lのred right / blue left、mirror_rのred left / blue right は、反転の有無がidleと逆になる。そのため、切り替えた瞬間に頭が反対側（約52 px ≈ 0.3 m）へ移る
+  - separateでは、全12枚で頭の側がidleと一致する（`idle_tsuppari_alignment.png`）
+- **authored red Rの向き**: 突き出した手の先は、red_leftでは真正面（local −0.3°、1.76R）にある。red_rightでは、本人の右前へ斜め（+46°、2.4R）に出ている
+  - SEPARATEでは、左右で打つ方向が非対称に見える
+  - MIRROR-Rでは、両手とも外側の斜めに打つ
+  - MIRROR-Lでは、両手とも正面へ打つ
+- poseは、Tsuppari全体（16 tick ≈ 267 ms）で保持する。保持として読みやすいか、長すぎるかは、User Play Testで判断してほしい
 
 # Design Deviations
 
 Design Deviations: NONE
 
-ACTION-07Aの意味からの変更は無い。設計の範囲内で、実装上の細部として決めたもの:
+Taskの範囲内で、細部として決めたもの:
 
-- dummyのharnessは、範囲内でも、相手が `DUMMY_TSUPPARI_RECEDE_SPEED`（0.1 m/s）より速く離れている間は打たない
-  - 前の命中で滑っている相手を打って、分かりきったwhiffになるのを避けるため
-  - harnessだけの値で、Simulationの命中判定は複製していない
-- Tsuppariのdebug表示は、参加者ごとに体の下へ置くと、近いときに重なって読めなかった（smokeのscreenshotで確認）。そのため、既存のdebug textと同じ左下の固定行（y = 944）にまとめた
+- art modeの表示は、Taskの推奨どおりdebug UIの中に置いた
+  - 操作ヘルプ行に足すと1920 pxを超える。そのため、毎frame更新している左下のTsuppari debug行（y = 944）の先頭に出す
+  - key 0がoffのProduct表示では見えない
+- 正規化の測定は、idle masterへのlandmark照合にした（方法と値はrecipeに明記）。IoUで相似変換を合わせる方式は、誤った回転になったため使っていない
+- blue参照は比較のために正規化した。左右反転したidle redに対して測っているので、参照のためだけにidle blueの03A sourceを使うことはない
+- recipeのmode keyは `mirror_l` / `mirror_r`（file名に合わせた）。TSの型は、Taskの例どおり `'mirror-left' | 'mirror-right'`
+- 一時的なgate textureの寸法は、TSのmetadataに表で持つ（`productWrestlerArt.ts` には混ぜない）。Python testで、新しいexportとの一致を検査する
 
 # Unexpected Scope
 
-- 参加者のkey一覧を確かめる既存のTest 3件が、Snapshotの追加で失敗した。一覧にfieldを2つ加えた（主張は不変）。CounterTransitionのguardrailの対象ではないが、Taskが要求したState追加の直接の結果なので、ここに記録する
-- 修正したもの以外の問題は見つけていない
+- dev serverで `favicon.ico` が404になる（以前から。今回は直していない）
+- build時に、chunk sizeが500 kBを超えるという警告が出る（以前から。Phaserのbundle）
 
 # Known Untested Items
 
-- 実機のGPUでの描画（headlessはSwiftShader。既知の三角形の崩れは、以前から続いている現象）
-- Browserの「Push × dummyのTsuppari」の組の勝負は、押すtimingがCDPの遅延に左右される。6回のうち2回で、組の勝負を確認した（他の回は、接触の外で普通の命中になるなど、設計どおりの別の場面）。決定的な検証は、unit test TS31〜33で行っている
-- Tokudawaraの窓の中で、Tsuppariによってring-outする専用のfixtureは無い（既存の `resolveArenaRingOut` をそのまま使っている）
-- Game Feel（User Play Test）
+- 実機のUser Play Test（Game Feel、見た目の評価）。headlessのsmokeは、texture選択と配置の正しさまでしか確かめていない
+- 実ブラウザの通常のframe rateでの見え方（headless SwiftShaderでは、16 tickの行動が3〜18 frameで描かれた）
+- Touch入力（このTaskの範囲外。key 4はkeyboardだけ）
 
-# User Play Test
+# User Visual Gate
 
-**Required。** 判断してほしいもの:
+**User Visual Gate: REQUIRED**（Product Tsuppari artの受理は主張しない）
 
-- Tsuppariのtiming（startup 6 / recovery 9）
-- 1秒の手のcooldown
-- 左右を交互に使うリズム
-- reach 0.875 m
-- Tsuppariの押しの距離（約0.27 m）
-- 強くしたPushの距離（約0.53 m）
-- Push × Tsuppariの勝負の感触（同時なら約0.29 m押し切る。startup中に当たるとPushが止まる）
-- Tsuppari同士の打ち合い
-- CounterでTsuppariを捕える間合いと読みやすさ
-- 6回目のKuzushiの周期
-- 一枚poseを将来、action全体に表示するか、もっと短いphaseに表示するか
+手順:
 
-操作: ArrowLeft / ArrowRight = Tsuppari、`3` = dummyのTsuppari mode、`0` = debug表示（phase textと左下のcd / buildup）。
+1. `pnpm dev` → Enter
+2. 0でdebug表示 → 4で方式を切り替え（左下に `TSU ART:` が出る）
+3. 3でdummy mode 3（CPUが繰り返しTsuppariを打つ）。自分はArrowLeft / ArrowRightで打つ
+
+各方式で見てほしい点:
+
+- 左右の手が分かるか
+- idle → poseで体の位置、大きさ、向きが跳ばないか（特にmirrorで頭が逆側に出る点）
+- reachがそれらしく見えるか（red Rの斜めの突き）
+- 派生blueの色と形
+- リズムやimpactを判断できるくらい見えるか
+- 全行動の保持が読みやすいか、長すぎるか
+
+選んだ方式を、後続Taskで `WRESTLER_PRODUCT_ART_SPEC` とruntimeの契約へ昇格させるかどうかは、Userが決める。
 
 # Git Delivery
 
-- Task-ownedのfileだけを明示的にstageし、1 commit（`feat(action): implement tsuppari gameplay`）
+- Task-ownedのfileだけを明示的にstageし、1 commit（`feat(art): add tsuppari visual gate`）
 - fetch → fast-forwardの安全を確認 → `origin/develop` へpush → remote SHAを確認 → working tree clean
