@@ -1,5 +1,5 @@
 Task-ID: ACTION-07A-TSUPPARI-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / CORE GAMEPLAY DESIGN / INPUT / ART INTEGRATION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -721,3 +721,211 @@ Investigate and design Tsuppari against Current Source.
 
 Return a concrete, implementation-ready design.
 Do not implement Tsuppari yet.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: DESIGN PASS / IMPLEMENTATION READY
+Accepted Investigation Baseline: 86f3bb385cfe1469a6fa327de9fc3fdeaf0c17f6
+
+## Reported Investigation vs Task
+
+The investigation satisfies ACTION-07A.
+
+- Production source was not changed.
+- Current Push / Counter / Grip / input / presentation source was inspected directly.
+- The current Push displacement model was measured rather than inferred from the acceleration constant alone.
+- Tsuppari was designed as Simulation-owned fixed-step gameplay, not Phaser/sprite collision.
+- Left/right independent cooldowns, deterministic buildup, Counter behavior, Push/Tsuppari contest, ring-out path, input latches, Snapshot/presentation boundary, dummy harness, test matrix and art follow-up are all covered.
+- No broad physics rewrite, generic stats framework or unrelated refactor is required.
+
+Implementation may proceed as a separate Task.
+
+## Accepted Provisional Implementation Defaults
+
+The following are accepted as **Prototype defaults for 07B**, not final balance:
+
+- `TSUPPARI_STARTUP_TICKS = 6`
+- `TSUPPARI_ACTIVE_TICKS = 1`
+- `TSUPPARI_RECOVERY_TICKS = 9`
+- per-hand cooldown = 60 ticks, counted from accepted action start
+- provisional hand reach = 0.525 m from attacker center plus receiver body radius
+  - current equal-radius center threshold = 0.875 m
+- `TSUPPARI_IMPULSE = 2.13 m/s`
+- `TSUPPARI_KUZUSHI_BUILDUP = 5`
+  - hits 1..5 ordinary
+  - hit 6 ordinary impulse + Kuzushi
+  - then reset
+- Tsuppari Kuzushi uses existing `KUZUSHI_TICKS = 30`
+- new Push provisional acceleration = `26.25 m/s^2`
+  - chosen because the representative fixture gives about 2x the current Push displacement
+- `MAX_EXTERNAL_SPEED` and `EXTERNAL_DECELERATION` remain unchanged.
+
+These values remain User Play Test gated.
+
+## Accepted Action / Input Semantics
+
+- ArrowLeft = left-hand Tsuppari.
+- ArrowRight = right-hand Tsuppari.
+- Same participant priority:
+  - Push > Tsuppari > Counter > Grip > Move.
+- Within Tsuppari:
+  - Left is preferred when both hands are ready and both edges occur on the same tick.
+  - If the preferred hand is unavailable because of cooldown, an available Right edge may start instead.
+- Inputs that cannot start are dropped, not queued.
+- Tsuppari locks WASD for the full action.
+- Tsuppari is FREE-state only.
+- No Tsuppari start while grappled, in CounterTransition, in Kuzushi, during another action, or after bout outcome.
+- Cooldowns continue to count down while the bout is still progressing, including Kuzushi / grapple / CounterTransition.
+- Bout restart resets cooldowns and buildup.
+
+## Accepted Hit / Counter Semantics
+
+- Tsuppari can hit without ordinary body contact if the center-based reach test succeeds.
+- Hit is evaluated once on the active tick.
+- Ordinary hit:
+  - attacker gets no intentional Tsuppari advance
+  - receiver gets Tsuppari impulse
+  - successful-hit buildup increments.
+- Whiff:
+  - no impulse
+  - buildup unchanged.
+- Counter catching Tsuppari:
+  - Tsuppari user enters Kuzushi in place
+  - no side/rear relocation
+  - no CounterTransition
+  - no Tsuppari impulse
+  - no buildup increment/reset
+  - Counter user returns to idle/stable
+  - Counter tier is not meaningful for Tsuppari.
+- Existing external momentum is not silently zeroed by a Tsuppari Counter. "In place" means no special relocation/overshoot is added.
+
+## Pair Resolution Baseline
+
+The pair resolver must be symmetric / participant-order independent.
+
+- Push vs Push:
+  - preserve current equal-force cancellation semantics.
+- Tsuppari vs Tsuppari on the same hit tick:
+  - both hits succeed from the same pre-resolution state
+  - both impulses apply
+  - both buildups update
+  - threshold Kuzushi is applied after both hit/force results are determined.
+- Push vs Tsuppari:
+  - do not discard Tsuppari merely because Push has higher same-participant input priority
+  - both contributions contest
+  - Push must win overall in the intended representative exchange
+  - initial coupled contribution may use the proposed `TSUPPARI_COUPLED_SHARE = 0.5`.
+
+`TSUPPARI_COUPLED_SHARE = 0.5` is a **provisional tuning choice**, not a permanent rule. User Play Test must judge whether the short reverse impulse / resistance looks natural.
+
+## Push Tuning Review
+
+The report correctly distinguishes acceleration from observed displacement.
+
+Current representative result:
+- old Push: about 0.267 m
+- proposed Push at 26.25: about 0.533 m
+- proposed Tsuppari: about 0.266 m.
+
+Therefore the proposed first-pass relationship satisfies the requested target:
+
+```
+Push displacement ~= 2 x old Push
+Tsuppari displacement ~= old Push
+```
+
+Do not change global `MAX_EXTERNAL_SPEED` or `EXTERNAL_DECELERATION` merely to obtain a literal 2x acceleration constant.
+
+The Implementation Task must verify actual representative displacement, not only constants.
+
+## Required Correction / Guardrail for 07B
+
+The report found three existing `BoutCounterTransition.test.ts` fixtures that fail when Push strength is raised.
+
+07B may adjust **fixture starting positions only** if needed to recreate the same intended CounterTransition scenarios.
+
+It must NOT:
+- weaken those assertions
+- delete those cases
+- change Counter / CounterTransition semantics to make them pass
+- treat the fixture adjustment as evidence that Counter behavior changed.
+
+Report the exact fixture-only changes.
+
+## Presentation / Art Boundary
+
+07B should implement gameplay + input + debug/presentation state using the current idle sprite if necessary.
+
+Do not bundle Product Tsuppari pose integration into 07B.
+
+The later Art Visual Gate must compare:
+- separately authored left/right red pose masters
+- one-side red master + reflection.
+
+The User has not accepted which left/right pose-production method wins yet.
+
+The accepted idle art baseline remains:
+- authored red master
+- derived blue via offline local-Y reflection + mawashi recolor.
+
+## Verification Required for 07B
+
+Treat 07B as Heavy/Core Gameplay verification.
+
+At minimum:
+- all explicit boundary cases from the ACTION-07A matrix
+- participant-order symmetry for simultaneous Tsuppari
+- left/right cooldown timing
+- Push > Tsuppari > Counter > Grip priority
+- Tsuppari whiff/hit/reach boundary
+- 1..5 -> 6th Kuzushi cycle
+- new-Bout reset
+- Counter catches left/right Tsuppari
+- no CounterTransition for Tsuppari Counter
+- Tsuppari vs Tsuppari, including threshold cases
+- Push vs Tsuppari contest
+- unchanged equal Push-vs-Push semantics
+- representative Push/Tsuppari displacement
+- ring-out / simultaneous ring-out paths
+- grapple / CounterTransition / Kuzushi / recovery input suppression
+- Snapshot deep-copy/state ownership
+- full relevant automated suite
+- build
+- browser/runtime smoke.
+
+User Play Test remains the final gate for:
+- Push force feel
+- Tsuppari force feel
+- reach
+- 1-second cooldown
+- action timing
+- Push-vs-Tsuppari contest feel
+- Counter timing/readability
+- Tsuppari-vs-Tsuppari feel.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+- Tsuppari terminology
+- ArrowLeft / ArrowRight hand mapping
+- independent 1-second hand cooldown concept
+- deterministic 5 ordinary hits -> 6th Kuzushi concept
+- Push stronger than Tsuppari
+- Tsuppari Counter = in-place Kuzushi with no wrap
+- Push Counter existing relocation semantics
+- Tsuppari FREE-state-only direction for the first prototype
+- current red-master idle art baseline.
+
+## Next Task
+
+Implementation is READY.
+
+Recommended next Task:
+`ACTION-07B-TSUPPARI-GAMEPLAY-IMPLEMENTATION`
+
+Scope should be gameplay / input / debug presentation only.
+Product Tsuppari pose art should remain a separate subsequent Visual Gate / integration Task.
