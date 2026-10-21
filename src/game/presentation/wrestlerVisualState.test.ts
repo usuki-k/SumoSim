@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BODY_RADIUS,
   BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
   PUSH_ACTIVE_TICKS,
   PUSH_STARTUP_TICKS,
@@ -133,6 +134,7 @@ describe('wrestler visual state (VISUAL-01A)', () => {
   it('turning while not READY (rear grip), then ready; drive while READY and holding', () => {
     const sim = touching()
     for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
+    for (let t = 0; t < COUNTER_TRANSITION_TICKS; t++) sim.step(intents())
     sim.step(intents({ grip: true }))
     let s = sim.getSnapshot()
     expect(vis(s, 1)).toMatchObject({ pose: 'grapple', grappleRole: 'morozashi-disadvantaged', turning: true })

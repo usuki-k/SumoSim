@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BODY_RADIUS,
   BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
   EXTERNAL_DECELERATION,
   GRAPPLE_DRIVE_ACCELERATION,
@@ -96,10 +97,11 @@ function frontMorozashi(): BoutSimulation {
   return sim
 }
 
-// Best Counter -> rear -> Grip: A holds Morozashi and is READY, B is TURNING.
+// Best Counter -> rear (after the Counter transition) -> Grip: A holds Morozashi and is READY, B is TURNING.
 function rearMorozashi(): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
   for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
+  stepN(sim, COUNTER_TRANSITION_TICKS)
   sim.step(intents({ grip: true }))
   const s = sim.getSnapshot()
   expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
@@ -353,10 +355,11 @@ describe('Grappled Drive (ACTION-05C1)', () => {
     d2.setMode('push') // in contact and ready: pushes on tick 0
     let firstDummyDrive = -1
     let playerAlone = false
-    for (let t = 0; t < 150; t++) {
+    const gripTick = PUSH_STARTUP_TICKS + 1 + COUNTER_TRANSITION_TICKS // after the Counter transition
+    for (let t = 0; t < 150 + COUNTER_TRANSITION_TICKS; t++) {
       const before = rear.getSnapshot()
       const intent = d2.nextIntent(before)
-      const player = one({ counter: t === 0, grip: t === PUSH_STARTUP_TICKS + 1, drive: t > PUSH_STARTUP_TICKS + 1 })
+      const player = one({ counter: t === 0, grip: t === gripTick, drive: t > gripTick })
       rear.step(new Map([['a', player], ['b', intent]]))
       const s = rear.getSnapshot()
       if (s.engagement.kind === 'grappled' && A(s).action.kind === 'drive' && B(s).action.kind === 'idle') playerAlone = true
@@ -366,7 +369,7 @@ describe('Grappled Drive (ACTION-05C1)', () => {
       }
     }
     expect(playerAlone).toBe(true)
-    expect(firstDummyDrive).toBeGreaterThan(PUSH_STARTUP_TICKS + 40)
+    expect(firstDummyDrive).toBeGreaterThan(gripTick + 40)
     expect(rear.getSnapshot().engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
     expect(DUMMY_PUSH_COOLDOWN_TICKS).toBe(30)
   })
@@ -402,7 +405,7 @@ describe('Grappled Drive (ACTION-05C1)', () => {
     expect(Math.hypot(B(s).position.x, B(s).position.y)).toBeGreaterThan(2.275) // not clamped back
     expect(Math.hypot(A(s).position.x, A(s).position.y)).toBeLessThanOrEqual(2.275)
     expect(s.engagement.kind).toBe('grappled') // final physical state kept as-is
-    expect(Object.keys(s).sort()).toEqual(['arena', 'engagement', 'outcome', 'participants'])
+    expect(Object.keys(s).sort()).toEqual(['arena', 'counterTransition', 'engagement', 'outcome', 'participants'])
   })
 
   it('T150: Counter -> Kuzushi -> Morozashi -> TURNING -> Drive -> contest -> release replays exactly', () => {
@@ -411,6 +414,7 @@ describe('Grappled Drive (ACTION-05C1)', () => {
       const script: [number, Input, Input][] = [
         [1, { counter: true }, { push: true }],
         [PUSH_STARTUP_TICKS, {}, {}],
+        [COUNTER_TRANSITION_TICKS, {}, {}],
         [1, { grip: true }, {}],
         [30, { drive: true }, { drive: true }],
         [40, { drive: true }, { drive: true, grip: true }],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_RADIUS, BoutSimulation, PUSH_STARTUP_TICKS } from './BoutSimulation.ts'
+import { BODY_RADIUS, BoutSimulation, COUNTER_TRANSITION_TICKS, PUSH_STARTUP_TICKS } from './BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, Vec2 } from './BoutTypes.ts'
 import {
   RING_OUT_SIMULTANEOUS_EPSILON,
@@ -223,14 +223,22 @@ describe('Ring-out / BoutOutcome (ACTION-06A)', () => {
     expect(runUntilDecided(m, () => intents({}, { drive: true })).after.outcome).toEqual(win('b', 'a'))
   })
 
-  it('T165: Counter relocation near the edge keeps its accepted validity and never places a center outside', () => {
-    const ring = 1.25 // as in the accepted fallback fixture: rear is invalid, a side is used
-    const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0, ring))
+  it('T165: Counter target near the edge keeps its accepted validity and never places the end center outside', () => {
+    // ACTION-04A4: the target is taken around the pusher's stagger end point; here the rear is invalid
+    // (max center distance 0.8) and a side is used. The transition itself runs to completion.
+    const ring = 1.15
+    const sim = new BoutSimulation(setupAt(-COMBINED / 2 + 0.2, 0, COMBINED / 2 + 0.2, 0, ring))
     for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
+    expect(B(sim.getSnapshot()).posture.kind).toBe('kuzushi')
+    expect(sim.getSnapshot().counterTransition).toMatchObject({ kind: 'active', tier: 'best' })
+    for (let k = 0; k < COUNTER_TRANSITION_TICKS; k++) {
+      sim.step(IDLE)
+      expect(sim.getSnapshot().outcome).toEqual({ kind: 'ongoing' })
+    }
     const s = sim.getSnapshot()
-    expect(B(s).posture.kind).toBe('kuzushi')
+    expect(s.counterTransition).toEqual({ kind: 'none' })
     expect(radial(A(s).position)).toBeLessThanOrEqual(ring - BODY_RADIUS + 1e-12)
-    expect(s.outcome).toEqual({ kind: 'ongoing' })
+    expect(Math.abs(A(s).position.y)).toBeCloseTo(COMBINED, 9) // a side, not the rear
   })
 
   it('T166 / T167 / T168: no wall; the decided bout is frozen exactly; the outcome cannot change', () => {
@@ -303,7 +311,7 @@ describe('Ring-out / BoutOutcome (ACTION-06A)', () => {
 
   it('T172: the outcome is top-level only; participants carry no winner / loser flags', () => {
     const { after } = walkOut(0.2, 1)
-    expect(Object.keys(after).sort()).toEqual(['arena', 'engagement', 'outcome', 'participants'])
+    expect(Object.keys(after).sort()).toEqual(['arena', 'counterTransition', 'engagement', 'outcome', 'participants'])
     for (const p of after.participants) {
       expect(Object.keys(p).sort()).toEqual(
         ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'velocity'].sort(),

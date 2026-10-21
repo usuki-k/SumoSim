@@ -1,6 +1,7 @@
 // Canonical owner of bout runtime state. Pure TypeScript; must not import Phaser.
 import type {
   ArenaSetup,
+  BoutCounterTransition,
   BoutEngagement,
   BoutOutcome,
   BoutSetup,
@@ -52,10 +53,15 @@ export const KUZUSHI_TICKS = 30 // ~500 ms of full Kuzushi ticks (countered atta
 // Received Push acceleration multiplier while the driven-back participant is in Kuzushi.
 export const KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5
 // Counter position resolution (ACTION-04A2). Provisional Prototype tuning.
-// Attacker-only forward carry along its locked Push direction on a successful Counter.
+// Attacker-only forward carry along its locked Push direction when a caught Push has no valid side /
+// rear target (the no-relocation fallback; a valid target starts the Counter transition instead).
 export const COUNTER_OVERSHOOT_SPEED = 1.0 // m/s
 // Lateral offsets within this (m) count as a tie when choosing the side.
 export const COUNTER_SIDE_EPSILON = 1e-6
+// Counter transition (ACTION-04A4). Provisional Prototype tuning, subject to User Play Test.
+export const COUNTER_TRANSITION_TICKS = 120 // ~2.0 s pair exchange after a Best / Success catch
+// The pusher's forward stagger along its locked Push direction over the transition (1.0 R).
+export const COUNTER_STAGGER_DISTANCE = BODY_RADIUS // m
 
 // Grip / Engagement (ACTION-05A). Provisional Prototype tuning, subject to User Play Test.
 export const GRIP_REACH_TICKS = 6 // ~100 ms: waits for an in-range idle target
@@ -103,6 +109,28 @@ interface ContactResult {
   readonly nx: number
   readonly ny: number
 }
+
+// Active Counter transition (ACTION-04A4). Everything except the tick count is fixed at the catch:
+// the pusher moves pusherStart -> pusherEnd along d; the Counter user moves around the moving pusher
+// in its (d, perp) basis from (startRadius, startTheta) to (contact distance, endTheta), ending
+// exactly on counterUserEnd (the side / rear candidate of pusherEnd).
+interface ActiveCounterTransition {
+  readonly kind: 'active'
+  readonly tier: Exclude<CounterTier, 'fail'>
+  readonly counterUser: MutableParticipant
+  readonly pusher: MutableParticipant
+  ticksElapsed: number
+  readonly direction: Vec2
+  readonly pusherStart: Vec2
+  readonly pusherEnd: Vec2
+  readonly startRadius: number
+  readonly startTheta: number
+  readonly endRadius: number
+  readonly endTheta: number
+  readonly counterUserEnd: Vec2
+}
+
+type CounterTransitionState = { readonly kind: 'none' } | ActiveCounterTransition
 
 const ZERO_MOVE: Vec2 = { x: 0, y: 0 }
 
@@ -170,6 +198,17 @@ function copyOutcome(outcome: BoutOutcome): BoutOutcome {
   return { kind: 'win', winnerId: outcome.winnerId, loserId: outcome.loserId, reason: outcome.reason }
 }
 
+function copyCounterTransition(transition: CounterTransitionState): BoutCounterTransition {
+  if (transition.kind === 'none') return { kind: 'none' }
+  return {
+    kind: 'active',
+    tier: transition.tier,
+    counterUserId: transition.counterUser.id,
+    pusherId: transition.pusher.id,
+    ticksRemaining: COUNTER_TRANSITION_TICKS - transition.ticksElapsed,
+  }
+}
+
 function copyEngagement(engagement: BoutEngagement): BoutEngagement {
   if (engagement.kind === 'free') return { kind: 'free' }
   const advantage: GrappleAdvantage =
@@ -186,12 +225,19 @@ export function counterTier(pushActiveTicksRemaining: number): Exclude<CounterTi
   return activeElapsed < COUNTER_BEST_TICKS ? 'best' : 'success'
 }
 
+// A Counter target: the defender's center plus its bearing `theta` around the attacker in the
+// attacker's (d, perp) basis (side+ = +PI/2, side- = -PI/2, rear = +-PI on the preferred side).
+export interface CounterTarget extends Vec2 {
+  readonly theta: number
+}
+
 // Where a successful Counter puts the defender, or null to stay put. Basis: attacker center `p` and
 // its locked Push direction `d`; candidates sit at exact contact distance `combined` (no overlap):
 //   rear = p - d*R, side+ = p + perp*R, side- = p - perp*R  with perp = (-d.y, d.x).
 // Side preference: the side the defender already leans to (sign of its lateral offset); on a tie the
-// side nearer the ring center, then side+. Best tries rear first. The first valid candidate wins;
-// a candidate is valid only if the defender body fits fully inside the ring (never clamped).
+// side nearer the ring center, then side+. Best tries rear first (reached around the preferred side).
+// The first valid candidate wins; a candidate is valid only if the defender body fits fully inside
+// the ring (never clamped).
 export function counterRelocationTarget(
   tier: Exclude<CounterTier, 'fail'>,
   p: Vec2,
@@ -199,14 +245,14 @@ export function counterRelocationTarget(
   combined: number,
   defenderPosition: Vec2,
   maxCenterDistance: number,
-): Vec2 | null {
+): CounterTarget | null {
   const perpX = -d.y
   const perpY = d.x
-  const sidePlus = { x: p.x + perpX * combined, y: p.y + perpY * combined }
-  const sideMinus = { x: p.x - perpX * combined, y: p.y - perpY * combined }
+  const sidePlus = { x: p.x + perpX * combined, y: p.y + perpY * combined, theta: Math.PI / 2 }
+  const sideMinus = { x: p.x - perpX * combined, y: p.y - perpY * combined, theta: -Math.PI / 2 }
   const lateralOffset = perpX * (defenderPosition.x - p.x) + perpY * (defenderPosition.y - p.y)
 
-  let sides: Vec2[]
+  let sides: CounterTarget[]
   if (lateralOffset > COUNTER_SIDE_EPSILON) sides = [sidePlus, sideMinus]
   else if (lateralOffset < -COUNTER_SIDE_EPSILON) sides = [sideMinus, sidePlus]
   else {
@@ -214,12 +260,22 @@ export function counterRelocationTarget(
     const minusFromCenter = Math.hypot(sideMinus.x, sideMinus.y)
     sides = minusFromCenter < plusFromCenter - COUNTER_SIDE_EPSILON ? [sideMinus, sidePlus] : [sidePlus, sideMinus]
   }
-  const candidates =
-    tier === 'best' ? [{ x: p.x - d.x * combined, y: p.y - d.y * combined }, ...sides] : sides
+  const rear = { x: p.x - d.x * combined, y: p.y - d.y * combined, theta: Math.sign(sides[0].theta) * Math.PI }
+  const candidates = tier === 'best' ? [rear, ...sides] : sides
 
   const isValid = (c: Vec2) =>
     Number.isFinite(c.x) && Number.isFinite(c.y) && Math.hypot(c.x, c.y) <= maxCenterDistance
   return candidates.find(isValid) ?? null
+}
+
+// Counter transition progress curves (u in [0, 1]): the pusher lurches forward and slows down; the
+// Counter user's bearing / distance around the pusher move with a smoothstep.
+export function counterStaggerEase(u: number): number {
+  return 1 - (1 - u) * (1 - u)
+}
+
+export function counterWrapEase(u: number): number {
+  return u * u * (3 - 2 * u)
 }
 
 // The only entry into Kuzushi: cancels the current action, so nothing chosen earlier carries over.
@@ -388,6 +444,8 @@ export class BoutSimulation {
   private readonly participants: MutableParticipant[]
   // Pair relationship; the only place grappling is recorded (participants carry no grapple flags).
   private engagement: BoutEngagement = { kind: 'free' }
+  // Pair Counter transition; while active it alone moves both participants.
+  private counterTransition: CounterTransitionState = { kind: 'none' }
   // Bout result; the only place winner / loser / rematch is recorded.
   private outcome: BoutOutcome = { kind: 'ongoing' }
 
@@ -425,9 +483,14 @@ export class BoutSimulation {
   // external update (FREE decay / grappled shared Drive update) -> integrate (self + external) ->
   // contact -> grapple bond (grappled) -> Counter / Grip / Push resolution (free) -> action timers ->
   // facing -> ring-out (once, from the previous and final resolved centers).
+  // While a Counter transition is active the tick is stepCounterTransition instead (intents ignored).
   // Once the outcome is decided the bout is frozen: step() is an exact no-op.
   step(intents: ReadonlyMap<ParticipantId, ParticipantIntent>): void {
     if (this.outcome.kind !== 'ongoing') return
+    if (this.counterTransition.kind === 'active') {
+      this.stepCounterTransition(this.counterTransition)
+      return
+    }
     const [a, b] = this.participants
     const previousA: Vec2 = { x: a.position.x, y: a.position.y }
     const previousB: Vec2 = { x: b.position.x, y: b.position.y }
@@ -503,6 +566,11 @@ export class BoutSimulation {
     this.updateFacing()
 
     // After every positional change of the tick; the final physical state is kept as-is.
+    this.resolveRingOutFrom(previousA, previousB)
+  }
+
+  private resolveRingOutFrom(previousA: Vec2, previousB: Vec2): void {
+    const [a, b] = this.participants
     this.outcome = resolveArenaRingOut(
       [
         { id: a.id, previous: previousA, current: a.position },
@@ -510,6 +578,67 @@ export class BoutSimulation {
       ],
       this.arena,
     )
+  }
+
+  // One Counter transition tick. Pair input lock: no intent is read (edges are dropped, not queued),
+  // the pusher's Kuzushi timer is paused and no contact / Push / Counter / Grip / grapple rule runs.
+  // The path is the only position owner; velocities report the path displacement (pusher: external,
+  // Counter user: own footwork) and are not integrated. Then the usual facing and ring-out for both;
+  // on the last tick of an ongoing bout the transition completes.
+  private stepCounterTransition(t: ActiveCounterTransition): void {
+    const [a, b] = this.participants
+    const previousA: Vec2 = { x: a.position.x, y: a.position.y }
+    const previousB: Vec2 = { x: b.position.x, y: b.position.y }
+    const pusherBefore: Vec2 = { x: t.pusher.position.x, y: t.pusher.position.y }
+    const counterUserBefore: Vec2 = { x: t.counterUser.position.x, y: t.counterUser.position.y }
+
+    t.ticksElapsed += 1
+    const last = t.ticksElapsed >= COUNTER_TRANSITION_TICKS
+    if (last) {
+      // Exact endpoints: the pusher's full stagger and the side / rear candidate of that end point.
+      t.pusher.position = { x: t.pusherEnd.x, y: t.pusherEnd.y }
+      t.counterUser.position = { x: t.counterUserEnd.x, y: t.counterUserEnd.y }
+    } else {
+      const u = t.ticksElapsed / COUNTER_TRANSITION_TICKS
+      const stagger = COUNTER_STAGGER_DISTANCE * counterStaggerEase(u)
+      const pusher = {
+        x: t.pusherStart.x + t.direction.x * stagger,
+        y: t.pusherStart.y + t.direction.y * stagger,
+      }
+      const wrap = counterWrapEase(u)
+      const radius = t.startRadius + (t.endRadius - t.startRadius) * wrap
+      const theta = t.startTheta + (t.endTheta - t.startTheta) * wrap
+      const along = radius * Math.cos(theta)
+      const across = radius * Math.sin(theta) // along perp = (-d.y, d.x)
+      t.pusher.position = pusher
+      t.counterUser.position = {
+        x: pusher.x + t.direction.x * along - t.direction.y * across,
+        y: pusher.y + t.direction.y * along + t.direction.x * across,
+      }
+    }
+    t.pusher.selfVelocity = { x: 0, y: 0 }
+    t.pusher.externalVelocity = {
+      x: (t.pusher.position.x - pusherBefore.x) / TICK_SECONDS,
+      y: (t.pusher.position.y - pusherBefore.y) / TICK_SECONDS,
+    }
+    t.counterUser.selfVelocity = {
+      x: (t.counterUser.position.x - counterUserBefore.x) / TICK_SECONDS,
+      y: (t.counterUser.position.y - counterUserBefore.y) / TICK_SECONDS,
+    }
+    t.counterUser.externalVelocity = { x: 0, y: 0 }
+
+    this.updateFacing()
+    this.resolveRingOutFrom(previousA, previousB)
+    if (!last || this.outcome.kind !== 'ongoing') return
+
+    // Completion: both at rest, the Counter user regains control next tick, and the pusher starts a
+    // full Kuzushi (the Counter -> Grip / Morozashi opening after the exchange).
+    for (const p of this.participants) {
+      p.selfVelocity = { x: 0, y: 0 }
+      p.externalVelocity = { x: 0, y: 0 }
+    }
+    enterKuzushi(t.pusher)
+    this.counterTransition = { kind: 'none' }
   }
 
   // Returns a fresh copy; mutating it never affects canonical state.
@@ -532,6 +661,7 @@ export class BoutSimulation {
         }),
       ),
       engagement: copyEngagement(this.engagement),
+      counterTransition: copyCounterTransition(this.counterTransition),
       outcome: copyOutcome(this.outcome),
     }
   }
@@ -691,11 +821,14 @@ export class BoutSimulation {
     return { nx, ny }
   }
 
-  // In contact, a Counter window catching an active opponent Push succeeds: the attacker's Push is
-  // cancelled into Kuzushi before this tick's Push force, and the defender returns to idle.
-  // Best puts the defender behind the attacker, Success at its side (counterRelocationTarget), and the
-  // attacker alone gets a forward carry along its locked Push direction. Existing external momentum
-  // is kept. Returns the tier, or null.
+  // In contact, a Counter window catching an active opponent Push succeeds: the attacker's (pusher's)
+  // Push is cancelled into Kuzushi before this tick's Push force, and the defender (Counter user)
+  // returns to idle. The side / rear target (counterRelocationTarget) is taken around the pusher's end
+  // point after its COUNTER_STAGGER_DISTANCE stagger along the locked Push direction. With a target,
+  // nobody moves on this tick: both velocities are cleared and the Counter transition starts (Best:
+  // rear, Success: side, reached over COUNTER_TRANSITION_TICKS). Without one the ACTION-04A2 fallback
+  // is unchanged: the defender stays put and the attacker alone gets the overshoot carry, existing
+  // external momentum kept. Returns the tier, or null.
   private resolveCounter(): CounterTier | null {
     const [a, b] = this.participants
     for (const [defender, attacker] of [
@@ -707,23 +840,50 @@ export class BoutSimulation {
       // Captured before enterKuzushi cancels the Push.
       const d: Vec2 = { x: attacker.action.direction.x, y: attacker.action.direction.y }
       const tier = counterTier(attacker.action.ticksRemaining)
+      const pusherStart: Vec2 = { x: attacker.position.x, y: attacker.position.y }
+      const pusherEnd: Vec2 = {
+        x: pusherStart.x + d.x * COUNTER_STAGGER_DISTANCE,
+        y: pusherStart.y + d.y * COUNTER_STAGGER_DISTANCE,
+      }
+      const combined = attacker.bodyRadius + defender.bodyRadius
       const target = counterRelocationTarget(
         tier,
-        attacker.position,
+        pusherEnd,
         d,
-        attacker.bodyRadius + defender.bodyRadius,
+        combined,
         defender.position,
         this.arena.radius - defender.bodyRadius,
       )
       enterKuzushi(attacker)
       defender.action = { kind: 'idle' }
-      if (target) {
-        defender.position.x = target.x
-        defender.position.y = target.y
+      if (!target) {
+        attacker.externalVelocity.x += d.x * COUNTER_OVERSHOOT_SPEED
+        attacker.externalVelocity.y += d.y * COUNTER_OVERSHOOT_SPEED
+        clampExternal(attacker.externalVelocity)
+        return tier
       }
-      attacker.externalVelocity.x += d.x * COUNTER_OVERSHOOT_SPEED
-      attacker.externalVelocity.y += d.y * COUNTER_OVERSHOOT_SPEED
-      clampExternal(attacker.externalVelocity)
+      for (const p of [defender, attacker]) {
+        p.selfVelocity = { x: 0, y: 0 }
+        p.externalVelocity = { x: 0, y: 0 }
+      }
+      // The Counter user's starting place around the pusher, in the pusher's (d, perp) basis.
+      const relX = defender.position.x - pusherStart.x
+      const relY = defender.position.y - pusherStart.y
+      this.counterTransition = {
+        kind: 'active',
+        tier,
+        counterUser: defender,
+        pusher: attacker,
+        ticksElapsed: 0,
+        direction: d,
+        pusherStart,
+        pusherEnd,
+        startRadius: Math.hypot(relX, relY),
+        startTheta: Math.atan2(-d.y * relX + d.x * relY, d.x * relX + d.y * relY),
+        endRadius: combined,
+        endTheta: target.theta,
+        counterUserEnd: { x: target.x, y: target.y },
+      }
       return tier
     }
     return null

@@ -15,6 +15,7 @@ import { createPreBoutComparison } from './PreBoutComparisonView.ts'
 import { addProductDohyo, drawArenaBoundaryDebug, preloadProductDohyo } from './DohyoView.ts'
 import { WrestlerView, preloadProductWrestlers } from './WrestlerView.ts'
 import type {
+  BoutCounterTransition,
   BoutEngagement,
   BoutSetup,
   ParticipantActionState,
@@ -77,6 +78,12 @@ interface ParticipantView {
   readonly facingMarker: Phaser.GameObjects.Arc
   readonly label: Phaser.GameObjects.Text
   readonly phaseText: Phaser.GameObjects.Text
+}
+
+// Presentation-only label for the Counter user during a Counter transition (the pusher shows KUZUSHI).
+function counterTransitionLabel(transition: BoutCounterTransition, id: ParticipantId): string {
+  if (transition.kind !== 'active' || transition.counterUserId !== id) return ''
+  return transition.tier === 'best' ? 'COUNTER BEST' : 'COUNTER SUCCESS'
 }
 
 // Presentation-only label for the current posture / action (stable idle shows nothing).
@@ -392,7 +399,8 @@ export class BoutScene extends Phaser.Scene {
         const visual = resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving)
         view.wrestler.apply(visual, participant, pos)
       }
-      const label = phaseLabel(participant.action, participant.posture)
+      const label =
+        counterTransitionLabel(snapshot.counterTransition, participant.id) || phaseLabel(participant.action, participant.posture)
       view.phaseText.setText(label !== '' || !opponent ? label : grappleLabel(participant, opponent, snapshot.engagement))
       view.phaseText.setPosition(pos.x, pos.y - bodyPixels - 66)
     }

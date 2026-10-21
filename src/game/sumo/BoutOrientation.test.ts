@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_RADIUS, BoutSimulation, GRIP_RECOVERY_TICKS, PUSH_STARTUP_TICKS, TICK_SECONDS } from './BoutSimulation.ts'
+import {
+  BODY_RADIUS,
+  BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
+  GRIP_RECOVERY_TICKS,
+  PUSH_STARTUP_TICKS,
+  TICK_SECONDS,
+} from './BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, ParticipantState } from './BoutTypes.ts'
 import {
   GRAPPLE_FACING_TOLERANCE,
@@ -56,13 +63,15 @@ const errorOf = (self: ParticipantState, other: ParticipantState) =>
 const ready = (s: BoutSnapshot, which: 0 | 1) =>
   canActInGrapple(s.participants[which], s.participants[1 - which], s.engagement)
 
-// B pushes on tick 0; A counters (Best on tick 0 -> rear, or Success later -> side) and grips the
+// B pushes on tick 0; A counters (Best on tick 0 -> rear, or Success later -> side), waits out the
+// Counter transition (ACTION-04A4) and grips the
 // Kuzushi B on the next tick. Returns the simulation right after the grip tick.
 function counterGrip(kind: 'side' | 'rear'): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
   const counterTick = kind === 'rear' ? 0 : PUSH_STARTUP_TICKS + 4
   const resolveTick = kind === 'rear' ? PUSH_STARTUP_TICKS : counterTick
   for (let t = 0; t <= resolveTick; t++) sim.step(intents({ counter: t === counterTick }, { push: t === 0 }))
+  for (let t = 0; t < COUNTER_TRANSITION_TICKS; t++) sim.step(IDLE)
   expect(B(sim.getSnapshot()).posture.kind).toBe('kuzushi')
   sim.step(intents({ grip: true }))
   const s = sim.getSnapshot()
@@ -131,7 +140,10 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
       if (prev > STEP) expect(e).toBeCloseTo(prev - STEP, 9)
       prev = e
     }
-    expect(updates).toBe(Math.ceil((e1 - GRAPPLE_FACING_TOLERANCE) / STEP - 1e-9) + 1)
+    // After the Counter transition B sits at the exact side (error exactly 90 deg), so the last step can
+    // land on the tolerance boundary itself; float rounding may then need one more update.
+    const exact = Math.ceil((e1 - GRAPPLE_FACING_TOLERANCE) / STEP - 1e-9) + 1
+    expect([exact, exact + 1]).toContain(updates)
     expect(updates).toBeGreaterThanOrEqual(24)
     expect(updates).toBeLessThanOrEqual(26)
   })
@@ -162,6 +174,7 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
     // integration: the rear victim turns + on its first update
     const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
     for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
+    for (let t = 0; t < COUNTER_TRANSITION_TICKS; t++) sim.step(IDLE)
     const before = B(sim.getSnapshot()).facing
     sim.step(intents({ grip: true }))
     expect(normalizeAngle(B(sim.getSnapshot()).facing - before)).toBeCloseTo(STEP, 9)
@@ -262,7 +275,8 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
       expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
     }
     const s = sim.getSnapshot()
-    expect(Object.keys(s).sort()).toEqual(['arena', 'engagement', 'outcome', 'participants']) // + outcome (ACTION-06A)
+    // + outcome (ACTION-06A), + counterTransition (ACTION-04A4)
+    expect(Object.keys(s).sort()).toEqual(['arena', 'counterTransition', 'engagement', 'outcome', 'participants'])
     expect(Object.keys(B(s)).sort()).toEqual(
       ['action', 'bodyRadius', 'externalVelocity', 'facing', 'id', 'position', 'posture', 'velocity'].sort(),
     )

@@ -3,9 +3,7 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_BEST_TICKS,
-  COUNTER_OVERSHOOT_SPEED,
   COUNTER_WINDOW_TICKS,
-  EXTERNAL_DECELERATION,
   KUZUSHI_PUSH_SUSCEPTIBILITY,
   KUZUSHI_TICKS,
   PUSH_ACTIVE_TICKS,
@@ -182,7 +180,7 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     expect(attackerBefore.kind === 'push' && counterTier(attackerBefore.ticksRemaining)).toBe('success')
   })
 
-  it('T64: a later active tick resolves Success and cancels that tick of Push force', () => {
+  it('T64: a later active tick resolves Success, cancels that tick of Push force and absorbs the pair momentum', () => {
     const c = PUSH_STARTUP_TICKS + 4
     const sim = touching()
     for (let t = 0; t < c; t++) sim.step(intents({}, { push: t === 0 }))
@@ -192,10 +190,12 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     const s = sim.getSnapshot()
     expect(B(s).posture.kind).toBe('kuzushi')
     expect(B(s).action.kind).toBe('idle')
-    // only decay, no new gain on the resolving tick
-    expect(A(s).externalVelocity.x).toBeCloseTo(e0 + EXTERNAL_DECELERATION * TICK_SECONDS, 12)
-    // ACTION-04A2: the attacker additionally carries the overshoot along its locked direction (-x)
-    expect(B(s).externalVelocity.x).toBeCloseTo(A(s).externalVelocity.x - COUNTER_OVERSHOOT_SPEED, 12)
+    // ACTION-04A4 (D3): the Counter transition starts and absorbs all momentum; no Push gain is applied
+    expect(s.counterTransition).toMatchObject({ kind: 'active', tier: 'success', counterUserId: 'a', pusherId: 'b' })
+    for (const p of s.participants) {
+      expect(p.externalVelocity).toEqual({ x: 0, y: 0 })
+      expect(p.velocity).toEqual({ x: 0, y: 0 })
+    }
   })
 
   it('T65: no Push / too early / too late (opponent Recovery) all fail into self Kuzushi', () => {

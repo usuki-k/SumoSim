@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_RADIUS, BoutSimulation, PUSH_STARTUP_TICKS } from './BoutSimulation.ts'
+import { BODY_RADIUS, BoutSimulation, COUNTER_TRANSITION_TICKS, PUSH_STARTUP_TICKS } from './BoutSimulation.ts'
 import type { ArenaSetup, BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, Vec2 } from './BoutTypes.ts'
 import {
   RING_OUT_SIMULTANEOUS_EPSILON,
@@ -536,18 +536,22 @@ describe('Tokudawara in BoutSimulation (TOKUDAWARA-01A)', () => {
   })
 
   it('Counter relocation keeps the conservative circular condition (never into a Tokudawara extension)', () => {
-    // Fixture where the rear target (+x, 1.05 m) is invalid on the circle (1.25 - bodyRadius = 0.9) but
-    // would fit inside a deep +x Tokudawara: the result must equal the plain-circle result.
+    // Fixture where the rear target around the pusher's stagger end point (+x, ~0.95 m) is invalid on
+    // the circle (1.25 - bodyRadius = 0.9) but would fit inside a deep +x Tokudawara: the result (a side,
+    // after the full Counter transition) must equal the plain-circle result.
     const ring = 1.25
     const run = (arena: ArenaSetup) => {
-      const sim = new BoutSimulation(setup({ x: -COMBINED / 2, y: 0 }, { x: COMBINED / 2, y: 0 }, arena))
+      const sim = new BoutSimulation(setup({ x: -COMBINED / 2 + 0.25, y: 0 }, { x: COMBINED / 2 + 0.25, y: 0 }, arena))
       for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
+      for (let k = 0; k < COUNTER_TRANSITION_TICKS; k++) sim.step(intents({}))
       return sim.getSnapshot()
     }
     const circle = run({ radius: ring })
     const tokudawara = run({ radius: ring, tokudawara: { depth: 0.3, halfAngle: H } })
     expect(B(tokudawara).posture.kind).toBe('kuzushi')
     expect(tokudawara.participants).toEqual(circle.participants)
+    expect(tokudawara.counterTransition).toEqual({ kind: 'none' })
+    expect(Math.abs(A(tokudawara).position.y)).toBeCloseTo(COMBINED, 9) // a side, not the rear
     expect(radial(A(tokudawara).position)).toBeLessThanOrEqual(ring - BODY_RADIUS + 1e-12)
     expect(tokudawara.outcome).toEqual({ kind: 'ongoing' })
   })

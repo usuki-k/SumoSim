@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_RADIUS, BoutSimulation, PUSH_ACTIVE_TICKS, PUSH_RECOVERY_TICKS, PUSH_STARTUP_TICKS } from '../sumo/BoutSimulation.ts'
+import {
+  BODY_RADIUS,
+  BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
+  PUSH_ACTIVE_TICKS,
+  PUSH_RECOVERY_TICKS,
+  PUSH_STARTUP_TICKS,
+} from '../sumo/BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
 import { DUMMY_PUSH_COOLDOWN_TICKS, PushDummyController } from './pushDummyController.ts'
 
@@ -223,6 +230,40 @@ describe('PushDummyController (ACTION-03B2)', () => {
     }
     expect(sawKuzushi).toBe(true)
     expect(nextEdge - firstStableIdle).toBe(DUMMY_PUSH_COOLDOWN_TICKS)
+  })
+
+  it('T74b: during a Counter transition the dummy emits nothing (even idle / stable) and keeps a full cooldown', () => {
+    // The dummy drives 'a', the Counter user (idle and stable for the whole transition); 'b' pushes.
+    const sim = new BoutSimulation(setup(-COMBINED / 2, COMBINED / 2))
+    const dummy = new PushDummyController('a', 'b')
+    dummy.setMode('push')
+    const drive = (t: number, dummyIntent: ParticipantIntent) =>
+      sim.step(
+        new Map<ParticipantId, ParticipantIntent>([
+          ['a', { ...dummyIntent, counterPressed: t === 0 }],
+          ['b', { move: { x: 0, y: 0 }, pushPressed: t === 0, counterPressed: false, gripPressed: false, driveHeld: false }],
+        ]),
+      )
+    let t = 0
+    for (; sim.getSnapshot().counterTransition.kind === 'none'; t++) drive(t, IDLE_INTENT)
+    let lockedTicks = 0
+    for (; sim.getSnapshot().counterTransition.kind === 'active'; t++) {
+      const before = sim.getSnapshot()
+      expect(a(before).action.kind === 'idle' && a(before).posture.kind === 'stable').toBe(true)
+      const intent = dummy.nextIntent(before)
+      expect(intent).toEqual(IDLE_INTENT)
+      drive(t, intent)
+      lockedTicks++
+    }
+    expect(lockedTicks).toBe(COUNTER_TRANSITION_TICKS)
+    // in contact afterwards: the first edge waits exactly the full cooldown
+    let firstEdge = -1
+    for (let k = 0; k <= DUMMY_PUSH_COOLDOWN_TICKS && firstEdge < 0; k++, t++) {
+      const intent = dummy.nextIntent(sim.getSnapshot())
+      if (intent.pushPressed) firstEdge = k
+      drive(t, intent)
+    }
+    expect(firstEdge).toBe(DUMMY_PUSH_COOLDOWN_TICKS)
   })
 
   // ACTION-05C1: while grappled the Mode 2 dummy now holds Drive (was: emits nothing).

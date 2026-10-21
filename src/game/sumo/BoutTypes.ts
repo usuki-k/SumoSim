@@ -130,9 +130,27 @@ export type BoutOutcome =
     }
   | { readonly kind: 'rematch'; readonly reason: BoutRematchReason }
 
+// Pair-level Counter resolution (ACTION-04A4): after a Best / Success catch both participants follow a
+// Simulation-owned path for a fixed number of ticks with all input ignored. The path itself is internal;
+// canonical positions / facing already carry what presentation needs.
+export type BoutCounterTransition =
+  | { readonly kind: 'none' }
+  | {
+      readonly kind: 'active'
+      readonly tier: Exclude<CounterTier, 'fail'>
+      // The participant whose Counter caught the Push.
+      readonly counterUserId: ParticipantId
+      // The participant whose active Push was caught.
+      readonly pusherId: ParticipantId
+      // Transition ticks still to run, including the next tick (0 only when the bout was decided on
+      // the final transition tick).
+      readonly ticksRemaining: number
+    }
+
 export interface BoutSnapshot {
   readonly arena: ArenaSetup
   readonly participants: readonly ParticipantState[]
   readonly engagement: BoutEngagement
+  readonly counterTransition: BoutCounterTransition
   readonly outcome: BoutOutcome
 }

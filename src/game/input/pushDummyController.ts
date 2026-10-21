@@ -51,6 +51,13 @@ export class PushDummyController {
     const target = snapshot.participants.find((p) => p.id === this.targetId)
     if (!self || !target) return NO_INPUT
 
+    // Counter transition: every input is ignored by the Simulation; wait it out with a full cooldown so
+    // nothing fires on the first tick after it.
+    if (snapshot.counterTransition.kind === 'active') {
+      this.cooldownTicks = DUMMY_PUSH_COOLDOWN_TICKS
+      return NO_INPUT
+    }
+
     // Grappled: hold Drive (ACTION-05C1) and keep the Push cooldown full; never Grip / Release.
     if (snapshot.engagement.kind === 'grappled') {
       this.cooldownTicks = DUMMY_PUSH_COOLDOWN_TICKS

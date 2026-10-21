@@ -2,16 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   BODY_RADIUS,
   BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
-  EXTERNAL_DECELERATION,
   GRIP_RANGE_MARGIN,
   GRIP_REACH_TICKS,
   GRIP_RECOVERY_TICKS,
   KUZUSHI_TICKS,
   PUSH_STARTUP_TICKS,
-  TICK_SECONDS,
 } from './BoutSimulation.ts'
-import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, Vec2 } from './BoutTypes.ts'
+import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from './BoutTypes.ts'
 
 const COMBINED = 2 * BODY_RADIUS
 const RANGE = BODY_RADIUS + BODY_RADIUS + GRIP_RANGE_MARGIN
@@ -60,17 +59,6 @@ const dist = (s: BoutSnapshot) =>
 const kindOf = (s: BoutSnapshot, which: 0 | 1) => {
   const action = s.participants[which].action
   return action.kind === 'grip' ? `grip-${action.phase}` : action.kind
-}
-
-function speed(v: Vec2): number {
-  return Math.hypot(v.x, v.y)
-}
-
-function decayed(v: Vec2): Vec2 {
-  const s = speed(v)
-  const drop = EXTERNAL_DECELERATION * TICK_SECONDS
-  if (s <= drop) return { x: 0, y: 0 }
-  return { x: (v.x * (s - drop)) / s, y: (v.y * (s - drop)) / s }
 }
 
 function expectFinite(s: BoutSnapshot): void {
@@ -259,40 +247,53 @@ describe('Grip / Engagement foundation (ACTION-05A)', () => {
     expect(kindOf(both.getSnapshot(), 1)).toBe('idle')
   })
 
-  it('T101 / T108: Best Counter -> rear -> Grip gives Morozashi and averages external velocity', () => {
+  // ACTION-04A4: the Counter user regains control only after the Counter transition; the pusher then
+  // gets a full Kuzushi, so the Counter -> Grip -> Morozashi opening is kept after the exchange.
+  it('T101 / T108: Best Counter -> rear -> (transition) -> Grip gives Morozashi; both at rest', () => {
     const sim = touching()
     for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
+    expect(sim.getSnapshot().counterTransition.kind).toBe('active')
+    // a Grip edge during the transition is dropped, not queued
+    sim.step(intents({ grip: true }))
+    stepN(sim, COUNTER_TRANSITION_TICKS - 1)
     const before = sim.getSnapshot()
-    expect(B(before).posture.kind).toBe('kuzushi')
-    expect(speed(B(before).externalVelocity)).toBeGreaterThan(0) // overshoot
+    expect(before.counterTransition).toEqual({ kind: 'none' })
+    expect(before.engagement).toEqual({ kind: 'free' })
+    expect(A(before).action).toEqual({ kind: 'idle' })
+    expect(B(before).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS })
     expect(A(before).externalVelocity).toEqual({ x: 0, y: 0 })
+    expect(B(before).externalVelocity).toEqual({ x: 0, y: 0 })
     sim.step(intents({ grip: true }))
     const s = sim.getSnapshot()
     expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
-    const ea = decayed(A(before).externalVelocity)
-    const eb = decayed(B(before).externalVelocity)
-    const avg = { x: (ea.x + eb.x) / 2, y: (ea.y + eb.y) / 2 }
-    expect(A(s).externalVelocity.x).toBeCloseTo(avg.x, 12)
-    expect(A(s).externalVelocity.y).toBeCloseTo(avg.y, 12)
+    expect(A(s).externalVelocity).toEqual({ x: 0, y: 0 })
     expect(B(s).externalVelocity).toEqual(A(s).externalVelocity)
     expect(dist(s)).toBeCloseTo(COMBINED, 12)
   })
 
-  it('T108: Success Counter -> side -> Grip, and a later Grip within the margin, give Morozashi', () => {
+  it('T108: Success Counter -> side -> Grip right after the transition, or late in the renewed Kuzushi, gives Morozashi', () => {
     const success = touching()
     for (let t = 0; t <= PUSH_STARTUP_TICKS + 4; t++) {
       success.step(intents({ counter: t === PUSH_STARTUP_TICKS + 4 }, { push: t === 0 }))
     }
+    stepN(success, COUNTER_TRANSITION_TICKS)
     expect(B(success.getSnapshot()).posture.kind).toBe('kuzushi')
     success.step(intents({ grip: true }))
     expect(success.getSnapshot().engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
 
-    const later = touching()
-    for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) later.step(intents({ counter: t === 0 }, { push: t === 0 }))
-    stepN(later, 10) // overshoot carries B away
-    expect(dist(later.getSnapshot())).toBeGreaterThan(COMBINED + 0.03)
-    later.step(intents({ grip: true }))
-    expect(later.getSnapshot().engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
+    // the renewed Kuzushi lasts KUZUSHI_TICKS full ticks after completion; one later the target is stable
+    const late = (wait: number) => {
+      const sim = touching()
+      for (let t = 0; t <= PUSH_STARTUP_TICKS + 4; t++) {
+        sim.step(intents({ counter: t === PUSH_STARTUP_TICKS + 4 }, { push: t === 0 }))
+      }
+      stepN(sim, COUNTER_TRANSITION_TICKS + wait)
+      sim.step(intents({ grip: true }))
+      return sim.getSnapshot().engagement
+    }
+    // the Grip lands on tick wait + 1 after completion: tick KUZUSHI_TICKS is the last Kuzushi tick
+    expect(late(KUZUSHI_TICKS - 1)).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
+    expect(late(KUZUSHI_TICKS)).toEqual({ kind: 'grappled', advantage: { kind: 'neutral' } })
   })
 
   it('T102: attachment from the margin moves both centers symmetrically to the exact contact distance', () => {

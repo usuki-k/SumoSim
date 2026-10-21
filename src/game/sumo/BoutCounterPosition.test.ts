@@ -3,13 +3,13 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_OVERSHOOT_SPEED,
+  COUNTER_STAGGER_DISTANCE,
+  COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
   CONTACT_SLOP,
-  EXTERNAL_DECELERATION,
   KUZUSHI_TICKS,
   MAX_EXTERNAL_SPEED,
   PUSH_STARTUP_TICKS,
-  TICK_SECONDS,
   counterRelocationTarget,
   counterTier,
 } from './BoutSimulation.ts'
@@ -62,13 +62,6 @@ function expectFinite(s: BoutSnapshot): void {
   }
 }
 
-function decayed(v: Vec2): Vec2 {
-  const s = speed(v)
-  const drop = EXTERNAL_DECELERATION * TICK_SECONDS
-  if (s <= drop) return { x: 0, y: 0 }
-  return { x: (v.x * (s - drop)) / s, y: (v.y * (s - drop)) / s }
-}
-
 // B (attacker) presses Push on tick 0; A presses Counter on `counterTick`, optionally walking laterally
 // on ticks 1..4. Returns the snapshots just before and after the resolving tick (B enters Kuzushi).
 function counterScenario(opts: { counterTick: number; lateral?: number; setup?: BoutSetup }) {
@@ -114,23 +107,39 @@ function expectAt(p: Vec2, q: Vec2): void {
 
 const SUCCESS_TICK = PUSH_STARTUP_TICKS + 4
 
+// Runs the Counter transition (ACTION-04A4) to completion and returns the completion Snapshot.
+function complete(sim: BoutSimulation): BoutSnapshot {
+  for (let k = 0; k < COUNTER_TRANSITION_TICKS; k++) sim.step(IDLE)
+  const s = sim.getSnapshot()
+  expect(s.counterTransition).toEqual({ kind: 'none' })
+  return s
+}
+
+// The pusher's end point: its catch position plus the stagger along the locked Push direction.
+function pusherEnd(after: BoutSnapshot, d: Vec2): Vec2 {
+  const p = B(after).position
+  return { x: p.x + d.x * COUNTER_STAGGER_DISTANCE, y: p.y + d.y * COUNTER_STAGGER_DISTANCE }
+}
+
 describe('Counter position resolution (ACTION-04A2)', () => {
-  it('T78: Best puts the defender at the attacker rear at exact contact distance', () => {
-    const { before, after } = counterScenario({ counterTick: 0 })
+  it('T78: Best ends the defender at the attacker rear (after its stagger) at exact contact distance', () => {
+    const { sim, before, after } = counterScenario({ counterTick: 0 })
     expect(tierOf(before)).toBe('best')
     const d = lockedDirection(before)
-    const p = B(after).position
-    expectAt(A(after).position, { x: p.x - d.x * COMBINED, y: p.y - d.y * COMBINED })
-    expect(dist(after)).toBeCloseTo(COMBINED, 12)
-    expect(B(after).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS })
-    expect(A(after).posture).toEqual({ kind: 'stable' })
-    expect(A(after).action).toEqual({ kind: 'idle' })
-    expect(A(after).position.x).toBeGreaterThan(B(after).position.x) // behind B, who pushed toward -x
+    const end = pusherEnd(after, d)
+    const done = complete(sim)
+    expectAt(B(done).position, end)
+    expectAt(A(done).position, { x: end.x - d.x * COMBINED, y: end.y - d.y * COMBINED })
+    expect(dist(done)).toBeCloseTo(COMBINED, 12)
+    expect(B(done).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS })
+    expect(A(done).posture).toEqual({ kind: 'stable' })
+    expect(A(done).action).toEqual({ kind: 'idle' })
+    expect(A(done).position.x).toBeGreaterThan(B(done).position.x) // behind B, who pushed toward -x
   })
 
   it('T79: Success picks the side the defender leans to (both signs), at contact distance', () => {
     for (const lateral of [1, -1]) {
-      const { before, after } = counterScenario({ counterTick: SUCCESS_TICK, lateral })
+      const { sim, before, after } = counterScenario({ counterTick: SUCCESS_TICK, lateral })
       expect(tierOf(before)).toBe('success')
       const d = lockedDirection(before)
       const perp = { x: -d.y, y: d.x }
@@ -139,9 +148,11 @@ describe('Counter position resolution (ACTION-04A2)', () => {
       const sign = offset > 0 ? 1 : -1
       // d is about -x, so perp is about -y: walking +y gives a negative offset -> side- (+y side)
       expect(sign).toBe(lateral > 0 ? -1 : 1)
-      expectAt(A(after).position, { x: p.x + sign * perp.x * COMBINED, y: p.y + sign * perp.y * COMBINED })
-      expect(Math.sign(A(after).position.y)).toBe(lateral)
-      expect(dist(after)).toBeCloseTo(COMBINED, 12)
+      const end = pusherEnd(after, d)
+      const done = complete(sim)
+      expectAt(A(done).position, { x: end.x + sign * perp.x * COMBINED, y: end.y + sign * perp.y * COMBINED })
+      expect(Math.sign(A(done).position.y)).toBe(lateral)
+      expect(dist(done)).toBeCloseTo(COMBINED, 12)
     }
   })
 
@@ -209,16 +220,20 @@ describe('Counter position resolution (ACTION-04A2)', () => {
   })
 
   it('T82: integration — invalid rear falls back to a side; tier stays Best and attacker Kuzushi', () => {
-    const setup = setupAt(-COMBINED / 2, 0, COMBINED / 2, 0, 1.25) // max 0.9: rear (1.05) invalid
-    const { before, after } = counterScenario({ counterTick: 0, setup })
+    // Pair shifted +0.2: the pusher ends near (0.2, 0); max 0.8: rear (~0.9) invalid, sides (~0.73) valid.
+    const setup = setupAt(-COMBINED / 2 + 0.2, 0, COMBINED / 2 + 0.2, 0, 1.15)
+    const { sim, before, after } = counterScenario({ counterTick: 0, setup })
     expect(tierOf(before)).toBe('best')
     expect(B(after).posture.kind).toBe('kuzushi')
+    expect(after.counterTransition).toMatchObject({ kind: 'active', tier: 'best' })
     const d = lockedDirection(before)
-    const p = B(after).position
+    const end = pusherEnd(after, d)
+    const done = complete(sim)
     // on-axis tie, both sides equally far from center -> side+ = p + perp * R (perp ~ (0,-1))
-    expectAt(A(after).position, { x: p.x - d.y * COMBINED, y: p.y + d.x * COMBINED })
-    expect(Math.hypot(A(after).position.x, A(after).position.y)).toBeLessThanOrEqual(1.25 - BODY_RADIUS)
-    expect(dist(after)).toBeCloseTo(COMBINED, 12)
+    expectAt(A(done).position, { x: end.x - d.y * COMBINED, y: end.y + d.x * COMBINED })
+    expect(Math.hypot(A(done).position.x, A(done).position.y)).toBeLessThanOrEqual(1.15 - BODY_RADIUS)
+    expect(dist(done)).toBeCloseTo(COMBINED, 12)
+    expect(done.outcome).toEqual({ kind: 'ongoing' })
   })
 
   it('T83: any applied relocation is finite, fully inside the ring and at exact contact distance', () => {
@@ -250,16 +265,27 @@ describe('Counter position resolution (ACTION-04A2)', () => {
     expect(none).toBeGreaterThan(0)
   })
 
-  it('T84: first-active Best gives the attacker exactly the overshoot along d; defender none', () => {
+  // ACTION-04A4: the transition replaces the overshoot whenever a target exists (D3: entry clears all
+  // momentum; the pusher's only motion is the COUNTER_STAGGER_DISTANCE path).
+  it('T84: a Best catch starts the transition and clears every velocity; nobody moves on the catch tick', () => {
     const { before, after } = counterScenario({ counterTick: 0 })
-    expect(A(before).externalVelocity).toEqual({ x: 0, y: 0 })
-    const d = lockedDirection(before)
-    expectAt(B(after).externalVelocity, { x: d.x * COUNTER_OVERSHOOT_SPEED, y: d.y * COUNTER_OVERSHOOT_SPEED })
-    expect(A(after).externalVelocity).toEqual({ x: 0, y: 0 })
-    expect(speed(B(after).externalVelocity)).toBeLessThanOrEqual(MAX_EXTERNAL_SPEED)
+    expect(after.counterTransition).toEqual({
+      kind: 'active',
+      tier: 'best',
+      counterUserId: 'a',
+      pusherId: 'b',
+      ticksRemaining: COUNTER_TRANSITION_TICKS,
+    })
+    for (const p of after.participants) {
+      expect(p.velocity).toEqual({ x: 0, y: 0 })
+      expect(p.externalVelocity).toEqual({ x: 0, y: 0 })
+    }
+    // the catch tick resolves contact first; the Counter user is not relocated on it
+    expect(dist(after)).toBeLessThanOrEqual(COMBINED + CONTACT_SLOP)
+    expect(Math.abs(A(after).position.x - A(before).position.x)).toBeLessThan(0.05)
   })
 
-  it('T84: overshoot on top of large prior momentum is clamped to MAX_EXTERNAL_SPEED', () => {
+  it('T84: large prior momentum is absorbed too (no clamp, no carry)', () => {
     // A fails a Counter (Kuzushi on ticks 12..41); B's Push is active on ticks 35..42 and is boosted by
     // A's Kuzushi; A recovers on tick 42 and Counters B's last active tick (Success).
     const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
@@ -267,47 +293,44 @@ describe('Counter position resolution (ACTION-04A2)', () => {
     for (let t = 0; t < recoverTick; t++) sim.step(intents({ counter: t === 0 }, { push: t === recoverTick - 13 }))
     const before = sim.getSnapshot()
     expect(pushPhase(before)).toBe('active')
+    expect(speed(B(before).externalVelocity) + COUNTER_OVERSHOOT_SPEED).toBeGreaterThan(MAX_EXTERNAL_SPEED)
     sim.step(intents({ counter: true }))
     const after = sim.getSnapshot()
-    expect(B(after).posture.kind).toBe('kuzushi')
-    expect(speed(decayed(B(before).externalVelocity)) + COUNTER_OVERSHOOT_SPEED).toBeGreaterThan(MAX_EXTERNAL_SPEED)
-    expect(speed(B(after).externalVelocity)).toBeCloseTo(MAX_EXTERNAL_SPEED, 12)
-    expectAt(A(after).externalVelocity, decayed(A(before).externalVelocity)) // defender untouched
+    expect(after.counterTransition).toMatchObject({ kind: 'active', tier: 'success' })
+    for (const p of after.participants) expect(p.externalVelocity).toEqual({ x: 0, y: 0 })
+    const done = complete(sim)
+    expectAt(B(done).position, pusherEnd(after, lockedDirection(before)))
   })
 
-  it('T85: later Success keeps prior pair momentum; only the attacker gets the overshoot delta', () => {
-    const { before, after } = counterScenario({ counterTick: SUCCESS_TICK })
-    const e = A(before).externalVelocity
-    expect(speed(e)).toBeGreaterThan(0.1)
-    expect(B(before).externalVelocity).toEqual(e)
-    const d = lockedDirection(before)
-    const kept = decayed(e) // decay only: no new Push gain on the resolving tick
-    expectAt(A(after).externalVelocity, kept)
-    expectAt(B(after).externalVelocity, {
-      x: kept.x + d.x * COUNTER_OVERSHOOT_SPEED,
-      y: kept.y + d.y * COUNTER_OVERSHOOT_SPEED,
-    })
-  })
-
-  it('T86: the overshoot decays through the existing external decay to exact zero', () => {
-    const { sim, after } = counterScenario({ counterTick: 0 })
-    let prev = speed(B(after).externalVelocity)
-    let ticks = 0
-    while (speed(B(sim.getSnapshot()).externalVelocity) > 0) {
-      sim.step(IDLE)
-      const s = sim.getSnapshot()
-      expectFinite(s)
-      const e = B(s).externalVelocity
-      expect(speed(e)).toBeCloseTo(Math.max(0, prev - EXTERNAL_DECELERATION * TICK_SECONDS), 12)
-      expect(e.x).toBeLessThanOrEqual(0) // never reverses (d ~ -x)
-      prev = speed(e)
-      expect(++ticks).toBeLessThan(100)
+  it('T85: the pusher stagger is exactly COUNTER_STAGGER_DISTANCE along d, independent of prior momentum', () => {
+    const best = counterScenario({ counterTick: 0 }) // no prior pair momentum
+    const success = counterScenario({ counterTick: SUCCESS_TICK }) // prior momentum
+    expect(speed(A(success.before).externalVelocity)).toBeGreaterThan(0.1)
+    expect(COUNTER_STAGGER_DISTANCE).toBe(BODY_RADIUS) // D1: 1.0 R
+    for (const run of [best, success]) {
+      const d = lockedDirection(run.before)
+      const done = complete(run.sim)
+      const moved = { x: B(done).position.x - B(run.after).position.x, y: B(done).position.y - B(run.after).position.y }
+      expectAt(moved, { x: d.x * COUNTER_STAGGER_DISTANCE, y: d.y * COUNTER_STAGGER_DISTANCE })
     }
-    expect(dist(sim.getSnapshot())).toBeGreaterThan(COMBINED) // carried away from the rear defender
   })
 
-  it('T87: relocation and overshoot use the locked Push direction, not facing / contact normal', () => {
-    const { before, after } = counterScenario({ counterTick: SUCCESS_TICK, lateral: 1 })
+  it('T86: after completion both rest exactly (no residual transition velocity or drift)', () => {
+    const { sim } = counterScenario({ counterTick: 0 })
+    const done = complete(sim)
+    for (const p of done.participants) {
+      expect(p.velocity).toEqual({ x: 0, y: 0 })
+      expect(p.externalVelocity).toEqual({ x: 0, y: 0 })
+    }
+    for (let k = 0; k < 20; k++) sim.step(IDLE)
+    const s = sim.getSnapshot()
+    expectFinite(s)
+    expect(A(s).position).toEqual(A(done).position)
+    expect(B(s).position).toEqual(B(done).position)
+  })
+
+  it('T87: the transition uses the locked Push direction, not facing / contact normal', () => {
+    const { sim, before, after } = counterScenario({ counterTick: SUCCESS_TICK, lateral: 1 })
     const d = lockedDirection(before)
     const normal = {
       x: (A(before).position.x - B(before).position.x) / dist(before),
@@ -316,12 +339,10 @@ describe('Counter position resolution (ACTION-04A2)', () => {
     // geometry has rotated away from the locked direction
     expect(Math.abs(Math.atan2(normal.y, normal.x) - Math.atan2(d.y, d.x))).toBeGreaterThan(0.01)
     expect(Math.abs(B(before).facing - Math.atan2(d.y, d.x))).toBeGreaterThan(0.01)
-    const p = B(after).position
-    expectAt(A(after).position, { x: p.x + d.y * COMBINED, y: p.y - d.x * COMBINED }) // side- of d
-    expectAt(
-      { x: B(after).externalVelocity.x - A(after).externalVelocity.x, y: B(after).externalVelocity.y - A(after).externalVelocity.y },
-      { x: d.x * COUNTER_OVERSHOOT_SPEED, y: d.y * COUNTER_OVERSHOOT_SPEED },
-    )
+    const end = pusherEnd(after, d)
+    const done = complete(sim)
+    expectAt(B(done).position, end)
+    expectAt(A(done).position, { x: end.x + d.y * COMBINED, y: end.y - d.x * COMBINED }) // side- of d
   })
 
   it('T88: a failed Counter keeps A1 behavior: self Kuzushi, no relocation, no overshoot', () => {
@@ -338,7 +359,7 @@ describe('Counter position resolution (ACTION-04A2)', () => {
     expect(B(s).externalVelocity).toEqual({ x: 0, y: 0 })
   })
 
-  it('T89: A1 semantics hold: no same-tick Push gain, exact tiers, Kuzushi timer from resolution', () => {
+  it('T89: A1 semantics hold: no same-tick Push gain, exact tiers; Kuzushi paused, then renewed (D2)', () => {
     const best = counterScenario({ counterTick: 0 })
     expect(best.t).toBe(PUSH_STARTUP_TICKS)
     expect(A(best.after).externalVelocity).toEqual({ x: 0, y: 0 }) // the cancelled Push never pushed
@@ -346,6 +367,12 @@ describe('Counter position resolution (ACTION-04A2)', () => {
     expect(success.t).toBe(PUSH_STARTUP_TICKS + 3)
     expect(tierOf(success.before)).toBe('success')
     const { sim } = best
+    for (let k = 1; k <= COUNTER_TRANSITION_TICKS; k++) {
+      sim.step(intents({}, { push: true, move: [0, 1] }))
+      expect(B(sim.getSnapshot()).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS })
+      expect(B(sim.getSnapshot()).facing).toBe(B(best.after).facing)
+    }
+    expect(sim.getSnapshot().counterTransition).toEqual({ kind: 'none' })
     for (let k = 1; k <= KUZUSHI_TICKS; k++) {
       sim.step(intents({}, { push: true, move: [0, 1] }))
       expect(B(sim.getSnapshot()).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS - k })
