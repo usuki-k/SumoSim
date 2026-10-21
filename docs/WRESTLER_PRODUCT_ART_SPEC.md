@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本（ACTION-ART-03、設計）。現在の制作の実験は **1枚の全身sprite**（ART-WRESTLER-02B、§11）。部位を組み立てる方式（02A）は、User Visual Gateで不採用になった。assetのcommitとPhaserへの統合はまだ無い。
+Status: Product力士artの正本（ACTION-ART-03、設計）。現在の制作の実験は **別々に描いた2枚の全身sprite（青・赤）を剛体として扱う方式**（ART-WRESTLER-03A、§11）。部位を組み立てる方式（02A）と、02Bの1枚の候補は、User Visual Gateで不採用になった。assetのcommitとPhaserへの統合はまだ無い。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -248,6 +248,17 @@ ChatGPTの画像生成と、localの決定的な処理だけで実行できる�
   - idleの検証の後も、未解決のまま残る
   - §5・§13の部位の2関節の方式は、この結論が出るまで前提にしない
 
+**更新（ART-WRESTLER-03A）: 2枚の剛体spriteで、最小のanimationの方式を試す**
+- 02Bの1枚の候補（`wrestler_single.png`）は、User Visual Gateで **不採用**（画像の作り直し）。1枚の方式そのものは、まだ有効
+- 新しい実験では、相手と向き合うように **別々に描いた2枚**（青まわし・赤まわし）を使う
+  - **反転（左右・上下）はしない**。2枚は別の画像のまま
+- **最小のanimationの方式を、検証中**（未承認）
+  - 向き = sprite全体の回転、移動・よろけ = sprite全体の平行移動（よろけに、ごく小さな剛体の回転を加える比較も行う）
+  - 手足のanimation、frame、変形、spriteの差し替えは使わない
+  - toolは `preview_dual_rigid_wrestlers.py`
+- 接触や組みなどの専用のposeが必要かは、**未解決**
+- 8方向のsprite、animationの数、poseの数、最終的な描画の構成は、決めない
+
 ## 12. 決定的な切り出しtool（Recommended）
 
 次の制作Taskで、小さな **`tools/wrestler_art/`** を作ることを推奨する。
@@ -444,9 +455,10 @@ toolを先に作る案（Sequence B）は採用しない。生成画像が型ど
 **現在のstaging（ART-WRESTLER-02A以降。§11の変更による）**
 1. ART-WRESTLER-01（canonical wrestler）は行わない（全身生成は廃止）
 2. **ART-WRESTLER-02A**: 部位の候補 + `tools/wrestler_art/` で、切り出し・正規化・idleの組み立てpreview → Technical PASS、User Visual Gateで **不採用**
-3. **ART-WRESTLER-02B**: 1枚の全身spriteの評価（正規化、16方向の回転、arena上のpreview）→ User Visual Gate（採用 / 画像の作り直し / 1枚の方式の不採用）
-4. 次: 02Bが採用されたら、actionのposeの方式を調べる（方式は未決定）
-5. ACTION-ART-03A: Phaserへの統合（Product previewの承認後）
+3. **ART-WRESTLER-02B**: 1枚の全身spriteの評価（正規化、16方向の回転、arena上のpreview）→ toolはPASS、候補の画像は作り直し
+4. **ART-WRESTLER-03A**: 別々に描いた2枚の剛体sprite（反転なし）の、360°回転、向かい合い、最小の剛体の動き（前進、よろけ、接触）の検証 → User Visual Gate（剛体で十分 / 一部だけ専用pose / 剛体の360°は不可）
+5. 次: 03Aの結果によって、actionのposeの方式を調べる（方式は未決定）
+6. ACTION-ART-03A: Phaserへの統合（Product previewの承認後）
 
 ## 22. Deferred / Unresolved
 

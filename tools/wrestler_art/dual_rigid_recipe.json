@@ -1,0 +1,84 @@
+{
+  "recipe_schema": 1,
+  "name": "dual-rigid-03a",
+  "note": "Two separately authored wrestler sprites (blue / red), never mirrored. Source coordinates are continuous image px (pixel edges on integers, +x right, +y down). source_front_deg is the painted back->front axis in the source (deg, + = clockwise on screen); the sprite is rotated once by -source_front_deg so FRONT = local +X. Motion values are Product-preview parameters only (R = wrestler body radius), not gameplay animation values. All values are Provisional.",
+  "alpha_threshold": 8,
+  "sprites": {
+    "blue": {
+      "file": "wrestler_blue.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "0de729df419e8be1c63c812c55c2e6a7a5b07319614194a4b649a3dc9adf65dd",
+      "reviewed_file_sha256": "ede9ffd2d3e010248b84c9a90a9942db48be4b1e547f73a2bb5347fe1781dbb4",
+      "nominal_front": "image right (+X)",
+      "source_front_deg": 21.4,
+      "front_evidence": {
+        "note": "Informational: mawashi knot center -> midpoint of both hands.",
+        "back_source_px": [365, 515],
+        "front_source_px": [875, 715]
+      },
+      "root_source_px": [620, 615],
+      "body_core_source_px": [[741, 308], [544, 808]],
+      "body_core_target_r": 2.0
+    },
+    "red": {
+      "file": "wrestler_red.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "a212dbfeab3da3ad4e42c352f1f7baea7f7b99fc901053bd05c4609df25dafe7",
+      "reviewed_file_sha256": "98f9465a6306228e3c4e7757f73394b8baa5bb2f5f73a47be568edb5c9792fa9",
+      "nominal_front": "image left (-X)",
+      "source_front_deg": 160.7,
+      "front_evidence": {
+        "note": "Informational: mawashi knot center -> midpoint of both hands.",
+        "back_source_px": [915, 515],
+        "front_source_px": [380, 702.5]
+      },
+      "root_source_px": [648, 609],
+      "body_core_source_px": [[522, 251], [731, 847]],
+      "body_core_target_r": 2.0
+    }
+  },
+  "faceoff": {
+    "start_distance_r": 4.0,
+    "variants": [
+      { "label": "1 start distance", "distance_r": 4.0, "line_deg": 0 },
+      { "label": "2 pre-contact", "distance_r": 2.8, "line_deg": 0 },
+      { "label": "3 near contact / push", "distance_r": 2.05, "line_deg": 0 },
+      { "label": "4 line rotated +30", "distance_r": 2.8, "line_deg": 30 },
+      { "label": "5 line rotated -30", "distance_r": 2.8, "line_deg": -30 },
+      { "label": "6 side position", "distance_r": 2.8, "line_deg": 64 }
+    ]
+  },
+  "motion": {
+    "frame_ms": 50,
+    "gif_view_px": [760, 420],
+    "advance": {
+      "start_distance_r": 4.0,
+      "distance_r_each": 0.95,
+      "hold_start_frames": 8,
+      "move_frames": 20,
+      "hold_end_frames": 10
+    },
+    "stagger": {
+      "contact_distance_r": 2.1,
+      "back_r": 0.8,
+      "lateral_r": 0.25,
+      "recover_back_r": 0.3,
+      "recover_lateral_r": 0.08,
+      "hold_start_frames": 6,
+      "out_frames": 6,
+      "hold_peak_frames": 4,
+      "recover_frames": 14,
+      "hold_end_frames": 8,
+      "rotation_max_deg": 5.0
+    },
+    "push": {
+      "start_distance_r": 4.0,
+      "contact_distance_r": 2.0,
+      "approach_frames": 16,
+      "hold_contact_frames": 4,
+      "shift_keys_r": [0.0, 0.3, -0.25, 0.15, 0.0],
+      "segment_frames": 8,
+      "hold_end_frames": 6
+    }
+  }
+}

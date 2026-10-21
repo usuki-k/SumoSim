@@ -4,7 +4,8 @@ Offline review tools for SumoSim Product wrestler art. Two tools live here:
 
 | Tool | Task | Status |
 |---|---|---|
-| `preview_single_wrestler.py` | ART-WRESTLER-02B | **current**: one authored full-body sprite, rotation / arena evaluation ([below](#one-piece-sprite-evaluation-art-wrestler-02b)) |
+| `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | **current**: two separately authored sprites (blue / red) as rigid objects: 360° rotation, faceoff, minimal rigid motion ([below](#dual-rigid-sprites-art-wrestler-03a)) |
+| `preview_single_wrestler.py` | ART-WRESTLER-02B | one authored full-body sprite, rotation / arena evaluation (source REVISE IMAGE; helpers reused by 03A) ([below](#one-piece-sprite-evaluation-art-wrestler-02b)) |
 | `assemble_wrestler.py` | ART-WRESTLER-02A | experiment / reference only: technical PASS, User Visual Gate **REJECTED**; its output is not the Product baseline |
 
 ## Parts assembly (ART-WRESTLER-02A, experiment)
@@ -204,3 +205,53 @@ an output or preview tile edge, or a missing arena asset.
 
 Tests: `PY -m unittest discover -s tools/wrestler_art/tests -v` runs both tools'
 tests (`test_preview_single_wrestler.py` for this one).
+
+## Dual rigid sprites (ART-WRESTLER-03A)
+
+Tests the minimal animation model: each wrestler is **one rigid authored
+image**; facing = whole-sprite rotation, movement / stagger = whole-sprite
+translation (optionally a tiny rigid rotation). Blue and red are separate
+sources and are **never mirrored or flipped**; there are no per-limb
+transforms, warps, repaints or in-between frames.
+
+```bash
+PY tools/wrestler_art/preview_dual_rigid_wrestlers.py
+```
+
+Inputs: `input.local/wrestler_blue.png`, `input.local/wrestler_red.png`
+(1254×1254 RGBA, identity = decoded RGBA pixel SHA-256). Outputs go to
+`output-dual-rigid.local/` (git-ignored). Takes ~30 s.
+
+### Recipe (`dual_rigid_recipe.json`, Provisional)
+
+Per sprite: `source_front_deg` (painted back → front axis in the source; the
+sprite is rotated once by `−source_front_deg` so FRONT = local +X;
+`front_evidence` = knot center → midpoint of both hands, informational),
+`root_source_px`, `body_core_source_px` (perpendicular to the front axis within
+3°, normalized to 2R ≈ 123.08 runtime px). `faceoff.variants` and `motion` are
+explicit **preview-only** paths in R (frame counts, distances, lateral drift,
+`stagger.rotation_max_deg` ≤ 6°); they are not gameplay animation values.
+
+### Outputs
+
+| File | Content |
+|---|---|
+| `blue_runtime_16angles.png`, `red_runtime_16angles.png` | 0°–337.5° whole-sprite rotation, same root per tile |
+| `blue_pivot_guide.png`, `red_pivot_guide.png` | root, ±X / ±Y, body circle R, body-core line (master scale) |
+| `dual_faceoff_arena_1920.png` | Product arena, blue left / red right at the prototype start roots, each facing the other root |
+| `dual_faceoff_variants.png` | start 4R, pre-contact 2.8R, near contact 2.05R, line ±30°, side position (line 64°) |
+| `dual_advance.gif` | both translate toward each other along their facing (4R → 2.1R) |
+| `{blue,red}_stagger_translation_only.gif` | the staggering wrestler moves back 0.8R + 0.25R lateral (its local +Y) and recovers; facing constant |
+| `{blue,red}_stagger_translation_plus_rotation.gif` | same path + rigid rotation up to `rotation_max_deg` (5°) and back |
+| `dual_push_contact.gif` | approach to 2.0R, then the touching pair shifts +0.3R / −0.25R / +0.15R / 0 |
+| `rigid_motion_contact_sheet.png` | labeled static frames: idle faceoff, advance start / mid, near contact, push displacement, stagger start / peak / recovery, peak with rotation |
+| `dual_rigid.json` | per-sprite axis / root / body core / scales / runtime pivot / alpha bbox, 16-angle data, faceoff facing·direction dots, motion parameters, every GIF frame's (root, facing) |
+| `build_dual_rigid_manifest.json` | recipe, source file / pixel SHA-256, arena hashes, decoded-pixel SHA-256 of every PNG, GIF file + decoded-frame SHA-256 (no timestamp) |
+
+GIFs are written with Pillow only (adaptive palette, 50 ms frames, loop); Pillow
+merges identical consecutive hold frames and adds their durations. Draw order
+is blue then red, with the near-circular preview shadow under both.
+
+Tests: `test_preview_dual_rigid_wrestlers.py` (includes a build with
+`Image.transpose` / `ImageOps.mirror` / `ImageOps.flip` patched to fail, and a
+check that every GIF frame equals a re-render from only (root, facing)).
