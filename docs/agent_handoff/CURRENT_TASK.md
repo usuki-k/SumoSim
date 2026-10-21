@@ -1,5 +1,5 @@
 Task-ID: ACTION-07B-TSUPPARI-GAMEPLAY-IMPLEMENTATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / CORE GAMEPLAY / INPUT / PRESENTATION DEBUG
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -777,3 +777,244 @@ Implement ACTION-07A exactly enough to make Tsuppari playable and testable.
 
 Keep Product Tsuppari pose art out of this Task.
 Preserve fixed-step deterministic Simulation ownership and accepted Push Counter semantics.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+Accepted Technical Baseline: 7b38c3ac3cef62115a7082f824b3eb56f29493d5
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-07A / ACTION-07B.
+
+Confirmed from Current Source:
+- Tsuppari gameplay is owned by BoutSimulation.
+- ArrowLeft / ArrowRight are semantic press edges only.
+- left/right hand cooldowns are Bout-local Simulation state.
+- action timing is fixed-step 6 / 1 / 9 ticks.
+- reach is center-based and independent of sprite pixels.
+- successful-hit buildup is deterministic.
+- Tsuppari Counter produces in-place Kuzushi with no CounterTransition.
+- Push/Tsuppari and Tsuppari/Tsuppari interactions are resolved in Simulation.
+- dedicated Product Tsuppari pose art was not added.
+- current red-master idle art baseline remains untouched.
+
+## Accepted Implemented Prototype Constants
+
+Provisional / User Play Test gated:
+
+- PUSH_EXTERNAL_ACCELERATION = 26.25 m/s^2
+- TSUPPARI_STARTUP_TICKS = 6
+- TSUPPARI_ACTIVE_TICKS = 1
+- TSUPPARI_RECOVERY_TICKS = 9
+- TSUPPARI_HAND_COOLDOWN_TICKS = 60
+- TSUPPARI_HAND_REACH = 0.525 m
+- current effective equal-radius center reach = 0.875 m
+- TSUPPARI_IMPULSE = 2.13 m/s
+- TSUPPARI_COUPLED_SHARE = 0.5
+- TSUPPARI_KUZUSHI_BUILDUP = 5
+- Tsuppari Kuzushi duration = existing KUZUSHI_TICKS = 30
+
+Do not treat these values as final balance before User Play Test.
+
+## State / Ownership Review
+
+Accepted:
+
+- ParticipantIntent:
+  - tsuppariLeftPressed
+  - tsuppariRightPressed
+- ParticipantActionState:
+  - tsuppari { hand, phase, ticksRemaining, strike }
+- participant runtime:
+  - tsuppariCooldown { left, right }
+  - tsuppariBuildup
+- Snapshot exposes deep copies for presentation/debug/test use.
+
+No duplicate top-level Tsuppari state was introduced.
+
+## Tick / Cooldown Review
+
+Implemented order is acceptable:
+
+- outcome freeze
+- cooldown decrement
+- CounterTransition short-circuit
+- posture / grapple logic
+- FREE action start
+- movement/external integration
+- contact
+- Counter
+- Grip
+- Push/Tsuppari force resolution
+- action timers
+- facing
+- ring-out.
+
+Cooldown semantics are accepted:
+- hand accepted at t0 gets 60
+- same hand is unavailable through t0+59
+- ready at t0+60
+- cooldown continues during progressing CounterTransition / Kuzushi / grapple
+- outcome freeze stops it.
+
+## Input Priority Review
+
+Accepted:
+
+Push
+> ready Left Tsuppari
+> ready Right Tsuppari
+> Counter
+> Grip
+> Move
+
+If Left and Right are both pressed:
+- Left wins when both ready
+- if Left is on cooldown and Right is ready, Right may start.
+
+Edges are dropped, not queued.
+
+## Counter Review
+
+Tsuppari Counter implementation is accepted:
+
+- Counter window + active Tsuppari hit tick + in reach
+- attacker enters Kuzushi
+- Counter user returns idle/stable
+- no Tsuppari impulse
+- no buildup increment/reset
+- no side/rear relocation
+- no overshoot
+- no CounterTransition
+- existing momentum is preserved.
+
+Existing Push Counter logic remains contact-gated and retains Best / Success / transition / fallback semantics.
+
+## Force Resolution Review
+
+Accepted first Prototype model:
+
+### Tsuppari vs idle/non-Push
+- receiver only gets the impulse
+- attacker has no intentional Tsuppari advance.
+
+### Tsuppari vs Tsuppari
+- both hit decisions are made before force/Kuzushi mutation
+- both impulses apply
+- both buildups update
+- threshold Kuzushi is applied afterward
+- participant order symmetry is explicitly tested.
+
+### Push vs Tsuppari
+- active-contact contest is coupled
+- Tsuppari is not discarded
+- Push wins the representative exchange overall
+- TSUPPARI_COUPLED_SHARE = 0.5 remains provisional.
+
+The short reverse/resistance effect during a contest is a Game Feel question, not technically accepted as final tuning.
+
+## Push Tuning Review
+
+Measured implementation result is consistent with the User request:
+
+- old Push reference: ~0.267 m
+- new Push: ~0.5325 m
+- Tsuppari: ~0.2658 m
+- representative Push / Tsuppari displacement ratio: ~2.00
+
+Global:
+- MAX_EXTERNAL_SPEED unchanged
+- EXTERNAL_DECELERATION unchanged
+- KUZUSHI_PUSH_SUSCEPTIBILITY unchanged
+- Push phase timing unchanged.
+
+This is accepted as the first Play Test tuning.
+
+## CounterTransition Regression Guardrail
+
+Confirmed:
+- only the intended fixture geometry changed:
+  - COUNTER_USER_OUT.mid.x: 1.75 -> 1.73
+- assertions were not weakened
+- cases were not removed
+- CounterTransition rules were not changed.
+
+This is accepted as a fixture-only adaptation to stronger Push.
+
+## Verification Review
+
+Reported and accepted:
+
+- focused Tsuppari boundary tests: all required 44 cases PASS
+- additional dummy / visual-state tests PASS
+- pnpm test: 21 files / 340 tests PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- Browser/runtime smoke: PASS for required core interactions.
+
+Browser Push-vs-dummy-Tsuppari timing was not deterministic in every CDP attempt, but deterministic Simulation tests cover the required contest cases. This does not block Technical PASS.
+
+## Known Untested / Remaining Gates
+
+Still not finally accepted:
+
+- real-device/GPU visual behavior
+- Game Feel
+- Tsuppari dedicated pose art
+- pose duration/readability
+- Tokudawara-specific Tsuppari-only fixture is not added; existing ring-out/Tokudawara resolver coverage remains unchanged.
+
+These do not block the present technical result.
+
+## User Play Test Required
+
+User should now test the actual game and judge:
+
+1. ArrowLeft / ArrowRight alternating rhythm
+2. 1-second per-hand cooldown
+3. startup / recovery timing
+4. 0.875 m effective reach
+5. Tsuppari push distance (~0.27 m)
+6. strengthened Push distance (~0.53 m)
+7. Push vs Tsuppari contest feel
+8. Tsuppari vs Tsuppari exchange
+9. Counter vs Tsuppari readability / timing
+10. 6th-hit Kuzushi cadence
+11. ring-edge feel.
+
+Controls:
+- ArrowLeft / ArrowRight = Tsuppari
+- 3 = Tsuppari dummy mode
+- 0 = debug
+- R = restart.
+
+Dedicated Tsuppari art is not expected yet.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+- Tsuppari terminology
+- ArrowLeft / ArrowRight hand mapping
+- deterministic 5 ordinary hits -> 6th Kuzushi rule
+- Countered Tsuppari = in-place Kuzushi / no wrap
+- Push Counter existing relocation semantics
+- Simulation ownership / fixed-step architecture
+- current red-master idle art baseline.
+
+## Next Task Constraint
+
+Do not begin Product Tsuppari pose integration until the User reports the ACTION-07B gameplay Play Test result.
+
+If gameplay is accepted or only small tuning is requested:
+- preserve accepted gameplay semantics
+- then run a separate Tsuppari Art Visual Gate comparing:
+  - separate red left/right pose masters
+  - one-side master + reflection.
+
+If gameplay tuning is requested:
+- make the smallest focused tuning Task before art integration.
