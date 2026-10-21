@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本（ACTION-ART-03、設計のみ）。asset・tool・Phaserの統合はまだ無い。
+Status: Product力士artの正本（ACTION-ART-03、設計）。制作のworkflowは **部位を先に描き、組み立ては決定的なtoolで行う** 方式に変更した（ART-WRESTLER-02A、§11）。assetのcommitとPhaserへの統合はまだ無い。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -225,6 +225,16 @@ runtimeは、これを読んでposeを組む。
 
 ChatGPTの画像生成と、localの決定的な処理だけで実行できる。
 
+**変更（ART-WRESTLER-02A、User Accepted）: 上の C → B の段階は廃止する**
+- 全身（canonical / 組み立てガイド）を何度生成しても、上半身と下半身の体の軸が約180°食い違った（body-axis inversion）
+- 現在の制作workflow: **AIは独立した部位だけを描き、人体の組み立ては決定的なtoolが持つ**
+  - 独立した部位 → 明示的なregion / pivot / joint → 決定的なPythonの組み立てpreview → User Visual Approval → poseと外見の変化のpreview → Phaser統合
+  - 全身の解剖をAI生成に解かせない
+- 現在の入力は、どちらも組み立てpreviewの **候補**（Product承認はまだ）
+  - `parts_sheet.png`: head、mawashi、上腕、前腕と手、足を使う。sheet内のtorsoは **不採用（使わない）**
+  - `torso.png`: 置き換え用の単独のtorso
+- toolは `tools/wrestler_art/`（README参照）。pivot / scaleの値はProvisional
+
 ## 12. 決定的な切り出しtool（Recommended）
 
 次の制作Taskで、小さな **`tools/wrestler_art/`** を作ることを推奨する。
@@ -417,6 +427,12 @@ ChatGPTの画像生成と、localの決定的な処理だけで実行できる�
    - → User Play / Visual Test
 
 toolを先に作る案（Sequence B）は採用しない。生成画像が型どおりに並ぶ保証がないので、実際のsheetに合わせてregionを定義するほうが、やり直しが少ない。
+
+**現在のstaging（ART-WRESTLER-02A以降。§11の変更による）**
+1. ART-WRESTLER-01（canonical wrestler）は行わない（全身生成は廃止）
+2. **ART-WRESTLER-02A**: 部位の候補 + `tools/wrestler_art/` で、切り出し・正規化・idleの組み立てpreview → User Visual Approval
+3. 次: push / grip / 組みのpose preview、mawashiの色の別版、外見の変化のpreview（§20の4〜5）
+4. ACTION-ART-03A: Phaserへの統合（上と同じ）
 
 ## 22. Deferred / Unresolved
 
