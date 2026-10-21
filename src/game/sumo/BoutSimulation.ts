@@ -59,7 +59,7 @@ export const COUNTER_OVERSHOOT_SPEED = 1.0 // m/s
 // Lateral offsets within this (m) count as a tie when choosing the side.
 export const COUNTER_SIDE_EPSILON = 1e-6
 // Counter transition (ACTION-04A4). Provisional Prototype tuning, subject to User Play Test.
-export const COUNTER_TRANSITION_TICKS = 120 // ~2.0 s pair exchange after a Best / Success catch
+export const COUNTER_TRANSITION_TICKS = 90 // ~1.5 s pair exchange after a Best / Success catch
 // The pusher's forward stagger along its locked Push direction over the transition (1.0 R).
 export const COUNTER_STAGGER_DISTANCE = BODY_RADIUS // m
 

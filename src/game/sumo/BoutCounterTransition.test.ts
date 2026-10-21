@@ -158,7 +158,7 @@ describe('Counter transition (ACTION-04A4)', () => {
       pusherId: 'b',
       ticksRemaining: N,
     })
-    expect(N).toBe(120)
+    expect(N).toBe(90) // ACTION-04A5: ~1.5 s
     for (const s of [success.after, best.after]) {
       expect(s.engagement).toEqual({ kind: 'free' })
       expect(A(s).action).toEqual({ kind: 'idle' })
