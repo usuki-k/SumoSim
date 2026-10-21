@@ -1,5 +1,5 @@
 Task-ID: ART-WRESTLER-04B-RED-MASTER-RUNTIME-PROMOTION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT ART WORKFLOW / RUNTIME ASSET PROMOTION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -460,3 +460,127 @@ Do not modify `main`.
 Promote only the accepted red-master idle mirror/recolor workflow into the runtime/export baseline.
 
 Do not implement Tsuppari yet.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / USER VISUAL CHECK REQUIRED
+Accepted Technical Baseline: 7357788bd9b9091e50ef44859874cec4ae128671
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ART-WRESTLER-04B.
+
+- Runtime idle art now uses one authored red master.
+- Red runtime output remains the accepted existing red asset.
+- Blue runtime output is derived offline from normalized red by the accepted local-Y reflection and mawashi recolor.
+- Separate authored blue source is no longer required by the current runtime exporter.
+- Runtime paths/texture keys remain stable.
+- Product metadata, Product art SPEC and ARCHITECTURE were updated.
+- Simulation / input / Bout gameplay / WrestlerView / BoutScene were not changed.
+- Tsuppari was not implemented.
+
+## Source / Ownership Review
+
+Confirmed from Current Source:
+
+- current config source of truth:
+  - `tools/wrestler_art/runtime_wrestler_recipe.json`
+- master:
+  - red only
+- derived:
+  - blue
+  - reflection = `local_y`
+  - accepted red-to-blue mawashi recolor values live in the runtime recipe
+- historical `dual_rigid_recipe.json` is not read by the runtime exporter.
+- historical 04A comparison recipe no longer contains a second live red-to-blue recolor copy.
+
+The exporter normalizes the red source, derives blue from the normalized runtime red, and checks/writes both runtime PNGs deterministically.
+
+## Technical Baseline Accepted
+
+Expected runtime contract confirmed:
+
+- red:
+  - 158 x 178
+  - pivot (82, 95)
+  - body core 123.076923 px
+- blue:
+  - 158 x 178
+  - pivot (82, 83)
+  - body core 123.076923 px
+
+Blue pivot is the reflected red pivot:
+- `83 = 178 - 95`
+
+The TypeScript presentation metadata matches this contract.
+
+## Verification Review
+
+Reported:
+- wrestler_art Python suite: 125 PASS
+- pnpm test: 293 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- Browser / Runtime Smoke: PASS
+
+Coverage includes:
+- red-only source export
+- missing/invalid red fail-closed
+- no blue authored source requirement
+- deterministic export
+- read-only `--check`
+- stale runtime detection
+- local-Y reflection only
+- pivot/body-core mapping
+- alpha preservation
+- recolor mask isolation
+- accepted mask/fringe preservation
+- TypeScript metadata match
+- Product texture loading.
+
+No required A4/A5 gameplay verification was reopened because gameplay source was untouched.
+
+## Design Deviations
+
+Design Deviations: NONE
+
+The exporter reuses the 04A mirror/recolor algorithm implementation from `preview_idle_mirror_workflow.py` while the accepted values are owned by `runtime_wrestler_recipe.json`. This is not a semantic deviation and avoids duplicating the algorithm. Do not refactor it merely for cleanliness unless a later Task requires it.
+
+## User Visual Check
+
+REQUIRED before final integrated Product acceptance.
+
+User should verify in the actual Phaser game:
+
+- red / blue faceoff matches the previously accepted red-master preview
+- blue body size does not jump relative to red
+- blue pivot stays centered on the canonical body/debug circle
+- blue mawashi looks natural
+- whole-sprite rotation looks natural
+- no new texture filtering/artifact is visible
+- movement / Push / Counter / Grip presentation remains visually normal.
+
+If accepted, the integrated Product art baseline becomes:
+
+- one authored red master
+- offline derived blue via local-Y reflection + mawashi recolor
+- normal runtime PNGs for both participants.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+- do not restore separately authored blue as a runtime requirement
+- do not switch master back to blue
+- do not change the accepted local-Y reflection convention
+- do not dynamically mirror/recolor in Phaser
+- do not alter gameplay geometry because of art.
+
+## Next Task Constraint
+
+Do not start Tsuppari implementation until the User confirms the integrated runtime visual check.
+
+After User acceptance, Tsuppari art/workflow may use the same one-master red -> derived blue principle, followed by Tsuppari gameplay design/investigation.
