@@ -1,6 +1,13 @@
-# wrestler_art — Deterministic Wrestler Parts Assembly Preview
+# wrestler_art — Deterministic Wrestler Art Previews
 
-Offline asset-production tool for SumoSim Product wrestler art (ART-WRESTLER-02A).
+Offline review tools for SumoSim Product wrestler art. Two tools live here:
+
+| Tool | Task | Status |
+|---|---|---|
+| `preview_single_wrestler.py` | ART-WRESTLER-02B | **current**: one authored full-body sprite, rotation / arena evaluation ([below](#one-piece-sprite-evaluation-art-wrestler-02b)) |
+| `assemble_wrestler.py` | ART-WRESTLER-02A | experiment / reference only: technical PASS, User Visual Gate **REJECTED**; its output is not the Product baseline |
+
+## Parts assembly (ART-WRESTLER-02A, experiment)
 
 ```
 isolated Product parts  ->  explicit regions / pivots / joints  ->  idle assembly previews
@@ -137,3 +144,63 @@ hashes, 123 px torso, determinism).
 
 Automated tests verify geometry and determinism only. Whether the wrestler looks
 right is the User visual check.
+
+## One-piece sprite evaluation (ART-WRESTLER-02B)
+
+```
+wrestler_single.png  ->  single_sprite_recipe.json  ->  rotation + arena previews
+(reviewed candidate)     (root, one whole-sprite        (User Visual Gate; no runtime
+                          rotation, body-core scale)     asset, no Phaser integration)
+```
+
+The tool only crops transparent margin, adds transparent padding, rotates the
+whole sprite once, scales it uniformly and resamples it (premultiplied alpha,
+Lanczos). It never warps, perspective-corrects, repaints or moves body parts:
+if the painted camera bias looks wrong when rotated, that is a visual result
+for the User, not something to hide.
+
+```bash
+PY tools/wrestler_art/preview_single_wrestler.py
+```
+
+Defaults: `--recipe tools/wrestler_art/single_sprite_recipe.json`,
+`--input-dir tools/wrestler_art/input.local` (needs `wrestler_single.png`,
+1254×1254 RGBA, identity = decoded RGBA pixel SHA-256),
+`--output-dir tools/wrestler_art/output-single.local`,
+`--arena-dir public/assets/action/background` (read only).
+
+### Recipe (`single_sprite_recipe.json`, Provisional)
+
+- `orientation_correction_deg`: the one whole-sprite rotation (deg, + = clockwise
+  on screen) that puts the painted back → front axis on +X.
+  `orientation_evidence` documents the landmarks it was read from (informational).
+- `root_source_px`: participant center = rotation pivot (source px).
+- `body_core_source_px`: two points across the central torso, perpendicular to
+  the corrected +X axis (checked within 3°), excluding arms / hands / feet /
+  head / knot. Their distance is scaled to `body_core_target_r` (2R ≈ 123.08
+  runtime px). The full alpha bbox is never the scale reference.
+
+### Outputs (`output-single.local/`, git-ignored)
+
+| File | Content |
+|---|---|
+| `single_master.png` | normalized sprite, master scale (runtime × 4), root on a multiple of 4 |
+| `single_runtime.png` | exact /4 downscale (logical 1×) |
+| `single_pivot_guide.png` | root, body circle R, ±X / ±Y axes, body-core scale line |
+| `single_runtime_16angles.png` | runtime sprite at 0°–337.5° (22.5° steps), same root in every tile |
+| `single_on_arena_1920.png` | Product arena + two wrestlers at the prototype start roots (x = 960 ∓ 0.7 m × 175.82 px/m, y = 540), facing 0° / 180° |
+| `single_on_arena_8facings.png` | one wrestler at the ring center on the same arena crop, 0°–315° (45° steps) |
+| `single_sprite.json` | source identity, correction, root, body-core points / distance, scales, master / runtime pivot, runtime alpha bbox, per-angle tile bbox and centroid distance |
+| `build_single_manifest.json` | recipe, source file / pixel SHA-256, arena asset hashes, decoded-pixel SHA-256 of every image (no timestamp) |
+
+Transparent sprite previews have no shadow. The arena previews add the same
+near-circular procedural shadow as the 02A preview (2.25R × 2.0R, α 0.28, world
+offset (+0.07R, +0.12R)).
+
+The run fails closed (exit 2, nothing written) on a missing / resized /
+pixel-different / alpha-less source, an invalid recipe (point off the source,
+zero or non-perpendicular body core, correction beyond ±30°), a sprite touching
+an output or preview tile edge, or a missing arena asset.
+
+Tests: `PY -m unittest discover -s tools/wrestler_art/tests -v` runs both tools'
+tests (`test_preview_single_wrestler.py` for this one).

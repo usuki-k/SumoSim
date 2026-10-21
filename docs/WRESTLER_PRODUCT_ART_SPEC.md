@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本（ACTION-ART-03、設計）。制作のworkflowは **部位を先に描き、組み立ては決定的なtoolで行う** 方式に変更した（ART-WRESTLER-02A、§11）。assetのcommitとPhaserへの統合はまだ無い。
+Status: Product力士artの正本（ACTION-ART-03、設計）。現在の制作の実験は **1枚の全身sprite**（ART-WRESTLER-02B、§11）。部位を組み立てる方式（02A）は、User Visual Gateで不採用になった。assetのcommitとPhaserへの統合はまだ無い。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -235,6 +235,19 @@ ChatGPTの画像生成と、localの決定的な処理だけで実行できる�
   - `torso.png`: 置き換え用の単独のtorso
 - toolは `tools/wrestler_art/`（README参照）。pivot / scaleの値はProvisional
 
+**訂正（ART-WRESTLER-02B）: 部位を組み立てる方式はProduct baselineにしない**
+- ART-WRESTLER-02Aの組み立てtoolは、Technical PASS
+  - ただしUser Visual Gateで **不採用**: 体・手足・まわしが、1人の描かれた人物として読めなかった
+  - 組み立てた出力はProduct baselineではない。tool（`assemble_wrestler.py`）は実験・参考として残す
+- 現在の制作の実験: **1枚の描かれた全身sprite** に戻す
+  - runtimeへ統合する前に、360°の回転（連続したfacing）で破綻しないかを確かめる（`preview_single_wrestler.py`）
+  - toolで許すのは、透明な余白の切り取りと付与、sprite全体の1回の回転、一様なscale、決定的なresampleのみ。歪み・塗り直し・部位の移動はしない
+- 現在の1枚の候補（`wrestler_single.png`）は有望。ただし、02BのUser Visual Gateまでは **未承認**
+- **actionのposeの方式は未決定**
+  - 全身のpose spriteを複数持つか、animationのframeか、限られた変形か、他の1枚の方式か
+  - idleの検証の後も、未解決のまま残る
+  - §5・§13の部位の2関節の方式は、この結論が出るまで前提にしない
+
 ## 12. 決定的な切り出しtool（Recommended）
 
 次の制作Taskで、小さな **`tools/wrestler_art/`** を作ることを推奨する。
@@ -430,9 +443,10 @@ toolを先に作る案（Sequence B）は採用しない。生成画像が型ど
 
 **現在のstaging（ART-WRESTLER-02A以降。§11の変更による）**
 1. ART-WRESTLER-01（canonical wrestler）は行わない（全身生成は廃止）
-2. **ART-WRESTLER-02A**: 部位の候補 + `tools/wrestler_art/` で、切り出し・正規化・idleの組み立てpreview → User Visual Approval
-3. 次: push / grip / 組みのpose preview、mawashiの色の別版、外見の変化のpreview（§20の4〜5）
-4. ACTION-ART-03A: Phaserへの統合（上と同じ）
+2. **ART-WRESTLER-02A**: 部位の候補 + `tools/wrestler_art/` で、切り出し・正規化・idleの組み立てpreview → Technical PASS、User Visual Gateで **不採用**
+3. **ART-WRESTLER-02B**: 1枚の全身spriteの評価（正規化、16方向の回転、arena上のpreview）→ User Visual Gate（採用 / 画像の作り直し / 1枚の方式の不採用）
+4. 次: 02Bが採用されたら、actionのposeの方式を調べる（方式は未決定）
+5. ACTION-ART-03A: Phaserへの統合（Product previewの承認後）
 
 ## 22. Deferred / Unresolved
 

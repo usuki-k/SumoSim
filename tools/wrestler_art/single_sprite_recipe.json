@@ -1,0 +1,21 @@
+{
+  "recipe_schema": 1,
+  "name": "single-idle-02b",
+  "note": "Reviewed one-piece wrestler candidate only. Source coordinates are continuous image px (pixel edges on integers, +x right, +y down). All values are Provisional presentation metadata (User tuning).",
+  "source": {
+    "file": "wrestler_single.png",
+    "size": [1254, 1254],
+    "pixel_sha256": "b621d2f56efa80968b71dba1cc4e31bfcc3ad133968adcebb33864b89de5fdf3",
+    "reviewed_file_sha256": "d806a24fdb4cd8fa90d53e86fbffabd3ae7c490b6c3221fa2000deb94472666d"
+  },
+  "alpha_threshold": 8,
+  "orientation_correction_deg": -8.8,
+  "orientation_evidence": {
+    "note": "Informational: the back->front axis runs from the mawashi knot center to the midpoint of both hands and both feet; the whole sprite is rotated by -8.8 deg so that axis lies on +X.",
+    "back_source_px": [300, 605],
+    "front_source_px": [990, 712]
+  },
+  "root_source_px": [620, 655],
+  "body_core_source_px": [[908, 383], [817, 971]],
+  "body_core_target_r": 2.0
+}
