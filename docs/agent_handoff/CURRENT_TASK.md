@@ -1,155 +1,297 @@
-Task-ID: ACTION-04A5-COUNTER-TRANSITION-DURATION-TUNING
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / GAME FEEL TUNING / COUNTER TRANSITION
+Task-ID: ART-WRESTLER-04A-IDLE-MIRROR-WORKFLOW-VALIDATION
+Status: READY
+Task-Type: INVESTIGATION / ART WORKFLOW / VISUAL VALIDATION
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: e91e4a3ed079500223afa16f8deed7105943be9a
+Source-Baseline: 8ffadc83167c917bdc54a97f052e9f9d5988142b
 Handoff-Mode: GITHUB
 
-# ACTION-04A5 — Counter Transition Duration 2.0s -> 1.5s
+# ART-WRESTLER-04A — Idle Sprite Mirror + Mawashi Recolor Visual Validation
 
 ## Purpose
 
-Tune the accepted ACTION-04A4 CounterTransition duration from approximately 2.0 seconds to approximately 1.5 seconds.
+Before implementing Tsuppari, validate whether the current Product wrestler idle art can move from the existing
+"two separately authored blue / red sprites, no mirroring" workflow to a smaller deterministic workflow based on:
 
-User Play Test result on ACTION-04A4:
-- the continuous Success / Best transition itself feels good
-- the current ~2.0 second duration feels slightly too long
-- reduce the transition to ~1.5 seconds
-- do not redesign the path, final placement, stagger distance, input semantics, or Counter rules.
+- one canonical idle master
+- deterministic mirror/reflection for the counterpart
+- deterministic mawashi recoloring
+- the same runtime pivot/body-core scale contract.
 
-At the current 60 Hz logical tick rate, use:
+This Task is a visual/workflow investigation only.
 
-```
-COUNTER_TRANSITION_TICKS = 90
-```
+Do NOT implement Tsuppari gameplay.
+Do NOT change Bout input.
+Do NOT replace the current committed runtime wrestler assets yet.
 
-This is a focused tuning task, not a Counter redesign.
+The goal is to give the User a clear side-by-side visual comparison and enough technical evidence to decide whether
+the mirror workflow becomes the new Product art baseline.
+
+---
+
+# User Decision / Current Context
+
+The User explicitly permits withdrawing the previous Accepted art constraint:
+
+> blue and red are separately authored sprites and are never mirrored.
+
+That previous constraint must therefore NOT be treated as immutable in this investigation.
+
+However, mirror-based idle art is NOT yet accepted as the new Product baseline.
+
+This Task must first prove whether it looks acceptable.
+
+If the User accepts the preview after this Task, a later implementation Task may replace the runtime asset/export contract.
 
 ---
 
 # Current Baseline
 
-Implementation baseline:
-`e91e4a3ed079500223afa16f8deed7105943be9a`
+Current runtime:
+- `public/assets/action/wrestler/blue.png`
+- `public/assets/action/wrestler/red.png`
+- each is a separately authored rigid full-body sprite
+- `productWrestlerArt.ts` has separate metadata for blue/red
+- `WrestlerView` places canonical participant position at the explicit pivot and rotates the whole sprite by canonical facing
+- gameplay body radius/contact geometry is independent of sprite pixels.
 
-ACTION-04A4 currently provides:
-- Simulation-owned pair-level `counterTransition`
-- Success -> true side
-- Best -> true rear/back
-- pusher stagger distance = 1.0R = 0.35 m
-- input lock for both participants during transition
-- path-owned canonical positions
-- ordinary ring-out / Tokudawara for both participants
-- full `KUZUSHI_TICKS` after normal transition completion
-- no Phaser-owned gameplay tween.
+Current tooling:
+- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
+- `tools/wrestler_art/dual_rigid_recipe.json`
+- `tools/wrestler_art/export_runtime_wrestlers.py`
 
-These semantics are the baseline and must be preserved unless explicitly listed below.
-
----
-
-# Accepted User Decision — Do Not Reopen
-
-Change only the duration baseline:
-
-```
-120 ticks (~2.0 s)
-->
-90 ticks (~1.5 s)
-```
-
-The purpose is to make the same motion feel more responsive.
-
-Do not reinterpret this as:
-- shorter stagger distance
-- different Success / Best endpoint
-- different easing
-- different Counter timing window
-- different Kuzushi duration.
+The current no-mirror assumption is embedded in documentation/tool comments/tests.
+Do not broadly rewrite that workflow during this investigation.
 
 ---
 
-# Must Preserve
+# Critical Geometry Rule
 
-## D1 — Stagger distance
-Keep:
-```
-COUNTER_STAGGER_DISTANCE = 1.0R = 0.35 m
-```
+Do NOT assume that "mirror" means a raw screen-space left-right flip.
 
-## D2 — Post-transition Kuzushi
-Keep the full existing:
-```
-KUZUSHI_TICKS = 30
-```
-after normal transition completion.
+The current runtime contract normalizes the wrestler so:
+- local +X = FRONT
+- canonical facing rotates the whole sprite at runtime.
 
-## D3 — Entry momentum
-Keep clearing both participants' self / external velocity at valid CounterTransition entry.
+A counterpart derivation must preserve the semantic FRONT axis.
 
-## D4 — Final placement
-Keep:
-- Success = pusher's true side
-- Best = pusher's true rear/back
-- center distance = current combined body radius/contact distance
-- endpoint relative to the pusher's final stagger position.
+Investigate the correct reflection in the normalized local character frame.
 
-## Path / easing
-Keep the existing A4 path and easing functions unchanged unless a code-only mechanical adjustment is required by the tick-count constant.
+Preferred candidate to test:
+- reflect local Y (left/right body asymmetry) while preserving local +X as FRONT.
 
-## Input lock
-Keep both participants input-locked for the entire active CounterTransition.
-- held movement becomes effective on the first normal tick after completion
-- discrete presses during the transition are discarded, not queued.
+If a screen-space flip is used internally, compensate explicitly so the resulting derived sprite still has:
+- FRONT = local +X
+- the same participant root/pivot meaning
+- the same body-core scale reference.
 
-## Ring-out / Tokudawara
-Keep current A4 semantics unchanged.
-- both participants remain subject to ordinary ring-out every transition tick
-- no Counter-user immunity
-- outcome freeze remains unchanged.
+Report exactly what transform is used.
 
-## Null target / Failed Counter
-Keep existing behavior unchanged.
-- no-valid-target fallback remains ACTION-04A2 behavior
-- failed Counter does not start CounterTransition.
+Do not introduce a hidden second facing convention.
+
+---
+
+# Investigation Questions
+
+Answer at least:
+
+1. Can one current idle sprite be used as the canonical master and produce a visually acceptable counterpart by reflection + mawashi recolor?
+2. Which current master is the better source candidate?
+   - blue -> derived red
+   - red -> derived blue
+   - or both are materially equivalent.
+3. Does mirroring create obvious visual problems in:
+   - topknot / hair
+   - hands / feet
+   - shoulder / torso anatomy
+   - mawashi knot
+   - lighting / painted highlights
+   - silhouette / weight distribution?
+4. Does the derived counterpart still look acceptable through whole-sprite runtime rotation?
+5. Does it still look acceptable face-to-face at:
+   - prototype start distance
+   - near contact
+   - side position / oblique line?
+6. Can mawashi recoloring be deterministic while preserving painted shading/highlights?
+7. Can recoloring be limited to the mawashi with no visible skin/hair/body color contamination?
+8. Can root/pivot and body-core scale remain stable without gameplay or runtime-position changes?
+9. Would the mirror workflow materially reduce future pose-production burden compared with separately generating red/blue versions?
+10. What exact workflow should be recommended if the User accepts it?
 
 ---
 
 # Scope
 
-Expected production changes should be small.
+Allowed:
+- add a small deterministic preview tool under `tools/wrestler_art/`
+- add a small explicit recipe/config for mirror/recolor preview
+- add focused Python tests
+- use current committed runtime blue/red sprites as comparison/reference inputs
+- if needed, use existing reviewed local 03A source inputs when available
+- generate git-ignored local preview outputs
+- minimally update tool README to explain how to run the experiment
+- write the Completion Report.
 
-Likely:
-- `src/game/sumo/BoutSimulation.ts`
-  - `COUNTER_TRANSITION_TICKS = 90`
-- affected CounterTransition / regression tests that assert exact duration or tick counts
-- `docs/ARCHITECTURE.md`
-  - update current duration description from 120 / ~2.0s to 90 / ~1.5s
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+Preferred new tool shape:
 
-Update additional task-owned tests only if they explicitly depend on the old 120-tick timing.
+`tools/wrestler_art/preview_idle_mirror_workflow.py`
+
+Exact filename may differ if extending an existing preview tool is substantially smaller/clearer.
+
+Do not turn this into a general image-processing framework.
 
 ---
 
-# Scope Out
+# Source / Input Policy
 
-Do NOT:
-- change Success / Best geometry
-- change `COUNTER_STAGGER_DISTANCE`
-- change easing curves
-- add Counter art
-- add Grip / Morozashi art
-- change Counter timing window / tier boundary
-- change failed-Counter penalty
-- change ring-out winner semantics
-- change Tokudawara geometry
-- change null-target fallback
-- change Kuzushi duration
-- add Phaser tween gameplay movement
-- fix the deferred post-Kuzushi facing snap
-- refactor unrelated Simulation code.
+Prefer using committed current runtime sprites for the visual comparison so the Task can run from the Repository baseline:
 
-If a non-trivial semantic change seems necessary to make 90 ticks work, STOP and report instead of expanding scope.
+- `public/assets/action/wrestler/blue.png`
+- `public/assets/action/wrestler/red.png`
+
+If the higher-resolution local source is required for a fair comparison:
+- it may be used from `tools/wrestler_art/input.local/`
+- it must remain local / uncommitted
+- the Completion Report must distinguish results that require local source from results reproducible from committed runtime assets.
+
+Do not add user-uploaded Tsuppari images to this Task.
+They are for the later Tsuppari work, not this idle-workflow validation.
+
+---
+
+# Mawashi Recolor Direction
+
+Use a deterministic recolor method that preserves shading rather than painting a flat replacement color.
+
+Required properties:
+- alpha unchanged
+- body/hair/skin pixels outside the selected mawashi mask unchanged
+- luminance/value structure of folds/highlights substantially preserved
+- deterministic output from the same input/config
+- explicit target blue/red colors in the recipe/config
+- debug preview of the selected mawashi mask.
+
+A small mask-generation method is acceptable, for example:
+- explicit source-color / hue range + region constraint / connected component
+- explicit seed + deterministic flood/region rule
+- another small deterministic method.
+
+Do NOT manually repaint the PNG.
+Do NOT use an ML segmentation dependency.
+Do NOT add OpenCV/NumPy unless current repository already requires it and it is genuinely necessary.
+
+If a reliable mawashi-only mask cannot be produced without also changing skin/hair, STOP and report instead of hiding the contamination.
+
+---
+
+# Required Preview Outputs
+
+Generate git-ignored previews under a clear local directory, e.g.:
+
+`tools/wrestler_art/output-idle-mirror.local/`
+
+At minimum produce:
+
+## A. Baseline vs derived comparison
+One labeled sheet showing:
+- current authored blue
+- current authored red
+- blue-master -> mirrored/recolored red candidate
+- red-master -> mirrored/recolored blue candidate
+
+All at the same runtime scale and aligned by participant pivot.
+
+## B. Rotation comparison
+For each derived candidate:
+- 0°
+- 45°
+- 90°
+- 180°
+- 270°
+
+Use the same pivot and body circle reference.
+
+A 16-angle sheet is welcome if existing helper reuse makes it cheap, but the listed angles are mandatory.
+
+## C. Arena faceoff
+Show:
+1. current authored blue/red baseline
+2. blue-master-derived pair
+3. red-master-derived pair
+
+At:
+- prototype start distance
+- near contact
+- at least one oblique/side arrangement.
+
+Use the accepted Product arena.
+
+## D. Mirror / recolor diagnostics
+Show:
+- source sprite
+- mirror-only result
+- mawashi mask
+- mirror + recolor result
+- pivot/body-core overlay.
+
+## E. Optional motion preview
+If small helper reuse makes it cheap:
+- a short whole-sprite rotation or advance GIF for current vs derived.
+
+Do not add animation systems merely to satisfy this optional item.
+
+---
+
+# Visual Evaluation Criteria
+
+The User must be able to judge:
+
+- "same wrestler / same art family" rather than "another AI-generated body"
+- no obviously backwards anatomy
+- no broken hand/foot/topknot orientation
+- no strange mawashi knot direction
+- no obvious lighting reversal that becomes distracting
+- no body jump caused by pivot mismatch
+- no size jump caused by body-core mismatch
+- red/blue distinction remains clear
+- derived art remains readable at actual runtime size (~123 px body core)
+- faceoff still looks natural when one wrestler is rotated toward the other.
+
+Do not judge Product acceptance from automated tests.
+
+---
+
+# Runtime / Production Changes — Scope Out
+
+Do NOT change:
+- `public/assets/action/wrestler/blue.png`
+- `public/assets/action/wrestler/red.png`
+- `src/game/presentation/productWrestlerArt.ts`
+- `src/game/scenes/WrestlerView.ts`
+- `BoutScene`
+- any Simulation / gameplay file
+- input bindings
+- Counter / Push / Grip / Drive behavior
+- Tsuppari gameplay or Tsuppari art integration.
+
+Do NOT delete the existing dual-sprite tool or recipe.
+
+This Task produces evidence only.
+
+---
+
+# Documentation Rule
+
+Do not prematurely rewrite `docs/WRESTLER_PRODUCT_ART_SPEC.md` to say mirror is accepted.
+
+The previous "never mirror" decision has been explicitly reopened by the User, but the replacement workflow requires this visual gate first.
+
+In the Completion Report, clearly state:
+- previous constraint reopened by User
+- mirror workflow is Candidate / Pending User Visual Gate
+- no runtime baseline changed yet.
+
+A later review may update the Product art SPEC if the User accepts the mirror workflow.
 
 ---
 
@@ -160,170 +302,58 @@ Read directly:
 - `CLAUDE.md`
 - current `docs/agent_handoff/CURRENT_TASK.md`
 - current `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
 - `docs/ARCHITECTURE.md`
-- `src/game/sumo/BoutSimulation.ts`
-- `src/game/sumo/BoutCounterTransition.test.ts`
-- `src/game/sumo/BoutCounterPosition.test.ts`
-- `src/game/sumo/BoutGrip.test.ts`
-- `src/game/input/pushDummyController.test.ts`
-
-Inspect any additional current test only when needed because it depends on transition duration.
-
----
-
-# Implementation Direction
-
-Use the existing fixed-step transition design.
-
-The expected semantic change is only:
-
-```
-COUNTER_TRANSITION_TICKS: 120 -> 90
-```
-
-At 60 Hz:
-```
-90 / 60 = 1.5 seconds
-```
-
-The same normalized path should still use:
-```
-u = ticksElapsed / COUNTER_TRANSITION_TICKS
-```
-
-Therefore:
-- start geometry remains the same
-- end geometry remains the same
-- total displacement remains the same
-- only the time to traverse the path becomes shorter.
-
-Do not compensate by changing distance or easing.
+- `tools/wrestler_art/README.md`
+- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
+- `tools/wrestler_art/preview_single_wrestler.py`
+- `tools/wrestler_art/export_runtime_wrestlers.py`
+- `tools/wrestler_art/dual_rigid_recipe.json`
+- relevant tests under `tools/wrestler_art/tests/`
+- `src/game/presentation/productWrestlerArt.ts`
+- `src/game/scenes/WrestlerView.ts`.
 
 ---
 
 # Verification
 
 Verification Level:
-Focused Standard + Runtime Smoke + User Play Test
-
-Run focused tests first, then project checks.
+Focused Art Tool Verification + User Visual Gate
 
 Required:
-```
-pnpm test
-pnpm build
-git diff --check
-```
+1. run the focused new/updated Python tool tests
+2. run the existing wrestler_art test suite
+3. deterministic rerun: same inputs/config -> identical output pixel hashes
+4. confirm current committed runtime blue/red files are unchanged
+5. confirm no gameplay/source file outside the allowed tool/docs/report scope changed
+6. `git diff --check`.
 
-At minimum verify:
+If the tool modifies no TypeScript/runtime source, full `pnpm test` / `pnpm build` are not required merely for ceremony.
+If any TS/runtime file is unexpectedly touched, STOP and report scope conflict instead of expanding the Task.
 
-1. valid Success starts `counterTransition` with `ticksRemaining = 90`
-2. valid Best starts `counterTransition` with `ticksRemaining = 90`
-3. capture tick still does not teleport
-4. exactly 90 transition ticks are required for normal completion
-5. transition is still active after 89 transition ticks
-6. transition is `none` after the 90th transition tick when outcome remains ongoing
-7. normal input resumes on the next tick
-8. discrete action edges pressed during transition remain discarded
-9. pusher total stagger displacement remains exactly 0.35 m for ordinary valid cases
-10. Success final side geometry is unchanged
-11. Best final rear geometry is unchanged
-12. pair separation/non-overlap invariant remains valid
-13. entry momentum clearing is unchanged
-14. per-tick velocity bookkeeping still matches actual path displacement
-15. normal completion still zeroes transition velocities
-16. pusher Kuzushi remains paused during transition
-17. completion still restores the full existing `KUZUSHI_TICKS`
-18. Counter -> Grip / Morozashi follow-up remains available
-19. failed Counter remains unchanged
-20. no-valid-target fallback remains unchanged
-21. Snapshot `ticksRemaining` semantics remain correct
-22. deterministic replay remains deterministic.
-
-Do not weaken unrelated assertions just to accommodate the new duration.
+Technical tests must verify at least:
+- reflection keeps explicit pivot mapping correct
+- derived FRONT convention remains local +X
+- body-core diameter/scale remains unchanged
+- alpha preserved
+- pixels outside the mawashi mask are byte/pixel identical to the mirrored source
+- recolor is deterministic
+- source runtime assets are read-only
+- preview output is deterministic.
 
 ---
 
-# Previous A4 Known Untested Items
+# Stop Conditions
 
-ACTION-04A4 reported some explicit ring-out boundary fixtures that were not naturally reproduced in the actual transition geometry.
+STOP / BLOCKED if:
+- the mirror transform cannot preserve the current FRONT/pivot contract cleanly
+- mawashi recolor visibly or measurably contaminates skin/hair/body outside the intended mask
+- a fair preview would require changing current runtime assets
+- a gameplay/runtime architecture change becomes necessary
+- the only way to make the result look acceptable is manual painting or a new AI-generated second wrestler
+- Current Source materially conflicts with this Task.
 
-This tuning task does not redesign or claim to close those items.
-
-Carry them forward honestly in the Completion Report if they remain unresolved:
-- explicit natural transition fixture where both participants leave on the same tick
-- explicit Tokudawara side-window same-tick exit/re-entry fixture
-- real-GPU browser rendering remains subject to User Play Test.
-
-Do not silently convert those inherited items to PASS.
-
----
-
-# Browser / Runtime Smoke
-
-Required if environment supports it.
-
-Verify in the actual game flow:
-- pre-bout -> Enter still works
-- Success Counter visibly completes in about 1.5 seconds
-- Best Counter visibly completes in about 1.5 seconds
-- no teleport returns
-- pusher still travels the same 1.0R distance
-- Success still ends at side
-- Best still ends behind
-- both remain uncontrollable during transition
-- after transition the Counter user can act
-- pusher remains Kuzushi briefly
-- R restart still works
-- no new runtime console errors.
-
-If browser/runtime smoke cannot be run, report NOT RUN.
-
----
-
-# User Play Test — REQUIRED
-
-Technical PASS is not gameplay acceptance.
-
-After implementation, User should test:
-
-## Success
-- trigger Success Counter
-- confirm the same side movement now feels better at ~1.5 s
-- confirm it does not feel abrupt or too fast.
-
-## Best
-- trigger Best Counter
-- confirm the wrap-behind remains readable at ~1.5 s
-- confirm pusher stagger still reads clearly.
-
-## Post-transition
-- confirm control returns at a natural time
-- confirm Counter -> Grip / Morozashi opportunity still feels understandable.
-
-The final feel decision remains User-owned.
-
----
-
-# Acceptance Criteria
-
-Technical PASS requires:
-1. `COUNTER_TRANSITION_TICKS = 90`
-2. normal valid CounterTransition duration = exactly 90 fixed ticks
-3. A4 D1-D4 semantics preserved
-4. Success / Best endpoints unchanged
-5. path/easing unchanged
-6. input-lock semantics unchanged
-7. ring-out/Tokudawara semantics unchanged
-8. null-target fallback unchanged
-9. failed Counter unchanged
-10. post-transition Kuzushi remains 30 ticks
-11. affected tests updated intentionally
-12. `pnpm test` PASS
-13. `pnpm build` PASS
-14. `git diff --check` PASS
-15. Browser/runtime smoke PASS or honestly NOT RUN
-16. User Play Test marked REQUIRED.
+Do not silently fix unrelated art issues.
 
 ---
 
@@ -332,23 +362,30 @@ Technical PASS requires:
 Include:
 - Result
 - Preflight
-- exact duration change
-- changed files
-- tests updated
-- verification
-- browser/runtime smoke
-- confirmation that D1-D4 are preserved
-- confirmation that easing/path are unchanged
-- confirmation that input / ring-out / null-target / failed-Counter semantics are unchanged
-- inherited A4 Known Untested Items
-- User Play Test Required
+- source files inspected
+- exact mirror/reflection transform
+- exact recolor/mask method
+- master candidates tested
+- preview output paths
+- comparison of blue-master and red-master approaches
+- pivot/body-core evidence
+- deterministic output evidence
+- focused test results
+- existing wrestler_art suite results
+- files changed
+- files explicitly not changed
+- recommendation:
+  - ACCEPT CANDIDATE: blue master
+  - ACCEPT CANDIDATE: red master
+  - EITHER
+  - REJECT mirror workflow
+  - or USER VISUAL DECISION REQUIRED if technical evidence cannot choose
+- User Visual Gate: REQUIRED
 - Design Deviations
 - Unexpected Scope
 - Git delivery.
 
-Design Deviations:
-If none, write:
-`Design Deviations: NONE`
+Do not claim Product acceptance before the User sees the previews.
 
 ---
 
@@ -356,96 +393,25 @@ If none, write:
 
 Follow `AGENTS.md`.
 
-Expected task-owned files:
-- `src/game/sumo/BoutSimulation.ts`
-- affected CounterTransition / regression tests
-- `docs/ARCHITECTURE.md`
+Expected task-owned repository files may include:
+- new/updated `tools/wrestler_art/` preview tool
+- small mirror/recolor recipe/config
+- focused tests
+- `tools/wrestler_art/README.md`
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
+Preview image/GIF outputs remain in git-ignored `*.local` output directories and are NOT committed.
+
 Do not modify `CURRENT_TASK.md`.
+Do not modify `main`.
 
 Suggested commit:
-`tune: shorten counter transition`
-
-Push `origin/develop`.
-Do not modify `main`.
+`test(art): validate mirrored idle wrestler workflow`
 
 # Final Instruction
 
-Implement only the accepted CounterTransition duration tuning from ~2.0 s to ~1.5 s.
+Validate the idle mirror + mawashi recolor workflow only.
 
-Do not redesign Counter behavior.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-22
-Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
-Accepted Baseline: 507eea0fbfeb3ee4a4563935051c7e7925cbbd31
-
-## Accepted
-
-- `COUNTER_TRANSITION_TICKS = 90` (~1.5 s at current 60 Hz) is the accepted technical tuning baseline.
-- ACTION-04A4 D1-D4 remain preserved:
-  - stagger distance 1.0R = 0.35 m
-  - full post-transition `KUZUSHI_TICKS = 30`
-  - entry self/external momentum cleared for valid transitions
-  - Success = true side / Best = true rear relative to final pusher endpoint
-- Existing path/easing, input-lock, ring-out/Tokudawara, no-valid-target fallback, failed-Counter, and Counter tier/window semantics are unchanged.
-- Implementation scope is appropriately small: one production constant change, one explicit duration assertion update, documentation sync, and Completion Report.
-- Reported verification: 292 tests PASS, build PASS, diff-check PASS, browser/runtime smoke PASS.
-
-## Corrections
-
-- None for ACTION-04A5 implementation.
-- ACTION-04A4 inherited Known Untested Items remain unresolved and are not converted to PASS by this tuning task.
-
-## Do Not Reopen
-
-Unless the User requests another tuning change:
-- do not redesign CounterTransition geometry
-- do not change D1-D4
-- do not change easing/path because of this duration task
-- do not change ring-out/Tokudawara semantics
-- do not change null-target fallback or failed-Counter semantics.
-
-## User Play Test
-
-Required before gameplay-feel acceptance.
-
-Check:
-- Success side transition at ~1.5 s: natural, not abrupt
-- Best wrap-behind at ~1.5 s: readable, not too fast
-- pusher stagger remains readable
-- control return timing feels natural
-- Counter -> Grip / Morozashi follow-up remains understandable.
-
-Technical PASS does not by itself mean the 1.5 s Game Feel is accepted.
-
-## Inherited Known Untested / Deferred
-
-- natural transition fixture where both participants leave the ring on the same tick
-- Tokudawara side-window same-tick exit/re-entry explicit fixture
-- real-GPU rendering remains User Play Test dependent
-- Counter user can lose by crossing out during the transition near the edge (accepted current rule consequence, not changed here)
-- post-Kuzushi pusher facing may snap significantly after Best (deferred).
-
-## Next Task Constraint
-
-Do not create a follow-up implementation task solely from this review. First obtain the User Play Test result for the 1.5 s duration.
-
-
-## User Play Test Result — ACCEPTED
-
-User confirmed the ACTION-04A5 duration tuning at ~1.5 s feels good.
-
-Accepted Game Feel Baseline:
-- `COUNTER_TRANSITION_TICKS = 90` (~1.5 s at 60 Hz)
-
-Do Not Reopen unless explicitly requested:
-- do not revert to 120 ticks / ~2.0 s
-- do not retune the CounterTransition duration as part of unrelated future tasks.
-
-This closes the ACTION-04A5 User Play Test gate.
+Do not implement Tsuppari.
+Do not replace the current Product runtime wrestler assets.
+Do not declare the mirror workflow accepted until the User Visual Gate.
