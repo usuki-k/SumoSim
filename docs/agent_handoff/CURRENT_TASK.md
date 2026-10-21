@@ -1,5 +1,5 @@
 Task-ID: ACTION-ART-03A-RIGID-WRESTLER-RUNTIME-INTEGRATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PHASER PRODUCT ART INTEGRATION / WRESTLER
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -831,3 +831,427 @@ Do NOT begin dedicated action-pose production.
 After commit/push/report:
 
 「ACTION-ART-03A-RIGID-WRESTLER-RUNTIME-INTEGRATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / RUNTIME SMOKE PASS / USER PLAY TEST REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `f6f006dd967c5ce9b259c7cb5c140625d49f0719`
+- Agent-Start-Head:
+  `aff9f7948c894bd21d4f6456afa4d0571bede250`
+- Delivery is one implementation commit.
+- No Simulation / gameplay files changed.
+- No input files changed.
+- No package / lockfile changes.
+
+## Reported Implementation vs Design
+
+PASS.
+
+The runtime implementation matches the accepted rigid Product-wrestler direction.
+
+Current renderer:
+
+```
+canonical participant.position
+  -> BoutScene meter-to-pixel mapping
+  -> Product sprite explicit pivot/root
+
+canonical participant.facing
+  -> whole Product sprite rotation
+```
+
+No duplicated presentation-owned gameplay position/facing was introduced.
+
+## Product Runtime Assets
+
+PASS.
+
+Committed deterministic runtime assets:
+
+### blue
+- `public/assets/action/wrestler/blue.png`
+- 167×181
+- pivot: (84, 87)
+- body-core: ~123.0769 px
+- decoded pixel SHA:
+  `bbd3459360064934c1b2fa247fdb5821f3c5e8699b594e4b27dec93f8975fc7b`
+
+### red
+- `public/assets/action/wrestler/red.png`
+- 158×178
+- pivot: (82, 95)
+- body-core: ~123.0769 px
+- decoded pixel SHA:
+  `d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa`
+
+The exporter validates the reviewed source images and reproduces the committed PNGs deterministically.
+
+Do Not Reopen:
+- no manual edit of committed runtime PNGs
+- no mirror/flip
+- scale reference remains the explicit body-core, not full alpha bbox.
+
+## Product Presentation Contract
+
+PASS.
+
+`src/game/presentation/productWrestlerArt.ts` is a small Phaser-free presentation contract.
+
+It owns:
+- asset id
+- texture key
+- asset path
+- runtime dimensions
+- explicit pivot
+- body-core diameter.
+
+Phaser origin is correctly derived from:
+
+```
+originX = pivotX / width
+originY = pivotY / height
+```
+
+Display scale is:
+
+```
+(2 * canonicalBodyRadiusPx) / bodyCoreDiameterPx
+```
+
+At the accepted current bodyRadius this is ~1.0.
+
+This preserves gameplay bodyRadius ownership while keeping presentation art visually aligned.
+
+## WrestlerView Replacement
+
+PASS.
+
+Direct source inspection confirms the old procedural articulated Product path is removed.
+
+Current `WrestlerView` contains only:
+- one authored Product body Image
+- one procedural near-circular shadow.
+
+Removed from Product rendering:
+- procedural feet
+- procedural torso
+- procedural mawashi
+- procedural arms
+- procedural head
+- per-limb reach/spread
+- crouch/lean
+- torso pose interpolation
+- walking/shuffle part motion
+- kuzushi body-part deformation
+- runtime mawashi tint cue.
+
+No obsolete articulated body path continues invisibly.
+
+## Canonical Position / Facing
+
+PASS.
+
+Direct source inspection confirms:
+
+`BoutScene.syncViews()`
+- computes `pos = toCanvas(participant.position)`
+- uses the same `pos` for debug contact-circle center
+- passes that `pos` to `WrestlerView.apply()`.
+
+`WrestlerView.apply()`:
+- `body.setPosition(positionPx.x, positionPx.y)`
+- `body.setRotation(participant.facing)`.
+
+No facing quantization.
+No presentation interpolation of gameplay facing.
+No alternate root position.
+
+This is the requested architecture.
+
+## No-Mirror / No Per-Limb Product Rendering
+
+PASS.
+
+Runtime uses distinct blue / red texture files.
+
+No:
+- `setFlipX`
+- `setFlipY`
+- negative display scale
+- per-limb Product renderables
+- sprite-part reconstruction.
+
+This preserves the User-approved visual baseline.
+
+## Minimal Motion Interpretation
+
+PASS.
+
+The runtime now follows the intended minimum-animation interpretation:
+
+- movement:
+  canonical participant root moves; same sprite follows
+- facing:
+  same sprite rotates continuously
+- Push / Counter / Grip / Grapple / Drive / Kuzushi:
+  same base Product sprite remains in use
+- no dedicated action pose yet
+- no invented presentation-only stagger translation/rotation.
+
+For Kuzushi/stagger specifically:
+the renderer shows the canonical Simulation displacement only.
+
+This is intentional.
+A later presentation-only stagger polish must not be added unless User Play Test shows it is necessary.
+
+## Visual State Preservation
+
+PASS.
+
+`wrestlerVisualState.ts` was not redesigned.
+
+It remains pure and continues to expose existing action/pose semantics.
+
+The rigid Product renderer currently uses it only to maintain `moving` hysteresis compatibility.
+
+This preserves a clean future route to a hybrid minimal-pose system without prematurely adding poses now.
+
+## Shadow
+
+ACCEPTED for current baseline.
+
+The shadow remains:
+- presentation-only
+- below Product bodies
+- world-position offset down/right
+- near-circular ellipse
+- not baked into Product PNG.
+
+The ellipse still receives participant facing rotation, as the previous current visual path did.
+Because the shape is near-circular, this is not a blocking Product issue.
+
+Do not reopen unless User Play Test makes shadow rotation visibly distracting.
+
+## BoutScene / HUD / Debug Preservation
+
+PASS.
+
+Direct source inspection confirms only minimal scene wiring:
+- Product wrestler preload
+- blue/red art id in presentation metadata
+- Product art passed to WrestlerView
+- obsolete `dtMs` argument removed from `syncViews()`.
+
+Preserved:
+- pre-bout comparison
+- Enter start
+- Product HUD
+- key 0 debug
+- contact circles
+- facing marker
+- labels / phase text
+- grapple line
+- arena boundary debug
+- R restart
+- dummy 1 / 2
+- existing input/gameplay flow.
+
+## Verification Completeness
+
+PASS technically.
+
+Reported verification:
+
+- `pnpm test`
+  - PASS
+  - 18 files / 262 tests
+
+- `pnpm build`
+  - PASS
+
+- Python wrestler-art tests
+  - 107 PASS
+
+- `git diff --check`
+  - PASS
+
+- deterministic export `--check`
+  - blue PASS
+  - red PASS
+
+- Browser/runtime smoke
+  - PASS
+  - Product arena loaded
+  - blue/red assets loaded
+  - pre-bout flow worked
+  - Enter start worked
+  - movement/facing updated
+  - key 0 debug root alignment checked
+  - R restart worked
+  - old procedural bodies absent
+  - no relevant console runtime exception.
+
+## Runtime Smoke Limitation
+
+The Agent smoke did NOT fully verify:
+- real User-perceived motion quality
+- Kuzushi readability
+- successful Grip/Grapple/Drive visual quality
+- dohyo-edge readability during actual play.
+
+The automated input attempt did not establish Grip; engagement stayed FREE.
+
+Therefore those items remain mandatory User Play Test, not Technical PASS evidence.
+
+## Unexpected Scope Review
+
+The Agent changed `docs/ARCHITECTURE.md` by 3 lines even though it was not listed in expected Task-owned changes.
+
+Reviewed result:
+- only stale current-state documentation was synchronized
+- it now accurately states the rigid Product WrestlerView
+- no architecture rule or gameplay semantics changed.
+
+Classification:
+**Accepted non-semantic documentation sync.**
+
+No rerun required.
+
+Do not treat nearby stale documentation as automatic permission for future scope expansion; report first when material.
+
+## SPEC Sync
+
+PASS.
+
+The Product wrestler spec now makes current authority explicit in §0:
+
+- two separately authored rigid full-body sprites
+- no mirror
+- continuous whole-image facing rotation
+- canonical root translation as minimum movement baseline
+- all current action states use the same sprite
+- dedicated action/contact poses Deferred pending User Play Test.
+
+Older part-based/two-link material remains clearly labeled historical.
+
+This is sufficient and avoids rewriting historical design records.
+
+## User Goal Attainment
+
+Technical runtime integration goal:
+**ACHIEVED**
+
+Product / Game Feel goal:
+**PENDING USER PLAY TEST**
+
+The assets are now running in the actual Phaser game, but Technical PASS cannot decide whether:
+- rigid Push looks convincing
+- Counter is readable
+- Kuzushi feels like stagger
+- Grip/Grapple/Drive is readable
+- continuous rotation still feels acceptable under real input.
+
+## User Play Test — REQUIRED
+
+Run the current `develop` runtime.
+
+Suggested local command:
+
+```
+pnpm dev
+```
+
+Then test:
+
+### 1. Pre-bout / start
+- comparison appears
+- Enter starts
+- blue left / red right
+- size and facing look natural.
+
+### 2. Movement / rotation
+- WASD around the opponent
+- circle around the opponent
+- inspect diagonal / vertical / reverse directions
+- judge 360° rigid rotation in live motion.
+
+### 3. Push / Counter
+- ArrowUp Push
+- ArrowDown Counter
+- judge whether same base sprite is acceptable at this prototype stage.
+
+### 4. Kuzushi / stagger
+- trigger successful/failed Counter where practical
+- judge whether canonical displacement alone visually communicates stagger
+- specifically decide whether a future tiny rigid rotation/offset is needed.
+
+### 5. Grip / Grapple / Drive
+- Shift for Grip
+- use dummy mode 1 / 2 as needed
+- establish Grapple if possible
+- hold ArrowUp for Drive
+- judge close-contact readability.
+
+### 6. Debug alignment
+- key 0
+- verify contact circles remain centered under body mass
+- verify facing marker agrees with apparent sprite front.
+
+### 7. Edge readability
+- move toward dohyo edge
+- rotate near tawara
+- check silhouette and HUD readability.
+
+## Acceptance Questions
+
+Please report:
+
+1. **360° rotation**: OK / NG
+2. **normal movement**: OK / NG
+3. **Push/Counter with same sprite**: OK / NG
+4. **Kuzushi using position change only**: OK / NG
+5. **Grip/Grapple/Drive with same sprite**: OK / NG / not tested
+6. **sprite size/root alignment**: OK / NG
+7. any specific state that first looks unacceptable.
+
+## Accepted Baseline If User Passes
+
+If User Play Test is acceptable, current baseline becomes:
+
+- blue/red rigid Product sprites integrated
+- no mirror
+- one base sprite per wrestler
+- canonical position translation
+- canonical continuous facing rotation
+- no action-specific Product pose yet.
+
+Then the next visual task should be driven only by an observed runtime weakness, not by automatically creating animation sets.
+
+## Next Task Constraint
+
+Do NOT create a new action-pose / 8-direction / animation-production Task until User Play Test identifies a concrete deficiency.
+
+If the current rigid baseline passes:
+continue to the next highest-priority Action/Game Feel issue.
+
+If only one state fails:
+create a narrowly scoped hybrid-pose investigation for that state only.
+
+## Final Acceptance State
+
+Implementation:
+**TECHNICAL PASS**
+
+Runtime Smoke:
+**PASS**
+
+Architecture / Scope:
+**PASS with accepted minor documentation sync**
+
+Product Game Feel:
+**PENDING USER PLAY TEST**
