@@ -1,359 +1,411 @@
-Task-ID: ART-WRESTLER-04A-IDLE-MIRROR-WORKFLOW-VALIDATION
-Status: REVIEWED
-Task-Type: INVESTIGATION / ART WORKFLOW / VISUAL VALIDATION
+Task-ID: ART-WRESTLER-04B-RED-MASTER-RUNTIME-PROMOTION
+Status: READY
+Task-Type: IMPLEMENTATION / PRODUCT ART WORKFLOW / RUNTIME ASSET PROMOTION
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 8ffadc83167c917bdc54a97f052e9f9d5988142b
+Source-Baseline: 89b1e7c86402229d0489849637b7920f8560d8df
 Handoff-Mode: GITHUB
 
-# ART-WRESTLER-04A — Idle Sprite Mirror + Mawashi Recolor Visual Validation
+# ART-WRESTLER-04B — Promote Red-Master Mirror/Recolor Workflow to Runtime
 
 ## Purpose
 
-Before implementing Tsuppari, validate whether the current Product wrestler idle art can move from the existing
-"two separately authored blue / red sprites, no mirroring" workflow to a smaller deterministic workflow based on:
+Promote the User-accepted ART-WRESTLER-04A mirror workflow into the current Product idle wrestler runtime/export contract.
 
-- one canonical idle master
-- deterministic mirror/reflection for the counterpart
-- deterministic mawashi recoloring
-- the same runtime pivot/body-core scale contract.
+Accepted User Visual Decision:
+- canonical idle master = **authored red wrestler**
+- red runtime sprite remains the canonical authored/master appearance
+- blue runtime sprite is derived from the red master by the validated local-Y reflection
+- local +X remains FRONT
+- blue mawashi is produced by the validated deterministic recolor
+- the previous requirement "blue and red are separately authored and never mirrored" is withdrawn.
 
-This Task is a visual/workflow investigation only.
+This Task changes the idle Product art workflow only.
 
-Do NOT implement Tsuppari gameplay.
-Do NOT change Bout input.
-Do NOT replace the current committed runtime wrestler assets yet.
-
-The goal is to give the User a clear side-by-side visual comparison and enough technical evidence to decide whether
-the mirror workflow becomes the new Product art baseline.
+Do NOT implement Tsuppari yet.
 
 ---
 
-# User Decision / Current Context
+# Accepted Baseline — Do Not Reopen
 
-The User explicitly permits withdrawing the previous Accepted art constraint:
+From ART-WRESTLER-04A User Visual Gate:
 
-> blue and red are separately authored sprites and are never mirrored.
+## Master
+Use:
+- **RED MASTER**
 
-That previous constraint must therefore NOT be treated as immutable in this investigation.
+Do not choose blue master instead.
 
-However, mirror-based idle art is NOT yet accepted as the new Product baseline.
+## Reflection
+Use the validated normalized-local reflection:
 
-This Task must first prove whether it looks acceptable.
+```
+(x, y) -> (x, H - y)
+```
 
-If the User accepts the preview after this Task, a later implementation Task may replace the runtime asset/export contract.
+Semantics:
+- reflect local Y / wrestler left-right asymmetry
+- preserve local +X = FRONT
+- reflect pivot and body-core points with the same mapping
+- do not introduce a second facing convention.
+
+## Recolor
+Use the accepted deterministic mawashi-only recolor behavior from ART-WRESTLER-04A.
+
+The conservative anti-aliased mawashi fringe observed in diagnostics is visually accepted at runtime scale.
+
+Do not broaden the mask into skin just to eliminate that fringe.
+
+## Visual result
+The User accepted:
+- `red master -> derived blue`
+- same-body / color-variant appearance
+- runtime-scale visual result.
 
 ---
 
-# Current Baseline
+# Required Runtime Result
 
-Current runtime:
-- `public/assets/action/wrestler/blue.png`
+After this Task:
+
 - `public/assets/action/wrestler/red.png`
-- each is a separately authored rigid full-body sprite
-- `productWrestlerArt.ts` has separate metadata for blue/red
-- `WrestlerView` places canonical participant position at the explicit pivot and rotates the whole sprite by canonical facing
-- gameplay body radius/contact geometry is independent of sprite pixels.
-
-Current tooling:
-- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
-- `tools/wrestler_art/dual_rigid_recipe.json`
-- `tools/wrestler_art/export_runtime_wrestlers.py`
-
-The current no-mirror assumption is embedded in documentation/tool comments/tests.
-Do not broadly rewrite that workflow during this investigation.
-
----
-
-# Critical Geometry Rule
-
-Do NOT assume that "mirror" means a raw screen-space left-right flip.
-
-The current runtime contract normalizes the wrestler so:
-- local +X = FRONT
-- canonical facing rotates the whole sprite at runtime.
-
-A counterpart derivation must preserve the semantic FRONT axis.
-
-Investigate the correct reflection in the normalized local character frame.
-
-Preferred candidate to test:
-- reflect local Y (left/right body asymmetry) while preserving local +X as FRONT.
-
-If a screen-space flip is used internally, compensate explicitly so the resulting derived sprite still has:
-- FRONT = local +X
-- the same participant root/pivot meaning
-- the same body-core scale reference.
-
-Report exactly what transform is used.
-
-Do not introduce a hidden second facing convention.
-
----
-
-# Investigation Questions
-
-Answer at least:
-
-1. Can one current idle sprite be used as the canonical master and produce a visually acceptable counterpart by reflection + mawashi recolor?
-2. Which current master is the better source candidate?
-   - blue -> derived red
-   - red -> derived blue
-   - or both are materially equivalent.
-3. Does mirroring create obvious visual problems in:
-   - topknot / hair
-   - hands / feet
-   - shoulder / torso anatomy
-   - mawashi knot
-   - lighting / painted highlights
-   - silhouette / weight distribution?
-4. Does the derived counterpart still look acceptable through whole-sprite runtime rotation?
-5. Does it still look acceptable face-to-face at:
-   - prototype start distance
-   - near contact
-   - side position / oblique line?
-6. Can mawashi recoloring be deterministic while preserving painted shading/highlights?
-7. Can recoloring be limited to the mawashi with no visible skin/hair/body color contamination?
-8. Can root/pivot and body-core scale remain stable without gameplay or runtime-position changes?
-9. Would the mirror workflow materially reduce future pose-production burden compared with separately generating red/blue versions?
-10. What exact workflow should be recommended if the User accepts it?
-
----
-
-# Scope
-
-Allowed:
-- add a small deterministic preview tool under `tools/wrestler_art/`
-- add a small explicit recipe/config for mirror/recolor preview
-- add focused Python tests
-- use current committed runtime blue/red sprites as comparison/reference inputs
-- if needed, use existing reviewed local 03A source inputs when available
-- generate git-ignored local preview outputs
-- minimally update tool README to explain how to run the experiment
-- write the Completion Report.
-
-Preferred new tool shape:
-
-`tools/wrestler_art/preview_idle_mirror_workflow.py`
-
-Exact filename may differ if extending an existing preview tool is substantially smaller/clearer.
-
-Do not turn this into a general image-processing framework.
-
----
-
-# Source / Input Policy
-
-Prefer using committed current runtime sprites for the visual comparison so the Task can run from the Repository baseline:
+  - remains the red canonical runtime sprite
+  - should remain pixel-identical to the current accepted red runtime asset if the normalization path is unchanged.
 
 - `public/assets/action/wrestler/blue.png`
-- `public/assets/action/wrestler/red.png`
+  - is no longer exported from a separately authored blue source
+  - is generated deterministically from the normalized red runtime master:
+    1. normalize/export red master
+    2. reflect local Y while preserving FRONT = +X
+    3. recolor only the mawashi to blue
+    4. write the derived blue runtime asset.
 
-If the higher-resolution local source is required for a fair comparison:
-- it may be used from `tools/wrestler_art/input.local/`
-- it must remain local / uncommitted
-- the Completion Report must distinguish results that require local source from results reproducible from committed runtime assets.
+The runtime filenames should remain:
+- `red.png`
+- `blue.png`
 
-Do not add user-uploaded Tsuppari images to this Task.
-They are for the later Tsuppari work, not this idle-workflow validation.
-
----
-
-# Mawashi Recolor Direction
-
-Use a deterministic recolor method that preserves shading rather than painting a flat replacement color.
-
-Required properties:
-- alpha unchanged
-- body/hair/skin pixels outside the selected mawashi mask unchanged
-- luminance/value structure of folds/highlights substantially preserved
-- deterministic output from the same input/config
-- explicit target blue/red colors in the recipe/config
-- debug preview of the selected mawashi mask.
-
-A small mask-generation method is acceptable, for example:
-- explicit source-color / hue range + region constraint / connected component
-- explicit seed + deterministic flood/region rule
-- another small deterministic method.
-
-Do NOT manually repaint the PNG.
-Do NOT use an ML segmentation dependency.
-Do NOT add OpenCV/NumPy unless current repository already requires it and it is genuinely necessary.
-
-If a reliable mawashi-only mask cannot be produced without also changing skin/hair, STOP and report instead of hiding the contamination.
+Do not force Scene/Bout code to care how the files were produced.
 
 ---
 
-# Required Preview Outputs
+# Important Workflow Constraint
 
-Generate git-ignored previews under a clear local directory, e.g.:
+The **runtime exporter must prove this is a one-master workflow**.
 
-`tools/wrestler_art/output-idle-mirror.local/`
+The current separately authored high-resolution blue source must no longer be required to build/check the current runtime idle assets.
 
-At minimum produce:
+A clean runtime export/check should succeed with:
+- canonical red source present
+- separately authored blue source absent.
 
-## A. Baseline vs derived comparison
-One labeled sheet showing:
-- current authored blue
-- current authored red
-- blue-master -> mirrored/recolored red candidate
-- red-master -> mirrored/recolored blue candidate
+Historical / comparison preview tools may continue to use the old blue source when available.
 
-All at the same runtime scale and aligned by participant pivot.
-
-## B. Rotation comparison
-For each derived candidate:
-- 0°
-- 45°
-- 90°
-- 180°
-- 270°
-
-Use the same pivot and body circle reference.
-
-A 16-angle sheet is welcome if existing helper reuse makes it cheap, but the listed angles are mandatory.
-
-## C. Arena faceoff
-Show:
-1. current authored blue/red baseline
-2. blue-master-derived pair
-3. red-master-derived pair
-
-At:
-- prototype start distance
-- near contact
-- at least one oblique/side arrangement.
-
-Use the accepted Product arena.
-
-## D. Mirror / recolor diagnostics
-Show:
-- source sprite
-- mirror-only result
-- mawashi mask
-- mirror + recolor result
-- pivot/body-core overlay.
-
-## E. Optional motion preview
-If small helper reuse makes it cheap:
-- a short whole-sprite rotation or advance GIF for current vs derived.
-
-Do not add animation systems merely to satisfy this optional item.
+Do not delete historical tools or old comparison evidence merely because they are no longer the runtime baseline.
 
 ---
 
-# Visual Evaluation Criteria
+# Source of Truth / Recipe Direction
 
-The User must be able to judge:
+Avoid having two live copies of the same mirror/recolor tuning constants.
 
-- "same wrestler / same art family" rather than "another AI-generated body"
-- no obviously backwards anatomy
-- no broken hand/foot/topknot orientation
-- no strange mawashi knot direction
-- no obvious lighting reversal that becomes distracting
-- no body jump caused by pivot mismatch
-- no size jump caused by body-core mismatch
-- red/blue distinction remains clear
-- derived art remains readable at actual runtime size (~123 px body core)
-- faceoff still looks natural when one wrestler is rotated toward the other.
+There must be one clear current source of truth for:
+- accepted master = red
+- reflection rule
+- blue recolor mask parameters
+- target blue recolor values
+- runtime pivot/body-core derivation.
 
-Do not judge Product acceptance from automated tests.
+Preferred direction:
+- promote/evolve the ART-WRESTLER-04A mirror recipe into the accepted runtime mirror recipe,
+  OR
+- create one small explicit runtime recipe and make the preview/export tests read that same config.
 
----
+Do not duplicate the same recolor constants independently in multiple production-current recipe files.
 
-# Runtime / Production Changes — Scope Out
+Historical `dual_rigid_recipe.json` may remain for old dual-sprite preview/reference, but it must not remain the semantic source of truth that requires a blue runtime source.
 
-Do NOT change:
-- `public/assets/action/wrestler/blue.png`
-- `public/assets/action/wrestler/red.png`
-- `src/game/presentation/productWrestlerArt.ts`
-- `src/game/scenes/WrestlerView.ts`
-- `BoutScene`
-- any Simulation / gameplay file
-- input bindings
-- Counter / Push / Grip / Drive behavior
-- Tsuppari gameplay or Tsuppari art integration.
-
-Do NOT delete the existing dual-sprite tool or recipe.
-
-This Task produces evidence only.
+If the smallest safe implementation differs, report the exact ownership clearly in Completion Report.
 
 ---
 
-# Documentation Rule
-
-Do not prematurely rewrite `docs/WRESTLER_PRODUCT_ART_SPEC.md` to say mirror is accepted.
-
-The previous "never mirror" decision has been explicitly reopened by the User, but the replacement workflow requires this visual gate first.
-
-In the Completion Report, clearly state:
-- previous constraint reopened by User
-- mirror workflow is Candidate / Pending User Visual Gate
-- no runtime baseline changed yet.
-
-A later review may update the Product art SPEC if the User accepts the mirror workflow.
-
----
-
-# Required Reading
+# Current Source to Inspect
 
 Read directly:
 - `AGENTS.md`
 - `CLAUDE.md`
-- current `docs/agent_handoff/CURRENT_TASK.md`
-- current `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- current `CURRENT_TASK.md`
+- current `CURRENT_COMPLETION_REPORT.md`
 - `docs/WRESTLER_PRODUCT_ART_SPEC.md`
 - `docs/ARCHITECTURE.md`
 - `tools/wrestler_art/README.md`
-- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
-- `tools/wrestler_art/preview_single_wrestler.py`
+- `tools/wrestler_art/preview_idle_mirror_workflow.py`
+- `tools/wrestler_art/idle_mirror_recipe.json`
 - `tools/wrestler_art/export_runtime_wrestlers.py`
+- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
 - `tools/wrestler_art/dual_rigid_recipe.json`
-- relevant tests under `tools/wrestler_art/tests/`
+- relevant `tools/wrestler_art/tests/`
 - `src/game/presentation/productWrestlerArt.ts`
-- `src/game/scenes/WrestlerView.ts`.
+- `src/game/scenes/WrestlerView.ts`
+- `src/game/scenes/BoutScene.ts`.
+
+Review Handoff does not replace Current Source inspection.
 
 ---
 
-# Verification
+# Implementation Direction
+
+## 1. Export red master
+
+Keep the current accepted red authored source normalization:
+- explicit source identity
+- one whole-sprite orientation normalization to FRONT = local +X
+- explicit root/pivot
+- body-core = 2R
+- exact runtime downscale.
+
+Prefer preserving current red runtime pixels exactly.
+
+If the red runtime output changes unexpectedly, STOP and report rather than silently accepting a new red appearance.
+
+## 2. Derive blue from the normalized runtime red
+
+The derivation should happen from the normalized runtime red image/geometry so the runtime result matches the ART-WRESTLER-04A User-approved candidate.
+
+Use:
+- local-Y reflection
+- reflected pivot/body-core metadata
+- accepted mawashi recolor.
+
+Do not derive blue from a separately authored blue source.
+
+## 3. Runtime metadata
+
+Update `productWrestlerArt.ts` deliberately.
+
+Expected if the accepted ART-WRESTLER-04A candidate is reproduced exactly:
+
+- red:
+  - current metadata unchanged
+- derived blue:
+  - dimensions match normalized red runtime dimensions
+  - pivot = reflected red pivot
+  - body-core diameter unchanged.
+
+From the validated preview evidence, the expected candidate was approximately:
+- red: 158×178, pivot (82,95), body-core 123.076923
+- derived blue: 158×178, pivot (82,83), body-core 123.076923
+
+Do not copy these values blindly; verify them from the actual exporter output.
+
+## 4. Presentation
+
+Keep:
+- same texture keys / public paths if practical
+- `WrestlerView` canonical position/facing behavior
+- canonical facing unquantized
+- gameplay body radius and Simulation completely independent.
+
+No runtime `setFlipX/setFlipY` should be necessary if the exporter writes the derived blue PNG.
+
+Prefer offline deterministic derivation.
+
+---
+
+# Product Art SPEC Update
+
+Update `docs/WRESTLER_PRODUCT_ART_SPEC.md` so §0 becomes truthful.
+
+New Accepted baseline should state, in substance:
+
+- canonical authored idle master = red
+- blue counterpart = deterministic local-Y reflection + blue mawashi recolor
+- both are exported as normal runtime PNGs
+- runtime still rotates the whole sprite by canonical facing
+- gameplay geometry is unchanged
+- separate authored blue/red requirement is withdrawn
+- historical ART-WRESTLER-03A two-source/no-mirror workflow remains history/reference only.
+
+Do not rewrite unrelated historical sections beyond what is needed to remove contradictions about the current baseline.
+
+---
+
+# ARCHITECTURE Update
+
+Update the Product wrestler art paragraph minimally so Current Architecture no longer claims the two runtime wrestlers are separately authored.
+
+Document the one-master derivation boundary as presentation/art tooling only.
+
+Do not alter gameplay architecture.
+
+---
+
+# Tests
 
 Verification Level:
-Focused Art Tool Verification + User Visual Gate
+Standard Art Tool / Presentation Asset Promotion + Browser Runtime Smoke + User Visual Check
 
-Required:
-1. run the focused new/updated Python tool tests
-2. run the existing wrestler_art test suite
-3. deterministic rerun: same inputs/config -> identical output pixel hashes
-4. confirm current committed runtime blue/red files are unchanged
-5. confirm no gameplay/source file outside the allowed tool/docs/report scope changed
-6. `git diff --check`.
+Add/update tests intentionally.
 
-If the tool modifies no TypeScript/runtime source, full `pnpm test` / `pnpm build` are not required merely for ceremony.
-If any TS/runtime file is unexpectedly touched, STOP and report scope conflict instead of expanding the Task.
+At minimum verify:
 
-Technical tests must verify at least:
-- reflection keeps explicit pivot mapping correct
-- derived FRONT convention remains local +X
-- body-core diameter/scale remains unchanged
-- alpha preserved
-- pixels outside the mawashi mask are byte/pixel identical to the mirrored source
-- recolor is deterministic
-- source runtime assets are read-only
-- preview output is deterministic.
+## Export contract
+1. runtime export uses red as the single canonical authored source
+2. runtime export succeeds when separate blue source is absent
+3. runtime `red.png` matches a fresh red-master export
+4. runtime `blue.png` matches a fresh derived export
+5. red output remains pixel-identical to the pre-Task accepted red runtime
+6. blue output equals the accepted red-master mirror/recolor algorithm result
+7. repeated export is deterministic
+8. `--check` writes nothing and detects stale/changed runtime assets
+9. invalid red source fails closed
+10. missing red source fails closed.
+
+## Geometry
+11. derived blue preserves local +X = FRONT
+12. blue pivot is the reflected red pivot
+13. body-core diameter remains unchanged
+14. runtime scale contract in `productWrestlerArt.ts` matches fresh exporter output
+15. no extra presentation-only gameplay offset is introduced.
+
+## Recolor
+16. alpha preserved
+17. pixels outside the mawashi mask equal the reflected red source
+18. accepted conservative mask/fringe behavior remains unchanged
+19. recolor output is deterministic.
+
+## Repository / presentation
+20. current Product paths/textures load
+21. current red/blue metadata matches generated assets
+22. gameplay / Simulation source is unchanged.
+
+Run the full wrestler-art suite after focused tests.
+
+---
+
+# Required Verification
+
+Run, as applicable:
+
+```
+python -m unittest discover -s tools/wrestler_art/tests -v
+pnpm test
+pnpm build
+git diff --check
+```
+
+Use the repository's documented Python environment/tool command on the actual machine.
+
+Why pnpm test/build are required this time:
+- committed runtime Product assets and TypeScript presentation metadata are changing.
+
+Report actual counts/results.
+
+---
+
+# Browser / Runtime Smoke
+
+Required if environment supports it.
+
+Verify:
+- pre-bout comparison still opens
+- Enter starts Bout
+- red wrestler loads
+- derived blue wrestler loads
+- no missing texture / console errors
+- both pivots align with canonical debug body circles
+- both rotate correctly with canonical facing
+- start faceoff looks like the User-approved red-master preview
+- movement / Push / Counter / Grip still render with the same rigid-sprite mechanics
+- R restart works.
+
+Do not claim visual Product acceptance solely from headless rendering.
+
+---
+
+# User Visual Check — REQUIRED
+
+Although the preview candidate is already accepted, this Task changes the actual runtime assets.
+
+The final integration check should confirm:
+- actual Phaser red/blue faceoff matches the accepted preview
+- derived blue does not visibly jump in size/pivot
+- blue mawashi looks natural in runtime
+- rotation remains natural
+- no unexpected texture filtering/artifact was introduced.
+
+If those are good, the red-master runtime workflow becomes the accepted integrated Product baseline.
+
+---
+
+# Scope Out
+
+Do NOT:
+- implement Tsuppari
+- use the four uploaded Tsuppari images in this Task
+- change input bindings
+- add new action states
+- change Simulation / Bout rules
+- change bodyRadius/contact geometry
+- change Counter / Push / Grip / Drive
+- create skeletal/limb animation
+- add runtime dynamic recoloring if offline export is sufficient
+- redesign arena/HUD
+- modify Management state.
+
+Do not opportunistically fix unrelated art issues.
 
 ---
 
 # Stop Conditions
 
 STOP / BLOCKED if:
-- the mirror transform cannot preserve the current FRONT/pivot contract cleanly
-- mawashi recolor visibly or measurably contaminates skin/hair/body outside the intended mask
-- a fair preview would require changing current runtime assets
-- a gameplay/runtime architecture change becomes necessary
-- the only way to make the result look acceptable is manual painting or a new AI-generated second wrestler
-- Current Source materially conflicts with this Task.
+- reproducing the accepted derived blue requires a material visual change from the User-approved preview
+- red runtime output changes unexpectedly
+- a separate blue authored source is still technically required for the current runtime exporter and cannot be removed without a larger architecture change
+- mirror/recolor rules would need to change materially from the User-approved candidate
+- gameplay/Simulation changes become necessary
+- Current Source materially conflicts with this accepted design.
 
-Do not silently fix unrelated art issues.
+Do not silently substitute a different mirror or recolor algorithm.
+
+---
+
+# Expected Changed Files
+
+May include:
+- `tools/wrestler_art/export_runtime_wrestlers.py`
+- accepted runtime mirror recipe/config
+- related wrestler_art tests
+- `tools/wrestler_art/README.md`
+- `public/assets/action/wrestler/blue.png`
+- possibly `public/assets/action/wrestler/red.png` only if byte re-export is identical; no visual change accepted
+- `src/game/presentation/productWrestlerArt.ts`
+- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
+- `docs/ARCHITECTURE.md`
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
+
+Do not edit `CURRENT_TASK.md`.
+
+---
+
+# Implementation Evidence
+
+Completion Report should include a compact table:
+
+| Design Requirement | Implemented As | Verified By |
+|---|---|---|
+
+At minimum:
+- red single master
+- separate blue source no longer required
+- exact reflection convention
+- mawashi recolor ownership
+- red pixel preservation
+- derived blue output
+- pivot/body-core metadata
+- deterministic export/check
+- runtime presentation unchanged
+- gameplay source untouched.
 
 ---
 
@@ -362,30 +414,27 @@ Do not silently fix unrelated art issues.
 Include:
 - Result
 - Preflight
-- source files inspected
-- exact mirror/reflection transform
-- exact recolor/mask method
-- master candidates tested
-- preview output paths
-- comparison of blue-master and red-master approaches
-- pivot/body-core evidence
-- deterministic output evidence
-- focused test results
-- existing wrestler_art suite results
-- files changed
-- files explicitly not changed
-- recommendation:
-  - ACCEPT CANDIDATE: blue master
-  - ACCEPT CANDIDATE: red master
-  - EITHER
-  - REJECT mirror workflow
-  - or USER VISUAL DECISION REQUIRED if technical evidence cannot choose
-- User Visual Gate: REQUIRED
+- Current Source delta
+- final recipe/source-of-truth ownership
+- red master source/export path
+- blue derivation path
+- exact generated dimensions/pivots/body-core
+- old vs new runtime asset hashes
+- proof red did not visually change
+- proof blue matches accepted derived candidate
+- test results
+- pnpm test/build
+- Browser/Runtime Smoke
+- User Visual Check Required
+- Changed Files
+- Files explicitly not changed
 - Design Deviations
 - Unexpected Scope
+- Known Untested Items
 - Git delivery.
 
-Do not claim Product acceptance before the User sees the previews.
+If none:
+`Design Deviations: NONE`
 
 ---
 
@@ -393,152 +442,21 @@ Do not claim Product acceptance before the User sees the previews.
 
 Follow `AGENTS.md`.
 
-Expected task-owned repository files may include:
-- new/updated `tools/wrestler_art/` preview tool
-- small mirror/recolor recipe/config
-- focused tests
-- `tools/wrestler_art/README.md`
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
-
-Preview image/GIF outputs remain in git-ignored `*.local` output directories and are NOT committed.
-
-Do not modify `CURRENT_TASK.md`.
-Do not modify `main`.
+Normal successful Task:
+- stage only Task-owned files
+- one implementation commit
+- fetch / fast-forward safety check
+- push `origin/develop`
+- verify remote SHA
+- clean working tree.
 
 Suggested commit:
-`test(art): validate mirrored idle wrestler workflow`
+`refactor(art): derive blue wrestler from red master`
+
+Do not modify `main`.
 
 # Final Instruction
 
-Validate the idle mirror + mawashi recolor workflow only.
+Promote only the accepted red-master idle mirror/recolor workflow into the runtime/export baseline.
 
-Do not implement Tsuppari.
-Do not replace the current Product runtime wrestler assets.
-Do not declare the mirror workflow accepted until the User Visual Gate.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-22
-Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
-Accepted Technical Baseline: 334a5e181c4197cbd7a87e08c98af6029d19c894
-
-## Reported Implementation vs Design
-
-Accepted as technically aligned with this Investigation / Visual Validation Task.
-
-- Added a preview-only deterministic mirror/recolor workflow.
-- Runtime Product assets remain unchanged.
-- TypeScript / Phaser / Simulation / input remain unchanged.
-- Tsuppari was not implemented.
-- The previous no-mirror constraint was treated as reopened, not silently replaced.
-- Mirror workflow remains Candidate / Pending User Visual Gate.
-
-## Technical Review
-
-Confirmed from Current Source / commit diff:
-
-- reflection is across the normalized local X axis:
-  - image pixels reflect local Y
-  - semantic local +X = FRONT remains unchanged
-  - pivot and body-core points are reflected consistently
-- no hidden second facing convention was introduced
-- mawashi recolor:
-  - uses deterministic HSV selection + largest 4-connected component
-  - changes only selected mask pixels
-  - preserves alpha
-  - leaves pixels outside the mask identical to the mirrored source
-  - uses Pillow / standard library only
-- current authored runtime blue/red assets are read-only inputs
-- Product runtime source and gameplay source were not modified
-- comparison / rotation / arena / diagnostic previews are generated in git-ignored local output
-- focused test coverage includes reflection, pivot/body-core, FRONT preservation, mask isolation, recolor isolation, determinism, read-only runtime assets and fail-closed behavior.
-
-Reported verification:
-- focused ART-WRESTLER-04A tests: 14 PASS
-- full wrestler_art suite: 121 PASS
-- deterministic rerun: reported byte-identical outputs
-- git diff scope matches the Task.
-
-## Review Notes
-
-No material Design Deviation found.
-
-One known visual detail remains intentionally unresolved:
-- anti-aliased mawashi fringe outside the conservative mask:
-  - blue-master -> red: 113 pixels
-  - red-master -> blue: 67 pixels
-
-Do not expand the mask into skin merely to remove those pixels without a separate visual decision.
-
-## User Visual Gate
-
-REQUIRED before accepting the mirror workflow as Product baseline.
-
-Git-ignored preview outputs are not available through GitHub review, so ChatGPT has not directly visually approved them.
-
-User should inspect, at minimum:
-
-- `tools/wrestler_art/output-idle-mirror.local/idle_mirror_comparison.png`
-- `tools/wrestler_art/output-idle-mirror.local/idle_mirror_faceoff_arena.png`
-- `tools/wrestler_art/output-idle-mirror.local/derived_red_from_blue_rotations.png`
-- `tools/wrestler_art/output-idle-mirror.local/derived_blue_from_red_rotations.png`
-- `tools/wrestler_art/output-idle-mirror.local/diagnostics_blue_master.png`
-- `tools/wrestler_art/output-idle-mirror.local/diagnostics_red_master.png`
-
-Decision needed:
-1. accept or reject the mirror workflow
-2. if accepted, choose blue master or red master (or explicitly state no visual preference).
-
-Technical evidence alone does not justify choosing a master. The Completion Report's EITHER recommendation is accepted only as a technical conclusion.
-
-## Do Not Reopen / Do Not Change Yet
-
-Until User Visual Gate:
-- do not replace `public/assets/action/wrestler/blue.png` / `red.png`
-- do not change `productWrestlerArt.ts`
-- do not change `WrestlerView`
-- do not rewrite `WRESTLER_PRODUCT_ART_SPEC.md` as though mirror is accepted
-- do not implement Tsuppari on top of an unaccepted art workflow.
-
-## Next Task Constraint
-
-First obtain the User Visual Gate result.
-
-If accepted:
-- next Task may promote the chosen one-master mirror/recolor workflow into the runtime/export contract and update Product art SPEC.
-- Tsuppari implementation should follow after that baseline is settled.
-
-If rejected:
-- retain the current two-authored-sprite runtime baseline and decide Tsuppari art production separately.
-
-
----
-
-# User Visual Gate Result — ACCEPTED
-
-User reviewed the generated ART-WRESTLER-04A previews and accepted the mirror workflow.
-
-Accepted Product Art Direction:
-- use the **red authored idle sprite as the canonical master**
-- derive the blue counterpart from the red master by the validated local-Y reflection while preserving local +X = FRONT
-- recolor only the mawashi deterministically to blue
-- preserve pivot / body-core / canonical facing semantics
-- the previous Product constraint "blue and red must be separately authored and never mirrored" is withdrawn.
-
-User Visual Decision:
-- **RED MASTER ACCEPTED**
-- `red master -> derived blue` is the preferred baseline.
-- The conservative mawashi-mask fringe seen in diagnostics is visually acceptable at runtime scale.
-
-Do Not Reopen unless explicitly requested:
-- do not return to separate blue/red authored idle sprites as a requirement
-- do not choose blue master instead
-- do not change the validated reflection/facing convention while promoting this workflow.
-
-Next Task Constraint:
-- before Tsuppari implementation, promote the accepted red-master mirror/recolor workflow into the runtime/export contract
-- update Product art SPEC and relevant exporter/metadata/tests in that implementation Task
-- after that baseline is integrated and reviewed, Tsuppari can use the same one-master-derived-counterpart workflow.
+Do not implement Tsuppari yet.
