@@ -1,670 +1,488 @@
-Task-ID: ACTION-ART-03A-RIGID-WRESTLER-RUNTIME-INTEGRATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / PHASER PRODUCT ART INTEGRATION / WRESTLER
+Task-ID: ACTION-04A3-COUNTER-TRANSITION-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / DESIGN / CORE GAMEPLAY MOVEMENT / COUNTER RESOLUTION
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 31d658e0e4bf4d50168d0eae062e29c248b96fb9
+Source-Baseline: 190c50b37ad217b9597a64323f357ad396ecb903
 Handoff-Mode: GITHUB
 
-# ACTION-ART-03A — Accepted Dual Rigid Wrestler Runtime Integration
+# ACTION-04A3 — Counter Success / Best Continuous Transition Investigation
 
 ## Purpose
 
-Replace the current procedural/articulated Phaser wrestler rendering with the User-accepted **two authored full-body rigid sprites**.
+Investigate and design the smallest deterministic Simulation-owned transition that replaces the current one-tick Counter relocation with an approximately 2-second continuous exchange.
 
-The runtime model for this Task is intentionally small:
+This is **Investigation / Design only**.
 
-```
-Simulation participant.position
-        -> sprite root position
+Do NOT implement Production changes.
 
-Simulation participant.facing
-        -> whole-sprite rotation
+The User has already accepted the current Counter result semantics:
 
-same authored sprite
-        -> idle / movement / current action states
-```
+- Counter **Success**:
+  successful Counter wrestler ends at the opponent's **side**
+- Counter **Best**:
+  successful Counter wrestler ends at the opponent's **rear / back**
 
-This Task integrates the accepted minimum-asset visual direction into the real BoutScene.
+Those final positional semantics are correct and must be preserved unless a material conflict is found and reported.
 
-It must NOT add an 8-direction system, skeletal animation, per-limb transforms, or action-specific sprite production.
+The current problem is only the transition:
 
----
+- the successful Counter wrestler currently jumps to the side/rear target in one Simulation tick
+- the pushing / countered wrestler should visibly stagger forward
+- the successful Counter wrestler should move naturally into the side/rear result
+- both participants should be uncontrollable during the transition
+- target feel is approximately **2 seconds**
+- the User's `yoroke.mp4` is a feel reference for continuous stagger/movement, not a timing/formula source.
 
-# Accepted User Visual Decision
-
-ART-WRESTLER-03A produced:
-- separate blue and red authored wrestlers
-- 360° whole-sprite rotation previews
-- faceoff variants
-- translation-only advance
-- translation-only stagger
-- tiny-rotation stagger comparison
-- close-contact / push comparison.
-
-The User visually reviewed the results and judged that there was **not significant enough visual discomfort to block this approach**.
-
-For the current prototype, accept:
-
-## Accepted now
-
-- Use **two separately authored full-body sprites**:
-  - blue wrestler
-  - red wrestler
-- Never mirror either sprite.
-- Normalize both source arts so local +X = FRONT.
-- Runtime facing uses continuous whole-sprite rotation.
-- Runtime movement follows the canonical participant root position.
-- Use the same base full-body sprite across current gameplay states.
-- No limb animation is required for this integration.
-- No authored directional set is required for this integration.
-- Translation-only motion is acceptable as the initial minimal animation baseline.
-- Translation-only stagger / displacement is acceptable as the baseline direction.
-
-## Not accepted / not required yet
-
-- 8 authored directions
-- right-tsuppari / left-tsuppari / grapple image sets
-- final animation frame count
-- final action-pose count
-- skeletal rig
-- per-limb Product animation
-- dedicated Push / Grip / Grapple Product pose
-- a special tiny-rotation stagger rule.
-
-The +5° stagger comparison was useful validation, but do NOT add an arbitrary presentation-only rotation rule in this Task unless Current Source already provides a canonical rotation signal. It does not.
-
-If later User Play Test shows that Push/contact/Grip/Grapple is visually insufficient, that becomes a later focused hybrid-pose Task.
+The task must determine how this should be represented in Simulation state before implementation.
 
 ---
 
-# Important Interpretation — “Stagger by coordinate change”
+# User-Confirmed Behavior
 
-The User's intended minimal animation model is:
+## Success case
 
-> if a wrestler staggers, prefer showing it through the same sprite changing position instead of requiring a new animation image.
+Opponent Push is caught by Down Counter.
 
-For this Task, the canonical Simulation position/facing remains Source of Truth.
+Result:
+- current side-placement result remains
+- successful Counter wrestler moves continuously toward that side result
+- pushing/countered wrestler moves continuously forward in a stagger / loss-of-balance motion
+- approximate duration: 2 seconds
+- both participants ignore normal control input until the transition completes.
 
-Do NOT invent a second gameplay position.
+## Best case
 
-Do NOT add an arbitrary presentation-only stagger displacement formula just to reproduce the offline GIF.
+Opponent Push is caught at Best timing.
 
-If the current Simulation already displaces the participant through push/external velocity/kuzushi behavior, the rigid sprite follows that canonical position and therefore visually moves with it.
+Result:
+- current rear-placement result remains
+- successful Counter wrestler moves continuously around / behind toward that rear result
+- pushing/countered wrestler moves continuously forward in a stagger / loss-of-balance motion
+- approximate duration: 2 seconds
+- both participants ignore normal control input until the transition completes.
 
-The existing detailed procedural `kuzushi` body/arm deformation must NOT survive into the Product rigid sprite path.
+## Failed Counter
 
-A later presentation-only stagger offset may be considered only if User Play Test says canonical displacement alone is visually insufficient.
+Do NOT silently redesign failed Counter behavior in this Task.
 
----
+Current failed Counter -> Kuzushi behavior is separate unless source inspection shows an unavoidable shared-state issue.
 
-# Reviewed Product Source Art
+## Counter attempt art
 
-The exact reviewed source images remain local production inputs:
+Dedicated Counter artwork for Down input / whiff readability is planned separately.
 
-```
-tools/wrestler_art/input.local/
-  wrestler_blue.png
-  wrestler_red.png
-```
+Do NOT design or implement those images here.
 
-## Blue source identity
-
-- size: 1254×1254
-- RGBA
-- encoded file SHA-256:
-  `ede9ffd2d3e010248b84c9a90a9942db48be4b1e547f73a2bb5347fe1781dbb4`
-- decoded RGBA pixel SHA-256:
-  `0de729df419e8be1c63c812c55c2e6a7a5b07319614194a4b649a3dc9adf65dd`
-
-## Red source identity
-
-- size: 1254×1254
-- RGBA
-- encoded file SHA-256:
-  `98f9465a6306228e3c4e7757f73394b8baa5bb2f5f73a47be568edb5c9792fa9`
-- decoded RGBA pixel SHA-256:
-  `a212dbfeab3da3ad4e42c352f1f7baea7f7b99fc901053bd05c4609df25dafe7`
-
-Blocking identity remains decoded pixel SHA.
-
-### STOP discipline
-
-If either required input is missing:
-**STOP.**
-
-Do NOT search Downloads/Desktop/Pictures or another arbitrary directory.
-
-This explicitly corrects the non-semantic procedural deviation in ART-WRESTLER-03A.
-
-If the input exists but identity differs:
-**STOP.**
+This Task is about **successful Counter movement/state ownership only**.
 
 ---
 
-# Accepted Normalization Metadata
+# Terminology
 
-Current accepted/provisional Product normalization comes from:
+Use the following terms consistently:
 
-`tools/wrestler_art/dual_rigid_recipe.json`
+- **counter user / successful side**:
+  the participant who pressed Down and successfully caught the Push
+- **pusher / countered side**:
+  the participant whose active Push was caught
+- **Counter transition**:
+  the new time-bearing pair exchange after a Success/Best catch
+- **Kuzushi**:
+  the current Simulation posture state; do not use it as a synonym for the whole Counter transition.
 
-Preserve its current reviewed geometry unless implementation evidence shows a mechanical export bug.
-
-## Blue
-
-- source_front_deg: 21.4°
-- root_source_px: (620, 615)
-- body-core source:
-  - (741, 308)
-  - (544, 808)
-- body-core target: 2R
-- reported runtime image:
-  - approximately 167×181
-  - pivot approximately (84, 87)
-  - alpha bbox approximately 153×169.
-
-## Red
-
-- source_front_deg: 160.7°
-- root_source_px: (648, 609)
-- body-core source:
-  - (522, 251)
-  - (731, 847)
-- body-core target: 2R
-- reported runtime image:
-  - approximately 158×178
-  - pivot approximately (82, 95)
-  - alpha bbox approximately 146×166.
-
-Both runtime body-core widths:
-- approximately 123.077 px at the accepted current Product scale.
-
-These values are presentation metadata, not gameplay geometry.
+Current Source naming inside `resolveCounter()` uses `defender` for the Counter user and `attacker` for the pusher. Report that explicitly to avoid role confusion.
 
 ---
 
-# Accepted Gameplay / Arena Contract — Do Not Reopen
+# Current Source Facts to Verify
 
-- branch: develop
-- Product logical canvas: 1920×1080
-- Product ring center: (960, 540)
-- Product ring radius: 400 px
-- arena radius: 2.275 m
-- gameplay bodyRadius: 0.35 m
-- current presentation body-core target: about 123 px
-- Simulation position is canonical
-- Simulation facing is canonical and continuous
-- ring-out / Tokudawara unchanged
-- Push / Counter / Grip / Drive unchanged
-- fixed-step Simulation unchanged
-- accepted Product arena unchanged
-- accepted HUD / pre-bout comparison unchanged.
+Inspect Current Source directly.
 
-No gameplay formula may be moved into Phaser.
+At minimum verify:
 
----
+- `BoutTypes.ts`
+- `BoutSimulation.ts`
+- Counter-focused tests in `BoutSimulation.test.ts`
+- `ringOut.ts` and ring-out integration in the Simulation tick
+- `grappleOrientation.ts`
+- `FixedStepAccumulator.ts`
+- `PushDummyController.ts`
+- `BoutScene.ts`
+- `wrestlerVisualState.ts`
+- current Product `WrestlerView.ts`
+- `docs/ARCHITECTURE.md`
+- relevant current SPEC / Handoff.
 
-# Required Reading / Current Source
+Known current behavior to confirm:
 
-Read directly before implementation:
+1. successful Counter computes a side/rear target using `counterRelocationTarget()`
+2. the Counter user is directly assigned to that target in the same tick
+3. the pusher enters Kuzushi
+4. the pusher receives `COUNTER_OVERSHOOT_SPEED` along its locked Push direction
+5. ordinary facing/contact/ring-out order continues according to the current step pipeline.
 
-- `AGENTS.md`
-- `CLAUDE.md`
-- current `CURRENT_TASK.md`
-- reviewed prior `CURRENT_COMPLETION_REPORT.md`
-- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
-- `tools/wrestler_art/dual_rigid_recipe.json`
-- `tools/wrestler_art/preview_dual_rigid_wrestlers.py`
-- `tools/wrestler_art/README.md`
-- `src/game/scenes/WrestlerView.ts`
-- `src/game/scenes/BoutScene.ts`
-- `src/game/presentation/wrestlerVisualState.ts`
-- `src/game/presentation/productArena.ts`
-- current relevant tests.
-
-Current Source facts:
-- `WrestlerView.ts` currently generates procedural Phaser textures for:
-  - foot
-  - torso
-  - mawashi
-  - one-piece arm
-  - head
-  - shadow
-- it currently performs detailed per-state articulated presentation transforms
-- `BoutScene` already maps canonical Simulation position to Product pixels
-- `BoutScene.syncViews()` already obtains `WrestlerVisualState` and calls `WrestlerView.apply()`.
-
-Replace only the visual implementation necessary for this Product direction.
+Do not rely on the previous review summary in place of source inspection.
 
 ---
 
-# Architecture
+# Architecture Constraint
+
+Most important question:
+
+**Should the ~2-second Counter transition be canonical Simulation state, or presentation-only smoothing?**
+
+The User explicitly wants:
+- both participants uncontrollable during the interval
+- both participants to move through the exchange
+- deterministic timing.
+
+That strongly suggests Simulation ownership, but the Agent must inspect consequences before recommending a design.
+
+Do NOT implement a Phaser-only tween as a shortcut.
 
 Preserve:
 
 ```
-Pure TS Simulation
-  -> Snapshot / WrestlerVisualState
+Pure TypeScript Simulation
+  -> canonical state / results
   -> Phaser presentation
 ```
 
-For this Task:
+No second gameplay-position Source of Truth.
+
+---
+
+# Investigation Questions
+
+The Completion Report must answer all of the following.
+
+## 1. State ownership
+
+Compare at least these candidates:
+
+### Candidate A — pair-level Counter transition state
+Example concept only:
 
 ```
-participant.position
-        -> BoutScene meter->pixel mapping
-        -> WrestlerView root position
-
-participant.facing
-        -> WrestlerView rigid image rotation
+BoutCounterTransition
+  tier
+  counterUserId
+  pusherId
+  ticksRemaining
+  start/target positions
+  motion basis / progress
 ```
 
-Do not let Phaser alter Simulation state.
+### Candidate B — participant action/posture extension
+Represent the transition through per-participant action/posture state.
 
-Do not create duplicated position/facing Sources of Truth.
+### Candidate C — presentation-only interpolation
+Keep current instantaneous canonical result and visually interpolate.
+
+Evaluate:
+- single Source of Truth
+- input lock
+- deterministic fixed-step behavior
+- Snapshot clarity
+- contact/ring-out semantics
+- future dedicated Counter art
+- implementation size.
+
+Recommend one.
+
+Do not treat the example shape as pre-approved design.
+
+## 2. Duration
+
+User target is approximately **2 seconds**.
+
+At current 60 Hz this is about 120 ticks.
+
+Determine:
+- whether the design should expose a named provisional `COUNTER_TRANSITION_TICKS`
+- exact tick semantics:
+  - when tick 1 begins
+  - whether entry tick counts
+  - when input resumes.
+
+Do not tune final game feel numerically beyond what is needed for an implementable design.
+
+## 3. Input lock
+
+Define exactly what happens during the transition to:
+
+- WASD movement
+- Push press
+- Counter press
+- Grip press
+- Drive held
+- dummy-controller intents.
+
+Required User behavior:
+- no normal action starts during the transition.
+
+Investigate whether:
+- press edges during transition are simply consumed/ignored
+- held movement begins immediately on the first post-transition tick
+- held Drive has any relevance while FREE.
+
+Recommend explicit semantics so no input is unintentionally queued.
+
+## 4. Canonical movement paths
+
+Determine the minimal deterministic path representation for both participants.
+
+Successful Counter side:
+- Success ends at current side target
+- Best ends at current rear target.
+
+Countered pusher:
+- should move forward in a readable stagger / overshoot.
+
+Compare simple deterministic options such as:
+- start->target interpolation
+- velocity profile
+- fixed easing curve in canonical Simulation coordinates.
+
+Do not design a full animation system.
+
+Key requirement:
+- both participants' canonical positions should evolve continuously if Simulation owns the transition.
+
+Report whether exact final side/rear target should be stored at transition start or recomputed during transition.
+
+## 5. Pusher final position
+
+Current source gives the pusher forward external velocity rather than an explicit final position.
+
+The User wants about 2 seconds of readable forward stagger.
+
+Investigate:
+- whether to retain the current overshoot impulse inside the new transition
+- replace it with an explicit transition target/path
+- or use another small deterministic rule.
+
+This is a potentially semantic gameplay change.
+
+Do NOT silently decide a new final displacement if Current Source does not already determine it.
+
+If User judgment is required for the pusher's final distance, report a concrete decision point instead of inventing one.
+
+## 6. Contact handling
+
+During the pair transition, decide whether ordinary contact resolution should:
+
+- run normally
+- be bypassed for the two transitioning participants
+- be replaced by transition-specific separation geometry.
+
+Analyze:
+- overlap
+- jitter
+- path interference
+- maintaining readable side/rear placement.
+
+Do not assume current contact correction can coexist with scripted canonical paths.
+
+## 7. Ring-out / Tokudawara
+
+This is mandatory.
+
+Determine how ring-out should work while canonical positions move for ~2 seconds.
+
+Questions:
+- run ring-out every transition tick?
+- can either wrestler lose during the transition before it completes?
+- what happens if the successful side's path would cross out and re-enter?
+- current target selection already validates the Counter user's final center; is that enough for the whole path?
+- how does Tokudawara-aware earliest crossing interact with a multi-tick path?
+
+Preserve current accepted ring-out semantics unless a design change is explicitly proposed for User decision.
+
+## 8. Facing
+
+Define candidate facing behavior during transition.
+
+Possible considerations:
+- pusher keeps locked Push facing while staggering
+- successful side rotates toward its movement path / opponent / final orientation
+- both face each other continuously.
+
+Do not invent a visually complex rule.
+
+Recommend the smallest deterministic behavior that supports:
+- Success side movement
+- Best rear movement
+- current rigid sprite presentation.
+
+If a User visual decision is needed, say so.
+
+## 9. Velocity state
+
+Current participant state has:
+- self velocity
+- external velocity
+- total Snapshot velocity.
+
+Determine what those should mean during the transition.
+
+Avoid contradictory states such as:
+- position moving by scripted interpolation while velocity reports zero or unrelated values, unless intentionally defined and justified.
+
+Specify:
+- whether transition velocity is reflected in Snapshot `velocity`
+- what happens to pre-existing self/external velocity on entry
+- what velocity remains on completion.
+
+## 10. Kuzushi interaction
+
+Current pusher enters `posture.kind === 'kuzushi'` for about 0.5 seconds.
+
+The proposed transition is about 2 seconds.
+
+Investigate:
+- keep Kuzushi nested/parallel to transition?
+- extend Kuzushi duration?
+- transition supersedes the posture?
+- posture remains semantic but input lock comes from pair transition?
+
+Do not change failed-Counter Kuzushi semantics accidentally.
+
+## 11. Action / engagement interaction
+
+Determine:
+- actions of both participants on transition entry
+- whether engagement must remain FREE
+- whether Grip can occur during transition (expected no)
+- completion state.
+
+Preserve current Push cancellation semantics.
+
+## 12. Outcome / freeze interaction
+
+If a ring-out occurs during transition:
+- does transition stop immediately?
+- does outcome freeze motion as current runtime does?
+
+Recommend explicit behavior.
+
+## 13. Snapshot / presentation needs
+
+The current rigid renderer can display canonical position/facing directly.
+
+Determine whether Snapshot also needs a pair-level transition state for:
+- debug labels
+- future dedicated Counter art
+- transition progress
+- User-facing presentation.
+
+Avoid exposing data the runtime does not need.
+
+## 14. Determinism / fixed-step
+
+The design must remain:
+- 60 Hz fixed-step
+- frame-rate independent
+- deterministic from the same intent sequence.
+
+No Scene delta-time gameplay movement.
 
 ---
 
-# Runtime Asset Export
+# Required Design Output
 
-Commit normalized runtime Product sprites derived deterministically from the exact reviewed local inputs.
+The Completion Report must contain a concrete recommended design that is ready for ChatGPT review.
 
-Recommended runtime files:
+At minimum include:
+
+## Recommended state shape
+
+Pseudotype / TypeScript-like shape for:
+- pair transition state if recommended
+- any Snapshot exposure.
+
+## Transition entry
+
+Exact current Counter-success pipeline point where transition begins.
+
+## Transition tick
+
+Ordered steps for one tick during transition.
+
+Example structure only:
 
 ```
-public/assets/action/wrestler/
-  blue.png
-  red.png
+input ignored
+-> advance transition progress
+-> update canonical positions
+-> update canonical velocities/facing
+-> contact policy
+-> ring-out
+-> transition completion
 ```
 
-Use the existing deterministic normalization path.
+Do not copy this order blindly; derive it from current source.
 
-Do NOT manually resize/rotate/edit the committed PNG files.
+## Transition completion
 
-## Required exporter behavior
+State of:
+- positions
+- actions
+- posture
+- velocities
+- facing
+- input eligibility.
 
-Either:
-- extend the existing wrestler-art tooling with a focused runtime export mode, or
-- add one small explicit export script if that is clearer.
+## Success vs Best
 
-Do not make a generic asset pipeline.
+Show what is shared and what differs.
 
-The export must:
-1. validate source dimensions / alpha / decoded pixel SHA
-2. apply the accepted one-time source-axis normalization
-3. normalize the explicit body-core to 2R
-4. downscale to 1× Product runtime size
-5. preserve transparent padding required by the explicit participant pivot
-6. write deterministic PNGs
-7. report:
-   - dimensions
-   - pivot
-   - body-core size
-   - decoded output hash.
+## Boundary cases
 
-Committed Product PNGs must be byte/pixel-verifiable against a fresh deterministic export.
-
-No manual post-processing.
+Cover explicitly:
+- no valid Counter target
+- near ring edge
+- Tokudawara path
+- ring-out during transition
+- simultaneous/near-simultaneous boundary crossing
+- outcome already decided
+- transition completion on exact final tick.
 
 ---
 
-# Runtime Presentation Metadata
-
-Add a small pure presentation contract, recommended:
-
-```
-src/game/presentation/productWrestlerArt.ts
-```
-
-Keep it explicit and small.
-
-It should define, per Product wrestler asset:
-
-- texture key
-- asset URL
-- runtime asset width/height if useful
-- runtime pivot in px
-- runtime body-core diameter in px.
-
-Do not put participant-specific gameplay logic in this module.
-
-Do not build a generic skin/avatar framework.
-
-The Phaser image origin must be derived from the explicit pivot:
-
-```
-originX = pivotX / textureWidth
-originY = pivotY / textureHeight
-```
-
-so:
-
-```
-image.position == canonical participant center
-image.rotation == participant.facing
-```
-
-after source-axis normalization.
-
----
-
-# Participant -> Art Mapping
-
-The current prototype presentation fixture may map:
-
-- `wrestler-a` -> blue Product wrestler art
-- `wrestler-b` -> red Product wrestler art.
-
-Keep this mapping in presentation metadata / the existing `PARTICIPANT_PRESENTATION` boundary.
-
-Do not put colors/skins into Simulation participant state.
-
-The existing debug colors may remain for:
-- debug contact circles
-- debug grapple line
-- debug marker/readouts.
-
-They are not the Product sprite tint.
-
-Do NOT tint the Product wrestler images blue/red at runtime; they are already authored.
-
----
-
-# WrestlerView Runtime Direction
-
-Refactor `WrestlerView.ts` from articulated procedural body rendering to a small rigid Product-sprite renderer.
-
-Recommended structure:
-
-- one Product body image
-- one procedural/world shadow
-- root/pivot owned by the Product image's explicit metadata.
-
-Remove from the default Product rendering path:
-- procedural foot images
-- procedural torso
-- procedural mawashi
-- procedural arm images
-- procedural head
-- pose interpolation of those individual body parts
-- per-limb reach/spread
-- walking foot shuffle
-- procedural crouch/lean
-- procedural kuzushi arm/body deformation
-- mawashi tint-based Morozashi cue.
-
-Do not leave the old articulated Product path running invisibly underneath.
-
-It is acceptable to delete obsolete procedural body-generation code from `WrestlerView.ts` if no longer used.
-
-Do not delete the offline 02A/02B/03A art tools in this Task.
-
----
-
-# WrestlerView apply() Semantics
-
-Keep the public scene integration small.
-
-For each frame:
-
-1. derive `moving` from the existing `WrestlerVisualState` so presentation hysteresis behavior remains compatible
-2. position the Product sprite at `positionPx`
-3. rotate it to `participant.facing`
-4. position the shadow using the accepted small world-space offset
-5. freeze rules do not need a special body pose; canonical participant state is still rendered.
-
-Do not add new time-based body deformation.
-
-The same Product base image is used for:
-- idle
-- move
-- push
-- counter
-- grip
-- grapple
-- drive
-- kuzushi
-for this Task.
-
-Action readability beyond canonical root/facing is deferred to User Play Test.
-
----
-
-# Shadow
-
-Keep a subtle procedural shadow.
-
-Requirements:
-- shadow is presentation-only
-- it remains below both wrestler bodies
-- use accepted/current near-circular sizing
-- its world-space offset remains stable
-- do not bake another shadow into the Product asset
-- do not create directional shadow behavior that visibly rotates with the wrestler.
-
-If current shadow texture generation can be reduced to shadow-only code, do so.
-
----
-
-# Preload
-
-Add an explicit Product wrestler preload path.
-
-Recommended:
-- export `preloadProductWrestlers(scene)` from the wrestler presentation module / view
-- call it from `BoutScene.preload()` next to `preloadProductDohyo(this)`.
-
-Avoid loading files ad hoc from `create()`.
-
----
-
-# Scale
-
-At runtime, preserve participant-specific canonical bodyRadius semantics.
-
-Recommended scale formula:
-
-```
-scale = (2 * bodyRadiusPx) / art.bodyCoreDiameterPx
-```
-
-At the current accepted setup this should be approximately 1.0.
-
-This:
-- does not alter gameplay bodyRadius
-- keeps Product art aligned with the canonical gameplay body's visual size
-- avoids scaling from the full alpha bbox.
-
-Do not hardcode full-image size as gameplay diameter.
-
-Add a focused pure helper if useful.
-
----
-
-# Visual State
-
-Do not redesign `wrestlerVisualState.ts`.
-
-It remains a pure presentation mapping and may still be useful for:
-- `moving` hysteresis
-- future hybrid pose decisions.
-
-For the rigid renderer:
-- detailed pose fields may simply no longer produce body-part deformation.
-
-Do NOT remove Simulation-facing action semantics from the pure mapping in this Task.
-
-If compiler/tests show a small cleanup is required, keep it minimal.
-
----
-
-# Debug / HUD Preservation
-
-Preserve:
-- key 0 debug toggle
-- contact circle
-- facing marker
-- labels
-- phase text
-- grapple line
-- exact arena boundary debug
-- Product HUD
-- pre-bout comparison
-- Enter start flow
-- R restart
-- dummy 1/2.
-
-The debug contact circle must remain centered on the canonical participant root.
-
-The Product sprite pivot must visually align with that root.
-
-Do not change the accepted HUD layout.
-
----
-
-# Tests
-
-Verification Level:
-**Standard + Browser/Runtime Smoke + User Play/Visual Gate**
-
-## Offline asset/export verification
-
-Required:
-1. missing blue source fails
-2. missing red source fails
-3. wrong pixel identity fails
-4. deterministic runtime export
-5. committed blue.png matches fresh export
-6. committed red.png matches fresh export
-7. expected runtime pivot preserved
-8. expected body-core ~123.077 px preserved
-9. no mirror/flip used in export
-10. transparent padding/pivot remain valid.
-
-Run the relevant existing Python wrestler-art suite.
-
-## TypeScript focused checks
-
-Add focused tests for pure Product wrestler presentation metadata/helper where useful.
-
-At minimum verify:
-- Product keys/URLs are distinct
-- pivot -> Phaser origin conversion is correct
-- body-core scaling formula gives ~1.0 at accepted current bodyRadius
-- scaling formula responds deterministically if bodyRadiusPx differs.
-
-Do not unit-test Phaser internals with a large mocking framework.
-
-## Project verification
-
-Run:
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`.
-
-## Runtime smoke
-
-Open the game in a browser if the Agent environment supports it.
-
-Verify at minimum:
-- Product arena loads
-- blue/red Product wrestlers load
-- no missing texture / console runtime error
-- pre-bout comparison still works
-- Enter starts Bout
-- sprite roots track canonical positions
-- facing rotation updates during gameplay
-- key 0 debug contact circles remain centered under Product sprites
-- R restart still works.
-
-If browser/runtime smoke is genuinely unavailable:
-report it as NOT RUN.
-Do not call Overall Visual Acceptance PASS based only on build/tests.
-
----
-
-# User Play / Visual Test — REQUIRED
-
-Technical PASS is not acceptance.
-
-The User must play the real runtime after integration.
-
-Required visual/play checks:
-
-## A. Start / faceoff
-
-- Do blue and red look like they face one another?
-- Is the scale correct in the full 1920×1080 arena?
-- Are pivots/root positions natural?
-- Does the old procedural body disappear completely?
-
-## B. Movement / continuous facing
-
-Using WASD:
-- move around the opponent
-- rotate through multiple angles
-- confirm the sprite's 360° rigid rotation still feels acceptable in real motion.
-
-## C. Push / Counter
-
-- use Up Push
-- use Down Counter
-- judge whether unchanged rigid art is acceptable at this prototype stage.
-
-Do not auto-fail because there is no dedicated Push pose.
-This Task intentionally tests the minimum-art approach.
-
-## D. Kuzushi / stagger
-
-Judge:
-- whether canonical participant displacement with the same rigid image communicates stagger sufficiently
-- whether a later tiny rigid presentation rotation is actually necessary.
-
-Do not add it before this User test.
-
-## E. Grip / grapple / Drive
-
-Use Shift and dummy modes as needed.
-
-Judge:
-- whether close contact is readable
-- whether unchanged rigid images are acceptable
-- whether the first dedicated Product pose should eventually be:
-  - contact/push
-  - grip/grapple
-  - neither yet.
-
-## F. Ring / overall readability
-
-- rotate/move near dohyo edge
-- confirm silhouette remains readable against arena
-- confirm HUD remains readable.
-
----
-
-# Acceptance Criteria
-
-Technical:
-
-1. exact reviewed sources validated
-2. deterministic normalized Product runtime sprites committed
-3. no mirroring
-4. old procedural wrestler body rendering replaced
-5. Product image root uses explicit pivot
-6. canonical Simulation position drives sprite position
-7. canonical participant.facing drives whole-sprite rotation
-8. Product body-core scale stays aligned to canonical bodyRadius
-9. Simulation/gameplay source untouched semantically
-10. HUD/debug/pre-bout flows preserved
-11. pnpm test PASS
-12. pnpm build PASS
-13. relevant Python art tests PASS
-14. git diff --check PASS
-15. runtime smoke PASS or honestly NOT RUN
-16. User Play Test marked REQUIRED.
-
-Product/Game Feel:
-- only User can accept.
+# User Decisions vs Agent Recommendations
+
+Clearly separate:
+
+## Already User-decided
+
+- Success final relative placement = side
+- Best final relative placement = rear
+- approximately 2-second visible transition
+- both participants uncontrollable during transition
+- pusher visibly staggers forward
+- successful side also moves naturally
+- base rigid sprite may be reused for movement
+- Counter attempt art handled separately.
+
+## Agent may recommend
+
+- state ownership shape
+- tick bookkeeping
+- path representation
+- contact policy
+- facing policy
+- velocity bookkeeping
+- Snapshot exposure.
+
+## Must STOP for User decision if discovered
+
+- changing Success/Best final-placement meaning
+- changing ring-out winner semantics
+- inventing a materially different final pusher displacement
+- changing Counter timing window/tier classification
+- changing failed Counter penalty semantics.
 
 ---
 
@@ -672,126 +490,101 @@ Product/Game Feel:
 
 Do NOT:
 
-- create 8-direction authored sprites
-- generate new wrestler art
-- mirror current art
-- add Push/Counter/Grip/Grapple dedicated pose images
-- implement sprite-sheet animation
-- add skeleton/rig
-- add per-limb transforms
-- add tween/animation framework
-- add presentation-only stagger offset/rotation formula
-- change gameplay
-- change Simulation movement
-- change collision/bodyRadius
-- change input
-- change HUD
-- change arena
-- change Save/Management
-- delete previous offline art tools.
+- edit Production TypeScript gameplay/source
+- add the transition state
+- change Counter relocation
+- add animation/tween code
+- add Counter art
+- add Grip/Morozashi art
+- change current rigid wrestler assets
+- change Push/Counter timing values
+- change ring-out logic
+- change input bindings
+- change HUD.
+
+This is Investigation / Design only.
 
 ---
 
-# SPEC Sync
+# Verification Level
 
-Update `docs/WRESTLER_PRODUCT_ART_SPEC.md` minimally.
+Investigation / Design with focused source/test inspection.
 
-Required correction:
+Required:
 
-- ART-WRESTLER-03A User Visual Gate:
-  - dual separately-authored rigid sprites accepted for current prototype runtime integration
-  - no mirroring
-  - continuous whole-sprite rotation accepted
-  - translation/root movement accepted as the minimum motion baseline
-  - dedicated action/contact poses remain Deferred / only add if runtime User Play Test demonstrates need.
+- map current Counter success tick order from source
+- identify all existing Counter tests that depend on instantaneous relocation
+- identify ring-out/contact tests that the transition could affect
+- identify any current invariant that would be broken by a 2-second pair state
+- identify exact Production files likely touched by the later implementation
+- run no Production-changing command.
 
-Also update stale sections that still state Product runtime will definitely use body-part assembly / two-link arms as the selected implementation.
+Running existing tests is optional unless needed to confirm a source interpretation.
 
-Do NOT delete historical experiment records, but make the **current accepted direction unambiguous**.
-
-Do not lock final animation/pose counts.
-
----
-
-# Implementation Evidence
-
-Completion Report must include a compact evidence section:
-
-| Design Requirement | Implementation Evidence | Preserved | Verified By |
-|---|---|---|---|
-
-Cover at least:
-- separate blue/red source
-- no mirror
-- explicit pivot/root
-- body-core scale
-- continuous canonical facing
-- canonical position
-- no per-limb Product rendering
-- HUD/debug preservation.
+If tests are run, report them honestly.
 
 ---
 
 # Completion Report
 
-Include:
+Write only:
+
+`docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+
+Use the Investigation-only Report Commit Exception in `AGENTS.md` if applicable.
+
+Required sections:
 
 - Result
 - Preflight
-- reviewed source identities
-- asset export command/path
-- committed Product PNG dimensions/hashes
-- runtime pivot/origin metadata
-- scale formula
-- changed files
-- WrestlerView replacement summary
-- preload integration
-- canonical position/facing evidence
-- no-mirror evidence
-- removal of procedural body-art path
-- tests
-- build
-- browser/runtime smoke
-- User Play Test Required
-- Implementation Evidence
+- Current Counter Pipeline
+- Current Instant-Relocation Evidence
+- Affected State / Tests
+- Candidate Designs
+- Recommended Design
+- Recommended State Shape
+- Entry / Tick / Completion Semantics
+- Success vs Best
+- Input Lock Semantics
+- Movement / Velocity Semantics
+- Contact Semantics
+- Ring-out / Tokudawara Semantics
+- Facing Semantics
+- Kuzushi Interaction
+- Snapshot / Presentation
+- Boundary Cases
+- User Decisions Preserved
+- User Decisions Still Needed
+- Expected Implementation Files
+- Verification
 - Design Deviations
 - Unexpected Scope
 - Git delivery.
 
 ---
 
-# Design Deviations
+# Acceptance Criteria
 
-Required.
+PASS if the Investigation produces a design that:
 
-If none:
+1. preserves Success side / Best rear final semantics
+2. owns the ~2-second no-input interval explicitly
+3. avoids duplicate canonical positions
+4. defines both participants' movement ownership
+5. defines input suppression
+6. defines contact behavior
+7. defines ring-out/Tokudawara behavior
+8. defines facing
+9. defines velocity bookkeeping
+10. defines Kuzushi interaction
+11. remains deterministic/fixed-step
+12. is narrow enough for a focused implementation Task
+13. clearly identifies any unresolved User decision instead of inventing it.
 
-`Design Deviations: NONE`
+If a material design choice cannot be resolved without User judgment:
+Result may be `BLOCKED` with a concrete decision request.
 
-STOP and report before semantic deviation if implementation would require:
-- mirror
-- 8 directions
-- per-limb Product rendering
-- new action pose art
-- gameplay change
-- new stagger gameplay/presentation formula
-- replacing canonical position/facing with presentation-owned equivalents.
-
----
-
-# Stop Conditions
-
-STOP/BLOCKED if:
-
-- reviewed source files are missing
-- reviewed source identity differs
-- deterministic export cannot reproduce accepted Product normalization
-- runtime requires mirroring to face correctly
-- current source / accepted design materially conflicts
-- integration cannot preserve canonical participant root/facing
-- unrelated required prerequisite is discovered.
-
-Do not broaden scope to solve a prerequisite silently.
+Do NOT implement a fix.
 
 ---
 
@@ -799,780 +592,25 @@ Do not broaden scope to solve a prerequisite silently.
 
 Follow `AGENTS.md`.
 
-Expected Task-owned changes may include:
+Because this is Investigation / Design only:
 
-- deterministic wrestler Product export tooling/config if required
-- `public/assets/action/wrestler/blue.png`
-- `public/assets/action/wrestler/red.png`
-- small pure Product wrestler presentation metadata module
-- `src/game/scenes/WrestlerView.ts`
-- minimal `src/game/scenes/BoutScene.ts` preload / constructor wiring
-- focused tests
-- minimal `docs/WRESTLER_PRODUCT_ART_SPEC.md`
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
+- Production/source files must remain unchanged
+- only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` may be committed/pushed under the Investigation-only Report Commit Exception
+- do not edit `CURRENT_TASK.md`
+- do not update Product SPEC yet
+- push to `origin/develop`
+- do not modify `main`.
 
-Do not stage unrelated files.
+Suggested report-only commit:
 
-Suggested commit:
-
-`feat: integrate rigid product wrestlers`
-
-Push `origin/develop`.
-Do not modify `main`.
+`docs(agent): investigate counter transition`
 
 # Final Instruction
 
-Implement only the accepted dual rigid-sprite Product baseline.
+Investigate and design only.
 
-Stop after runtime integration, technical verification, and Browser Smoke.
+Do NOT implement the 2-second Counter transition.
 
-Do NOT begin dedicated action-pose production.
+After report/commit/push:
 
-After commit/push/report:
-
-「ACTION-ART-03A-RIGID-WRESTLER-RUNTIME-INTEGRATION が完了し、ChatGPT ReviewとUser Play Test待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS / RUNTIME SMOKE PASS / USER PLAY TEST REQUIRED
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `f6f006dd967c5ce9b259c7cb5c140625d49f0719`
-- Agent-Start-Head:
-  `aff9f7948c894bd21d4f6456afa4d0571bede250`
-- Delivery is one implementation commit.
-- No Simulation / gameplay files changed.
-- No input files changed.
-- No package / lockfile changes.
-
-## Reported Implementation vs Design
-
-PASS.
-
-The runtime implementation matches the accepted rigid Product-wrestler direction.
-
-Current renderer:
-
-```
-canonical participant.position
-  -> BoutScene meter-to-pixel mapping
-  -> Product sprite explicit pivot/root
-
-canonical participant.facing
-  -> whole Product sprite rotation
-```
-
-No duplicated presentation-owned gameplay position/facing was introduced.
-
-## Product Runtime Assets
-
-PASS.
-
-Committed deterministic runtime assets:
-
-### blue
-- `public/assets/action/wrestler/blue.png`
-- 167×181
-- pivot: (84, 87)
-- body-core: ~123.0769 px
-- decoded pixel SHA:
-  `bbd3459360064934c1b2fa247fdb5821f3c5e8699b594e4b27dec93f8975fc7b`
-
-### red
-- `public/assets/action/wrestler/red.png`
-- 158×178
-- pivot: (82, 95)
-- body-core: ~123.0769 px
-- decoded pixel SHA:
-  `d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa`
-
-The exporter validates the reviewed source images and reproduces the committed PNGs deterministically.
-
-Do Not Reopen:
-- no manual edit of committed runtime PNGs
-- no mirror/flip
-- scale reference remains the explicit body-core, not full alpha bbox.
-
-## Product Presentation Contract
-
-PASS.
-
-`src/game/presentation/productWrestlerArt.ts` is a small Phaser-free presentation contract.
-
-It owns:
-- asset id
-- texture key
-- asset path
-- runtime dimensions
-- explicit pivot
-- body-core diameter.
-
-Phaser origin is correctly derived from:
-
-```
-originX = pivotX / width
-originY = pivotY / height
-```
-
-Display scale is:
-
-```
-(2 * canonicalBodyRadiusPx) / bodyCoreDiameterPx
-```
-
-At the accepted current bodyRadius this is ~1.0.
-
-This preserves gameplay bodyRadius ownership while keeping presentation art visually aligned.
-
-## WrestlerView Replacement
-
-PASS.
-
-Direct source inspection confirms the old procedural articulated Product path is removed.
-
-Current `WrestlerView` contains only:
-- one authored Product body Image
-- one procedural near-circular shadow.
-
-Removed from Product rendering:
-- procedural feet
-- procedural torso
-- procedural mawashi
-- procedural arms
-- procedural head
-- per-limb reach/spread
-- crouch/lean
-- torso pose interpolation
-- walking/shuffle part motion
-- kuzushi body-part deformation
-- runtime mawashi tint cue.
-
-No obsolete articulated body path continues invisibly.
-
-## Canonical Position / Facing
-
-PASS.
-
-Direct source inspection confirms:
-
-`BoutScene.syncViews()`
-- computes `pos = toCanvas(participant.position)`
-- uses the same `pos` for debug contact-circle center
-- passes that `pos` to `WrestlerView.apply()`.
-
-`WrestlerView.apply()`:
-- `body.setPosition(positionPx.x, positionPx.y)`
-- `body.setRotation(participant.facing)`.
-
-No facing quantization.
-No presentation interpolation of gameplay facing.
-No alternate root position.
-
-This is the requested architecture.
-
-## No-Mirror / No Per-Limb Product Rendering
-
-PASS.
-
-Runtime uses distinct blue / red texture files.
-
-No:
-- `setFlipX`
-- `setFlipY`
-- negative display scale
-- per-limb Product renderables
-- sprite-part reconstruction.
-
-This preserves the User-approved visual baseline.
-
-## Minimal Motion Interpretation
-
-PASS.
-
-The runtime now follows the intended minimum-animation interpretation:
-
-- movement:
-  canonical participant root moves; same sprite follows
-- facing:
-  same sprite rotates continuously
-- Push / Counter / Grip / Grapple / Drive / Kuzushi:
-  same base Product sprite remains in use
-- no dedicated action pose yet
-- no invented presentation-only stagger translation/rotation.
-
-For Kuzushi/stagger specifically:
-the renderer shows the canonical Simulation displacement only.
-
-This is intentional.
-A later presentation-only stagger polish must not be added unless User Play Test shows it is necessary.
-
-## Visual State Preservation
-
-PASS.
-
-`wrestlerVisualState.ts` was not redesigned.
-
-It remains pure and continues to expose existing action/pose semantics.
-
-The rigid Product renderer currently uses it only to maintain `moving` hysteresis compatibility.
-
-This preserves a clean future route to a hybrid minimal-pose system without prematurely adding poses now.
-
-## Shadow
-
-ACCEPTED for current baseline.
-
-The shadow remains:
-- presentation-only
-- below Product bodies
-- world-position offset down/right
-- near-circular ellipse
-- not baked into Product PNG.
-
-The ellipse still receives participant facing rotation, as the previous current visual path did.
-Because the shape is near-circular, this is not a blocking Product issue.
-
-Do not reopen unless User Play Test makes shadow rotation visibly distracting.
-
-## BoutScene / HUD / Debug Preservation
-
-PASS.
-
-Direct source inspection confirms only minimal scene wiring:
-- Product wrestler preload
-- blue/red art id in presentation metadata
-- Product art passed to WrestlerView
-- obsolete `dtMs` argument removed from `syncViews()`.
-
-Preserved:
-- pre-bout comparison
-- Enter start
-- Product HUD
-- key 0 debug
-- contact circles
-- facing marker
-- labels / phase text
-- grapple line
-- arena boundary debug
-- R restart
-- dummy 1 / 2
-- existing input/gameplay flow.
-
-## Verification Completeness
-
-PASS technically.
-
-Reported verification:
-
-- `pnpm test`
-  - PASS
-  - 18 files / 262 tests
-
-- `pnpm build`
-  - PASS
-
-- Python wrestler-art tests
-  - 107 PASS
-
-- `git diff --check`
-  - PASS
-
-- deterministic export `--check`
-  - blue PASS
-  - red PASS
-
-- Browser/runtime smoke
-  - PASS
-  - Product arena loaded
-  - blue/red assets loaded
-  - pre-bout flow worked
-  - Enter start worked
-  - movement/facing updated
-  - key 0 debug root alignment checked
-  - R restart worked
-  - old procedural bodies absent
-  - no relevant console runtime exception.
-
-## Runtime Smoke Limitation
-
-The Agent smoke did NOT fully verify:
-- real User-perceived motion quality
-- Kuzushi readability
-- successful Grip/Grapple/Drive visual quality
-- dohyo-edge readability during actual play.
-
-The automated input attempt did not establish Grip; engagement stayed FREE.
-
-Therefore those items remain mandatory User Play Test, not Technical PASS evidence.
-
-## Unexpected Scope Review
-
-The Agent changed `docs/ARCHITECTURE.md` by 3 lines even though it was not listed in expected Task-owned changes.
-
-Reviewed result:
-- only stale current-state documentation was synchronized
-- it now accurately states the rigid Product WrestlerView
-- no architecture rule or gameplay semantics changed.
-
-Classification:
-**Accepted non-semantic documentation sync.**
-
-No rerun required.
-
-Do not treat nearby stale documentation as automatic permission for future scope expansion; report first when material.
-
-## SPEC Sync
-
-PASS.
-
-The Product wrestler spec now makes current authority explicit in §0:
-
-- two separately authored rigid full-body sprites
-- no mirror
-- continuous whole-image facing rotation
-- canonical root translation as minimum movement baseline
-- all current action states use the same sprite
-- dedicated action/contact poses Deferred pending User Play Test.
-
-Older part-based/two-link material remains clearly labeled historical.
-
-This is sufficient and avoids rewriting historical design records.
-
-## User Goal Attainment
-
-Technical runtime integration goal:
-**ACHIEVED**
-
-Product / Game Feel goal:
-**PENDING USER PLAY TEST**
-
-The assets are now running in the actual Phaser game, but Technical PASS cannot decide whether:
-- rigid Push looks convincing
-- Counter is readable
-- Kuzushi feels like stagger
-- Grip/Grapple/Drive is readable
-- continuous rotation still feels acceptable under real input.
-
-## User Play Test — REQUIRED
-
-Run the current `develop` runtime.
-
-Suggested local command:
-
-```
-pnpm dev
-```
-
-Then test:
-
-### 1. Pre-bout / start
-- comparison appears
-- Enter starts
-- blue left / red right
-- size and facing look natural.
-
-### 2. Movement / rotation
-- WASD around the opponent
-- circle around the opponent
-- inspect diagonal / vertical / reverse directions
-- judge 360° rigid rotation in live motion.
-
-### 3. Push / Counter
-- ArrowUp Push
-- ArrowDown Counter
-- judge whether same base sprite is acceptable at this prototype stage.
-
-### 4. Kuzushi / stagger
-- trigger successful/failed Counter where practical
-- judge whether canonical displacement alone visually communicates stagger
-- specifically decide whether a future tiny rigid rotation/offset is needed.
-
-### 5. Grip / Grapple / Drive
-- Shift for Grip
-- use dummy mode 1 / 2 as needed
-- establish Grapple if possible
-- hold ArrowUp for Drive
-- judge close-contact readability.
-
-### 6. Debug alignment
-- key 0
-- verify contact circles remain centered under body mass
-- verify facing marker agrees with apparent sprite front.
-
-### 7. Edge readability
-- move toward dohyo edge
-- rotate near tawara
-- check silhouette and HUD readability.
-
-## Acceptance Questions
-
-Please report:
-
-1. **360° rotation**: OK / NG
-2. **normal movement**: OK / NG
-3. **Push/Counter with same sprite**: OK / NG
-4. **Kuzushi using position change only**: OK / NG
-5. **Grip/Grapple/Drive with same sprite**: OK / NG / not tested
-6. **sprite size/root alignment**: OK / NG
-7. any specific state that first looks unacceptable.
-
-## Accepted Baseline If User Passes
-
-If User Play Test is acceptable, current baseline becomes:
-
-- blue/red rigid Product sprites integrated
-- no mirror
-- one base sprite per wrestler
-- canonical position translation
-- canonical continuous facing rotation
-- no action-specific Product pose yet.
-
-Then the next visual task should be driven only by an observed runtime weakness, not by automatically creating animation sets.
-
-## Next Task Constraint
-
-Do NOT create a new action-pose / 8-direction / animation-production Task until User Play Test identifies a concrete deficiency.
-
-If the current rigid baseline passes:
-continue to the next highest-priority Action/Game Feel issue.
-
-If only one state fails:
-create a narrowly scoped hybrid-pose investigation for that state only.
-
-## Final Acceptance State
-
-Implementation:
-**TECHNICAL PASS**
-
-Runtime Smoke:
-**PASS**
-
-Architecture / Scope:
-**PASS with accepted minor documentation sync**
-
-Product Game Feel:
-**PENDING USER PLAY TEST**
-
-
-# User Play Test Result — 2026-10-21
-
-User Play Test has now been completed for the ACTION-ART-03A rigid Product-wrestler runtime baseline.
-
-## Accepted
-
-### 360° rigid rotation
-**USER ACCEPTED**
-
-- continuous whole-sprite facing rotation is acceptable
-- no 8-direction authored set is required for the current baseline.
-
-### Normal movement
-**USER ACCEPTED**
-
-- canonical participant position -> rigid sprite translation is acceptable for normal movement.
-
-### Sprite size / root alignment
-**USER ACCEPTED**
-
-- current Product size and root/pivot alignment are acceptable.
-
-These are now the current Product visual baseline and should not be reopened without an explicit task.
-
-## Push / Counter
-
-### Push
-Current same-sprite Push is **acceptable enough to continue for now**.
-
-Do not create a Push-specific image automatically.
-
-### Counter
-Current same-sprite Counter is **NOT accepted**.
-
-User decision:
-- pressing Down / Counter should use dedicated authored art
-- the dedicated visual must also support a Counter whiff / failed attempt being readable.
-
-Do not lock the exact number of Counter frames/images yet.
-
-A future focused Counter-art task is required before Counter visuals are Product-accepted.
-
-## Counter Success Relocation / Stagger
-
-User observed obvious instant-position jumps around the tested Counter-success moments and rejected the current visual.
-
-Current Source inspection shows this is not merely the `posture.kind === 'kuzushi'` state.
-
-On successful Counter, `BoutSimulation.resolveCounter()` currently calls `counterRelocationTarget(...)` and then directly assigns:
-
-```
-defender.position.x = target.x
-defender.position.y = target.y
-```
-
-in one Simulation tick.
-
-Therefore the rigid Product sprite correctly exposes an existing **instant canonical Counter relocation**.
-
-User goal:
-- the displaced / broken wrestler should visibly stagger through a short continuous position animation
-- the successful wrestler should also move naturally during the exchange
-- the same base sprite may be reused for the stagger if position-only animation is visually sufficient
-- reference feel: the uploaded `yoroke.mp4`
-- do NOT assume new stagger artwork is required.
-
-Important:
-This is now a Movement / State-ownership issue, not just an art swap.
-
-Do NOT implement presentation smoothing blindly.
-
-A focused Investigation / Design must decide whether:
-1. Counter positional resolution becomes time-based canonical Simulation movement, or
-2. gameplay relocation remains instantaneous and Phaser derives a temporary presentation transition.
-
-The architecture consequences and contact/ring-out semantics must be reviewed before implementation.
-
-Do not silently change accepted Counter gameplay semantics.
-
-## Terminology Correction
-
-For User-facing discussion:
-
-- `Kuzushi` = internal gameplay posture/state in current Source
-- the visually rejected instant jump = successful Counter's direct position relocation
-- do not use “Kuzushi” as shorthand for that teleport-like relocation.
-
-## Grip / Grapple / Drive
-
-Current non-Grip rigid image:
-**USER ACCEPTED as the non-Grip/base state.**
-
-Current same-sprite Grip/Grapple visuals:
-**USER REJECTED.**
-
-User direction:
-- create a dedicated **Grip state** authored image
-- create a separate dedicated **Grip / Morozashi state** authored image.
-
-Do not assume the exact runtime mapping yet between:
-- `action.kind === 'grip'` reach/recovery
-- established neutral `engagement.kind === 'grappled'`
-- Morozashi holder/disadvantaged.
-
-That mapping needs a focused art/state design task so “Grip state” is not interpreted incorrectly.
-
-### Tsuri / lift
-
-User direction:
-- if a future Tsuri/lift state can be communicated clearly using position-only motion, prefer that
-- if it is visually unclear, dedicated Tsuri art may be added.
-
-Tsuri is Deferred.
-Do not implement it as part of the current Counter/Grip follow-up unless explicitly tasked.
-
-## Updated Product Art Strategy
-
-Current accepted strategy is now **hybrid minimal-pose**, not “one sprite for every action”.
-
-Accepted minimum:
-
-- Base / non-Grip:
-  - current blue/red rigid sprites
-  - 360° rotation
-  - normal translation.
-
-Future dedicated art is justified only where User Play Test found a concrete failure:
-
-- Counter: dedicated art required
-- Grip established state: dedicated art required
-- Grip Morozashi state: dedicated art required.
-
-Potentially no new art:
-- normal movement
-- Push, for now
-- Counter-success stagger displacement, if continuous position animation with existing art is sufficient
-- future Tsuri, if position-only motion is readable.
-
-Do NOT expand this into an 8-direction × every-state sprite matrix.
-
-## Next Work Ordering Constraint
-
-Before generating/implementing all dedicated art, first address the Counter visual/movement problem carefully.
-
-Recommended next sequence:
-
-1. focused Investigation / Design:
-   Counter success relocation + stagger motion ownership
-   - why instant relocation exists
-   - Simulation-time movement vs presentation-only transition
-   - successful-side movement
-   - contact/ring-out/facing implications
-   - preserve Counter outcome semantics unless User approves a gameplay change.
-
-2. after design is accepted:
-   implement the smallest continuous Counter-success movement/stagger representation.
-
-3. separately:
-   define/generate dedicated Counter art and map Counter active/whiff states.
-
-4. separately:
-   define/generate dedicated Grip neutral and Morozashi art and map them to canonical state.
-
-Do not combine Counter movement semantics + Counter new art + Grip new art into one large implementation task.
-
-## User Reference Video
-
-The User uploaded `yoroke.mp4` as a feel reference.
-
-Use it only as a reference for:
-- short continuous displacement
-- loser stagger/readability
-- successful side also moving naturally through the exchange.
-
-Do not copy its gameplay rules or frame timing blindly.
-Do not treat it as proof that one static sprite is sufficient; that remains a User visual gate after implementation.
-
-
-# Clarification — Recorded Instant-Jump Evidence
-
-The User clarified that the previously mentioned timestamps 0:00:25 / 0:00:29 referred to the newly uploaded gameplay recording:
-
-`画面録画 2026-10-21 215220.mp4`
-
-ChatGPT inspected the actual 30 fps file frame-by-frame.
-
-Observed:
-- a clear abrupt pair-position/orientation discontinuity occurs around **25.4–25.5 s**
-- another clear abrupt discontinuity occurs around **30.2 s** in the uploaded file
-- these read visually as instant relocation rather than a short continuous stagger/yoroke transition.
-
-This corrects the earlier situation where those timestamps had been discussed before the gameplay recording itself was attached.
-
-## Source correlation
-
-Current Source independently shows that successful Counter resolution can directly assign the defender's canonical position in one Simulation tick:
-
-```
-if (target) {
-  defender.position.x = target.x
-  defender.position.y = target.y
-}
-```
-
-inside `BoutSimulation.resolveCounter()`.
-
-This source behavior is **consistent with** the abrupt jump visible in the recording and remains the leading implementation cause.
-
-However, the recording by itself does not expose internal action/debug state, so do not phrase the video alone as formal proof that each exact visible jump was a Counter-success event without additional instrumentation.
-
-For the next Investigation:
-- use Source/event evidence to correlate the visible jump with Counter resolution
-- do not rely only on approximate video timestamps
-- preserve the User's visual requirement: replace the teleport-like presentation with a short continuous exchange in which both the displaced wrestler and successful wrestler move naturally.
-
-
-# User Clarification — Counter Success / Best Transition Semantics
-
-The User clarified the recorded events:
-
-- around 25 s:
-  - opponent Push (Up) is answered with Counter / sabaki (Down)
-  - Counter succeeds with the current **Success** tier
-  - the successful wrestler takes the opponent's **side**
-  - the resulting side position is specification-correct.
-
-- around 30 s:
-  - opponent Push (Up) is answered with Counter / sabaki (Down)
-  - Counter succeeds at the current **Best** timing
-  - the successful wrestler takes the opponent's **rear / back**
-  - the resulting rear position is specification-correct.
-
-Therefore:
-
-**Do NOT change the accepted Success / Best positional outcomes merely because the current runtime looks like a teleport.**
-
-The problem is the transition into those already-correct result positions.
-
-## Accepted new desired behavior
-
-The User wants Counter success to become a time-bearing transition, approximately **2 seconds**, using the current rigid Product sprites if they remain readable.
-
-During the transition:
-
-### Countered / defeated side
-- move continuously rather than teleport
-- visually pitch/read as a forward stagger / loss of balance
-- use `yoroke.mp4` as a feel reference
-- target duration: approximately 2 seconds.
-
-### Successful Counter side
-- also move continuously through the exchange
-- Success tier:
-  move naturally toward the already-defined side result
-- Best tier:
-  move naturally toward the already-defined rear result
-- target duration: approximately 2 seconds.
-
-### Input / action lock
-For the duration of this Counter-resolution transition:
-- both participants do not accept normal player / dummy action input
-- no new Push / Counter / Grip / movement should begin during the transition.
-
-This is intended as gameplay/presentation behavior, not just a camera tween.
-
-## State ownership implication
-
-The current implementation directly assigns the successful wrestler's canonical position in one tick.
-
-The desired behavior introduces:
-- a duration
-- two participants moving through a resolved exchange
-- temporary control lock
-- a completion point.
-
-Therefore this must NOT be implemented as an arbitrary Phaser-only smoothing layer without design review.
-
-The next focused Investigation / Design must determine the smallest explicit Simulation-owned representation for the Counter-resolution transition.
-
-Likely questions:
-- new Counter-resolution / sabaki transition state vs extension of existing action/posture state
-- how canonical start / target positions are stored
-- deterministic fixed-step interpolation / velocity over ~2 s
-- whether both participants' canonical positions move during the transition
-- exact facing behavior during side/rear movement
-- contact handling during the transition
-- ring-out / tokudawara checks during the transition
-- whether success and Best share one transition type with different targets
-- what happens if the resolved path approaches/outcrosses the ring boundary
-- how dummy/player input is suppressed and resumes.
-
-## Preserve
-
-Do Not Reopen unless explicitly requested:
-- Counter Success ends at the current side-placement result semantics
-- Counter Best ends at the current rear-placement result semantics
-- the User considers those positional outcomes correct
-- current blue/red rigid base sprites remain accepted for non-Counter/non-Grip baseline
-- dedicated Counter input-state art is still planned separately.
-
-## Counter art distinction
-
-The User also separately wants dedicated art for pressing Down / Counter, including readable whiff/failure behavior.
-
-Do NOT conflate:
-1. **Counter attempt art** (dedicated image/state), and
-2. **successful Counter movement transition** (the ~2 s side/rear exchange).
-
-They are separate follow-up concerns and should not be implemented together unless a future Task explicitly combines them.
-
-## Reference
-
-`yoroke.mp4` is a feel reference for:
-- the countered side's forward-stagger readability
-- continuous displacement over roughly 2 s
-- the successful side also moving naturally through the exchange.
-
-Do not copy its exact timing/trajectory/formula blindly.
-The final motion remains a SumoSim design and User Play Test gate.
+「ACTION-04A3-COUNTER-TRANSITION-INVESTIGATION が完了し、ChatGPT Design Review待ちです」
