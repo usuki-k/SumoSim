@@ -1471,3 +1471,108 @@ For the next Investigation:
 - use Source/event evidence to correlate the visible jump with Counter resolution
 - do not rely only on approximate video timestamps
 - preserve the User's visual requirement: replace the teleport-like presentation with a short continuous exchange in which both the displaced wrestler and successful wrestler move naturally.
+
+
+# User Clarification — Counter Success / Best Transition Semantics
+
+The User clarified the recorded events:
+
+- around 25 s:
+  - opponent Push (Up) is answered with Counter / sabaki (Down)
+  - Counter succeeds with the current **Success** tier
+  - the successful wrestler takes the opponent's **side**
+  - the resulting side position is specification-correct.
+
+- around 30 s:
+  - opponent Push (Up) is answered with Counter / sabaki (Down)
+  - Counter succeeds at the current **Best** timing
+  - the successful wrestler takes the opponent's **rear / back**
+  - the resulting rear position is specification-correct.
+
+Therefore:
+
+**Do NOT change the accepted Success / Best positional outcomes merely because the current runtime looks like a teleport.**
+
+The problem is the transition into those already-correct result positions.
+
+## Accepted new desired behavior
+
+The User wants Counter success to become a time-bearing transition, approximately **2 seconds**, using the current rigid Product sprites if they remain readable.
+
+During the transition:
+
+### Countered / defeated side
+- move continuously rather than teleport
+- visually pitch/read as a forward stagger / loss of balance
+- use `yoroke.mp4` as a feel reference
+- target duration: approximately 2 seconds.
+
+### Successful Counter side
+- also move continuously through the exchange
+- Success tier:
+  move naturally toward the already-defined side result
+- Best tier:
+  move naturally toward the already-defined rear result
+- target duration: approximately 2 seconds.
+
+### Input / action lock
+For the duration of this Counter-resolution transition:
+- both participants do not accept normal player / dummy action input
+- no new Push / Counter / Grip / movement should begin during the transition.
+
+This is intended as gameplay/presentation behavior, not just a camera tween.
+
+## State ownership implication
+
+The current implementation directly assigns the successful wrestler's canonical position in one tick.
+
+The desired behavior introduces:
+- a duration
+- two participants moving through a resolved exchange
+- temporary control lock
+- a completion point.
+
+Therefore this must NOT be implemented as an arbitrary Phaser-only smoothing layer without design review.
+
+The next focused Investigation / Design must determine the smallest explicit Simulation-owned representation for the Counter-resolution transition.
+
+Likely questions:
+- new Counter-resolution / sabaki transition state vs extension of existing action/posture state
+- how canonical start / target positions are stored
+- deterministic fixed-step interpolation / velocity over ~2 s
+- whether both participants' canonical positions move during the transition
+- exact facing behavior during side/rear movement
+- contact handling during the transition
+- ring-out / tokudawara checks during the transition
+- whether success and Best share one transition type with different targets
+- what happens if the resolved path approaches/outcrosses the ring boundary
+- how dummy/player input is suppressed and resumes.
+
+## Preserve
+
+Do Not Reopen unless explicitly requested:
+- Counter Success ends at the current side-placement result semantics
+- Counter Best ends at the current rear-placement result semantics
+- the User considers those positional outcomes correct
+- current blue/red rigid base sprites remain accepted for non-Counter/non-Grip baseline
+- dedicated Counter input-state art is still planned separately.
+
+## Counter art distinction
+
+The User also separately wants dedicated art for pressing Down / Counter, including readable whiff/failure behavior.
+
+Do NOT conflate:
+1. **Counter attempt art** (dedicated image/state), and
+2. **successful Counter movement transition** (the ~2 s side/rear exchange).
+
+They are separate follow-up concerns and should not be implemented together unless a future Task explicitly combines them.
+
+## Reference
+
+`yoroke.mp4` is a feel reference for:
+- the countered side's forward-stagger readability
+- continuous displacement over roughly 2 s
+- the successful side also moving naturally through the exchange.
+
+Do not copy its exact timing/trajectory/formula blindly.
+The final motion remains a SumoSim design and User Play Test gate.
