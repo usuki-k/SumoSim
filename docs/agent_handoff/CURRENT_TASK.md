@@ -76,12 +76,19 @@ Contains usable candidate art for:
 
 The torso contained in this original sheet is REJECTED and must NOT be used.
 
-Expected source:
+Expected reviewed visual source:
 - filename: `parts_sheet.png`
 - size: **1254×1254**
-- mode: RGBA / transparent
-- SHA-256:
+- decoded mode for validation: RGBA
+- reviewed original file SHA-256:
   `3363eb77aeafb3a9ee298e23256218716e675eb7de63acf304d23357f27a44aa`
+- canonical decoded RGBA pixel SHA-256:
+  `fecca71805ba1aebb51fdb09b79ebca647ed85a4b6b3072eb1b384ee538b7cbc`
+
+Important:
+PNG file SHA may differ after a lossless re-save/re-encode.
+For source identity, the blocking visual check is the decoded RGBA pixel hash, not the encoded PNG byte hash.
+Record the actual file SHA in the manifest, but do not reject a byte-different PNG if the decoded pixel hash matches the reviewed source.
 
 ### B. Replacement torso candidate
 
@@ -89,12 +96,16 @@ The User generated a separate simpler rounded / anime-game torso and approved it
 
 It is a CANDIDATE for assembly preview, not yet final Product acceptance.
 
-Expected source:
+Expected reviewed visual source:
 - filename: `torso.png`
 - size: **1374×1145**
-- mode: RGBA / transparent
-- SHA-256:
+- decoded mode for validation: RGBA
+- reviewed original file SHA-256:
   `8388ef8bb7ce44278426472aaf2af8eb751f82f2a8246e6ae86a03b92a71f734`
+- canonical decoded RGBA pixel SHA-256:
+  `8fe2791c4c7e1f43bcd8816d0a898e31c6f61a1c7127fe109488891ee0183094`
+
+Use decoded RGBA pixel identity as the blocking visual check for the same reason as the parts sheet.
 
 ## Required Local Inputs
 
@@ -115,10 +126,20 @@ Do NOT commit these source images.
 The tool must fail closed if:
 - either input is missing
 - dimensions do not match the expected reviewed source
-- alpha channel is missing
-- source SHA-256 does not match the reviewed input.
+- the decoded image cannot be represented as RGBA with meaningful alpha
+- the canonical decoded RGBA pixel SHA-256 does not match the reviewed input.
 
-Do not silently proceed with another image.
+Validation definition:
+1. decode PNG
+2. convert/read as canonical RGBA in row-major order
+3. hash the raw RGBA pixel bytes with SHA-256
+4. compare against the expected pixel hash above.
+
+The encoded PNG file SHA-256 must still be recorded, but it is informational for source provenance and is NOT a blocking equality check when pixel identity matches.
+
+This allows harmless PNG re-encoding while still rejecting any visual/pixel change.
+
+Do not silently proceed with a visually different image.
 
 ## Accepted Character Coordinate Contract
 
@@ -600,7 +621,7 @@ Material deviations requiring STOP:
 STOP/BLOCKED if:
 
 - required local inputs are missing
-- hashes/dimensions do not match
+- decoded pixel hashes / dimensions do not match
 - the candidate parts cannot be isolated cleanly
 - the replacement torso cannot be assigned a coherent FRONT/BACK axis
 - a coherent idle wrestler cannot be assembled without materially repainting/generated edits
@@ -645,3 +666,38 @@ Do NOT begin Phaser integration.
 After commit/push/report:
 
 「ART-WRESTLER-02A-PARTS-ASSEMBLY-PREVIEW が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
+
+
+# Coordination Correction — PNG Re-encoding Identity
+
+The previous Agent correctly stopped because the task required exact encoded-file SHA equality.
+
+ChatGPT rechecked the actual reviewed conversation attachments.
+
+Verified reviewed originals:
+
+## parts_sheet.png
+- 1254×1254 RGBA
+- original encoded file SHA-256:
+  `3363eb77aeafb3a9ee298e23256218716e675eb7de63acf304d23357f27a44aa`
+- canonical decoded RGBA pixel SHA-256:
+  `fecca71805ba1aebb51fdb09b79ebca647ed85a4b6b3072eb1b384ee538b7cbc`
+
+## torso.png
+- 1374×1145 RGBA
+- original encoded file SHA-256:
+  `8388ef8bb7ce44278426472aaf2af8eb751f82f2a8246e6ae86a03b92a71f734`
+- canonical decoded RGBA pixel SHA-256:
+  `8fe2791c4c7e1f43bcd8816d0a898e31c6f61a1c7127fe109488891ee0183094`
+
+The Agent-reported current parts_sheet encoded file SHA:
+`472c693a3c1ed29852997bf8f18bdaa172a76eed7594aad8e04f2db02ce240bd`
+
+may be a harmless re-encoding.
+
+On restart:
+- compute its decoded RGBA pixel SHA
+- if it equals `fecca718...b7cbc`, continue
+- if it differs, STOP/BLOCKED and require the reviewed visual source to be restored.
+
+No Production implementation was performed during the prior blocked attempt.
