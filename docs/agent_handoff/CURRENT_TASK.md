@@ -1,300 +1,231 @@
-Task-ID: ART-WRESTLER-02B-SINGLE-SPRITE-EVALUATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / OFFLINE PRODUCT ART PREVIEW / SINGLE-SPRITE VALIDATION
+Task-ID: ART-WRESTLER-03A-DUAL-SPRITE-RIGID-MOTION-VALIDATION
+Status: READY
+Task-Type: IMPLEMENTATION / OFFLINE PRODUCT ART VALIDATION / RIGID SPRITE MOTION
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 9a3569ff376c4397daf1297083272af599300189
+Source-Baseline: a4ed20e05cd64e374692dc69a631063e4a80ed9a
 Handoff-Mode: GITHUB
 
-# ART-WRESTLER-02B — Single Full-Body Wrestler Sprite Evaluation
+# ART-WRESTLER-03A — Dual Sprite 360° Rotation + Minimal Rigid Motion Validation
 
 ## Purpose
 
-Evaluate the newly generated **single full-body wrestler sprite** as the current Product-art candidate.
+Validate the User's intended **minimal animation model** before creating more art.
 
-The previous parts-based assembly experiment is no longer the current visual direction.
+The User's current hypothesis is:
 
-This Task must answer only:
+- each wrestler can use one authored full-body image
+- facing changes are represented by rotating the whole image
+- movement / advance is represented by moving the whole image's position
+- stagger / yoroke can be represented primarily by position displacement, optionally with a very small rigid whole-sprite rotation
+- no limb animation, frame animation, skeletal animation, deformation, or sprite swapping is required unless this validation proves it necessary.
 
-**Can this one-piece wrestler image be normalized to the accepted runtime body scale, rotated through the full top-down facing range, and placed on the Product arena without unacceptable camera/perspective/scale artifacts?**
+This Task exists to test that hypothesis visually.
 
-Do NOT integrate it into Phaser yet.
+Do NOT assume it is correct.
+Do NOT assume it is wrong.
+Generate review material that makes the tradeoff obvious.
 
-Do NOT design the final action-pose system yet.
+The key User question is:
 
-This is a focused visual-validation Task before any runtime commitment.
-
----
-
-## User Decision / Previous Visual Gate
-
-ART-WRESTLER-02A was a TECHNICAL PASS but the User visually rejected the assembled result.
-
-User result:
-- the deterministic parts assembly was visually far from the intended wrestler
-- the body/limbs/mawashi did not read as one coherent authored character
-- do not continue tuning that assembled result as the Product baseline.
-
-Therefore:
-
-### Current direction
-
-Use a **single authored full-body sprite** for the current Product candidate.
-
-The parts tool may remain in the repository as an experiment/reference, but:
-- do not treat its assembled output as accepted Product art
-- do not continue pivot/mawashi/forearm tuning in this Task
-- do not delete it unless a later explicit cleanup Task requests removal.
-
-This is a deliberate workflow correction based on User Visual Gate, not a technical rollback.
+**If these two newly generated wrestler images are each used as rigid sprites, rotated through 360° and translated for minimal motion, does SumoSim still read as two wrestlers actually facing and fighting each other?**
 
 ---
 
-## Current Candidate Image
+## User Clarification — Important
 
-The User generated and reviewed a substantially improved one-piece wrestler.
+The User explicitly rejected the previous visual result where one image was effectively mirrored / rotated and still did not read as two sumo wrestlers facing each other.
 
-Visual status:
-- anime/game style: promising
-- coherent upper/lower body direction: yes
-- much closer to the desired Product wrestler than the assembled parts result
-- top-down angle: usable candidate, but still slightly perspective-biased
-- final Product acceptance: NOT YET.
+Do NOT use image mirroring in this Task.
 
-The critical remaining risk is:
+The two current source images are separate authored images and must remain separate:
 
-**Does the slight perspective still look acceptable when the entire sprite rotates continuously through 360° in the top-down game?**
+- blue-mawashi wrestler
+- red-mawashi wrestler.
 
-### Required local input
+Allowed transforms:
+- whole-sprite rotation
+- whole-sprite translation
+- optional tiny rigid whole-sprite rotation for stagger comparison
+- uniform scale normalization.
 
-The User must place the exact reviewed image at:
+Not allowed:
+- horizontal flip
+- vertical flip
+- per-limb transform
+- crop-and-reassemble
+- skeletal deformation
+- non-uniform warp
+- perspective correction
+- repaint
+- generated in-between frames.
+
+---
+
+## Current Product Context
+
+The earlier stages established:
+
+- ART-WRESTLER-02A parts assembly:
+  - technical tool PASS
+  - User Visual Gate REJECTED
+  - not Product baseline.
+
+- ART-WRESTLER-02B one-piece single-sprite rotation:
+  - validation tool PASS
+  - source candidate REVISE IMAGE
+  - one-piece strategy itself remained viable.
+
+The User has now produced **two new authored wrestler images** intended to face one another more naturally.
+
+This Task evaluates those two images before deciding whether additional direction-specific or action-specific art is necessary.
+
+Do NOT start an 8-direction × pose production pipeline in this Task.
+
+---
+
+## Required Local Inputs
+
+Before the Agent starts, the User places the exact reviewed images at:
 
 ```
-tools/wrestler_art/input.local/wrestler_single.png
+tools/wrestler_art/input.local/
+  wrestler_blue.png
+  wrestler_red.png
 ```
 
-Expected reviewed source:
+### Reviewed blue source
 
+Expected:
+- filename: `wrestler_blue.png`
 - size: **1254×1254**
 - mode: RGBA / transparent
 - original encoded file SHA-256:
-  `d806a24fdb4cd8fa90d53e86fbffabd3ae7c490b6c3221fa2000deb94472666d`
+  `ede9ffd2d3e010248b84c9a90a9942db48be4b1e547f73a2bb5347fe1781dbb4`
 - canonical decoded RGBA pixel SHA-256:
-  `b621d2f56efa80968b71dba1cc4e31bfcc3ad133968adcebb33864b89de5fdf3`
+  `0de729df419e8be1c63c812c55c2e6a7a5b07319614194a4b649a3dc9adf65dd`
 
-As in 02A:
-- encoded file SHA is provenance only
+### Reviewed red source
+
+Expected:
+- filename: `wrestler_red.png`
+- size: **1254×1254**
+- mode: RGBA / transparent
+- original encoded file SHA-256:
+  `98f9465a6306228e3c4e7757f73394b8baa5bb2f5f73a47be568edb5c9792fa9`
+- canonical decoded RGBA pixel SHA-256:
+  `a212dbfeab3da3ad4e42c352f1f7baea7f7b99fc901053bd05c4609df25dafe7`
+
+As with prior art Tasks:
+- encoded PNG SHA is provenance
 - decoded RGBA pixel SHA is the blocking visual identity check.
 
 Do not silently substitute another generation.
 
 ---
 
-## Accepted Character / Arena Contract
+## Optional User Reference Video
+
+The User also provided a real sumo reference video in the ChatGPT conversation.
+
+Its purpose is conceptual only:
+- wrestlers square up toward each other
+- body/head/shoulder orientation should read as opponent-facing
+- movement can be visually simple if the confrontation remains legible.
+
+Do NOT make this video a required local input.
+Do NOT attempt to replicate or trace it frame-for-frame.
+Do NOT introduce video-processing dependencies.
+
+The User Visual Gate remains the final authority on whether the preview reads as sumo.
+
+---
+
+## Accepted Arena / Gameplay Contract
 
 Do Not Reopen:
 
-- logical Product presentation: 1920×1080
-- Product arena ring center: (960, 540)
-- Product arena radius: 400 px
+- Product logical art space: 1920×1080
+- arena center: (960, 540)
+- arena ring radius: 400 px
 - gameplay bodyRadius: 0.35 m
-- accepted wrestler body-scale baseline: approximately 123 px diameter
-- root = participant center
-- local +X = FRONT / facing
-- local -X = BACK
-- local +Y = wrestler RIGHT
-- local -Y = wrestler LEFT
-- facing remains continuous; do not quantize gameplay facing.
+- accepted visual body-core scale target: ~123 px diameter
+- gameplay facing remains continuous
+- Simulation remains gameplay Source of Truth.
 
 This Task is presentation-only.
 
 Do NOT change:
-- gameplay bodyRadius
-- contact geometry
+- bodyRadius
+- collision/contact
 - movement
-- Grip range
-- Push / Counter / Drive
-- Ring-out / Tokudawara.
+- Push / Counter / Grip / Drive
+- Ring-out / Tokudawara
+- fixed-step logic.
 
 ---
 
-## Candidate Orientation Contract
-
-For the reviewed candidate:
-
-- face/front = image right / +X
-- mawashi rear knot = image left / -X
-- the entire body is one authored sprite
-- no independent limb transforms in this Task.
-
-If the source requires a small whole-image rotation to put the intended back→front axis exactly on +X:
-- allow only one explicit deterministic whole-sprite rotation
-- record the angle in a checked-in recipe/config
-- do not warp, shear, perspective-correct, repaint, or independently move body parts.
-
-If a coherent +X axis cannot be assigned to the source, STOP.
-
----
-
-## Required Reading / Inspection
+## Required Reading
 
 Read directly:
 
 - `AGENTS.md`
 - `CLAUDE.md`
 - `docs/WRESTLER_PRODUCT_ART_SPEC.md`
-- reviewed `CURRENT_TASK.md`
-- `CURRENT_COMPLETION_REPORT.md`
+- reviewed previous `CURRENT_TASK.md`
+- current `CURRENT_COMPLETION_REPORT.md`
+- `tools/wrestler_art/preview_single_wrestler.py`
 - `tools/wrestler_art/README.md`
-- `tools/wrestler_art/assemble_wrestler.py` only to reuse small deterministic image-processing helpers if appropriate
 - `src/game/scenes/WrestlerView.ts`
 - `src/game/presentation/wrestlerVisualState.ts`
 - `src/game/presentation/productArena.ts`.
 
-Do not change `src/` in this Task.
+Do not modify `src/` in this Task.
 
 ---
 
-## Scope
+## Core Validation Model
 
-Create the smallest deterministic single-sprite preview path under the existing tool directory.
+Treat each image as one rigid renderable object.
 
-Recommended additions:
+For each wrestler define explicit presentation metadata:
+
+- source front axis
+- optional small one-time whole-image axis correction
+- explicit participant root / rotation pivot
+- explicit body-core scale reference
+- normalized runtime scale.
+
+The blue and red images may require different source-specific recipe values.
+
+Do not assume they are mirror images or identical anatomy.
+
+---
+
+# Scope
+
+Create the smallest focused validation path under `tools/wrestler_art/`.
+
+Recommended:
 
 ```
 tools/wrestler_art/
-  preview_single_wrestler.py
-  single_sprite_recipe.json
+  preview_dual_rigid_wrestlers.py
+  dual_rigid_recipe.json
+  tests/test_preview_dual_rigid_wrestlers.py
 ```
 
-Extend existing tests or add a focused test file.
+Reuse small deterministic helpers from the existing wrestler art tools when appropriate.
 
-Do not turn `wrestler_art` into a general art framework.
-
-### The tool owns only
-
-- input identity validation
-- transparent crop/padding
-- one optional whole-sprite orientation correction
-- one explicit presentation pivot/root
-- deterministic scale normalization
-- deterministic runtime downscale
-- rotation preview generation
-- Product arena preview generation
-- manifest / review metadata.
-
-It does NOT own gameplay.
+Do not create a generic animation framework.
 
 ---
 
-## Explicit Body Scale Reference
+# Required Preview Set
 
-Do NOT scale the full alpha bounding box to 123 px.
+## A. Independent 360° rotation validation
 
-The full silhouette contains arms, legs, and mawashi and is much larger than the gameplay body diameter.
-
-Instead define an explicit, reviewed-source-specific **body-core cross-section** in `single_sprite_recipe.json`.
-
-Preferred definition:
-
-- two explicit source points across the central torso/body mass
-- perpendicular to the +X facing axis
-- excludes arms, hands, feet, head, and mawashi knot.
-
-Normalize that source distance to:
-
-```
-2R = approximately 123.0769 runtime px
-```
-
-where:
-
-```
-R_runtime = 0.35 * 400 / 2.275
-```
-
-The chosen source points are Provisional presentation metadata.
-
-Report the exact points and source distance.
-
-Do not use alpha-bbox heuristics as the Product scale source of truth.
-
----
-
-## Pivot / Root
-
-A one-piece sprite still needs one explicit runtime pivot.
-
-Define an explicit `root_source_px` in the recipe representing the participant/body center.
-
-Requirements:
-- do not use the image center automatically unless inspection supports it
-- preserve the accepted participant-center semantics
-- keep the root stable for all rotations
-- export the normalized/runtime pivot in metadata.
-
-Generate a guide preview showing:
-- root
-- +X FRONT / -X BACK
-- +Y RIGHT / -Y LEFT
-- accepted gameplay body circle R
-- body-core scale reference line.
-
----
-
-## Master / Runtime
-
-Keep the accepted art-production direction:
-
-- deterministic master working image
-- runtime preview at logical 1×
-- no runtime asset commit yet.
-
-Recommended:
-- retain source detail at master size after crop/pad
-- normalize/downscale deterministically with premultiplied alpha-safe resampling
-- runtime scale derived from the explicit body-core reference.
-
-Do not upscale low-information runtime pixels unnecessarily.
-
-Report:
-- source body-core px
-- scale factor
-- runtime body-core px
-- full runtime alpha bbox.
-
----
-
-## Required Local Outputs
-
-Write only to ignored local output, recommended:
-
-```
-tools/wrestler_art/output-single.local/
-```
-
-Required:
-
-### 1. Normalized sprite
-- `single_master.png`
-- `single_runtime.png`
-
-Transparent background.
-
-### 2. Orientation / pivot guide
-- `single_pivot_guide.png`
-
-Show:
-- root
-- body circle
-- front/back axis
-- right/left axis
-- body-core scale line.
-
-### 3. 16-angle rotation sheet
-- `single_runtime_16angles.png`
-
-Angles:
+For **blue** and **red** separately, generate 16-angle sheets:
 
 ```
 0, 22.5, 45, 67.5,
@@ -303,556 +234,544 @@ Angles:
 270, 292.5, 315, 337.5
 ```
 
-Use the same normalized sprite and same root for every angle.
+Outputs:
+
+```
+blue_runtime_16angles.png
+red_runtime_16angles.png
+```
+
+Use:
+- same sprite
+- same pivot
+- whole-sprite rotation only.
+
+No flip.
 
 Purpose:
-- expose perspective that appears to rotate with the body
-- expose asymmetric foreshortening
-- expose clipping / pivot wobble
-- expose silhouette problems.
+- determine whether each authored pose survives free rotation
+- expose camera-space bias
+- expose head/torso/feet orientation issues
+- expose pivot wobble.
 
-This is a preview of continuous rotation, not gameplay facing quantization.
+---
 
-### 4. Product arena preview
-- `single_on_arena_1920.png`
+## B. Face-to-face arena validation
 
-Use the already committed Product arena assets, read-only.
-
-Place two wrestlers at the current prototype start positions:
-- x = center ± 0.7 m mapped with the accepted Product px/m
-- y = arena center
-- facing each other at 0° / 180°.
-
-Keep the current approximate runtime scale.
-
-No HUD required.
-
-### 5. Arena rotation contact sheet
-- `single_on_arena_8facings.png`
-
-Show one wrestler on a consistent cropped section of the Product arena at:
+Generate:
 
 ```
-0, 45, 90, 135, 180, 225, 270, 315
+dual_faceoff_arena_1920.png
 ```
 
-This exists specifically to judge whether the camera/perspective rotates unnaturally against the world.
+Use the accepted Product arena.
 
-### 6. Metadata
-- `single_sprite.json`
-- `build_single_manifest.json`
+Place:
+- blue on the left
+- red on the right
+- roots at the current prototype start spacing
+- each facing the opponent using whole-sprite rotation only.
+
+No mirroring.
+
+The key visual question:
+
+**Do they actually read as two sumo wrestlers facing one another?**
+
+Also generate a contact sheet with representative encounter headings:
+
+```
+dual_faceoff_variants.png
+```
+
+Required cases:
+1. normal start distance
+2. closer pre-contact distance
+3. near-contact / push distance
+4. both rotated +30° around world facing while still looking toward each other
+5. both rotated -30°
+6. side-position case where the blue/red world positions are not purely horizontal.
+
+For every case:
+- each wrestler's facing must geometrically point toward the other root unless the case explicitly tests an offset
+- no flip
+- no per-limb adjustment.
+
+---
+
+# C. Minimal Rigid Motion Validation
+
+This is the most important new part of the Task.
+
+The User is NOT asking for authored frame animation yet.
+
+The User wants to know whether minimal motion can be conveyed by rigid transforms.
+
+Generate short deterministic animated review files.
+
+Use GIF unless the existing verified environment already has a no-new-dependency path for another format.
+
+Do NOT add ffmpeg or a video dependency.
+
+## C1. Advance / charge
+
+Output:
+
+```
+dual_advance.gif
+```
+
+Script:
+- both wrestlers begin at a normal faceoff distance
+- each moves toward the opponent along its current facing
+- source sprite image does not change
+- sprite facing may update only if required by path orientation
+- no squash/stretch
+- no limb animation.
+
+Purpose:
+- can forward motion read acceptably with translation only?
+
+## C2. Stagger / yoroke — translation only
+
+Output:
+
+```
+blue_stagger_translation_only.gif
+red_stagger_translation_only.gif
+```
+
+Script:
+- opponent-facing idle
+- short backward displacement away from impact
+- slight lateral drift allowed
+- same source image, same facing
+- NO sprite rotation in this version.
+
+Purpose:
+- directly test the User's hypothesis that yoroke may be readable from coordinate change only.
+
+## C3. Stagger / yoroke — translation + tiny rigid rotation comparison
+
+Output:
+
+```
+blue_stagger_translation_plus_rotation.gif
+red_stagger_translation_plus_rotation.gif
+```
+
+Same path as C2, but allow a very small temporary rigid whole-sprite rotation.
+
+Recommended maximum:
+- ±3° to ±6°
+- exact value must be explicit in the recipe / report.
+
+Do NOT deform the body.
+
+Purpose:
+- compare whether tiny rigid rotation materially improves readability enough to justify it.
+
+## C4. Contact / pushing without pose swap
+
+Output:
+
+```
+dual_push_contact.gif
+```
+
+Script:
+- approach
+- touch/near-touch
+- short forward/back root displacement representing pressure exchange
+- no pose swap
+- no limb animation.
+
+This is NOT an attempt to implement gameplay Push.
+It is a Product-art perception test only.
+
+Key question:
+**Can the same two sprites remain believable at close contact, or does contact immediately require a dedicated pose?**
+
+---
+
+# D. Static Motion Contact Sheet
+
+Also output one easy-to-review static sheet:
+
+```
+rigid_motion_contact_sheet.png
+```
+
+Include labeled frames for:
+- idle faceoff
+- advance start
+- advance mid
+- near contact
+- push displacement
+- stagger start
+- stagger peak
+- recovery.
+
+This ensures review is possible even if animated GIF display is inconvenient.
+
+---
+
+# Motion Rules
+
+All preview motion must be deterministic.
+
+No physics engine.
+No gameplay formulas.
+
+Use explicit preview-only paths defined in recipe/config.
+
+Example categories only:
+- advance distance in R
+- stagger backward distance in R
+- optional lateral offset in R
+- optional small rigid rotation in degrees
+- frame count / timing.
+
+These values are Product-preview parameters only.
+
+Do not claim they are accepted gameplay animation values.
+
+---
+
+# Scale / Root
+
+Use an explicit root and body-core reference for each sprite.
+
+Do NOT scale based on full alpha bbox.
+
+Normalize both wrestlers so their central body masses are approximately comparable to the accepted:
+
+```
+2R ≈ 123.077 px runtime
+```
+
+If their authored body proportions differ, preserve those differences.
+
+Do not force identical full silhouette dimensions.
+
+---
+
+# Required Guides
+
+Generate:
+
+```
+blue_pivot_guide.png
+red_pivot_guide.png
+```
+
+Show:
+- root / rotation pivot
+- +X FRONT
+- -X BACK
+- +Y RIGHT
+- -Y LEFT
+- gameplay body circle R
+- source-specific body-core scale line.
+
+This must make it possible to verify whether the selected pivot/facing axis is credible.
+
+---
+
+# Metadata / Determinism
+
+Write under an ignored local output directory, recommended:
+
+```
+tools/wrestler_art/output-dual-rigid.local/
+```
+
+Metadata:
+
+```
+dual_rigid.json
+build_dual_rigid_manifest.json
+```
 
 Include:
-- source filename
-- source file SHA
-- decoded pixel SHA
+- source names
+- file SHA / pixel SHA
 - source dimensions
-- orientation correction angle
-- root source px
-- body-core reference points
-- source body-core distance
-- normalized/runtime scale
+- orientation correction per sprite
+- root per sprite
+- body-core reference per sprite
+- source->master/runtime scale per sprite
 - runtime pivot
 - runtime alpha bbox
-- output decoded pixel hashes
-- Pillow/tool version
-- no timestamps.
-
-Do not commit generated PNG/JSON outputs.
-
----
-
-## Shadow
-
-The source candidate should remain visually reviewable without hiding its silhouette.
-
-For transparent sprite previews:
-- no external shadow.
-
-For arena previews:
-- a subtle procedural world-grounding shadow is allowed
-- use the same accepted/current presentation direction as prior preview
-- shadow must not rotate a strongly directional shape with the sprite.
-
-Do not bake a new directional shadow into the candidate image.
+- preview-only motion parameters
+- output pixel hashes
+- animated output hashes
+- tool/Pillow version
+- no timestamp.
 
 ---
 
-## Visual Quality Constraints
+# Visual Decision Matrix
 
-Do NOT procedurally alter the candidate to make it pass.
+The Agent does NOT decide final visual acceptance, but the Completion Report must organize evidence around these outcomes.
 
-Allowed:
-- crop transparent margin
-- add transparent padding
-- whole-sprite rotation
-- uniform scale
-- deterministic resampling.
+## Outcome A — rigid sprites are enough for current prototype
 
-Not allowed:
-- perspective correction
-- non-uniform warp
-- liquify
-- repaint
-- body-part movement
-- limb extraction/reassembly
-- recoloring skin
-- changing mawashi shape
-- generating missing anatomy.
+Likely if:
+- 360° rotation is acceptable
+- faceoff reads naturally
+- advance reads naturally
+- translation-only stagger is acceptable
+- close contact is not badly broken.
 
-If the source camera bias is unacceptable at rotated angles, that is a **User Visual FAIL of this candidate**, not something the tool should hide.
+Then later Product implementation can start from:
+- rigid sprite rotation
+- world translation
+- minimal presentation offsets.
 
----
+This still does NOT mean every future action can use one pose.
 
-## SPEC Correction
+## Outcome B — hybrid minimal-pose strategy
 
-Update `docs/WRESTLER_PRODUCT_ART_SPEC.md` minimally.
+Likely if:
+- idle/movement/stagger work with rigid transforms
+- but push/contact/grapple do not.
 
-Record:
+Then likely direction:
+- idle/movement/stagger: same rigid sprite
+- only selected contact/action states get dedicated authored pose image(s).
 
-1. ART-WRESTLER-02A parts assembly:
-   - technical tool PASS
-   - User Visual Gate REJECTED
-   - assembled output is NOT Product baseline.
+This is the main alternative to an 8-direction × many-animation explosion.
 
-2. Current production experiment:
-   - return to one authored full-body sprite candidate
-   - validate full 360° rotation before runtime integration.
+Do NOT estimate or lock final image counts in this Task.
 
-3. The current one-piece candidate is:
-   - promising
-   - NOT final accepted until this Task's User Visual Gate.
+## Outcome C — rigid 360° fails structurally
 
-4. Do not claim the final action-pose strategy is decided.
-   - whether Product uses multiple full-body pose sprites, animation frames, limited deformation, or another one-piece method remains unresolved after idle validation.
+If:
+- camera/perspective rotates badly
+- faceoff repeatedly fails
+- rotation does not read as opponent-facing.
 
-Do not broadly rewrite the old spec.
+Then another asset strategy is required.
+
+Do not automatically choose 8-direction art.
+Report the failure first.
 
 ---
 
-## Verification
+# User Visual Gate — REQUIRED
+
+Technical PASS != visual acceptance.
+
+The User must inspect:
+
+1. `blue_runtime_16angles.png`
+2. `red_runtime_16angles.png`
+3. `dual_faceoff_arena_1920.png`
+4. `dual_faceoff_variants.png`
+5. `rigid_motion_contact_sheet.png`
+6. `dual_advance.gif`
+7. both translation-only stagger GIFs
+8. both translation+rotation stagger GIFs
+9. `dual_push_contact.gif`
+10. both pivot guides.
+
+Questions:
+
+- Do the two wrestlers genuinely look at / square toward each other?
+- Is there an obvious authored-camera direction rotating with either sprite?
+- Is one sprite significantly more rotation-safe than the other?
+- Does pure translation create acceptable forward motion?
+- Does pure translation create acceptable stagger?
+- Does tiny rigid rotation improve stagger, or just look like the sprite is spinning?
+- At near-contact, do they still read as sumo wrestlers pushing each other?
+- Which state first becomes visually unacceptable?
+- If dedicated art is required, is it only close-contact/action art rather than all movement?
+
+The User makes the final Outcome A/B/C decision.
+
+---
+
+# Verification
 
 Verification Level:
 **Standard + User Visual Gate**
 
-Required automated/focused checks:
+Required focused checks:
 
-1. missing source fails closed
-2. wrong dimensions fail
-3. wrong decoded pixel SHA fails
-4. missing/meaningless alpha fails
-5. same-pixel PNG re-encode is accepted
-6. explicit root exists and maps inside padded normalized image
-7. explicit body-core reference is non-zero
-8. runtime body-core scale matches accepted ~123.08 px within a small deterministic tolerance
-9. output alpha does not touch the sprite preview edges
-10. runtime pivot stays identical across all 16 rotations
-11. all 16 angles generated
-12. no rotation tile is clipped
-13. arena preview = 1920×1080
-14. two prototype start roots map correctly
-15. 8-facing arena sheet generated
-16. manifest has no timestamp/randomness
-17. deterministic rerun produces identical manifest and decoded pixel hashes
-18. local input/output remain ignored/untracked.
+1. missing blue source fails closed
+2. missing red source fails closed
+3. wrong dimensions fail
+4. wrong decoded pixel SHA fails
+5. alpha validation fails correctly
+6. same-pixel re-encode accepted
+7. each sprite has explicit valid root
+8. each body-core scale reference is non-zero
+9. normalized body core is ~123.077 runtime px
+10. no sprite preview clipping
+11. all 16 rotation angles produced for both images
+12. pivot remains stable through rotation
+13. no mirroring operation is used anywhere in the dual-rigid path
+14. faceoff roots/facing vectors actually point toward opponent
+15. faceoff arena output = 1920×1080
+16. required faceoff variants generated
+17. required GIFs generated
+18. GIF frames use only rigid rotation/translation/uniform-scale normalized source
+19. translation-only stagger contains no per-frame rotation
+20. translation+rotation stagger respects configured small max angle
+21. static motion contact sheet generated
+22. manifests contain no timestamp/randomness
+23. deterministic rerun produces identical hashes
+24. local inputs/outputs remain ignored/untracked
+25. `git diff --check` PASS.
 
 Run:
 - focused Python tests
-- actual reviewed candidate build
-- deterministic rerun comparison
+- actual reviewed-source build
+- deterministic rerun
 - `git diff --check`.
 
-No `pnpm test` / `pnpm build` required because `src/` is untouched.
+No `pnpm test` / `pnpm build` required because `src/` must remain untouched.
 
 ---
 
-## User Visual Gate — REQUIRED
+# SPEC Sync
 
-Technical PASS is not Product acceptance.
+Update `docs/WRESTLER_PRODUCT_ART_SPEC.md` minimally.
 
-The User must inspect at minimum:
+Record only:
+- 02B current single source was rejected by User Visual Gate
+- new experiment uses two separately authored opponent-facing sprites
+- no mirroring
+- rigid rotation + translation is being tested as the minimum animation model
+- whether dedicated action/contact poses are required remains unresolved.
 
-1. `single_runtime.png`
-2. `single_runtime_16angles.png`
-3. `single_on_arena_1920.png`
-4. `single_on_arena_8facings.png`
-5. `single_pivot_guide.png`.
+Do NOT record rigid-transform animation as accepted until User review.
 
-Visual questions:
-
-- Does the wrestler still read as a true top-down sprite at every rotation?
-- Does the apparent camera direction rotate with the wrestler?
-- Do 90° / 180° / 270° look materially stranger than 0°?
-- Does the pivot feel stable or does the body orbit/wobble?
-- Does the sprite feel too large/small relative to the accepted arena baseline?
-- Does the full body silhouette read clearly at runtime size?
-- Does it visually belong in the accepted Product arena?
-- Is the remaining face/chest visibility acceptable when freely rotated?
-
-### Acceptance outcomes
-
-A. **ACCEPT**
-- candidate is suitable as the current one-piece Product idle baseline
-- next Task may investigate action-pose strategy / additional one-piece poses.
-
-B. **REVISE IMAGE**
-- source camera/perspective/art needs another image-generation iteration
-- do not integrate into Phaser.
-
-C. **REJECT ONE-PIECE**
-- only if the actual rotation test demonstrates a structural problem that cannot be solved with a better one-piece source image.
-
-Do not let the Agent decide A/B/C alone.
+Do NOT lock:
+- 8-direction sprites
+- final animation count
+- pose count
+- final rendering architecture.
 
 ---
 
-## Scope Out
+# Scope Out
 
 Do NOT:
 
-- change `src/`
+- modify `src/`
 - integrate into Phaser
-- commit the wrestler image into `public/`
-- delete the old parts tool
-- continue 02A parts tuning
-- implement Push/Grip/Grapple image variants
-- implement animations
-- implement sprite-sheet/atlas packing
-- implement mawashi color variants
-- implement bulk/stature variants
 - change gameplay
-- change arena/HUD
-- generate new AI art.
+- add animation framework
+- add tween library
+- add ffmpeg dependency
+- generate new artwork
+- mirror images
+- create 8-direction authored art
+- create Push/Grip/Grapple production assets
+- determine final sprite counts
+- delete earlier wrestler-art tools.
 
 ---
 
-## Completion Report
+# Completion Report
 
 Include:
 
 - Result
 - Preflight
-- verified source identity
-- explicit source body axis
-- any whole-image orientation correction
-- root source px
-- body-core reference points / source distance
-- normalization scale
-- runtime body-core size
-- runtime full alpha bbox
-- output paths
-- output pixel hashes
+- verified source identities
+- explicit axis/root/body-core metadata for blue and red
+- exact normalization
+- no-mirror evidence
 - 16-angle evidence
-- arena-root mapping evidence
-- determinism evidence
+- faceoff geometry evidence
+- motion recipe values
+- translation-only stagger evidence
+- translation+rotation stagger comparison
+- close-contact/push perception evidence
+- output paths/hashes
+- determinism
 - tests
 - SPEC sync
 - User Visual Check Required
+- Agent visual observations, clearly non-authoritative
 - Design Deviations
 - Unexpected Scope
 - Git delivery.
 
-## Design Deviations
+The Completion Report may categorize technical evidence as:
+- rigid rotation technically valid
+- rigid translation technically valid
+- visual acceptance pending.
+
+Do NOT label the art visually accepted.
+
+---
+
+# Design Deviations
 
 Required.
 
 If none:
+
 `Design Deviations: NONE`
 
 Material deviations requiring STOP:
-- different source image
-- source repaint/warp
-- changing accepted gameplay scale
-- changing gameplay/source
-- committing runtime wrestler assets
-- returning to parts assembly instead of the one-piece candidate evaluation.
+- using different source images
+- mirroring either source
+- repainting/warping/per-limb transforms
+- modifying gameplay/runtime source
+- adding unapproved production pose assets
+- converting this into an 8-direction production Task.
 
 ---
 
-## Stop Conditions
+# Stop Conditions
 
 STOP/BLOCKED if:
 
-- required reviewed local input is missing
-- decoded pixel hash/dimensions do not match
-- source has no meaningful alpha
-- no coherent +X front axis can be assigned
-- no reasonable explicit participant root can be assigned without moving body parts
-- body-core scale cannot be defined without ambiguous heuristic inference
-- generating the required previews would require perspective warp/repaint.
+- reviewed source image missing
+- source pixel identity mismatches
+- no coherent facing axis/root can be assigned to either source
+- a preview requires mirroring to make the wrestlers face each other
+- rigid motion preview cannot be generated without per-limb edits
+- required deterministic GIF output is impossible with current verified Pillow setup without a new dependency.
+
+If GIF export itself is the only blocker, STOP and report; do not add a dependency without approval.
 
 ---
 
-## Git Delivery
+# Git Delivery
 
 Follow `AGENTS.md`.
 
-Expected committed changes are limited to:
+Expected committed changes only:
 
-- focused single-sprite preview tool/config/tests under `tools/wrestler_art/`
-- minimal `docs/WRESTLER_PRODUCT_ART_SPEC.md` correction
+- focused dual-rigid validation tool/config/tests under `tools/wrestler_art/`
+- minimal `docs/WRESTLER_PRODUCT_ART_SPEC.md` sync
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
 
-Do not commit:
-- `wrestler_single.png`
-- local output PNG/JSON files
+Do NOT commit:
+- source wrestler PNGs
+- generated preview PNG/GIF/JSON outputs
 - venv/cache
-- runtime Product wrestler assets.
+- Product runtime assets.
 
 Suggested commit:
 
-`tools: add single wrestler sprite preview`
+`tools: validate dual rigid wrestler sprites`
 
 Push `origin/develop`.
 Do not modify `main`.
 
-## Final Instruction
+# Final Instruction
 
-Stop after generating and verifying the one-piece idle rotation / arena previews.
+Stop after generating the dual-sprite rotation / faceoff / minimal-rigid-motion review set.
 
-Do NOT begin Phaser integration or action-pose production.
+Do NOT begin Phaser integration or new pose production.
 
 After commit/push/report:
 
-「ART-WRESTLER-02B-SINGLE-SPRITE-EVALUATION が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
-
-
-# Final ChatGPT Review
-
-Overall Result: TECHNICAL PASS / PRODUCT CANDIDATE REVISE IMAGE
-
-## Reviewed Delivery
-
-- Implementation commit:
-  `735466bee386de62f9e3e21991d529c139339d84`
-- Agent-Start-Head:
-  `03bde4c7a4d7156a32fa2069f9495832aa9f6153`
-- Delivery is one implementation commit.
-- No `src/` changes.
-- No `public/` wrestler runtime asset committed.
-- No gameplay or package changes.
-
-## Reported Implementation vs Design
-
-PASS.
-
-The implementation follows the Task:
-- exact reviewed source identity validation
-- one whole-sprite orientation correction only
-- explicit participant root
-- explicit body-core scale reference
-- deterministic uniform normalization
-- 16-angle rotation preview
-- arena 0/180 preview
-- arena 8-facing comparison
-- deterministic manifest/metadata
-- no perspective warp / repaint / per-limb edits.
-
-No material Design Deviation was found.
-
-## Verification Completeness
-
-PASS.
-
-Reported:
-- 62 Python tests PASS
-- real reviewed source identity PASS
-- deterministic rerun PASS
-- 16 directions produced and unclipped
-- 8 arena facings produced
-- runtime body-core = ~123.077 px
-- `git diff --check` PASS.
-
-No pnpm test/build was required because Product Source was not modified.
-
-## Tool / Geometry Acceptance
-
-The single-sprite preview path is accepted as a useful Product-art validation tool.
-
-Accepted technical baseline:
-- +X = FRONT
-- root_source_px = (620, 655), Provisional presentation metadata
-- body-core reference = 595 source px -> 2R runtime
-- whole-sprite correction = -8.8°
-- runtime body-core ≈123 px
-- runtime full alpha bbox ≈179×219 px
-- facing remains continuous; preview angle sampling does not quantize gameplay.
-
-Do not change gameplay `bodyRadius` to fit the image.
-
-## User-Provided Visual Review Material
-
-ChatGPT directly reviewed the uploaded outputs:
-- `single_pivot_guide.png`
-- `single_runtime.png`
-- `single_runtime_16angles.png`
-- `single_master.png`
-- `single_on_arena_8facings.png`
-- `single_on_arena_1920.png`.
-
-## Visual Result
-
-### Product candidate verdict: REVISE IMAGE
-
-Do NOT accept the current source image as the Product idle baseline.
-
-Do NOT reject the one-piece strategy itself.
-
-The current one-piece image is substantially better than the rejected 02A parts assembly:
-- coherent authored anatomy
-- coherent upper/lower body axis
-- good anime/game rendering quality
-- strong readable silhouette
-- acceptable arena scale.
-
-However, the rotation test exposes a material camera-space problem.
-
-## Blocking Visual Issue — Camera Bias Rotates With Sprite
-
-The authored source is not sufficiently orthographic / vertically top-down for free 360° rotation.
-
-The source visually reads as if the camera is somewhat behind/above the wrestler rather than directly above.
-
-When the whole sprite rotates:
-- the apparent camera bias rotates with the wrestler
-- 90° / 270° make this especially visible
-- back/head/chest foreshortening that should belong to the world/camera instead behaves as part of the character orientation.
-
-This is exactly the failure the 16-angle and arena-8-facing previews were intended to expose.
-
-The tool must NOT perspective-correct or warp this away.
-
-The source art needs another generation iteration.
-
-## Lighting Risk
-
-The sprite also contains directional painted highlights/shadows.
-
-When the entire sprite rotates, that painted lighting rotates with the wrestler.
-
-This is visible but is a secondary issue compared with the camera bias.
-
-Next source generation should prefer:
-- nearly vertical overhead camera
-- orthographic / near-orthographic projection
-- very weak perspective
-- near-overhead neutral body lighting
-- minimal camera-direction-specific shading.
-
-## Root / Pivot
-
-PASS for evaluation.
-
-The visual does not appear to orbit around the arena when rotated.
-
-The 16-angle sheet supports the reported stable pivot.
-
-The head being offset from the body axis is an authored-pose feature and makes 0°/180° opponents look somewhat asymmetric, but this is not the main blocker.
-
-Do not spend another Task tuning the pivot to solve the camera problem.
-
-## Scale / Arena Fit
-
-PASS as a provisional Product scale.
-
-The current 2R body-core normalization gives a wrestler that reads at a plausible scale in the accepted Product arena.
-
-The whole 179×219 px silhouette is larger than the gameplay circle because arms/legs extend beyond it; that is presentation and is not by itself a gameplay mismatch.
-
-Do not shrink the sprite merely because the full alpha bbox exceeds 123 px.
-
-## 02A vs 02B Decision
-
-Accepted correction:
-
-- 02A parts assembly:
-  - Technical PASS
-  - Visual REJECTED
-  - not Product baseline.
-
-- 02B one-piece method:
-  - validation tool Technical PASS
-  - current source image REVISE IMAGE
-  - one-piece method remains viable.
-
-Therefore the next action is **new image generation**, not Phaser integration and not another geometry-tuning implementation.
-
-## Required Direction for Next Image
-
-Preserve what worked:
-- anime/game style
-- round/heavy sumo body
-- coherent single full-body anatomy
-- blue mawashi
-- transparent background
-- one coherent facing direction
-- right-facing source convention.
-
-Change:
-- camera much closer to true vertical top-down
-- orthographic / near-orthographic
-- weak perspective
-- show mainly top surfaces
-- reduce visible front face/chest/belly surfaces
-- neutralize baked directional light.
-
-A new generated candidate must be run through this same 16-angle / arena-facing validation before Product acceptance.
-
-## User Goal Attainment
-
-PARTIAL.
-
-The Task successfully determined whether this candidate survives free rotation.
-
-Answer:
-**No, this specific image does not yet survive continuous 360° rotation well enough for Product acceptance.**
-
-The evaluation goal was achieved even though the art candidate itself needs revision.
-
-## Product / Gameplay Acceptance State
-
-Single-sprite preview tool:
-**ACCEPTED**
-
-Current wrestler source image:
-**REVISE IMAGE**
-
-One-piece Product-art approach:
-**STILL VIABLE / NOT REJECTED**
-
-Phaser integration:
-**NOT READY**
-
-Action-pose strategy:
-**UNRESOLVED / DEFERRED**
-
-## Next Task Constraint
-
-Do not create a new Agent implementation task merely to regenerate the image.
-
-First generate a revised one-piece source image in ChatGPT / image-generation workflow.
-
-After the User selects a new candidate:
-- either reuse the existing 02B tool locally with a source-specific recipe update in a small focused Task
-- or create a minimal candidate-update Task if repository metadata/hash/recipe must change.
-
-Do not begin:
-- Phaser integration
-- Push/Grip/Grapple production poses
-- body-shape variation
-until one-piece idle camera neutrality passes this visual gate.
-
-## Do Not Reopen
-
-- gameplay bodyRadius 0.35 m
-- Product ring mapping / accepted arena
-- continuous facing
-- rejected 02A assembled art
-- current Product scale target ~123 px body core.
-
-## Final State
-
-Overall Result:
-**TECHNICAL PASS / VISUAL GATE = REVISE IMAGE**
-
-No further Agent work should start until a new source image candidate is selected.
+「ART-WRESTLER-03A-DUAL-SPRITE-RIGID-MOTION-VALIDATION が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
