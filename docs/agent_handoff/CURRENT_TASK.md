@@ -1,5 +1,5 @@
 Task-ID: ART-WRESTLER-02A-PARTS-ASSEMBLY-PREVIEW
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / OFFLINE PRODUCT ART TOOL / WRESTLER PARTS PREVIEW
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -701,3 +701,328 @@ On restart:
 - if it differs, STOP/BLOCKED and require the reviewed visual source to be restored.
 
 No Production implementation was performed during the prior blocked attempt.
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS / USER PRODUCT VISUAL APPROVAL REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `b4608d21daf64e1aac73be101990b53590f57dde`
+- Agent-Start-Head:
+  `2d08b38cb376759b556ba6b9b43b09020fba6358`
+- Diff is one implementation commit.
+- No `src/` changes.
+- No `public/` runtime wrestler assets committed.
+- No package/lock changes.
+
+## Input Identity / Safety
+
+PASS.
+
+The implementation validates the reviewed local Product inputs by:
+- exact dimensions
+- meaningful alpha
+- canonical decoded RGBA pixel SHA-256.
+
+Reviewed sources match:
+
+### parts_sheet.png
+- 1254×1254 RGBA
+- decoded pixel SHA:
+  `fecca71805ba1aebb51fdb09b79ebca647ed85a4b6b3072eb1b384ee538b7cbc`
+
+### torso.png
+- 1374×1145 RGBA
+- decoded pixel SHA:
+  `8fe2791c4c7e1f43bcd8816d0a898e31c6f61a1c7127fe109488891ee0183094`
+
+This correctly preserves the earlier re-encoding rule:
+encoded file SHA is provenance only; pixel identity is the blocking visual identity check.
+
+## Rejected Original Torso
+
+PASS.
+
+The original parts-sheet torso is explicitly rejected.
+
+The replacement torso:
+- comes only from `torso.png`
+- is enforced by recipe validation
+- rejected visible pixels are checked against all parts-sheet crops
+- tests cover accidental reuse.
+
+Do Not Reopen:
+the original sheet torso remains rejected.
+
+## Deterministic Tool Design
+
+PASS.
+
+`tools/wrestler_art/` is a dedicated offline Product-art tool, not a generic framework.
+
+The flow is explicit:
+
+```
+reviewed local images
+  -> explicit source boxes
+  -> explicit pivots / joints
+  -> axis normalization
+  -> explicit master normalization
+  -> deterministic assembly
+  -> review previews
+```
+
+No OCR, AI segmentation, runtime gameplay logic, or heuristic body assembly is used.
+
+This is the correct response to the repeated full-body AI anatomy failures.
+
+## Coordinate / Orientation Contract
+
+PASS.
+
+The tool preserves:
+
+- +X = FRONT
+- -X = BACK
+- +Y = wrestler RIGHT
+- -Y = wrestler LEFT.
+
+The source parts are normalized consistently:
+- face -> +X
+- shoulder -> elbow -> +X
+- elbow -> hand -> +X
+- ankle -> toe -> +X
+- mawashi knot -> -X.
+
+Left-side limbs are generated deterministically by mirroring the right-side source.
+
+This removes the previous AI-generated upper/lower-body orientation ambiguity.
+
+## Part Extraction / Pivots
+
+PASS for idle-assembly purpose.
+
+All six required parts are explicit:
+- torso
+- mawashi
+- upper_arm
+- forearm_hand
+- head
+- foot.
+
+Pivots and joints are recipe-owned and exported to `parts.json`.
+
+They are not inferred from crop centers at runtime.
+
+The Task's main architecture goal—human/recipe-owned anatomy rather than AI-owned anatomy—is satisfied.
+
+## Runtime Scale
+
+PASS.
+
+The current accepted Product wrestler scale is preserved.
+
+- R runtime ≈61.538 px
+- torso primary size ≈123 px
+- master scale = runtime ×4
+- runtime preview = deterministic /4 export.
+
+Do not change gameplay `bodyRadius` to fit the new Product art.
+
+## Idle Assembly
+
+TECHNICAL PASS.
+
+The idle geometry is explicit and symmetric:
+- torso/root at participant center
+- head and mawashi on the same body axis
+- shoulders mirrored about local X
+- arms use explicit joint positions
+- feet use the same +X forward convention.
+
+No full-body AI interpretation remains in the assembly path.
+
+## Important Product Visual Gate — Mawashi Layering
+
+The Agent identified a legitimate visual issue.
+
+Current committed recipe follows the earlier spec layering:
+
+```
+feet
+torso
+mawashi
+upper arms
+forearms
+head
+```
+
+With the current ring-shaped generated mawashi asset, this can visually read as:
+**a ring sitting on top of the torso**.
+
+The Agent reports that a scratch comparison with torso partially covering the mawashi read more naturally as a top-down sumo body.
+
+This is a PRODUCT VISUAL decision, not a technical bug.
+
+Do not change it automatically.
+
+The User must inspect the actual preview before choosing.
+
+If the current preview looks unnatural, the next focused adjustment may:
+- place mawashi lower in the local layer order
+- resize/reposition it modestly
+- preserve the same source asset.
+
+No new AI image should be generated solely for this issue unless layering cannot solve it.
+
+## Material Follow-up — Forearm Effective Reach
+
+This is the most important technical finding for the next pose step.
+
+Current recipe:
+- upper-arm effective articulation length:
+  **0.85R**
+- forearm pivot -> hand effective articulation length:
+  **0.615R**
+
+Therefore current articulated maximum:
+**~1.465R**
+
+But current accepted presentation poses require approximately:
+- Push active: ~1.56R
+- Morozashi holder: up to ~1.86R.
+
+So:
+
+**the current forearm articulation geometry is sufficient for idle preview only, but NOT sufficient for the full accepted pose range.**
+
+This does NOT fail ART-WRESTLER-02A because this Task explicitly scoped only idle assembly and deferred full IK/pose coverage.
+
+However:
+
+### Do Not Proceed directly to Phaser integration.
+
+Before ACTION-ART-03A, a pose-preview/fitting Task MUST resolve this mismatch.
+
+Possible presentation-only solutions to investigate later:
+- move the effective elbow pivot back toward the original elbow center while hiding the cut/joint through overlap
+- adjust crop/transparent padding so the art overlaps the upper arm without shortening the kinematic bone
+- modestly rescale the forearm source within Product-safe limits
+- tune L1/L2 together.
+
+Do NOT:
+- increase gameplay Grip range
+- change bodyRadius
+- stretch painted limbs by 20–30% as a shortcut.
+
+The target is to preserve painted anatomy while recovering the required visual reach.
+
+## Body Size vs Gameplay Circle
+
+Current idle preview reports an overall silhouette approximately:
+- 144 px along one axis
+- 244 px across the elbow spread.
+
+This is not itself a gameplay geometry change.
+
+However, the User must visually verify that the broad idle-arm silhouette does not make the wrestler feel absurdly larger than the accepted collision/body scale.
+
+Torso scale itself remains aligned to the accepted ~123 px body diameter.
+
+## Determinism / Verification
+
+PASS.
+
+Reported:
+- Python unittest: 34 PASS
+- `git diff --check`: PASS
+- deterministic rerun:
+  - manifest identical
+  - parts.json identical
+  - decoded output pixel hashes identical
+- no timestamps/randomness
+- local source/output directories ignored.
+
+No pnpm test/build was required because Product Source did not change.
+
+## Product Art Spec Sync
+
+PASS.
+
+The authoritative wrestler Product-art spec now records:
+- full-body/canonical AI generation abandoned after repeated body-axis inversion
+- parts-first workflow
+- deterministic assembly tool owns anatomy
+- current sources are candidate assets pending visual approval.
+
+This supersedes the earlier canonical-full-body-first workflow.
+
+## User Product Visual Gate
+
+REQUIRED.
+
+Because all generated previews are intentionally git-ignored/local, ChatGPT cannot inspect them from the GitHub commit.
+
+Please upload the actual outputs.
+
+Minimum required for review:
+
+1. `idle_master.png`
+2. `idle_runtime.png`
+3. `idle_runtime_4angles.png`
+4. `idle_on_arena_1920.png`
+5. `pivot_guide.png`
+
+The most important are:
+- `idle_master.png`
+- `idle_on_arena_1920.png`
+- `pivot_guide.png`.
+
+## Visual Approval Questions
+
+Review will decide:
+
+- Does one coherent body axis finally read correctly?
+- Is +X/front visually unambiguous?
+- Does the head attach naturally to this torso?
+- Do shoulders and elbows look anatomical enough?
+- Are arms too wide / too far apart?
+- Does the mawashi layer correctly?
+- Are feet positioned plausibly?
+- Is the replacement torso compatible in art style with the generated head/limbs?
+- At runtime scale, does the mixed-source art look cohesive enough?
+- Does it look better than the procedural placeholder in the actual arena?
+
+## Acceptance State
+
+Offline extraction / assembly tool:
+**TECHNICAL PASS**
+
+Product wrestler idle appearance:
+**PENDING USER VISUAL APPROVAL**
+
+Full action-pose capability:
+**NOT YET ACCEPTED**
+because current forearm articulation length cannot reproduce the full accepted reach range.
+
+## Next Task Constraint
+
+Do NOT create Phaser integration yet.
+
+After the User approves or corrects the idle visual, the next task should be a focused:
+
+`ART-WRESTLER-02B-POSE-AND-VARIATION-PREVIEW`
+
+Expected scope:
+- resolve forearm effective reach
+- preview Push active
+- preview Grip reach
+- preview neutral grapple / Morozashi
+- preview two-wrestler overlap
+- preview bulk/stature extremes
+- decide mawashi layering/color handling if still unresolved.
+
+Only after those Product previews are accepted should ACTION-ART-03A integrate the Product wrestler into Phaser.
