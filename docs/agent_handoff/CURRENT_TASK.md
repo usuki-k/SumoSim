@@ -1,5 +1,5 @@
 Task-ID: ART-WRESTLER-03A-DUAL-SPRITE-RIGID-MOTION-VALIDATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / OFFLINE PRODUCT ART VALIDATION / RIGID SPRITE MOTION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -775,3 +775,346 @@ Do NOT begin Phaser integration or new pose production.
 After commit/push/report:
 
 「ART-WRESTLER-03A-DUAL-SPRITE-RIGID-MOTION-VALIDATION が完了し、ChatGPT ReviewとUser Visual Approval待ちです」
+
+
+# Final ChatGPT Review
+
+Overall Result: TECHNICAL PASS WITH PROCEDURAL CORRECTION / USER VISUAL GATE REQUIRED
+
+## Reviewed Delivery
+
+- Implementation commit:
+  `0f5ff640353cffae07d57801126ab3de621d4138`
+- Agent-Start-Head:
+  `ddc18129bc5690b5fbb8656e3f66759496190f79`
+- Delivery is one implementation commit.
+- No `src/` changes.
+- No `public/` wrestler runtime asset commit.
+- No package/lock changes.
+- No gameplay changes.
+
+## Reported Implementation vs Design
+
+PASS.
+
+The implementation matches the intended dual-rigid validation model:
+
+- two separately authored source sprites
+- blue and red treated independently
+- no mirroring
+- one explicit source-facing axis per sprite
+- one explicit participant root per sprite
+- one explicit body-core scale reference per sprite
+- whole-sprite rotation only
+- whole-sprite translation only
+- optional tiny whole-sprite rotation only for the stagger comparison
+- uniform normalization only
+- no per-limb motion
+- no repaint / warp / skeleton / generated in-betweens.
+
+This directly tests the User's intended minimal animation hypothesis.
+
+## Source Identity
+
+PASS.
+
+The reviewed images were verified exactly:
+
+### Blue
+- 1254×1254 RGBA
+- file SHA:
+  `ede9ffd2d3e010248b84c9a90a9942db48be4b1e547f73a2bb5347fe1781dbb4`
+- decoded RGBA pixel SHA:
+  `0de729df419e8be1c63c812c55c2e6a7a5b07319614194a4b649a3dc9adf65dd`
+
+### Red
+- 1254×1254 RGBA
+- file SHA:
+  `98f9465a6306228e3c4e7757f73394b8baa5bb2f5f73a47be568edb5c9792fa9`
+- decoded RGBA pixel SHA:
+  `a212dbfeab3da3ad4e42c352f1f7baea7f7b99fc901053bd05c4609df25dafe7`
+
+No substitute art was used.
+
+## Procedural Correction — Input Stop Condition
+
+The Completion Report says the required files were initially absent from:
+
+`tools/wrestler_art/input.local/`
+
+The Task explicitly said to STOP/BLOCKED if a required reviewed local input was missing.
+
+Instead, the Agent searched the User's Downloads folder, found byte-for-byte exact reviewed originals, and copied them into the ignored local input directory.
+
+This is a workflow deviation.
+
+It does NOT change Product semantics because:
+- both file SHA values matched exactly
+- both decoded pixel SHA values matched exactly
+- copied files remained local/ignored
+- repository source was unaffected.
+
+Therefore this Task is NOT rejected or rerun.
+
+Correction:
+- `Design Deviations: NONE` in the Agent report is too strong.
+- Correct classification:
+  **Non-semantic procedural deviation: prerequisite input placement was self-recovered instead of stopping.**
+
+Do not treat this as precedent.
+Future Agents must honor Task-specific STOP conditions and ask the User / ChatGPT instead of searching arbitrary local directories.
+
+## No-Mirror Requirement
+
+PASS.
+
+Direct source inspection confirms the dual validation module does not use:
+- horizontal flip
+- vertical flip
+- `transpose(FLIP_*)`
+- `ImageOps.mirror`
+- `mirror_part`.
+
+Tests also explicitly guard against mirror/flip calls.
+
+This is important because the User previously rejected mirrored/rotated art that did not read as a real faceoff.
+
+## Rotation / Facing Geometry
+
+PASS technically.
+
+The recipe defines source-specific fronts:
+
+- blue source_front_deg = 21.4°
+- red source_front_deg = 160.7°.
+
+Each source is normalized once so its local FRONT becomes +X.
+
+Faceoff geometry is explicit:
+- blue facing = direction toward red root
+- red facing = direction toward blue root.
+
+The reported facing-to-opponent dot = 1.0 for every required faceoff case.
+
+Therefore, if a preview does not visually read as a faceoff, the cause is authored art / perspective / pose, not incorrect facing math.
+
+## Scale
+
+PASS.
+
+Both wrestlers normalize their central body-core to:
+
+`2R ≈ 123.077 px`
+
+without using full alpha bounds as the scale reference.
+
+Reported runtime silhouettes:
+- blue: ~153×169 px alpha bbox
+- red: ~146×166 px alpha bbox.
+
+This preserves the accepted central body scale while allowing limbs to extend beyond the gameplay body circle.
+
+Do not change gameplay bodyRadius to fit either sprite.
+
+## Rigid Motion Model
+
+PASS technically.
+
+### Advance
+
+The preview uses:
+- same sprite image
+- root translation only
+- continuous facing
+- no pose/frame swap
+- no limb motion.
+
+### Translation-only stagger
+
+PASS.
+
+The reported translation-only stagger keeps facing constant:
+- blue stays 0°
+- red stays 180°.
+
+Only root position changes.
+
+This is the exact experiment the User requested for:
+"よろけアニメーションなら同じ画像を座標を変えるだけで表現できるか".
+
+### Translation + tiny rotation comparison
+
+PASS.
+
+The comparison adds at most:
+- +5° rigid whole-sprite rotation.
+
+This stays within the Task's requested tiny-rotation experiment.
+
+### Push/contact
+
+PASS as a perception test.
+
+The sprites remain unchanged while roots approach and shift.
+
+This does NOT imply Push gameplay or Product action animation has been accepted.
+
+It only creates evidence for the User Visual Gate.
+
+## GIF Implementation
+
+PASS.
+
+GIFs are produced through Pillow only:
+- no ffmpeg
+- no new package dependency
+- explicit 50 ms logical frame timing
+- deterministic output path.
+
+The code generates each frame from:
+- root
+- facing
+- normalized rigid sprite.
+
+This satisfies the requirement that the animation preview be transform-only.
+
+## Determinism / Verification
+
+PASS.
+
+Reported:
+- 96 Python tests PASS
+- 34 new focused tests
+- all 15 generated output files byte-identical across repeated actual-source runs
+- no timestamps/randomness
+- local source/output paths ignored
+- `git diff --check` PASS.
+
+No pnpm test/build was required because `src/` is untouched.
+
+## SPEC Sync
+
+PASS.
+
+The spec records:
+- 02A parts assembly = visually rejected
+- 02B previous one-piece candidate = visually rejected/revise
+- 03A = two separately authored rigid sprites, no mirror
+- rigid rotation/translation = validation experiment only
+- contact-specific poses remain unresolved
+- no 8-direction count or final animation count locked.
+
+This is correct scope discipline.
+
+## User Goal Attainment
+
+The technical part of the User's question is now answered:
+
+**Yes, the current tool can represent movement and stagger using the same authored image with root/facing transforms only.**
+
+But the important Product question remains unanswered:
+
+**Does it actually look acceptable as sumo?**
+
+That cannot be accepted from automated verification.
+
+## User Visual Gate — REQUIRED
+
+ChatGPT cannot inspect the local ignored PNG/GIF outputs through GitHub.
+
+Please upload the actual review outputs.
+
+Minimum high-value set:
+
+1. `dual_faceoff_arena_1920.png`
+2. `dual_faceoff_variants.png`
+3. `rigid_motion_contact_sheet.png`
+4. `dual_advance.gif`
+5. `blue_stagger_translation_only.gif`
+6. `red_stagger_translation_only.gif`
+7. `blue_stagger_translation_plus_rotation.gif`
+8. `red_stagger_translation_plus_rotation.gif`
+9. `dual_push_contact.gif`
+
+Also useful if rotation itself is questionable:
+- `blue_runtime_16angles.png`
+- `red_runtime_16angles.png`.
+
+Pivot guides are optional unless the rotation center looks wrong.
+
+## Visual Decision To Make
+
+After inspecting those outputs, choose one:
+
+### Outcome A — rigid sprite model is enough for current prototype
+
+Use:
+- whole-sprite rotation for facing
+- root translation for movement
+- root translation for stagger
+- maybe tiny rigid rotation as presentation polish.
+
+No dedicated action pose yet.
+
+### Outcome B — hybrid minimal-pose model
+
+Use rigid sprites for:
+- idle
+- movement
+- stagger
+
+but add dedicated authored pose(s) only for states that visibly break:
+- push/contact
+- grip
+- grapple
+or another smallest necessary set.
+
+This would avoid an automatic 8-directions × every action explosion.
+
+### Outcome C — rigid 360° model fails
+
+If rotation/faceoff itself remains structurally wrong, the current rigid approach is not suitable.
+
+Do NOT automatically jump to 8-direction art without a new design decision.
+
+## Current Acceptance State
+
+Dual-rigid validation tool:
+**TECHNICAL PASS**
+
+No-mirror requirement:
+**PASS**
+
+Rigid-transform implementation:
+**PASS**
+
+Current blue/red Product art:
+**PENDING USER VISUAL GATE**
+
+Translation-only stagger:
+**TECHNICALLY VERIFIED / VISUALLY UNDECIDED**
+
+Tiny-rotation stagger:
+**TECHNICALLY VERIFIED / VISUALLY UNDECIDED**
+
+Push/contact with unchanged pose:
+**VISUALLY UNDECIDED**
+
+Outcome A/B/C:
+**NOT YET DECIDED**
+
+## Next Task Constraint
+
+Do not start Phaser integration or produce new action pose art until the User reviews the generated motion previews.
+
+The next step is visual review, not another implementation Task.
+
+## Do Not Reopen
+
+- gameplay bodyRadius = 0.35 m
+- Product arena mapping
+- continuous gameplay facing
+- no-mirror requirement for these two source images
+- rejected 02A assembled Product art
+- rejected 02B source candidate
+- no final 8-direction / animation-count decision yet.
