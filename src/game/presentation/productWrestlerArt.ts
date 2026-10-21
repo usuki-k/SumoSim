@@ -1,7 +1,9 @@
-// Rigid Product wrestler art contract (ACTION-ART-03A). Pure presentation metadata; must not import Phaser.
-// Each wrestler is one authored full-body sprite exported by tools/wrestler_art/export_runtime_wrestlers.py
-// (ART-WRESTLER-03A normalization: FRONT = local +X, explicit body core = 2R at 1x Product scale). The
-// sprite is never mirrored: the canonical participant position and facing place and rotate it whole.
+// Rigid Product wrestler art contract (ACTION-ART-03A / ART-WRESTLER-04B). Pure presentation metadata; must
+// not import Phaser. Both runtime sprites come from one authored red master via
+// tools/wrestler_art/export_runtime_wrestlers.py: red = the normalized master (FRONT = local +X, explicit body
+// core = 2R at 1x Product scale); blue = that red reflected across the local X axis ((x, y) -> (x, H - y),
+// FRONT kept) with an offline mawashi recolor. At runtime neither is flipped: the canonical participant
+// position and facing place and rotate each sprite whole.
 import type { Vec2 } from '../sumo/BoutTypes.ts'
 
 export type ProductWrestlerArtId = 'blue' | 'red'
@@ -25,9 +27,9 @@ export const PRODUCT_WRESTLER_ART: Readonly<Record<ProductWrestlerArtId, Product
     id: 'blue',
     textureKey: 'product-wrestler-blue',
     assetPath: 'assets/action/wrestler/blue.png',
-    width: 167,
-    height: 181,
-    pivot: { x: 84, y: 87 },
+    width: 158,
+    height: 178,
+    pivot: { x: 82, y: 83 }, // red pivot (82, 95) reflected: y -> 178 - 95
     bodyCoreDiameterPx: 123.076923,
   },
   red: {

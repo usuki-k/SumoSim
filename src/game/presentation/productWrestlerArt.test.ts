@@ -27,8 +27,8 @@ describe('Product wrestler art contract (ACTION-ART-03A)', () => {
 
   it('pivot -> Phaser origin puts the pivot on the image position', () => {
     const blue = productWrestlerOrigin(PRODUCT_WRESTLER_ART.blue)
-    expect(blue.x).toBeCloseTo(84 / 167, 12)
-    expect(blue.y).toBeCloseTo(87 / 181, 12)
+    expect(blue.x).toBeCloseTo(82 / 158, 12)
+    expect(blue.y).toBeCloseTo(83 / 178, 12)
     for (const art of ARTS) {
       const origin = productWrestlerOrigin(art)
       expect(origin.x * art.width).toBeCloseTo(art.pivot.x, 9)
@@ -44,6 +44,13 @@ describe('Product wrestler art contract (ACTION-ART-03A)', () => {
       expect(productWrestlerScale(art, bodyRadiusPx * 1.2)).toBeCloseTo(1.2, 6)
       expect(productWrestlerScale(art, 50)).toBe(100 / art.bodyCoreDiameterPx)
     }
+  })
+
+  it('ART-WRESTLER-04B: blue is the red master reflected across local X (same size, pivot y -> H - y)', () => {
+    const { blue, red } = PRODUCT_WRESTLER_ART
+    expect([blue.width, blue.height]).toEqual([red.width, red.height])
+    expect(blue.pivot).toEqual({ x: red.pivot.x, y: red.height - red.pivot.y })
+    expect(blue.bodyCoreDiameterPx).toBe(red.bodyCoreDiameterPx)
   })
 
   it('stays Phaser-free', () => {

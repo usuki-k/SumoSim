@@ -1,7 +1,7 @@
-"""Focused tests for preview_idle_mirror_workflow.py (ART-WRESTLER-04A, Candidate / Pending User Visual Gate).
+"""Focused tests for preview_idle_mirror_workflow.py (ART-WRESTLER-04A; history / comparison since 04B).
 
-Synthetic images check the transform / mask / recolor rules; the committed runtime idle sprites (always
-in the repository) check the real derivation, read-only inputs and determinism.
+Synthetic images check the transform / mask / recolor rules (also used by the 04B runtime export); the
+real comparison needs the local 03A blue / red sources and is skipped without them.
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assemble_wrestler as aw  # noqa: E402
 import preview_idle_mirror_workflow as im  # noqa: E402
 from assemble_wrestler import Part  # noqa: E402
-from test_export_runtime_wrestlers import ts_metadata  # noqa: E402
 
 RECIPE = im.load_recipe(im.DEFAULT_RECIPE)
-RUNTIME = {key: aw.REPO_ROOT / RECIPE["sprites"][key]["file"] for key in im.SPRITES}
+RUNTIME = {key: aw.REPO_ROOT / "public" / "assets" / "action" / "wrestler" / f"{key}.png" for key in im.SPRITES}
+LOCAL = all((aw.DEFAULT_INPUT_DIR / f"wrestler_{key}.png").is_file() for key in im.SPRITES)
 
 
 def file_sha(path: Path) -> str:
@@ -77,20 +77,21 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(aw.pixel_sha256(out), aw.pixel_sha256(im.recolor(image, mask, RECIPE["recolor"]["blue_to_red"])))
 
 
-class RuntimeAssetTests(unittest.TestCase):
+@unittest.skipUnless(LOCAL, "local 03A wrestler_blue.png / wrestler_red.png are not present")
+class HistoricalComparisonTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.before = {key: file_sha(path) for key, path in RUNTIME.items()}
-        cls.authored = {key: im.load_runtime_sprite(aw.REPO_ROOT, key, RECIPE["sprites"][key]) for key in im.SPRITES}
-        cls.result = im.build(RECIPE, aw.REPO_ROOT, aw.DEFAULT_ARENA_DIR)
+        cls.authored = im.load_authored_sprites(aw.DEFAULT_INPUT_DIR)
+        cls.result = im.build(RECIPE, aw.DEFAULT_INPUT_DIR, aw.DEFAULT_ARENA_DIR)
 
-    def test_recipe_matches_runtime_metadata(self) -> None:
-        ts = ts_metadata()
-        for key in im.SPRITES:
-            spec = RECIPE["sprites"][key]
-            self.assertEqual(ts[key]["size"], spec["size"])
-            self.assertEqual(ts[key]["pivot"], [float(v) for v in spec["pivot"]])
-            self.assertAlmostEqual(im.body_core_length(self.authored[key]), ts[key]["body_core_px"], places=5)
+    def test_red_master_branch_is_the_runtime_blue(self) -> None:
+        # ART-WRESTLER-04B promoted exactly this derivation: the preview blue equals the committed runtime blue
+        with Image.open(RUNTIME["blue"]) as committed:
+            runtime_blue = aw.pixel_sha256(committed.convert("RGBA"))
+        self.assertEqual(self.result.info["derived"]["blue_from_red"]["pixel_sha256"], runtime_blue)
+        with Image.open(RUNTIME["red"]) as committed:
+            self.assertEqual(aw.pixel_sha256(committed.convert("RGBA")), aw.pixel_sha256(self.authored["red"].part.image))
 
     def test_derived_pixels_outside_mask_equal_the_mirrored_source_and_alpha_is_kept(self) -> None:
         for master in im.SPRITES:
@@ -145,7 +146,7 @@ class RuntimeAssetTests(unittest.TestCase):
         self.assertEqual({key: file_sha(path) for key, path in RUNTIME.items()}, self.before)
 
     def test_build_is_deterministic(self) -> None:
-        again = im.build(RECIPE, aw.REPO_ROOT, aw.DEFAULT_ARENA_DIR)
+        again = im.build(RECIPE, aw.DEFAULT_INPUT_DIR, aw.DEFAULT_ARENA_DIR)
         self.assertEqual(aw.json_text(again.manifest), aw.json_text(self.result.manifest))
         self.assertEqual(aw.json_text(again.info), aw.json_text(self.result.info))
 
@@ -161,29 +162,33 @@ class RuntimeAssetTests(unittest.TestCase):
 
 
 class FailClosedTests(unittest.TestCase):
-    def test_changed_runtime_sprite_fails(self) -> None:
+    def test_missing_local_blue_source_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for key, path in RUNTIME.items():
-                dest = root / RECIPE["sprites"][key]["file"]
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(path, dest)
-            blue = root / RECIPE["sprites"]["blue"]["file"]
-            image = Image.open(blue).convert("RGBA")
-            image.putpixel((0, 0), (1, 2, 3, 255))
-            image.save(blue)
-            with self.assertRaisesRegex(aw.AssemblyError, "blue: runtime sprite pixels differ"):
-                im.load_runtime_sprite(root, "blue", RECIPE["sprites"]["blue"])
+            red = aw.DEFAULT_INPUT_DIR / "wrestler_red.png"
+            if red.is_file():
+                shutil.copyfile(red, root / "wrestler_red.png")
+            with self.assertRaisesRegex(aw.AssemblyError, "source missing"):
+                im.load_authored_sprites(root)
             with redirect_stderr(io.StringIO()):
-                self.assertEqual(im.main(["--repo-root", str(root), "--output-dir", str(root / "out.local")]), 2)
+                self.assertEqual(im.main(["--input-dir", str(root), "--output-dir", str(root / "out.local")]), 2)
+
+    def test_red_to_blue_rule_has_one_owner(self) -> None:
+        runtime = json.loads((TOOL_DIR / "runtime_wrestler_recipe.json").read_text(encoding="utf-8"))
+        own = json.loads(im.DEFAULT_RECIPE.read_text(encoding="utf-8"))
+        self.assertNotIn("red_to_blue", own["recolor"])  # no second live copy
+        self.assertEqual(RECIPE["recolor"]["red_to_blue"], runtime["derived"]["recolor"])
 
     def test_bad_recipe_fails(self) -> None:
-        recipe = copy.deepcopy(RECIPE)
-        del recipe["recolor"]["red_to_blue"]
+        recipe = copy.deepcopy(json.loads(im.DEFAULT_RECIPE.read_text(encoding="utf-8")))
+        del recipe["recolor"]["blue_to_red"]
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "r.json"
             path.write_text(json.dumps(recipe), encoding="utf-8")
-            with self.assertRaisesRegex(aw.AssemblyError, "red_to_blue"):
+            with self.assertRaisesRegex(aw.AssemblyError, "runtime recipe not found"):
+                im.load_recipe(path)
+            shutil.copyfile(im.RUNTIME_RECIPE, Path(tmp) / im.RUNTIME_RECIPE.name)
+            with self.assertRaisesRegex(aw.AssemblyError, "blue_to_red"):
                 im.load_recipe(path)
 
     def test_outputs_are_git_ignored(self) -> None:

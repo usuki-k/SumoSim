@@ -1,9 +1,11 @@
-"""Deterministic export of the accepted rigid Product wrestler sprites (ACTION-ART-03A).
+"""Deterministic export of the accepted rigid Product wrestler sprites (ART-WRESTLER-04B, red master).
 
-Uses exactly the ART-WRESTLER-03A normalization (dual_rigid_recipe.json): source
-identity check, one whole-sprite rotation so FRONT = +X, explicit body-core
-scaled to 2R, exact /4 downscale to the 1x Product runtime size. Never mirrors.
-The committed runtime files are only ever written by this script.
+One authored master (runtime_wrestler_recipe.json):
+  red.png  = the authored red source with the ART-WRESTLER-03A normalization (source identity check,
+             one whole-sprite rotation so FRONT = +X, explicit body core scaled to 2R, exact /4 downscale)
+  blue.png = that normalized red runtime image reflected across the local X axis ((x, y) -> (x, H - y),
+             FRONT kept, pivot / body core mapped the same way) + the ART-WRESTLER-04A mawashi-only recolor
+No separately authored blue source is read. The committed runtime files are only ever written by this script.
 
     PY tools/wrestler_art/export_runtime_wrestlers.py            # write public/assets/action/wrestler/
     PY tools/wrestler_art/export_runtime_wrestlers.py --check    # verify the committed files, write nothing
@@ -14,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -24,24 +27,47 @@ from PIL import Image
 
 import assemble_wrestler as aw
 import preview_dual_rigid_wrestlers as pd
+import preview_idle_mirror_workflow as im
 import preview_single_wrestler as ps
 from assemble_wrestler import AssemblyError, Part
 
+DEFAULT_RECIPE = aw.TOOL_DIR / "runtime_wrestler_recipe.json"
 DEFAULT_RUNTIME_DIR = aw.REPO_ROOT / "public" / "assets" / "action" / "wrestler"
-RUNTIME_FILES = {key: f"{key}.png" for key in pd.SPRITES}
+SPRITES = ("blue", "red")
+RUNTIME_FILES = {key: f"{key}.png" for key in SPRITES}
+
+
+def load_recipe(path: Path) -> dict:
+    if not path.is_file():
+        raise AssemblyError(f"recipe not found: {path}")
+    try:
+        recipe = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise AssemblyError(f"recipe is not readable JSON: {path}: {exc}") from exc
+    if recipe.get("recipe_schema") != 1:
+        raise AssemblyError(f"unsupported recipe_schema {recipe.get('recipe_schema')!r}")
+    if recipe.get("master", {}).get("key") != "red" or recipe.get("derived", {}).get("key") != "blue":
+        raise AssemblyError("the runtime recipe must use red as master and derive blue")
+    if recipe["derived"].get("reflection") != "local_y":
+        raise AssemblyError("blue must be derived by the local-Y reflection")
+    for field in ("file", "size", "pixel_sha256", "source_front_deg", "root_source_px", "body_core_source_px",
+                  "body_core_target_r"):
+        if field not in recipe["master"]:
+            raise AssemblyError(f"master is missing {field!r}")
+    return recipe
 
 
 def export_parts(recipe: dict, input_dir: Path) -> Dict[str, Part]:
-    """Runtime (1x) part per sprite: validated source -> 03A normalization -> exact /4 downscale."""
-    parts = {}
-    for key in pd.SPRITES:
-        spec = recipe["sprites"][key]
-        source, _ = aw.load_source(input_dir / spec["file"], spec, key)
-        master, _ = ps.normalize_sprite(source, pd._sprite_recipe(spec, recipe["alpha_threshold"]))
-        runtime = aw.runtime_part(master)
-        ps._check_unclipped(runtime.image, f"{key} runtime")
-        parts[key] = runtime
-    return parts
+    """red: validated master source -> 03A normalization -> exact /4 downscale; blue: derived from it."""
+    spec = recipe["master"]
+    source, _ = aw.load_source(input_dir / spec["file"], spec, "red")
+    master, _ = ps.normalize_sprite(source, pd._sprite_recipe(spec, recipe["alpha_threshold"]))
+    red = aw.runtime_part(master)
+    ps._check_unclipped(red.image, "red runtime")
+    _, blue, mask = im.derive(im.Sprite(red, "red"), "red", {"recolor": {"red_to_blue": recipe["derived"]["recolor"]}})
+    if not mask:
+        raise AssemblyError("blue derivation: empty mawashi mask")
+    return {"blue": blue.part, "red": red}
 
 
 def png_bytes(image: Image.Image) -> bytes:
@@ -71,14 +97,14 @@ def export(recipe: dict, input_dir: Path, runtime_dir: Path) -> List[dict]:
         with os.fdopen(handle, "wb") as out:
             out.write(data)
         os.replace(temp, runtime_dir / RUNTIME_FILES[key])
-    return [describe(key, parts[key], encoded[key]) for key in pd.SPRITES]
+    return [describe(key, parts[key], encoded[key]) for key in SPRITES]
 
 
 def check(recipe: dict, input_dir: Path, runtime_dir: Path) -> List[dict]:
     """Fresh export compared with the committed files (decoded pixels and encoded bytes)."""
     parts = export_parts(recipe, input_dir)
     report = []
-    for key in pd.SPRITES:
+    for key in SPRITES:
         path = runtime_dir / RUNTIME_FILES[key]
         if not path.is_file():
             raise AssemblyError(f"committed runtime sprite missing: {path}")
@@ -97,7 +123,7 @@ def check(recipe: dict, input_dir: Path, runtime_dir: Path) -> List[dict]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Export (or --check) the rigid Product wrestler runtime sprites.")
-    parser.add_argument("--recipe", type=Path, default=pd.DEFAULT_RECIPE, help="accepted dual rigid recipe")
+    parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE, help="runtime red-master recipe")
     parser.add_argument("--input-dir", type=Path, default=aw.DEFAULT_INPUT_DIR, help="directory with the reviewed sprites")
     parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME_DIR, help="runtime asset directory")
     parser.add_argument("--check", action="store_true", help="verify committed files against a fresh export")
@@ -107,7 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        recipe = pd.load_recipe(args.recipe)
+        recipe = load_recipe(args.recipe)
         report = (check if args.check else export)(recipe, args.input_dir, args.runtime_dir)
     except AssemblyError as exc:
         print(f"error: {exc}", file=sys.stderr)

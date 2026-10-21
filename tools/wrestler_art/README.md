@@ -1,10 +1,12 @@
 # wrestler_art — Deterministic Wrestler Art Previews
 
-Offline review tools for SumoSim Product wrestler art. Two tools live here:
+Offline review and export tools for SumoSim Product wrestler art:
 
 | Tool | Task | Status |
 |---|---|---|
-| `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | **current**: two separately authored sprites (blue / red) as rigid objects: 360° rotation, faceoff, minimal rigid motion ([below](#dual-rigid-sprites-art-wrestler-03a)) |
+| `export_runtime_wrestlers.py` | ART-WRESTLER-04B | **current runtime export**: red master + derived blue ([below](#runtime-export-art-wrestler-04b-red-master)) |
+| `preview_idle_mirror_workflow.py` | ART-WRESTLER-04A | mirror / recolor comparison (history; red-master branch promoted) |
+| `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | two separately authored sprites as rigid objects (history / comparison; runtime no longer uses the blue source) ([below](#dual-rigid-sprites-art-wrestler-03a)) |
 | `preview_single_wrestler.py` | ART-WRESTLER-02B | one authored full-body sprite, rotation / arena evaluation (source REVISE IMAGE; helpers reused by 03A) ([below](#one-piece-sprite-evaluation-art-wrestler-02b)) |
 | `assemble_wrestler.py` | ART-WRESTLER-02A | experiment / reference only: technical PASS, User Visual Gate **REJECTED**; its output is not the Product baseline |
 
@@ -256,10 +258,10 @@ Tests: `test_preview_dual_rigid_wrestlers.py` (includes a build with
 `Image.transpose` / `ImageOps.mirror` / `ImageOps.flip` patched to fail, and a
 check that every GIF frame equals a re-render from only (root, facing)).
 
-## Runtime export (ACTION-ART-03A)
+## Runtime export (ART-WRESTLER-04B, red master)
 
 The accepted rigid Product wrestlers are committed as
-`public/assets/action/wrestler/blue.png` and `red.png`. They are only ever
+`public/assets/action/wrestler/red.png` and `blue.png`. They are only ever
 written by this script (no manual resize / rotate / edit):
 
 ```bash
@@ -267,29 +269,37 @@ PY tools/wrestler_art/export_runtime_wrestlers.py           # write public/asset
 PY tools/wrestler_art/export_runtime_wrestlers.py --check   # verify committed files, write nothing
 ```
 
-It validates `input.local/wrestler_blue.png` / `wrestler_red.png` (size, alpha,
-decoded RGBA pixel SHA-256), applies the 03A normalization from
-`dual_rigid_recipe.json` (one whole-sprite rotation to FRONT = +X, body core =
-2R) and writes the exact /4 runtime image (1× Product scale). It never mirrors.
+One authored master, one recipe (`runtime_wrestler_recipe.json`, the single current
+source of truth):
+
+- `red.png`: `input.local/wrestler_red.png` (size, alpha, decoded RGBA pixel
+  SHA-256 checked), the 03A normalization (one whole-sprite rotation to FRONT =
+  +X, explicit root, body core = 2R) and an exact /4 downscale.
+- `blue.png`: that normalized red runtime image reflected across the local X
+  axis, `(x, y) -> (x, H - y)` (FRONT kept; pivot / body core mapped the same
+  way), plus the 04A mawashi-only recolor (`derived.recolor`). No separately
+  authored blue source is read.
+
 It prints size, pivot, body core and pixel / file SHA-256 per file. The runtime
-metadata in `src/game/presentation/productWrestlerArt.ts` must match this
-output; `tests/test_export_runtime_wrestlers.py` checks the committed PNGs and
-that TypeScript contract against a fresh export (when the sources are present).
+metadata in `src/game/presentation/productWrestlerArt.ts` must match this output;
+`tests/test_export_runtime_wrestlers.py` checks the committed PNGs (with only the
+red source visible) and that TypeScript contract against a fresh export.
 
-## Idle mirror + mawashi recolor (ART-WRESTLER-04A, Candidate)
+## Idle mirror + mawashi recolor (ART-WRESTLER-04A, comparison / history)
 
-**Candidate / Pending User Visual Gate.** The User reopened the earlier
-"blue and red are never mirrored" constraint; this experiment checks whether one
-idle master can produce its counterpart. Nothing in the runtime changes: the
-committed `public/assets/action/wrestler/{blue,red}.png`, their metadata and the
-dual-sprite workflow above stay as they are.
+The red-master branch of this experiment was accepted and promoted to the runtime
+export above (ART-WRESTLER-04B). This preview remains as comparison evidence: it
+rebuilds the two separately authored 03A idle sprites from `input.local/` and
+derives each counterpart from the other (blue master and red master). The
+red -> blue rule is read from `runtime_wrestler_recipe.json`;
+`idle_mirror_recipe.json` keeps only the historical blue -> red rule.
 
 ```bash
 PY tools/wrestler_art/preview_idle_mirror_workflow.py   # -> output-idle-mirror.local/ (git-ignored)
 ```
 
-- Input: the committed runtime sprites only (read-only, pixel SHA-256 checked
-  against `idle_mirror_recipe.json`); no local source needed.
+- Input: the local 03A sources `wrestler_blue.png` / `wrestler_red.png` with the
+  `dual_rigid_recipe.json` normalization (fails closed when missing).
 - Transform: reflection across the local X axis, `(x, y) -> (x, H - y)` (image
   top-bottom flip). FRONT stays local +X, the wrestler's left and right swap,
   pivot / body-core points map the same way (`assemble_wrestler.mirror_part`).

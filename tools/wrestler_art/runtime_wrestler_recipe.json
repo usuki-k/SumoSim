@@ -1,0 +1,60 @@
+{
+  "recipe_schema": 1,
+  "name": "runtime-red-master-04b",
+  "note": "Current source of truth for the Product idle runtime wrestlers (ART-WRESTLER-04B, User-accepted red master). red.png = the authored red source normalized (one whole-sprite rotation to FRONT = local +X, explicit root, body core = 2R, exact /4 downscale). blue.png = that normalized red runtime image reflected across the local X axis ((x, y) -> (x, H - y), FRONT kept) with the mawashi-only recolor below. No separately authored blue source is used.",
+  "alpha_threshold": 8,
+  "master": {
+    "key": "red",
+    "file": "wrestler_red.png",
+    "size": [
+      1254,
+      1254
+    ],
+    "pixel_sha256": "a212dbfeab3da3ad4e42c352f1f7baea7f7b99fc901053bd05c4609df25dafe7",
+    "reviewed_file_sha256": "98f9465a6306228e3c4e7757f73394b8baa5bb2f5f73a47be568edb5c9792fa9",
+    "nominal_front": "image left (-X)",
+    "source_front_deg": 160.7,
+    "front_evidence": {
+      "note": "Informational: mawashi knot center -> midpoint of both hands.",
+      "back_source_px": [
+        915,
+        515
+      ],
+      "front_source_px": [
+        380,
+        702.5
+      ]
+    },
+    "root_source_px": [
+      648,
+      609
+    ],
+    "body_core_source_px": [
+      [
+        522,
+        251
+      ],
+      [
+        731,
+        847
+      ]
+    ],
+    "body_core_target_r": 2.0
+  },
+  "derived": {
+    "key": "blue",
+    "reflection": "local_y",
+    "recolor": {
+      "source_hue_deg": [
+        330,
+        364
+      ],
+      "min_saturation": 0.5,
+      "min_value": 0.06,
+      "target_hue_deg": 215.8,
+      "saturation_gain": 1.0,
+      "value_gain": 0.7095,
+      "value_offset": -0.0497
+    }
+  }
+}

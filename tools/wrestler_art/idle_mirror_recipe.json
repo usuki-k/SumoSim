@@ -1,48 +1,49 @@
 {
   "recipe_schema": 1,
   "name": "idle-mirror-04a",
-  "note": "ART-WRESTLER-04A candidate workflow (Pending User Visual Gate): one committed runtime idle sprite as master, its counterpart = reflection across the local X axis (wrestler left <-> right; FRONT stays local +X) + deterministic mawashi recolor. Hue bands / target values were measured on the committed runtime sprites. Runtime px, pixel edges on integers.",
-  "sprites": {
-    "blue": {
-      "file": "public/assets/action/wrestler/blue.png",
-      "size": [167, 181],
-      "pixel_sha256": "bbd3459360064934c1b2fa247fdb5821f3c5e8699b594e4b27dec93f8975fc7b",
-      "pivot": [84, 87],
-      "body_core_px": [[84.146705, 11.427385], [83.922357, 134.504104]]
-    },
-    "red": {
-      "file": "public/assets/action/wrestler/red.png",
-      "size": [158, 178],
-      "pixel_sha256": "d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa",
-      "pivot": [82, 95],
-      "body_core_px": [[82.115903, 168.958359], [82.063712, 45.881447]]
-    }
-  },
+  "note": "ART-WRESTLER-04A comparison preview (history since ART-WRESTLER-04B). Authored blue / red are rebuilt from the local 03A sources; the accepted red -> blue recolor rule is read from runtime_recipe (single owner). This file keeps only the historical blue -> red rule, angles and faceoff layouts.",
+  "runtime_recipe": "runtime_wrestler_recipe.json",
   "recolor": {
     "blue_to_red": {
-      "source_hue_deg": [190, 250],
+      "source_hue_deg": [
+        190,
+        250
+      ],
       "min_saturation": 0.3,
       "min_value": 0.06,
       "target_hue_deg": 358.2,
       "saturation_gain": 1.0,
       "value_gain": 1.409,
-      "value_offset": 0.070
-    },
-    "red_to_blue": {
-      "source_hue_deg": [330, 364],
-      "min_saturation": 0.5,
-      "min_value": 0.06,
-      "target_hue_deg": 215.8,
-      "saturation_gain": 1.0,
-      "value_gain": 0.7095,
-      "value_offset": -0.0497
+      "value_offset": 0.07
     }
   },
-  "angles_deg": [0, 45, 90, 180, 270],
+  "angles_deg": [
+    0,
+    45,
+    90,
+    180,
+    270
+  ],
   "faceoff": [
-    { "label": "start 4R", "distance_r": 4.0, "line_deg": 0 },
-    { "label": "near contact 2.05R", "distance_r": 2.05, "line_deg": 0 },
-    { "label": "oblique 2.8R, line 30", "distance_r": 2.8, "line_deg": 30 },
-    { "label": "side 2.8R, line 64", "distance_r": 2.8, "line_deg": 64 }
+    {
+      "label": "start 4R",
+      "distance_r": 4.0,
+      "line_deg": 0
+    },
+    {
+      "label": "near contact 2.05R",
+      "distance_r": 2.05,
+      "line_deg": 0
+    },
+    {
+      "label": "oblique 2.8R, line 30",
+      "distance_r": 2.8,
+      "line_deg": 30
+    },
+    {
+      "label": "side 2.8R, line 64",
+      "distance_r": 2.8,
+      "line_deg": 64
+    }
   ]
 }

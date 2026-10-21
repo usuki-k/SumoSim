@@ -1,13 +1,16 @@
-"""Idle mirror + mawashi recolor workflow previews (ART-WRESTLER-04A, Candidate / Pending User Visual Gate).
+"""Idle mirror + mawashi recolor workflow previews (ART-WRESTLER-04A; history / comparison since 04B).
 
-Offline visual validation only. Reads the committed runtime idle sprites (read-only) and derives each
-wrestler's counterpart from the other one:
+ART-WRESTLER-04B promoted the red-master branch of this experiment to the runtime export
+(export_runtime_wrestlers.py, runtime_wrestler_recipe.json). This preview stays as the comparison
+evidence: it rebuilds the two separately authored idle sprites from the local 03A sources
+(input.local/, dual_rigid_recipe.json normalization) and derives each counterpart from the other:
 
     master (FRONT = local +X)  -> reflect local Y (wrestler left <-> right; FRONT kept)
                                -> deterministic mawashi recolor (hue band + largest component)
                                -> side-by-side / rotation / arena faceoff / diagnostic previews
 
-The runtime assets, their metadata and the existing dual-sprite workflow are not changed.
+The red -> blue recolor rule is read from runtime_wrestler_recipe.json (the single current source);
+this recipe keeps only the historical blue -> red rule. Nothing here writes runtime assets.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ MANIFEST_SCHEMA = 1
 RECIPE_SCHEMA = 1
 
 DEFAULT_RECIPE = aw.TOOL_DIR / "idle_mirror_recipe.json"
+RUNTIME_RECIPE = aw.TOOL_DIR / "runtime_wrestler_recipe.json"
 DEFAULT_OUTPUT_DIR = aw.TOOL_DIR / "output-idle-mirror.local"
 
 SPRITES = ("blue", "red")
@@ -87,28 +91,29 @@ def load_recipe(path: Path) -> dict:
         raise AssemblyError(f"recipe is not readable JSON: {path}: {exc}") from exc
     if recipe.get("recipe_schema") != RECIPE_SCHEMA:
         raise AssemblyError(f"unsupported recipe_schema {recipe.get('recipe_schema')!r}")
-    if sorted(recipe.get("sprites", {})) != sorted(SPRITES):
-        raise AssemblyError("recipe must define the blue and red runtime sprites")
+    runtime_path = path.parent / recipe.get("runtime_recipe", RUNTIME_RECIPE.name)
+    if not runtime_path.is_file():
+        raise AssemblyError(f"runtime recipe not found: {runtime_path}")
+    runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+    # the accepted red -> blue rule has exactly one owner: the runtime recipe
+    recipe.setdefault("recolor", {})["red_to_blue"] = runtime["derived"]["recolor"]
     for rule in ("blue_to_red", "red_to_blue"):
         if rule not in recipe.get("recolor", {}):
             raise AssemblyError(f"recipe is missing recolor.{rule}")
     return recipe
 
 
-def load_runtime_sprite(repo_root: Path, key: str, spec: dict) -> Sprite:
-    """A committed runtime sprite, opened read-only and checked against its reviewed pixels / metadata."""
-    path = repo_root / spec["file"]
-    if not path.is_file():
-        raise AssemblyError(f"{key}: runtime sprite missing: {path}")
-    with Image.open(path) as opened:
-        opened.load()
-        image = opened.convert("RGBA")
-    if list(image.size) != list(spec["size"]):
-        raise AssemblyError(f"{key}: size {image.size} != recipe {spec['size']}")
-    if aw.pixel_sha256(image) != spec["pixel_sha256"]:
-        raise AssemblyError(f"{key}: runtime sprite pixels differ from the reviewed committed asset")
-    core = {"core_a": tuple(spec["body_core_px"][0]), "core_b": tuple(spec["body_core_px"][1])}
-    return Sprite(Part(image, tuple(spec["pivot"]), core), f"authored {key}")
+def load_authored_sprites(input_dir: Path) -> Dict[str, Sprite]:
+    """The two separately authored idle sprites (history), rebuilt from the local 03A sources with the
+    dual_rigid_recipe.json normalization at runtime scale. Requires input.local/ (never committed)."""
+    dual = pd.load_recipe(pd.DEFAULT_RECIPE)
+    out: Dict[str, Sprite] = {}
+    for key in SPRITES:
+        spec = dual["sprites"][key]
+        source, _ = aw.load_source(input_dir / spec["file"], spec, key)
+        master, _ = ps.normalize_sprite(source, pd._sprite_recipe(spec, dual["alpha_threshold"]))
+        out[key] = Sprite(aw.runtime_part(master), f"authored {key}")
+    return out
 
 
 # ---------------------------------------------------------------- mirror / mask / recolor
@@ -331,8 +336,8 @@ def body_core_length(sprite: Sprite) -> float:
     return ps._dist(sprite.part.joints["core_a"], sprite.part.joints["core_b"])
 
 
-def build(recipe: dict, repo_root: Path, arena_dir: Path) -> MirrorBuild:
-    authored = {key: load_runtime_sprite(repo_root, key, recipe["sprites"][key]) for key in SPRITES}
+def build(recipe: dict, input_dir: Path, arena_dir: Path) -> MirrorBuild:
+    authored = load_authored_sprites(input_dir)
     images: Dict[str, Image.Image] = {}
     derived: Dict[str, Sprite] = {}
     info: dict = {
@@ -420,7 +425,7 @@ def write_outputs(result: MirrorBuild, output_dir: Path) -> List[Path]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Preview the idle mirror + mawashi recolor workflow (ART-WRESTLER-04A).")
     parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
-    parser.add_argument("--repo-root", type=Path, default=aw.REPO_ROOT, help="where the committed runtime sprites live")
+    parser.add_argument("--input-dir", type=Path, default=aw.DEFAULT_INPUT_DIR, help="local 03A blue / red sources")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--arena-dir", type=Path, default=aw.DEFAULT_ARENA_DIR)
     return parser
@@ -430,7 +435,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         recipe = load_recipe(args.recipe)
-        result = build(recipe, args.repo_root, args.arena_dir)
+        result = build(recipe, args.input_dir, args.arena_dir)
         written = write_outputs(result, args.output_dir)
     except AssemblyError as exc:
         print(f"error: {exc}", file=sys.stderr)

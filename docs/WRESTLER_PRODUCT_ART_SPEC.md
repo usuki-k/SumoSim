@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本。**現在の採用方針は §0**（別々に描いた2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合済み）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
+Status: Product力士artの正本。**現在の採用方針は §0**（描いた1枚のred masterと、そこから決定的に作ったblueの、2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合、ART-WRESTLER-04Bでred master方式へ移行）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -13,14 +13,19 @@ Status: Product力士artの正本。**現在の採用方針は §0**（別々に
 
 ---
 
-## 0. 現在の採用方針（ART-WRESTLER-03A User Visual Gate → ACTION-ART-03A）
+## 0. 現在の採用方針（ACTION-ART-03A → ART-WRESTLER-04A / 04B User Visual Gate）
 
 **Accepted（現在のprototype）**
-- 別々に描いた **2枚の全身sprite**（青まわし・赤まわし）を、剛体として使う
-  - `public/assets/action/wrestler/blue.png` / `red.png`
-  - `tools/wrestler_art/export_runtime_wrestlers.py` が、レビュー済みのsourceから決定的に書き出す（手での加工はしない）
-- **反転（左右・上下）はしない**
-- sourceは、sprite全体を1回だけ回転して、local +X = 前にそろえる。明示したbody-coreを2Rに正規化する（`dual_rigid_recipe.json`）
+- 2枚の全身sprite（赤まわし・青まわし）を、剛体として使う
+  - `public/assets/action/wrestler/red.png` / `blue.png`
+  - `tools/wrestler_art/export_runtime_wrestlers.py` が、決定的に書き出す（手での加工はしない）
+- **描いたidleのmasterは、redの1枚だけ**（ART-WRESTLER-04B）
+  - red: レビュー済みのred sourceを、sprite全体を1回だけ回転してlocal +X = 前にそろえ、明示したbody-coreを2Rに正規化したもの
+  - blue: 正規化したred runtimeを、**local X軸について反射**（`(x, y) → (x, H − y)`。前 = +Xはそのまま、力士の左右だけが入れ替わる。pivotとbody-coreの点も同じ写像）し、**まわしだけを決定的に塗り替えた**もの（色相の帯 + 最大の連結成分のマスク。陰影の並びを保つ）
+  - 正規化・反射・塗り替えの値の正本は `runtime_wrestler_recipe.json`（1か所）
+  - 両方とも通常のruntime PNGとして書き出す。runtimeでの反転や動的な塗り替えはしない
+  - まわしの縁の、ごく細いアンチエイリアスの残りは、runtimeのサイズで許容した（User Visual Gate）
+- 「blueとredは別々に描き、反転しない」という以前の決定（ART-WRESTLER-03A）は、**撤回した**。03Aの2枚のsourceと `dual_rigid_recipe.json` は、履歴 / 比較用として残す
 - runtimeでは、次のとおりに描く
   - 位置: canonicalなparticipantの位置に、明示したpivotを置く
   - 向き: canonicalな `participant.facing` で、sprite全体を連続的に回転する
@@ -36,6 +41,7 @@ Status: Product力士artの正本。**現在の採用方針は §0**（別々に
 - 8方向のsprite、animationのframe数、poseの数、skeletal rig、手足ごとのanimation: 決めない・作らない
 
 **履歴**
+- 03Aの別々に描いた2枚（反転なし）: ART-WRESTLER-04Bで、red masterの方式に置き換えた（比較用のtoolとして残す）
 - 02Aの部位の組み立て: 不採用
 - 02Bの1枚の候補: 作り直し
 - 以下の§1〜§21にある部位の組み立て・2関節の腕・mawashiの色の別版などは、設計時点の案として残す
@@ -280,7 +286,7 @@ ChatGPTの画像生成と、localの決定的な処理だけで実行できる�
 **更新（ART-WRESTLER-03A）: 2枚の剛体spriteで、最小のanimationの方式を試す**
 - 02Bの1枚の候補（`wrestler_single.png`）は、User Visual Gateで **不採用**（画像の作り直し）。1枚の方式そのものは、まだ有効
 - 新しい実験では、相手と向き合うように **別々に描いた2枚**（青まわし・赤まわし）を使う
-  - **反転（左右・上下）はしない**。2枚は別の画像のまま
+  - **反転（左右・上下）はしない**。2枚は別の画像のまま（この制約はART-WRESTLER-04Bで撤回した。§0）
 - **最小のanimationの方式を、検証中**（未承認）
   - 向き = sprite全体の回転、移動・よろけ = sprite全体の平行移動（よろけに、ごく小さな剛体の回転を加える比較も行う）
   - 手足のanimation、frame、変形、spriteの差し替えは使わない
