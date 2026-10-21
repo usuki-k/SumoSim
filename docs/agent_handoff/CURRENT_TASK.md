@@ -513,3 +513,32 @@ If accepted:
 
 If rejected:
 - retain the current two-authored-sprite runtime baseline and decide Tsuppari art production separately.
+
+
+---
+
+# User Visual Gate Result — ACCEPTED
+
+User reviewed the generated ART-WRESTLER-04A previews and accepted the mirror workflow.
+
+Accepted Product Art Direction:
+- use the **red authored idle sprite as the canonical master**
+- derive the blue counterpart from the red master by the validated local-Y reflection while preserving local +X = FRONT
+- recolor only the mawashi deterministically to blue
+- preserve pivot / body-core / canonical facing semantics
+- the previous Product constraint "blue and red must be separately authored and never mirrored" is withdrawn.
+
+User Visual Decision:
+- **RED MASTER ACCEPTED**
+- `red master -> derived blue` is the preferred baseline.
+- The conservative mawashi-mask fringe seen in diagnostics is visually acceptable at runtime scale.
+
+Do Not Reopen unless explicitly requested:
+- do not return to separate blue/red authored idle sprites as a requirement
+- do not choose blue master instead
+- do not change the validated reflection/facing convention while promoting this workflow.
+
+Next Task Constraint:
+- before Tsuppari implementation, promote the accepted red-master mirror/recolor workflow into the runtime/export contract
+- update Product art SPEC and relevant exporter/metadata/tests in that implementation Task
+- after that baseline is integrated and reviewed, Tsuppari can use the same one-master-derived-counterpart workflow.
