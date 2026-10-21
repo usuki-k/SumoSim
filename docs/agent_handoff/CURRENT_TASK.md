@@ -1,5 +1,5 @@
 Task-ID: ACTION-07C-TSUPPARI-ART-VISUAL-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: ART VISUAL GATE / PRESENTATION INTEGRATION / RUNTIME COMPARISON
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -618,3 +618,215 @@ Create a runtime-comparable Tsuppari Art Visual Gate from the four User-provided
 
 Keep ACTION-07B gameplay unchanged.
 Do not select the final Tsuppari art strategy before the User Visual Gate.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: e30d6b407c3c98f086f4765a0847f3f74038fe0f
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-07C.
+
+Confirmed from Current Source / diff:
+
+- all four required local candidate inputs were validated after the filename prerequisite was corrected
+- candidate source files remain under git-ignored `input.local/`
+- 12 temporary Visual-Gate runtime textures were generated deterministically
+- all three required comparison modes exist:
+  - SEPARATE
+  - MIRROR-L
+  - MIRROR-R
+- authored blue candidates are reference/comparison inputs only
+- runtime candidate textures are derived from the red pose masters
+- key 4 cycles the three art modes
+- current art mode is presentation-only Scene state
+- Simulation / Snapshot / ACTION-07B gameplay state was not changed
+- accepted idle `red.png` / `blue.png` were not changed
+- Product Tsuppari art strategy was not prematurely accepted.
+
+## Presentation Ownership Review
+
+Accepted flow:
+
+```
+BoutSimulation / Snapshot
+-> resolveWrestlerVisualState
+-> selectWrestlerArt(...)
+-> WrestlerView
+```
+
+- `TsuppariArtMode` lives in presentation code.
+- `BoutScene` owns the currently selected Visual-Gate mode.
+- `WrestlerView` switches texture, origin and body-core scale only from presentation metadata.
+- canonical participant center and facing remain Snapshot-owned.
+- changing mode does not modify gameplay state.
+
+This preserves the project architecture.
+
+## Hand / Reflection Mapping Review
+
+The explicit mapping is technically coherent with local +X = FRONT and local-Y reflection swapping hand identity.
+
+Accepted for Visual Gate:
+
+### SEPARATE
+- red left = authored red L
+- red right = authored red R
+- blue left = reflected red R + recolor
+- blue right = reflected red L + recolor
+
+### MIRROR-L
+- all four variants derive from authored red L
+- semantic hand identity is preserved through the documented reflection/double-reflection mapping.
+
+### MIRROR-R
+- all four variants derive from authored red R
+- semantic hand identity is preserved likewise.
+
+The TypeScript metadata and Python exporter tests enforce this mapping.
+
+## Normalization Review
+
+Accepted as technically sufficient for a Visual Gate:
+
+- every candidate has explicit measured front/root/body-core values
+- candidates are normalized independently rather than blindly reusing idle coordinates
+- body-core diameter is held at 123.076923 px for all 12 gate textures
+- each texture carries its own dimensions and pivot
+- no limb warp / skeletal transformation is used.
+
+The landmark-based normalization is a Visual-Gate measurement method, not yet a permanent Product art contract.
+
+## Recolor Review
+
+Accepted technically:
+
+- current red->blue recolor rule remains owned by the accepted runtime recipe
+- gate recipe does not duplicate that current rule
+- alpha is preserved
+- pixels outside the mawashi mask remain unchanged
+- mask limits fail closed
+- reported real-pose masks remain within the configured limits.
+
+No evidence of gameplay or idle-art ownership leakage was found.
+
+## Runtime / Mode Review
+
+Accepted:
+
+- key `4` cycles:
+  - SEPARATE
+  - MIRROR-L
+  - MIRROR-R
+- mode switch does not restart the Bout
+- mode switch does not alter Snapshot state
+- full Tsuppari action uses the selected held pose
+- when Tsuppari ends, the accepted idle sprite returns
+- Product Tsuppari art is not yet accepted.
+
+## Verification Review
+
+Reported:
+
+- focused wrestler-art: 19 / 19 PASS
+- full wrestler-art suite: 144 / 144 PASS
+- focused presentation: 7 / 7 PASS
+- pnpm test: 347 / 347 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- deterministic re-export: PASS
+- accepted idle runtime export check: PASS
+- gameplay source diff: 0
+- browser/runtime smoke: 38 / 38 PASS.
+
+This is sufficient for Technical PASS.
+
+## Important Visual Differences — User Must Decide
+
+These are not technical blockers, but must NOT be silently accepted.
+
+### MIRROR modes: head-side jump
+
+The report measured that some mirror-derived poses flip the non-symmetric head/body placement relative to accepted idle.
+
+Approximate visible shift:
+- about 52 runtime px
+- roughly 0.3 m in Product scale.
+
+Therefore the User should specifically watch idle -> Tsuppari -> idle in:
+- MIRROR-L right-hand cases
+- MIRROR-R left-hand cases
+- corresponding blue variants.
+
+If the jump is visually distracting, the mirror strategy should be rejected even though it is technically valid.
+
+### SEPARATE: asymmetric strike direction
+
+Reported normalized hand direction:
+- authored red Left: approximately straight ahead
+- authored red Right: approximately +46 degrees to wrestler-right.
+
+Therefore SEPARATE may look less symmetric between left/right, even though it avoids the mirror head jump.
+
+This is a Visual Gate question, not something to auto-correct in tooling.
+
+### Full-action pose hold
+
+Current gate holds one pose through startup + active + recovery (~267 ms).
+
+This is deliberately provisional.
+User must judge whether:
+- readable and satisfying
+- too long/static
+- or later should show only a smaller phase.
+
+Do not change gameplay timing based only on this art hold.
+
+## User Visual Gate
+
+REQUIRED.
+
+Recommended test:
+
+1. `pnpm dev`
+2. Enter
+3. `0` for debug
+4. `4` to cycle SEPARATE / MIRROR-L / MIRROR-R
+5. ArrowLeft / ArrowRight for player Tsuppari
+6. `3` for repeating dummy Tsuppari.
+
+Judge:
+
+- which of SEPARATE / MIRROR-L / MIRROR-R looks best
+- left/right hand readability
+- idle -> pose -> idle positional/body jump
+- strike direction
+- derived blue quality
+- reach plausibility
+- whether Tsuppari is now readable enough to judge rhythm/impact
+- whether the full-action held pose is too long.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- ACTION-07B gameplay formulas and current provisional push amounts
+- ArrowLeft / ArrowRight hand semantics
+- deterministic buildup rule
+- Countered Tsuppari behavior
+- accepted idle red-master art baseline
+- authored blue candidates remaining reference-only for this gate.
+
+## Next Task Constraint
+
+Do not promote any gate texture/mode into `WRESTLER_PRODUCT_ART_SPEC.md` or the permanent runtime contract until the User selects a Visual-Gate result.
+
+After User selection:
+- promote only the accepted Tsuppari art strategy
+- remove/retire temporary gate-only mode machinery as appropriate
+- then perform a final runtime Play Test with the selected art.
