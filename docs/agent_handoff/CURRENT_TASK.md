@@ -1,5 +1,5 @@
 Task-ID: ACTION-04A5-COUNTER-TRANSITION-DURATION-TUNING
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / GAME FEEL TUNING / COUNTER TRANSITION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -375,3 +375,63 @@ Do not modify `main`.
 Implement only the accepted CounterTransition duration tuning from ~2.0 s to ~1.5 s.
 
 Do not redesign Counter behavior.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+Accepted Baseline: 507eea0fbfeb3ee4a4563935051c7e7925cbbd31
+
+## Accepted
+
+- `COUNTER_TRANSITION_TICKS = 90` (~1.5 s at current 60 Hz) is the accepted technical tuning baseline.
+- ACTION-04A4 D1-D4 remain preserved:
+  - stagger distance 1.0R = 0.35 m
+  - full post-transition `KUZUSHI_TICKS = 30`
+  - entry self/external momentum cleared for valid transitions
+  - Success = true side / Best = true rear relative to final pusher endpoint
+- Existing path/easing, input-lock, ring-out/Tokudawara, no-valid-target fallback, failed-Counter, and Counter tier/window semantics are unchanged.
+- Implementation scope is appropriately small: one production constant change, one explicit duration assertion update, documentation sync, and Completion Report.
+- Reported verification: 292 tests PASS, build PASS, diff-check PASS, browser/runtime smoke PASS.
+
+## Corrections
+
+- None for ACTION-04A5 implementation.
+- ACTION-04A4 inherited Known Untested Items remain unresolved and are not converted to PASS by this tuning task.
+
+## Do Not Reopen
+
+Unless the User requests another tuning change:
+- do not redesign CounterTransition geometry
+- do not change D1-D4
+- do not change easing/path because of this duration task
+- do not change ring-out/Tokudawara semantics
+- do not change null-target fallback or failed-Counter semantics.
+
+## User Play Test
+
+Required before gameplay-feel acceptance.
+
+Check:
+- Success side transition at ~1.5 s: natural, not abrupt
+- Best wrap-behind at ~1.5 s: readable, not too fast
+- pusher stagger remains readable
+- control return timing feels natural
+- Counter -> Grip / Morozashi follow-up remains understandable.
+
+Technical PASS does not by itself mean the 1.5 s Game Feel is accepted.
+
+## Inherited Known Untested / Deferred
+
+- natural transition fixture where both participants leave the ring on the same tick
+- Tokudawara side-window same-tick exit/re-entry explicit fixture
+- real-GPU rendering remains User Play Test dependent
+- Counter user can lose by crossing out during the transition near the edge (accepted current rule consequence, not changed here)
+- post-Kuzushi pusher facing may snap significantly after Best (deferred).
+
+## Next Task Constraint
+
+Do not create a follow-up implementation task solely from this review. First obtain the User Play Test result for the 1.5 s duration.
