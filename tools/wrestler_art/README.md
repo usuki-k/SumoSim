@@ -275,3 +275,34 @@ It prints size, pivot, body core and pixel / file SHA-256 per file. The runtime
 metadata in `src/game/presentation/productWrestlerArt.ts` must match this
 output; `tests/test_export_runtime_wrestlers.py` checks the committed PNGs and
 that TypeScript contract against a fresh export (when the sources are present).
+
+## Idle mirror + mawashi recolor (ART-WRESTLER-04A, Candidate)
+
+**Candidate / Pending User Visual Gate.** The User reopened the earlier
+"blue and red are never mirrored" constraint; this experiment checks whether one
+idle master can produce its counterpart. Nothing in the runtime changes: the
+committed `public/assets/action/wrestler/{blue,red}.png`, their metadata and the
+dual-sprite workflow above stay as they are.
+
+```bash
+PY tools/wrestler_art/preview_idle_mirror_workflow.py   # -> output-idle-mirror.local/ (git-ignored)
+```
+
+- Input: the committed runtime sprites only (read-only, pixel SHA-256 checked
+  against `idle_mirror_recipe.json`); no local source needed.
+- Transform: reflection across the local X axis, `(x, y) -> (x, H - y)` (image
+  top-bottom flip). FRONT stays local +X, the wrestler's left and right swap,
+  pivot / body-core points map the same way (`assemble_wrestler.mirror_part`).
+- Mawashi mask: hue band + saturation / value floors from the recipe, limited to
+  the largest 4-connected component (tinted outline pixels elsewhere are dropped).
+- Recolor (mask only, alpha kept): hue -> recipe target hue, saturation x gain,
+  value -> value x gain + offset (gain / offset map the source p10 / p90 value to
+  the authored counterpart's). Pixels outside the mask are unchanged.
+- Outputs: `idle_mirror_comparison.png` (authored blue / red, derived red / blue),
+  `derived_*_rotations.png` (0 / 45 / 90 / 180 / 270), `idle_mirror_faceoff_arena.png`
+  (authored pair, blue-master pair, red-master pair at start 4R / near contact /
+  oblique / side), `diagnostics_*_master.png` (source, mirror only, mask, mirror +
+  recolor, pivot / body core / +X), the derived sprites, `idle_mirror.json` and
+  `build_idle_mirror_manifest.json` (no timestamp).
+
+Tests: `test_preview_idle_mirror_workflow.py`.
