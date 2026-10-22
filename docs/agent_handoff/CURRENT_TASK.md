@@ -1,5 +1,5 @@
 Task-ID: ACTION-11A-GRIP-ATTEMPT-ART-VISUAL-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION ART VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -623,3 +623,214 @@ pose === 'grip'
 On whiff recovery or Grip success/grapple, immediately return to the existing visual behavior.
 
 Do not implement Grip success art or hand VFX in this Task.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: 89b2d631bdd74b65f93558678f24b1b599165f4a
+
+## Source Identity Review
+
+The User-provided source was independently rechecked from the uploaded file.
+
+Confirmed:
+
+- size: 1254 x 1254
+- decoded RGBA SHA-256:
+  `323a7e79829c371345e8561ef3dd8ff6f49541eceb74450ec418b16c328478e0`
+- PNG file SHA-256:
+  `2dcc3b3f87a931098463a4168a0f31873c83b71e8b6badda376d4b1cc20f61f9`
+
+This exactly matches the Task and recipe identity.
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-11A.
+
+Confirmed from Current Source / diff:
+
+- one authored red Grip-attempt source is the only authored source
+- runtime red is normalized to the Product body-core / pivot convention
+- runtime blue is derived offline by local-Y reflection + the shared accepted mawashi recolor
+- no runtime mirror/recolor was added
+- Grip attempt selection is exactly:
+  `state.pose === 'grip' && state.gripPhase === 'reach'`
+- Grip recovery falls back to the existing idle Product art
+- successful Grip / grapple falls back to the existing current grapple visual
+- WrestlerView only adds preload + selector integration
+- no dedicated Grip success art or hand VFX was added
+- Counter / Tsuppari / Kuzushi / Push selection remains intact.
+
+## Temporary Runtime Gate
+
+Current provisional runtime:
+
+```
+public/assets/action/wrestler/grip-attempt-gate/red.png
+public/assets/action/wrestler/grip-attempt-gate/blue.png
+```
+
+Current metadata:
+
+- red: 195 x 190, pivot (81, 105)
+- blue: 195 x 190, pivot (81, 85)
+- body core: 123.076923 px.
+
+Current pixel hashes:
+
+- red:
+  `9501d5301bbb982072bf419636c2ffb19f0ab9a3c72477172158a64f9dee57da`
+- blue:
+  `828bbf803a41bbc19f16a1d691c0c3dc8dbb26d87c83a7ce673bc5f682c59098`
+
+This remains Visual Gate infrastructure, not permanent Product art.
+
+## Measurement / Normalization
+
+Accepted technical measurement:
+
+- source FRONT: 162.5 degrees
+- root: (683, 608)
+- body core: (568, 244) - (759, 850)
+- body-core perpendicular deviation: approximately 0.03 degrees.
+
+The hair / mawashi scale ratios are close to idle and support the selected registration.
+
+No unsafe guessed pivot/root/body-core was introduced.
+
+## Recolor / Mask Review
+
+Standard shared Product mask limits were sufficient:
+
+- mask_px = 2220
+- missed_band_px = 15 <= 60
+- fringe_px = 72 <= 120.
+
+No Grip-specific relaxation was added.
+
+The shared recolor rule remains owned by runtime_wrestler_recipe.json.
+
+## Exact Visual Semantics
+
+Accepted technical rule:
+
+```
+Grip reach
+-> Grip attempt gate art
+
+Grip recovery
+-> existing idle Product art
+
+Grip success / grapple
+-> existing grapple fallback
+```
+
+No presentation timer extends the attempt pose.
+
+### Important current gameplay consequence
+
+If Grip is pressed while already in valid success range, the Simulation can enter grapple on that same tick.
+
+In that case there may be no rendered Grip-reach frame, so the attempt pose may not become visible before the grapple fallback appears.
+
+This is consistent with Current Gameplay and ACTION-11A scope.
+
+Do not change Grip timing only to force the attempt pose to appear unless the User explicitly requests that behavior after Play Test.
+
+## Gameplay Preservation
+
+Confirmed no Production file changes under:
+
+- src/game/sumo/
+- src/game/input/.
+
+Therefore ACTION-11A does not change:
+
+- Grip range
+- Grip timing
+- Grip success
+- simultaneous Grip
+- Kuzushi -> Morozashi
+- release
+- Grappled Orientation
+- Drive
+- Push charge
+- Counter
+- Tsuppari.
+
+## Regression Preservation
+
+Accepted:
+
+- Product Tsuppari selection unchanged
+- Product Counter selection and 35-degree rotation unchanged
+- Push 24-tick charge visual selection unchanged
+- Kuzushi sweat unchanged
+- idle Product art unchanged
+- grapple / drive current fallback unchanged
+- Product asset source files outside this temporary gate unchanged.
+
+## Verification Review
+
+Reported and accepted:
+
+- Grip attempt exporter focused tests: 17 / 17
+- full wrestler-art suite: 185 / 185
+- focused presentation selector: 10 / 10
+- presentation regression suite: 81 PASS
+- Grip / Drive / Orientation / PushCharge regression: 93 PASS
+- pnpm test: 27 files / 449 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- Grip attempt deterministic export + --check: PASS
+- idle / Tsuppari / Counter exporter checks: PASS
+- browser/runtime smoke: 28 / 28 PASS
+- no Product art regression.
+
+This is sufficient for Technical PASS.
+
+## User Visual Gate
+
+REQUIRED before promotion.
+
+Primary question:
+
+> Does this pose read clearly as "Grip attempt / 掴みに行く" during the short reach window?
+
+Judge especially:
+
+- distinction from idle
+- distinction from Push / Tsuppari
+- red / blue readability
+- pivot / scale continuity
+- whether approximately 100 ms is enough to perceive the pose
+- whether immediate-success cases with no visible attempt frame are acceptable
+- whether whiff -> idle recovery transition is acceptable
+- whether attempt -> current temporary grapple fallback is understandable until Grip success art is added.
+
+## Do Not Promote Yet
+
+Until User acceptance:
+
+- do not move from grip-attempt-gate to permanent Product paths
+- do not add it as Accepted in WRESTLER_PRODUCT_ART_SPEC
+- do not add Grip success art
+- do not add hand-mark VFX
+- do not modify Grip gameplay/timing merely to lengthen the visible pose.
+
+## Next Task Constraint
+
+If the User accepts ACTION-11A visually:
+
+- the attempt pose can be promoted later, or retained provisionally while Grip success visual work continues.
+
+The next visual design task may independently address Grip success:
+- two-wrestler head/shoulder offset
+- success pose
+- mawashi hand-marker VFX.
+
+Do not combine those into ACTION-11A retroactively.
