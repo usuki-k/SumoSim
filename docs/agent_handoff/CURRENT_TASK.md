@@ -1,5 +1,5 @@
 Task-ID: ACTION-07C1-TSUPPARI-RIGHT-POSE-REFRESH
-Status: READY
+Status: REVIEWED
 Task-Type: ART ASSET REFRESH / VISUAL GATE FOLLOW-UP
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -367,3 +367,184 @@ Refresh only the right-hand Tsuppari candidate path and re-run the existing ACTI
 
 Keep gameplay unchanged.
 Do not permanently accept SEPARATE until the User reviews the refreshed runtime.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS FOR VISUAL GATE / MEASUREMENT REPRODUCIBILITY CORRECTION DEFERRED / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: 4ba81157e3525bfb150e374f9937259b77d55a03
+
+## Reported Implementation vs Task
+
+Accepted for the purpose of the refreshed Visual Gate.
+
+Confirmed from Current Source / diff:
+
+- only the red-right candidate path was refreshed
+- six red-right-derived gate textures changed
+- red-left-derived textures remained unchanged
+- MIRROR-L remained unchanged
+- accepted idle red/blue sprites remained unchanged
+- ACTION-07B gameplay and input source remained unchanged
+- three-mode comparison and key-4 presentation logic remained unchanged
+- SEPARATE remains a User preference only, not a permanent Product baseline.
+
+## Source Replacement
+
+Confirmed:
+
+Old red-right decoded RGBA SHA-256:
+- d0e6070e2359a8309b07e7c3d76eba905c50fd379cf7e4b4d50bf14c1816d33b
+
+New red-right decoded RGBA SHA-256:
+- 3db3260bc3d90a88694bb65959c83919f148985847c4575c104394261e92cace
+
+The other three candidate identities remain the ACTION-07C values.
+
+## Accepted Refreshed Runtime Candidate
+
+For this Visual Gate only:
+
+- red-right source_front_deg: 157.8
+- runtime red-right: 209 x 167
+- pivot: (79, 87)
+- reflected blue-left pivot: (79, 80)
+- body-core remains 123.076923 px.
+
+Reported strike-direction proxy improved from approximately:
+- old: 46.1 degrees
+- new: 27.8 degrees.
+
+This is evidence of a more forward candidate, not final visual acceptance.
+
+## Expected Asset Delta Review
+
+Changed, as expected:
+- separate_red_right.png
+- separate_blue_left.png
+- mirror_r_red_right.png
+- mirror_r_red_left.png
+- mirror_r_blue_right.png
+- mirror_r_blue_left.png
+
+Confirmed unchanged:
+- separate_red_left.png
+- separate_blue_right.png
+- mirror_l_red_left.png
+- mirror_l_red_right.png
+- mirror_l_blue_left.png
+- mirror_l_blue_right.png
+- accepted idle red.png
+- accepted idle blue.png.
+
+This matches the Task scope.
+
+## Recolor Review
+
+Accepted for Visual Gate:
+
+- current red->blue rule was not changed
+- new red-right mask remains inside configured limits
+- alpha preservation / mask-outside pixel invariants remain covered by the existing tests
+- reported mask result:
+  - mask 2276 px
+  - missed band 11 px
+  - fringe 67 px.
+
+No evidence of skin/hair/arm recolor contamination was reported.
+
+## Verification Review
+
+Reported:
+
+- focused wrestler-art: 19 PASS
+- full wrestler-art: 144 PASS
+- exporter --check: PASS
+- pnpm test: 347 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- Browser smoke: 47 / 47 PASS
+- gameplay / input / scenes diff from ACTION-07C implementation baseline: 0 lines.
+
+This is sufficient to proceed to User Visual Gate.
+
+## Measurement Reproducibility Correction
+
+One non-blocking technical/documentation issue remains.
+
+ACTION-07C did not commit the helper used to derive normalization measurements.
+
+For ACTION-07C1, the Agent reconstructed the measurement procedure from recipe prose and calibration against the old right candidate.
+
+The reconstructed hair-landmark procedure used:
+- 7 px opening (erosion + dilation)
+
+while the top-level recipe prose still describes:
+- 7 px erosion.
+
+The newly recorded measurement_evidence explains this reconstruction, but the repository does not yet contain one executable measurement helper that reproduces the measurements from the source PNG.
+
+This does NOT block the current Visual Gate because:
+- the normalized recipe values are explicit
+- deterministic export from those values is tested
+- old-pose calibration was within approximately 1 source px
+- runtime texture/pivot/body-core integration is verified.
+
+However, before promoting a Tsuppari pose into the permanent Product art contract:
+- reconcile the recipe prose with the actual measurement method
+- preferably commit a small deterministic measurement helper or otherwise make the measurement derivation reproducible.
+
+Do not silently treat the current scratchpad reconstruction as the permanent Product-art measurement Source of Truth.
+
+## User Visual Gate
+
+REQUIRED.
+
+The refreshed gate should now be judged primarily in SEPARATE mode.
+
+Recommended:
+
+1. pnpm dev
+2. Enter
+3. 0 = debug
+4. use 4 until TSU ART: SEPARATE
+5. ArrowLeft / ArrowRight for player
+6. 3 for repeated CPU Tsuppari.
+
+Judge:
+
+- new right strike looks sufficiently forward/natural
+- left/right strike directions now feel balanced enough
+- derived blue-left looks natural
+- idle -> pose -> idle does not visibly jump
+- reach/hand contact looks plausible
+- held pose duration remains readable
+- Tsuppari is now visually strong enough to judge rhythm and impact.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- ACTION-07B gameplay tuning
+- current Push / Tsuppari displacement baseline
+- ArrowLeft / ArrowRight semantics
+- deterministic buildup
+- Countered Tsuppari behavior
+- accepted idle red-master baseline
+- current three-mode gate machinery until the User selects the final art strategy.
+
+## Next Task Constraint
+
+If the User accepts refreshed SEPARATE:
+
+- promote SEPARATE to the permanent Tsuppari Product-art baseline
+- remove/retire temporary mirror comparison modes as appropriate
+- update WRESTLER_PRODUCT_ART_SPEC / runtime art contract
+- formalize the normalization measurement method before or as part of that promotion
+- then run final integrated User Play Test.
+
+If the right pose is still visually unsatisfactory:
+- perform another small candidate refresh rather than changing gameplay.
