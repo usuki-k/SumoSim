@@ -1,168 +1,167 @@
-Task-ID: ACTION-08C-COUNTER-PRODUCT-ART-PROMOTION
+Task-ID: ACTION-09A-KUZUSHI-SWEAT-VISUAL-GATE
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: b65ab9a2e01835dc955248d5d4f7492361b78c1c
-Agent-Start-Head: 5411ab102e91dc5826f533d3fe8d918d767627c8
+Source-Baseline: 6c6a3f0cc2fcaffa2cef26d057713a8e783bf9c7
+Agent-Start-Head: 0b3f85cce8f96bee242791334725a97fb66f2a63
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 28 / 28 PASS（GPU）。昇格と整理で受理済みの見た目が変わっていないかは、最後のUser Regression Play Testで確認する）。
+PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 40 / 40 PASS（GPU）。汗だけでKuzushiが読み取れるかは、User Visual Gateで判断する）。
 
-- User Play Testで受理されたCounter / 引き・捌き（ACTION-08A1のpose + ACTION-08Bの35°の体の回転）を、恒久のProductの契約に昇格した
-  - 2枚のruntime texture: `public/assets/action/wrestler/counter/red.png` / `blue.png`
-  - exporter: `export_counter.py` + `counter_recipe.json`
-  - metadata / 選択 / 回転: `productCounterArt.ts`
-- 2枚とも、受理済みの `counter-gate` textureと、**decoded pixelもPNG byteも同じ**（`git mv` で移した）
-- 35°・sin曲線・red + / blue −の動きは、そのまま変えていない
-- gameplayは変えていない（`src/game/sumo`、`src/game/input` は差分0行）
+- 既存の `WrestlerVisualState.pose === 'kuzushi'` と `kuzushiStrength` だけを使って、頭の脇にpresentation専用の汗の滴を2つ重ねた
+- 次のものは変えていない:
+  - Kuzushi / CounterTransitionのgameplay
+  - 体のsprite、Product art、Counterの35°の回転
+- 体の揺れ、専用のKuzushi sprite、timerは足していない
 
 # Preflight
 
 - working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
-- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `b65ab9a`（`origin/develop` のancestor）、Handoff-Mode GITHUB
-- `b65ab9a..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `5411ab1`
-- 受理済みのsource: `input.local/candidate_red_counter.png`
-  - 1265×1244 RGBA
-  - decoded RGBA pixel SHA-256 `5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8`（一致）
+- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `6c6a3f0`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+- `6c6a3f0..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `0b3f85c`
 
-# Gate → 恒久Productの昇格と、pixelが同じことの証明
+# 実装
 
-| 受理済みのgate（移す前） | 恒久のProduct | size / pivot | pixel SHA-256（両方で同じ） | file SHA-256（両方で同じ） |
-|---|---|---|---|---|
-| `counter-gate/red.png` | `public/assets/action/wrestler/counter/red.png` | 210×207 / (74, 115) | `83b96783ebdd741ab07e435d25ce7a4ce6557b734d40c8873560bab2b630d5d3` | `a6128071c1a4137d7fbab66e8d51b90e72fe3ebe187c85ac73bd17fcfd2a6b4e` |
-| `counter-gate/blue.png` | `public/assets/action/wrestler/counter/blue.png` | 210×207 / (74, 92) | `1dec7025670ba375287166078cbb52dd3b6701fa52618646107fd4f50153e439` | `3aa893ce83621b66071fe77fd20c4b577b9fc22ef17d944e6768217448b457f3` |
+## 形と描き方
 
-- 移した後に `export_counter.py --check` と再実行をした。新しいexportとpixelもbyteも一致した
-- `tests/test_export_counter.py` の `ACCEPTED_COUNTER_PIXELS` で、この2つのhashを固定した
-- body-coreは2枚とも123.076923 px
-- 正規化の値（front 178.8、root (863, 553)、body core (853, 111)–(868, 846)）、pivot、sourceは変えていない
+- 手続き的な涙形（先端が上の、漫画の汗）を1つだけtextureにした
+  - `Graphics.generateTexture`。大きい滴の4倍のresolutionで1回だけ描く
+  - 2つの滴（Phaserの `Image`）で共有する
+  - 色:
+    - 本体はpale cyan（`#AEE8FF`）
+    - 縁は濃い青（`#2A78C0`）
+    - 白いhighlightを1つ入れた
+  - 文字・星・感嘆符・赤い点滅は無い
+- depth **2.5**: 体（2）より上で、debugのoverlay（3）とHUD / text（4）より下（下記のDesign Deviation参照）
+- 滴の形は、画面に対して常に先端が上
+  - 回すのは、置く位置だけ（canonical facing）
+  - 汗のiconとして読みやすいようにした
+- particle、effect framework、画像assetは足していない
 
-# 恒久の正本（Single Source of Truth）
+## 位置と大きさ（R単位、wrestler-local: +forward = FRONT、+lateral = wrestlerの右）
 
-| 何 | 正本 |
-|---|---|
-| 描いたsource | `input.local/candidate_red_counter.png` の1枚（commitしない。同一性はrecipeのpixel SHA-256） |
-| 正規化の値、mask_limits | `tools/wrestler_art/counter_recipe.json`（`master`） |
-| red → blueの規則 | `tools/wrestler_art/runtime_wrestler_recipe.json`（idle / Tsuppariと共有。複製しない） |
-| 書き出し / `--check` | `tools/wrestler_art/export_counter.py`（`--out-dir`。既定は `public/assets/action/wrestler/counter/`） |
-| runtimeのmetadata、選択、35°の回転 | `src/game/presentation/productCounterArt.ts`（`PRODUCT_COUNTER_ART`、`selectWrestlerPoseArt`、`counterVisualRotationOffset`、`COUNTER_VISUAL_MAX_ROTATION_RAD`） |
-| 文書 | `docs/WRESTLER_PRODUCT_ART_SPEC.md` §0（Counterの節を新設）、`docs/ARCHITECTURE.md` |
+| 滴 | forward | lateral（red） | lateral（blue） | width | height |
+|---|---|---|---|---|---|
+| 大 | +0.90 R | **+0.62 R** | **−0.62 R** | 0.20 R | 0.34 R |
+| 小 | +0.78 R | **−0.13 R** | **+0.13 R** | 0.15 R | 0.26 R |
 
-# 名前を変えた / 消した一時的なgate（すべて `git mv` で、履歴を保っている）
+- 置く位置は、canonicalなparticipantの中心と `participant.facing` から求める
+  - `kuzushiSweatOffsetPx`: `(f·cos − l·sin, f·sin + l·cos) · R`
+  - Counterの±35°の体の回転は使わない
+- 推奨値から変えた理由（Taskが「頭から明らかに離れるなら、R単位で最小限に調整」を認めている）:
+  1. 受理済みのidle spriteで頭（髪）の重心を測ると、**red (+0.584 R, +0.419 R)**、**blue (+0.584 R, −0.419 R)** だった
+     - blueはredの反射なので、頭の横の位置が逆になる
+     - 推奨値を色で固定すると、redでは小さい滴が、blueでは大きい滴が、頭の中心から約1.0 R離れて肩や腕の上に乗った（頭の半径は約0.47 R）
+  2. そこで、lateralの符号をartの反射に合わせて色ごとに反転した（どちらの色でも、頭に対する置き方が同じになる）
+  3. さらに、小さい滴だけをlateral −0.58 → **−0.13 R** にして、頭の反対側の縁へ寄せた
+  4. 大きい滴、forward、大きさは推奨値のまま
+  5. 比較のsheetを4案作り、2つの滴が頭の両脇に付く案を選んだ（scratchpadの `sweat_preview2.png`）
+  - PNGごとのpixel座標は使っていない
 
-| 旧（gate） | 新（Product） |
-|---|---|
-| `public/assets/action/wrestler/counter-gate/red.png` / `blue.png` | `public/assets/action/wrestler/counter/red.png` / `blue.png`（byteは同じ） |
-| `src/game/presentation/counterGateArt.ts`（+ `.test.ts`） | `src/game/presentation/productCounterArt.ts`（+ `.test.ts`） |
-| `tools/wrestler_art/counter_gate_recipe.json` | `tools/wrestler_art/counter_recipe.json` |
-| `tools/wrestler_art/export_counter_gate.py` | `tools/wrestler_art/export_counter.py` |
-| `tools/wrestler_art/tests/test_export_counter_gate.py` | `tools/wrestler_art/tests/test_export_counter.py` |
+## alphaの規則
 
-識別子の変更:
+- `alpha = clamp(kuzushiStrength, 0, 1)`
+  - `kuzushiStrength` は既存のもの（`min(1, ticksRemaining / KUZUSHI_TICKS)`）
+- `visible = alpha > 0`
+- pose ≠ kuzushiなら、alphaは0で非表示
+- 壁時計、render delta、timer、点滅、上下の揺れは使わない
 
-- `COUNTER_GATE_ART` → `PRODUCT_COUNTER_ART`
-- `COUNTER_GATE_BODY_CORE_DIAMETER_PX` → `PRODUCT_COUNTER_BODY_CORE_DIAMETER_PX`
-- `allCounterGateArts` → `allProductCounterArts`
-- texture keyは `counter-gate-red/blue` → `product-counter-red/blue`
-- exporterの `DEFAULT_GATE_DIR` / `--gate-dir` → `DEFAULT_COUNTER_DIR` / `--out-dir`
-- 次は値も名前もそのまま: `counterVisualRotationOffset`、`COUNTER_VISUAL_MAX_ROTATION_RAD`、`selectWrestlerPoseArt`
+# Changed Files
 
-履歴として残したもの:
+- `src/game/presentation/kuzushiVisualEffect.ts`（新規。pure、Phaser非依存）
+  - `KUZUSHI_SWEAT_DROPS`
+  - `kuzushiSweatVisual(id, state)`
+  - `kuzushiSweatOffsetPx(drop, facing, R)`
+- `src/game/presentation/kuzushiVisualEffect.test.ts`（新規。11 tests）
+- `src/game/scenes/WrestlerView.ts`
+  - 汗のtexture（`ensureSweatTexture`）
+  - 2つのImage（depth 2.5）
+  - `apply` での表示 / alpha / 位置
+  - 体・影・pivot・scale・回転は変えていない
+- `docs/ARCHITECTURE.md`（暫定のVisual Gateであることを1行で記した）
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
-- `counter_recipe.json` の `status`
-- exporterのdocstring
-- READMEのHistory
-- SPEC §0
+## 変更していないもの
 
-上の4か所に、08A / 08A1 / 08Bの `counter-gate` の経緯を書いた。現在の正本と二重にはなっていない。
+- `src/game/sumo/`、`src/game/input/`（`6c6a3f0` から差分0行）
+- `wrestlerVisualState.ts`、`productCounterArt.ts`、`productTsuppariArt.ts`、`productWrestlerArt.ts`、`BoutScene.ts`
+- `public/`、`tools/`（差分0行。idle / Tsuppari / Counterのasset、recipe、exporterは不変）
+- `WRESTLER_PRODUCT_ART_SPEC.md`（Acceptedにはしていない）、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md`
 
-# Mask（Counterだけの許容は維持）
+# Kuzushiに入る経路（A〜E）
 
-- `counter_recipe.json` の `mask_limits.max_missed_px = 80` はそのまま
-  - noteを「このCounterのsourceだけの、受理済みの狭い性質（全体の基準ではない）」に書き直した
-- idle / Tsuppariの上限は60のまま（testで確かめている）
-- 塗り替えのalgorithmと、共通の規則は変えていない
+すべて、Simulationを通したunit testと、browser smokeで確かめた。
 
-| 値 | 結果 |
-|---|---|
-| mask px | 1724 |
-| missed | 70（上限80。うち69はalpha < 128の輪郭の縁） |
-| fringe | 75（上限120） |
-
-- 80を超えれば、引き続きfail closedで止まる
-- 混入が無いことは、08A1でmaskの画像を目視して確かめた。pixelが同じなので変わらない
-
-# 35°の動きを保つこと
-
-`productCounterArt.ts` に、そのまま移した:
-
-- `COUNTER_VISUAL_MAX_ROTATION_RAD = 35 · π / 180`
-- `counterVisualRotationOffset = sign · sin(π · phaseProgress) · 35°`（red +1、blue −1）
-- Counter以外では0
-
-その他:
-
-- `wrestlerVisualState.ts`（`progress(ticksRemaining, COUNTER_WINDOW_TICKS)`）は変えていない
-- `WrestlerView` は、importとcommentだけを変えた
-  - 体だけを `facing + offset` で回す
-  - 影・位置・scaleは変えない
-- 08Bのtest（曲線、35°、符号、0、Snapshot / facingは不変）は、すべて残してPASS
-
-# Implementation Evidence
-
-| Design Requirement | Implemented As | Verified By |
+| 経路 | unit test（`kuzushiVisualEffect.test.ts`） | browser smoke |
 |---|---|---|
-| 受理済みgate → 恒久Productへの昇格 | `git mv` で、asset / module / exporter / recipe / testを恒久の名前へ移した | pixelとbyteのhashの一致（上の表）、`test_product_pixels_equal_the_accepted_counter_gate` |
-| 恒久のruntime path | `public/assets/action/wrestler/counter/red.png` / `blue.png`（ちょうど2枚） | `test_exactly_two_files_from_the_one_red_pose`、TSの `two Product textures under counter/`、smokeのtexture読み込み |
-| sourceの持ち主とhash | `counter_recipe.json` の `master`（pixel SHA-256 `5429d02f…`）。合わなければ止まる | `test_accepted_source_identity`、`test_missing_or_changed_source_fails_closed` |
-| red → blueの導出 | local Y反射 + 共通のまわしの塗り替え（ruleはidle recipe） | `test_only_one_local_y_reflection`、`test_recolor_rule_is_owned_by_the_idle_runtime_recipe`、`test_red_is_the_normalized_pose_and_blue_its_reflected_recolor`（alpha、mask外が不変） |
-| 受理済みpixelを保つ | 正規化の値もpivotも変えていない。byteが同じものを移した | `ACCEPTED_COUNTER_PIXELS`、`export_counter.py --check`、決定的な再実行 |
-| Counterだけ `max_missed` 80 | recipeの値は維持、noteを更新。idle / Tsuppariは60 | `test_counter_only_missed_allowance`、`test_mask_limits_fail_closed`、`test_real_mask_covers_the_mawashi` |
-| 明示したgeometry / pivot | `PRODUCT_COUNTER_ART`（210×207、(74, 115) / (74, 92)、123.076923） | `test_typescript_metadata_matches_the_export`、TSの `texture keys / paths are Product names; geometry …`、smokeのorigin = pivot |
-| 35°の動きを保つ | 定数と関数をそのまま移した | TSの08Bのtest（曲線、35°、中間点、red / blueの符号、Counter以外は0、Snapshot / facingは不変）、smokeの観測値 |
-| 一時的なgateの整理 | gateの名前、path、texture keyは、runtime / tool / testに残っていない | TSの `no temporary counter-gate runtime dependency remains`、smokeの「gate textureは0枚」、`counter-gate/` が無いことのtest |
-| SPEC / ARCHITECTUREの更新 | SPEC §0に「Accepted: Counter / 引き・捌きのpose」を新設し、idle共通の記述の例外も直した。ARCHITECTUREの段落をProduct Counterに置き換えた | 文書の差分 |
-| gameplayは不変 | `src/game/sumo`、`src/game/input` は差分0行 | `git diff b65ab9a -- src/game/sumo src/game/input` = 0行、sumoのtestは全PASS |
+| A. Counter Fail | Kuzushiに入ると、alpha 1。tickごとに `ticksRemaining / 30` と一致し、単調に減る。最後は1/30以下、回復すると0。相手は非表示 | S1: blue、76 frame。alpha 1.00 → … → 0.50 → … → ほぼ0、回復で非表示 |
+| B. CounterがTsuppariを捕まえる | 攻撃側にalpha 1、Counterを使った側は非表示 | （unitで確かめた） |
+| C. Tsuppariの6回目の命中 | 6回目の命中のtickで、受け手にalpha 1。それまでは、受け手がKuzushiのときだけ表示 | （unitで確かめた） |
+| D. PushのCounter Best | CounterTransitionの全tick（pusherのtimerは止まっている）でalpha 1、Counterを使った側は非表示。終わると新しく30 tick、そこから単調に薄くなり、回復で非表示 | S2: CounterTransition 90 tick、pusher（blue）の汗は292 frameで位置もalphaも正しい。full 220 frameの後に薄くなり、最後は0.00。red（Counterを使った側）には出ない |
+| E. GripがKuzushiを消す | Gripのtickでmorozashiになり、汗は非表示 | S3: blueのCounter Fail → redのGrip（smokeの中で注入）→ Morozashi（holder red）。次のframeからblueの汗は非表示 |
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| `test_export_counter.py`（focused） | 17 tests OK |
-| wrestler-art全suite | 168 tests OK |
-| presentationのtest（`productCounterArt` / `wrestlerVisualState` などを含む） | 57 tests PASS |
-| `pnpm test`（sumoのCounter / CounterTransitionのregressionを含む） | 23 files / 364 tests PASS |
+| `kuzushiVisualEffect.test.ts`（focused） | 11 tests PASS |
+| `src/game/sumo` + `src/game/presentation`（Counter / Tsuppari / Grip / CounterTransition / `wrestlerVisualState` / Product art） | 21 files / 342 tests PASS（既存のtestは変えていない） |
+| `pnpm test` | 24 files / 375 tests PASS |
 | `pnpm build` / `tsc --noEmit` | PASS（以前からあるchunk size警告だけ） |
 | `git diff --check` | OK |
-| `export_counter.py` の決定的な再実行 / `--check` | 再実行でbyteが同じ（red `a6128071…`、blue `3aa893ce…`）/ exit 0 |
-| `export_runtime_wrestlers.py --check`（idle） / `export_tsuppari.py --check`（Tsuppari） | どちらもexit 0（idle / Tsuppariは不変） |
-| `src/game/sumo/` / `src/game/input/` | `b65ab9a` から差分0行 |
+| `export_counter.py` / `export_runtime_wrestlers.py` / `export_tsuppari.py` の `--check` | どれもexit 0（Product assetは不変） |
+| `git diff 6c6a3f0 -- src/game/sumo src/game/input public tools` | 0行 |
+
+Taskのtest項目との対応:
+
+| Taskの項目 | 確かめた内容 |
+|---|---|
+| 1〜4 | 非表示、fresh 1、half 0.5、回復の直前は1/30、0とclamp |
+| 5 | sourceに時間やdeltaの入力が無い |
+| 6 / 8 | R単位の値が決まっていて、blueは鏡像。どちらの色も同じ規則 |
+| 7 | facing 0 / π / π/2 / 任意の値で、正しく回る |
+| 9〜11 | Kuzushiのときの体の選択はidle、Counterの回転は0。Counter / Tsuppari / idleのmetadataは不変 |
+| 12〜16 | 上のA〜E |
+| 17 | diff 0行 |
 
 # Browser / Runtime Smoke
 
 - `pnpm dev`（port 5199）+ Chrome（CDP、GPU: ANGLE D3D11）
-- 08Bのsmokeを、Productのtexture keyで実行した
-- CPU redのCounterは、smoke scriptの中だけで `dummy.nextIntent` を一時的に包んで出した（ソースは変えていない）
-- 結果: **28 / 28 PASS**
+- 08Cのsmoke（Product Counter / Tsuppari / 35°の回転 / Push / Grip / R）に、汗の場面S1〜S4を加えた
+- logに、汗の `visible` / `alpha` / 位置 / depthと、`kuzushiStrength` を記録した
+- 汗の場面はdebug OFF（Productの見え方）で撮った
+- 結果: **40 / 40 PASS**
 
 | 確認 | 結果 |
 |---|---|
-| Productの `product-counter-red/blue`（210×207）が読み込まれる。gateのtextureは0枚。Tsuppari / idleのsizeは変わらない | PASS |
-| Enterで開始。ArrowDown → blueは全Counter frameで `product-counter-blue` | PASS |
-| blueの回転（観測値）: −9.06 → −17.50 → −24.75 → −30.31 → −33.81 → **−35.00** → … → −9.06°（08Bと同じ） | PASS |
-| red: `product-counter-red`。+9.06 → … → +33.81°でPushをBestで捕まえ、既存のCounterTransition（`active`）へ | PASS |
-| pivotのまわりに回る。位置 = Snapshot center、scale 1.0、影 = facing、Snapshotのfacingは不変 | PASS |
-| Counterの空振り → Fail / Kuzushi。Counter以外（CounterTransitionを含む）、Tsuppariは回転差0 | PASS |
-| Tsuppariの左右はProductのまま。Push / Grip / 移動、R restart、console error / 失敗したrequestが無い | PASS |
+| Enterで開始。Kuzushi以外のframe（両者）には汗が無い | PASS |
+| S1: Counter Failのblueに汗。alpha = kuzushiStrength、位置 = canonical center + R offsetをfacingで回したもの、depth 2.5 | PASS |
+| S1: alphaは1から単調に減り、ほぼ0になる。回復すると非表示。redには出ない | PASS |
+| S2: PushのCounter Best。CounterTransitionのあいだ、pairが動いてもpusherの汗が付いて回り、濃いまま。その後、新しい30 tickで薄くなる。Counterを使った側には出ない | PASS |
+| S3: GripがKuzushiを消すと、汗はすぐ非表示 | PASS |
+| S4: R restartで汗は非表示 | PASS |
+| 08Cの確認（Product Counterの2枚、gate textureは0枚、blueの回転は−35°まで / redは+33.81°で捕獲、Counter Fail / Best / CounterTransition、Tsuppariの左右、Push / Grip / 移動、R restart、console error / 失敗したrequestが無い） | PASS |
 
-screenshot（scratchpadの `smoke8/`、GPU）で、08Bと同じposeと回転を確かめた（`09_blue_early/peak/late`、`10_red_peak`、`11_after_red_counter`）。
+screenshot（scratchpadの `smoke9/`、GPU、debug OFF）:
+
+| file | 状態 | alpha |
+|---|---|---|
+| `20_sweat_fresh.png` | Counter Failの直後のKuzushi | 1.0 |
+| `21_sweat_half.png` | 回復の途中 | 0.6 |
+| `22_sweat_counter_transition.png` | CounterTransition中のpusher（blue）。横に回り込むred | 1.0 |
+
+- どれでも、2つの滴が頭の両脇に付いていた
+- halfでは、薄くなっていることを目視で確かめた
 
 # Design Deviations
 
-Design Deviations: NONE
+1. **汗の位置**: Taskが認める範囲で、R単位の位置を最小限に調整した（上の「推奨値から変えた理由」）。lateralを色ごとに反転し、小さい滴を −0.58 → −0.13 Rにした。大きさ、forward、大きい滴の位置は推奨値のまま
+2. **depth**: 推奨の「3」ではなく、**2.5** にした
+   - 既存のdebug overlay（facing marker、接触円）がdepth 3なので、3だと「debug UIより下」というTaskの意図が、作成順しだいになる
+   - 2.5なら「体より上、debug / HUDより下」が必ず成り立つ
 
 # Unexpected Scope
 
@@ -170,23 +169,34 @@ NONE
 
 # Known Untested Items
 
-- 実機での最後のUser Regression Play Test
+- 実機でのUser Visual Gate（見た目、読みやすさ）
 
-# Final User Regression Play Test: REQUIRED
+# User Visual Gate: REQUIRED
 
-pose・blueの版・35°の回転は、すでに受理済み。確認してほしいのは、昇格と整理で何も変わっていないことだけ:
+主な問い:
 
-- Counterのposeと、red / blueの見た目が同じか
-- 35°の動きが同じか、Tsuppariと見分けられるか
-- Success / Bestの遷移
-- pivot / scaleの飛びや、gameplayの劣化が無いか
+> 汗の重ね描きだけで、専用のspriteが無くても、Kuzushiがすぐ読み取れるか
+
+判断してほしい点:
+
+- gameの大きさで見えるか
+- 頭に付いて見えるか
+- damage / KO / 気絶に見えないか
+- うるさくないか
+- CounterTransitionのあいだ濃いままでよいか
+- その後の0.5秒で薄くなるのが分かりやすいか
+- red / blueの両方
+- Tsuppari / Counterの見た目は、引き続き分かりやすいか
 
 確認の手順:
 
-1. `pnpm dev` → Enter → ArrowDown（blue）
-2. CPUのPushをArrowDownで返す（dummy `2`）
+1. `pnpm dev` → Enter → 離れた状態でArrowDown（Counter Fail → blueのKuzushi）
+2. CPUのPushをArrowDownで返す（dummy `2`。CPUのKuzushiと、CounterTransition）
+3. Tsuppariを6回当てる
+
+汗だけでは足りなければ、次のTaskで「汗 + ごく小さな体の揺れ」を試す（このTaskでは足していない）。
 
 # Git Delivery
 
-- stageするのはTask-owned fileだけ。commit `refactor(art): promote counter product pose` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
-- `input.local/`、`main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない
+- stageするのはTask-owned fileだけ。commit `feat(presentation): add kuzushi sweat visual gate` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
+- `main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない
