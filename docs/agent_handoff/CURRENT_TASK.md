@@ -1,333 +1,411 @@
-Task-ID: ACTION-08C-COUNTER-PRODUCT-ART-PROMOTION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION / PRODUCT ART PROMOTION / TEMP-GATE CLEANUP
+Task-ID: ACTION-09A-KUZUSHI-SWEAT-VISUAL-GATE
+Status: READY
+Task-Type: PRESENTATION VISUAL EFFECT GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: b65ab9a2e01835dc955248d5d4f7492361b78c1c
-Review-Handoff: ACTION-08B accepted by User visual Play Test at a5f4fe3e9bb48cfad8c38cbc65723ae4a4bd4d78
+Source-Baseline: 6c6a3f0cc2fcaffa2cef26d057713a8e783bf9c7
+Review-Handoff: ACTION-08C technical review at 23ba65ed8e85893656eb0a3f000023304701bc90
 Handoff-Mode: GITHUB
 
-# ACTION-08C — Promote Counter / Hiki-Sabaki Art to Product Baseline
+# ACTION-09A — Kuzushi Sweat Visual Gate
 
 ## Purpose
 
-Promote the User-accepted Counter / 引き・捌き visual result from the temporary ACTION-08A/08B gate into the permanent Product art/runtime contract.
+Make the existing Kuzushi gameplay state visually readable **without adding a dedicated Kuzushi wrestler sprite**.
 
-The User has accepted the integrated current result:
+For this first Visual Gate, add only a small procedural **sweat effect around the wrestler's head** while the existing presentation state is Kuzushi.
 
-- current Counter red pose
-- current derived blue Counter pose
-- current explicit pivots/body-core
-- current presentation-only body rotation
-- max 35 degrees
-- sine curve
-- red + / blue - mirrored direction.
+Do not add body wobble yet.
+Do not add a new pose image.
+Do not change Kuzushi gameplay.
 
-This Task is a Product promotion / cleanup only.
+Primary User question:
 
-Do NOT redesign the pose.
-Do NOT retune the 35-degree motion.
-Do NOT change Counter gameplay.
+> Is a simple sweat effect enough to make "this wrestler is currently Kuzushi / off-balance" readable?
+
+If not, a later Task may add a small body wobble or another symbol.
 
 ---
 
-# Accepted Baseline — Do Not Reopen
+# Current Source Definition — Preserve Exactly
 
-## Counter gameplay
-
-Keep exactly:
-
-- ArrowDown = Counter
-- COUNTER_WINDOW_TICKS = 12
-- Counter Best / Success / Fail semantics
-- Counter vs Push behavior
-- Counter vs Tsuppari behavior
-- CounterTransition side/rear movement
-- Kuzushi rules
-- input priority
-- participant canonical facing semantics.
-
-No Simulation changes are expected.
-
-## Counter visual
-
-Keep exactly the currently accepted ACTION-08A1 / 08B result.
-
-Current accepted provisional assets:
+Kuzushi is already Simulation-owned as:
 
 ```
-public/assets/action/wrestler/counter-gate/red.png
-public/assets/action/wrestler/counter-gate/blue.png
+posture:
+  stable
+  | kuzushi { ticksRemaining }
 ```
 
-Current accepted geometry:
+Current constants / semantics:
 
-- red: 210 x 207, pivot (74, 115)
-- blue: 210 x 207, pivot (74, 92)
-- body core: 123.076923 px.
+- `KUZUSHI_TICKS = 30` (~0.5 s of full Kuzushi ticks)
+- entering Kuzushi always cancels the current action to idle
+- Kuzushi participant cannot start normal FREE actions
+- effective movement input is zero / braking
+- facing is frozen while Kuzushi
+- Push received while Kuzushi uses `KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5`
+- normal gameplay momentum/ring-out rules continue
+- a valid Grip on a Kuzushi target consumes Kuzushi and gives the gripper Morozashi
+- Counter Fail puts the Counter user into Kuzushi
+- Counter catching Tsuppari puts the Tsuppari attacker into Kuzushi in place
+- Tsuppari 6th successful hit puts the receiver into Kuzushi
+- Push Counter success puts the pusher into Kuzushi.
 
-Current accepted source identity:
-
-```
-tools/wrestler_art/input.local/candidate_red_counter.png
-```
-
-decoded RGBA pixel SHA-256:
-
-```
-5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8
-```
-
-Current accepted red/blue derivation:
-
-```
-red = normalized authored red Counter source
-blue = local-Y reflection(red) + accepted mawashi-only recolor
-```
-
-Current accepted body motion:
-
-```
-phaseProgress = 1 - counter.ticksRemaining / COUNTER_WINDOW_TICKS
-magnitude = sin(pi * phaseProgress) * 35 degrees
-
-red  = canonical facing + magnitude
-blue = canonical facing - magnitude
-```
-
-Outside Counter:
-- visual rotation offset = 0.
-
-Do not change any of these values or signs.
+Do not alter any of the above.
 
 ---
 
-# Permanent Runtime Contract
+# Important CounterTransition Semantics
 
-Replace the temporary Counter gate asset location with a permanent Product location.
+Push Counter Success / Best has special existing timing.
 
-Preferred permanent path:
+When the pusher is caught:
+
+- pusher enters Kuzushi
+- CounterTransition starts
+- during the ~1.5 s CounterTransition, the pusher's Kuzushi timer is paused
+- after transition completion, a fresh full `KUZUSHI_TICKS = 30` is started again.
+
+Therefore a simple presentation rule:
 
 ```
-public/assets/action/wrestler/counter/
+show effect whenever WrestlerVisualState.pose === 'kuzushi'
 ```
 
-Preferred files:
+will intentionally keep the effect visible during the CounterTransition and then through the post-transition Kuzushi window.
 
-```
-red.png
-blue.png
-```
+Do NOT add a special exception for CounterTransition in this Task.
 
-Permanent outputs must preserve the accepted pixels exactly.
-
-Before removing/renaming the gate assets:
-- capture their decoded pixel hashes
-- prove permanent red == current counter-gate/red.png
-- prove permanent blue == current counter-gate/blue.png
-- preferably preserve identical PNG bytes as well if only moving/renaming.
-
-Do not renormalize into a visually different result.
+The User will judge whether this duration reads correctly.
 
 ---
 
-# Permanent Presentation Module
+# Existing Presentation State
 
-Replace temporary gate naming with permanent Product naming.
-
-Preferred:
+Current pure presentation already exposes:
 
 ```
-src/game/presentation/productCounterArt.ts
+WrestlerVisualState.pose === 'kuzushi'
+WrestlerVisualState.kuzushiStrength
 ```
 
-It should own:
+Current meaning of `kuzushiStrength`:
 
-- red / blue Product Counter metadata
-- texture keys
-- permanent asset paths
-- width / height
-- pivots
-- body-core diameter
-- accepted 35-degree presentation rotation constants/function
-- Counter art selection.
+```
+1.0  = fresh/full Kuzushi
+...
+0.0  = about to recover
+```
 
-Current pure architecture remains:
+derived from:
+
+```
+ticksRemaining / KUZUSHI_TICKS
+```
+
+Use this existing state.
+
+Do not derive Kuzushi from raw input or scene state.
+
+Architecture remains:
 
 ```
 BoutSimulation / Snapshot
 -> WrestlerVisualState
--> Product Counter art + pure presentation rotation
--> WrestlerView
+-> pure Kuzushi effect parameters
+-> Phaser WrestlerView presentation
 ```
-
-Do not add Phaser imports to the pure presentation module.
-
-Do not create a generic pose framework.
 
 ---
 
-# Permanent Counter Export Tooling
+# Visual Effect — First Gate
 
-Promote the current gate exporter/recipe into a permanent deterministic Counter exporter contract.
+Use the existing wrestler art unchanged.
 
-Preferred names:
+Add **two simple procedural sweat drops** around the head.
 
-```
-tools/wrestler_art/counter_recipe.json
-tools/wrestler_art/export_counter.py
-```
+No external PNG asset is required.
 
-The permanent contract should:
+Preferred visual language:
 
-- use exactly one authored red Counter source
-- validate the accepted decoded source hash
-- produce exactly two runtime outputs:
-  - red.png
-  - blue.png
-- derive blue by local-Y reflection + accepted shared mawashi recolor
-- preserve alpha
-- preserve pixels outside recolor mask
-- fail closed on source mismatch
-- be deterministic
-- support read-only `--check`.
+- pale cyan / light blue sweat
+- high contrast enough to read on the current arena
+- one larger drop and one smaller drop
+- stylized teardrop / comic-sweat shape
+- no text
+- no stars
+- no exclamation mark
+- no red damage flash.
 
-Reuse the existing accepted recolor rule owned by:
+The intention is:
 
 ```
-tools/wrestler_art/runtime_wrestler_recipe.json
+"sweating / under pressure / balance broken"
 ```
 
-Do not duplicate recolor constants.
+not:
+- stun
+- damage
+- KO
+- attack impact.
+
+This is a Prototype Visual Gate; exact colour/shape remains provisional until User Play Test.
 
 ---
 
-# Counter-Specific Mask Limit
+# Placement
 
-Preserve the accepted Counter-only validation allowance introduced in ACTION-08A1:
+Place the effect in **wrestler-local geometry**, not fixed screen-up geometry.
+
+Use canonical participant facing.
+
+Suggested local offsets in units of body radius R:
 
 ```
-max_missed_px = 80
+large drop:
+  forward = +0.90 R
+  lateral = +0.62 R
+
+small drop:
+  forward = +0.78 R
+  lateral = -0.58 R
 ```
+
+where:
+- local +X = wrestler FRONT
+- local +Y = wrestler RIGHT.
+
+Convert local offsets to world/canvas coordinates using canonical `participant.facing`.
+
+Do not use the Counter's presentation-only +/-35° body offset for the sweat placement.
 
 Reason:
-- current accepted image has 70 missed band pixels
-- 69 of those are semi-transparent outline/fringe pixels with alpha < 128
-- no material skin/hair/arm contamination was observed.
+- Kuzushi is its own visual state
+- canonical facing is Simulation-owned
+- the effect should stay anchored to the wrestler/head region rather than inherit unrelated Counter presentation motion.
 
-Important:
-- this is Counter-specific
-- do NOT change idle or Tsuppari mask limits
-- do NOT change the recolor algorithm
-- do NOT change the shared recolor rule
-- permanent Counter exporter must still fail if missed > 80
-- permanent Counter exporter must still fail/report if material contamination appears.
-
-Document this as a narrow accepted property of this Counter source, not a global standard.
+If Current Product geometry shows these suggested offsets place the drops materially away from the head:
+- adjust the local offsets minimally
+- report the final R-relative values
+- do not add asset-specific magic pixel coordinates.
 
 ---
 
-# Remove Temporary Gate Naming
+# Size
 
-After permanent Product paths/modules/tools are in place, remove/retire temporary runtime/tool naming where appropriate:
+Suggested provisional sizes, in R:
 
-- `counter-gate/` runtime directory
-- `counterGateArt.ts`
-- `counterGateArt.test.ts`
-- `counter_gate_recipe.json`
-- `export_counter_gate.py`
-- corresponding README wording that calls the current accepted Counter art a Visual Gate.
+```
+large drop:
+  width  ~0.20 R
+  height ~0.34 R
 
-Use git mv/rename where appropriate to preserve history.
+small drop:
+  width  ~0.15 R
+  height ~0.26 R
+```
 
-Do not remove useful historical notes explaining the earlier gate process.
+Keep them readable at the 1920x1080 logical resolution without covering the wrestler.
 
-Do not leave duplicate active Sources of Truth.
+Do not make the effect larger than the head/body silhouette.
+
+---
+
+# Strength / Fade
+
+Use `kuzushiStrength` directly as the main effect alpha.
+
+Required:
+
+```
+alpha = clamp(kuzushiStrength, 0, 1)
+```
+
+So:
+
+- newly entered Kuzushi -> full sweat visibility
+- post-transition ordinary Kuzushi -> gradually fades as recovery approaches
+- final Kuzushi state with strength near 0 -> nearly/fully invisible
+- stable -> effect hidden.
+
+Do not use wall-clock time.
+
+Do not use render delta.
+
+Do not add a presentation timer.
+
+Do not add pulsing/bobbing in this Task.
+
+Reason:
+- the first Gate should isolate whether the state marker itself is useful
+- a frozen bout should not have an independently moving effect.
+
+---
+
+# Rendering
+
+Keep implementation small and explicit.
+
+Preferred options:
+
+- a tiny generated Phaser texture for one sweat-drop shape, reused for both drops, or
+- two small Phaser Graphics objects owned by WrestlerView.
+
+Do not add an effect framework.
+
+Do not add a generic particle system.
+
+Recommended depth:
+
+```
+body = existing depth 2
+Kuzushi sweat = depth 3
+HUD/debug = existing higher layers
+```
+
+The effect should render above wrestler bodies and below normal HUD/debug UI.
+
+---
+
+# Preferred Pure Helper
+
+Prefer a small pure presentation helper, for example:
+
+```
+src/game/presentation/kuzushiVisualEffect.ts
+```
+
+It may expose data such as:
+
+```ts
+interface KuzushiSweatVisual {
+  visible: boolean
+  alpha: number
+  drops: readonly [
+    { forwardR: number; lateralR: number; widthR: number; heightR: number },
+    ...
+  ]
+}
+```
+
+or an equivalent small explicit shape.
+
+The helper must:
+
+- depend only on `WrestlerVisualState`
+- be Phaser-free
+- return hidden / alpha 0 outside Kuzushi
+- use `kuzushiStrength` without inventing gameplay state.
+
+Do not create a generic status-effect abstraction.
 
 ---
 
 # WrestlerView Integration
 
-Keep behavior unchanged.
+WrestlerView should:
 
-WrestlerView should still:
+- keep current idle/Tsuppari/Counter Product body selection unchanged
+- keep Counter 35° presentation rotation unchanged
+- add/update/hide two sweat objects based on the pure Kuzushi visual data
+- position sweat from canonical participant center/facing and body radius R
+- never alter body position, scale, pivot, texture, or canonical facing because of the sweat effect.
 
-- preload idle Product art
-- preload permanent Tsuppari Product art
-- preload permanent Counter Product art
-- select Counter art only when `state.pose === 'counter'`
-- apply accepted Counter presentation rotation to body sprite only
-- keep canonical participant position
-- keep canonical participant facing unchanged
-- keep shadow on canonical facing
-- keep scale unchanged.
-
-No extra translation.
-No extra scale animation.
-No new timer.
+The sweat is an overlay only.
 
 ---
 
-# WrestlerVisualState
+# Scope
 
-Keep current Counter progress derivation unchanged:
+## In Scope
 
-```
-phaseProgress = progress(action.ticksRemaining, COUNTER_WINDOW_TICKS)
-```
+- pure Kuzushi sweat-effect parameters
+- two procedural sweat marks
+- strength-based fade
+- local-R placement around the head
+- rendering for both red and blue wrestlers
+- CounterTransition compatibility
+- focused tests
+- browser smoke
+- User Visual Gate.
 
-Do not change progress semantics.
+## Scope Out
 
-Do not add new Counter presentation state.
+Do NOT:
 
----
-
-# Product Art SPEC Update
-
-Update:
-
-```
-docs/WRESTLER_PRODUCT_ART_SPEC.md
-```
-
-so §0 truthfully includes permanent Counter art.
-
-Accepted Counter section should state:
-
-- one authored red Counter master
-- blue derived offline by local-Y reflection + shared mawashi recolor
-- permanent runtime red/blue textures
-- explicit pivot/body-core metadata
-- pose selected by `WrestlerVisualState.pose === 'counter'`
-- Counter pose shown for current Counter action state only
-- presentation-only body rotation:
-  - 0 -> 35 -> 0
-  - sine curve
-  - red + / blue -
-- body rotation does not change Simulation facing
-- no runtime reflection/recolor
-- sprite shape does not determine gameplay collision
-- the integrated visual result was accepted by User Play Test.
-
-Also state that the previous `counter-gate` naming was temporary Visual-Gate infrastructure and is no longer the Product contract.
-
-Do not rewrite unrelated historical sections.
+- add a Kuzushi sprite
+- modify Product wrestler PNGs
+- modify Tsuppari PNGs
+- modify Counter PNGs
+- change Counter 35° motion
+- add body wobble
+- add body rotation for Kuzushi
+- add translation/scale animation
+- add stars / exclamation marks
+- add particles
+- add sound
+- change Kuzushi gameplay
+- change Kuzushi duration
+- change Push susceptibility
+- change Grip/Morozashi behavior
+- change CounterTransition
+- update WRESTLER_PRODUCT_ART_SPEC as Accepted
+- modify PROJECT_HANDOFF.md.
 
 ---
 
-# ARCHITECTURE Update
+# Required Scenario Coverage
 
-Update Current Architecture so it describes:
+The effect must correctly follow all existing ways Kuzushi can appear.
 
-- permanent Counter Product art
-- permanent red->blue derivation
-- presentation-only 35-degree body-sabaki rotation
-- canonical `participant.facing` remains Simulation-owned and unchanged
-- Counter art/motion is presentation only.
+At minimum verify:
 
-Remove wording that says the Counter art is still provisional/gate-only.
+## A. Counter Fail
 
-Do not alter Counter gameplay formulas.
+```
+Counter expires
+-> Counter user enters Kuzushi
+-> sweat appears full
+-> fades across the ~0.5 s Kuzushi
+-> disappears on recovery
+```
+
+## B. Counter catches Tsuppari
+
+```
+Tsuppari attacker enters Kuzushi in place
+-> sweat appears on attacker
+-> Counter user does not get sweat
+```
+
+## C. Tsuppari 6th-hit Kuzushi
+
+```
+receiver enters Kuzushi
+-> sweat appears on receiver
+```
+
+## D. Push Counter Success / Best
+
+```
+pusher enters Kuzushi
+-> sweat appears
+-> remains full while CounterTransition pauses Kuzushi timer
+-> after transition, fresh 30-tick Kuzushi starts
+-> sweat then fades with kuzushiStrength
+```
+
+## E. Grip consumes Kuzushi
+
+```
+valid Grip on Kuzushi target
+-> Kuzushi consumed
+-> Morozashi engagement begins
+-> sweat disappears immediately
+```
+
+Do not change gameplay to make these scenarios easier to render.
 
 ---
 
@@ -335,28 +413,23 @@ Do not alter Counter gameplay formulas.
 
 At minimum verify:
 
-1. accepted Counter source hash is enforced
-2. permanent exporter uses exactly one authored red source
-3. exactly two permanent Counter runtime textures are produced
-4. permanent red pixels equal accepted gate red pixels
-5. permanent blue pixels equal accepted gate blue pixels
-6. blue is local-Y reflected red + shared mawashi recolor
-7. Counter-only mask limit remains 80
-8. idle/Tsuppari mask rules remain unchanged
-9. alpha preserved
-10. mask-outside pixels unchanged
-11. body core remains 123.076923 px
-12. permanent TypeScript metadata matches exporter dimensions/pivots
-13. deterministic exporter
-14. `--check` is read-only and detects stale/missing assets
-15. accepted idle sprites unchanged
-16. accepted Tsuppari textures unchanged
-17. Counter selector works only during Counter
-18. accepted 35-degree sine rotation is unchanged
-19. red/blue signs remain +/-
-20. participant.facing / Snapshot unchanged by presentation rotation
-21. no temporary `counter-gate` runtime dependency remains
-22. Simulation/input source unchanged.
+1. non-Kuzushi visual state -> sweat hidden / alpha 0
+2. fresh Kuzushi -> visible / alpha 1
+3. half remaining -> alpha ~0.5
+4. near recovery -> alpha approaches 0
+5. no wall-clock/render-delta input is used
+6. local drop geometry is deterministic
+7. world placement rotates correctly with canonical participant facing
+8. red and blue use the same effect semantics
+9. Counter body rotation logic remains unchanged
+10. Tsuppari/Counter/idle body art selection remains unchanged
+11. body texture/pivot/scale metadata unchanged
+12. Counter Fail path drives effect correctly
+13. Counter-caught Tsuppari path drives effect correctly
+14. Tsuppari 6th hit drives effect correctly
+15. Push Counter transition keeps effect while Kuzushi timer is paused
+16. Grip consumption removes effect
+17. src/game/sumo and src/game/input have no semantic changes.
 
 Do not weaken existing tests.
 
@@ -365,25 +438,20 @@ Do not weaken existing tests.
 # Verification
 
 Verification Level:
-Standard Product Art Promotion + final regression check
+Standard Presentation Visual Gate
 
 Required:
 
-- focused permanent Counter art exporter tests
-- full wrestler-art suite
-- focused presentation tests
-- relevant Counter gameplay regression tests
+- focused pure Kuzushi visual tests
+- focused `wrestlerVisualState` tests
+- relevant Counter / Tsuppari / Grip gameplay regression tests
+- existing Product presentation tests
 - `pnpm test`
 - `pnpm build`
 - `git diff --check`
-- permanent Counter exporter deterministic rerun
-- permanent Counter exporter `--check`
-- idle exporter `--check`
-- Tsuppari exporter `--check`
-- prove `src/game/sumo/` and `src/game/input/` unchanged from ACTION-08B baseline.
-
-If promotion requires gameplay changes:
-- STOP and report.
+- browser/runtime smoke
+- prove `src/game/sumo/` and `src/game/input/` unchanged
+- prove idle/Tsuppari/Counter Product asset hashes unchanged.
 
 ---
 
@@ -391,74 +459,63 @@ If promotion requires gameplay changes:
 
 Required.
 
-Verify:
+Verify at least:
 
-1. Enter starts Bout
-2. ArrowDown shows permanent Counter Product art
-3. blue uses accepted derived texture
-4. red uses accepted authored-derived texture
-5. accepted 0 -> 35 -> 0 motion is unchanged
-6. red + / blue - direction is unchanged
-7. body rotates around the explicit pivot/canonical center
-8. position/scale unchanged
-9. participant.facing unchanged
-10. shadow remains canonical-facing
-11. Counter Fail behavior unchanged
-12. Push Counter Success / Best unchanged
-13. CounterTransition side/rear movement unchanged
-14. Tsuppari Product art unchanged
-15. Push / Grip / movement unchanged
-16. no temporary counter-gate runtime texture is loaded
-17. R restart works
-18. no console errors.
+1. pre-bout / Enter works
+2. ordinary stable wrestler has no sweat
+3. Counter Fail shows sweat on the failed Counter user
+4. sweat is near the head and follows canonical facing
+5. alpha decreases as ordinary Kuzushi recovers
+6. Push Counter Success / Best shows sweat on the pusher during CounterTransition
+7. Counter user does not incorrectly receive the effect
+8. effect remains positioned correctly while the pair moves through CounterTransition
+9. after transition, effect fades through the fresh 30-tick Kuzushi
+10. Grip consuming Kuzushi removes the effect if practical to observe in smoke
+11. Tsuppari / Counter Product poses remain unchanged
+12. Counter 35° motion remains unchanged
+13. Push / Grip / movement gameplay unchanged
+14. R restart clears the effect
+15. no console errors.
+
+Capture screenshots for:
+- fresh ordinary Kuzushi
+- about half-recovered Kuzushi
+- CounterTransition pusher Kuzushi.
 
 ---
 
-# Final User Regression Play Test
+# User Visual Gate
 
-Required, but this is only a regression gate.
+REQUIRED.
 
-The User already accepted:
-- current Counter image
-- current blue derivation
-- current 35-degree body rotation.
+Primary question:
 
-The final check is only to confirm promotion/cleanup changed nothing visually.
+> Does the sweat overlay make Kuzushi immediately readable without needing a dedicated wrestler sprite?
 
 Judge:
 
-- same Counter pose
-- same red/blue look
-- same 35-degree movement
-- same Tsuppari distinction
-- same Success/Best transition
-- no pivot/scale jump
-- no gameplay regression.
+- sweat is visible enough at gameplay scale
+- sweat placement feels attached to the head/wrestler
+- effect does not look like damage/KO/stun
+- effect is not visually noisy
+- full-strength display during CounterTransition is acceptable
+- fade during the post-transition 0.5 s recovery feels understandable
+- red and blue are equally readable
+- existing Tsuppari / Counter visuals remain clear.
 
-Do not redesign during this Task.
+If sweat alone is insufficient:
+- next Task may test **sweat + very small body wobble**
+- do not add that wobble inside ACTION-09A.
 
 ---
 
-# Scope Out
+# Documentation
 
-Do NOT:
+Do not add this Visual Gate to the Accepted Product-art section yet.
 
-- change Counter image
-- change source hash
-- change normalization values
-- change pivots
-- change body-core
-- change 35 degrees
-- change sine curve
-- change red/blue sign
-- add lateral offset
-- add scale/camera/impact animation
-- change Counter gameplay
-- change CounterTransition
-- change Push / Tsuppari
-- change idle Product art
-- create generic animation framework
-- modify PROJECT_HANDOFF.md.
+It is acceptable to add a short provisional note to `docs/ARCHITECTURE.md` only if needed to describe Current Source truthfully.
+
+Do not update `WRESTLER_PRODUCT_ART_SPEC.md` as Accepted until User acceptance.
 
 ---
 
@@ -466,38 +523,13 @@ Do NOT:
 
 STOP if:
 
-- accepted source hash does not match
-- permanent outputs cannot reproduce accepted gate pixels
-- promotion changes pivot/body-core/visual pixels
-- Counter-only mask allowance no longer safely covers the source
-- recolor contaminates skin/hair/arms
-- Counter gameplay changes become necessary
-- CounterTransition changes become necessary
-- removing gate naming requires broad architecture redesign
+- implementing the effect requires Kuzushi gameplay changes
+- a new Simulation state/timer is required
+- CounterTransition semantics need modification
+- body Product assets need modification
+- effect placement requires hard-coded per-PNG pixel offsets rather than R-relative presentation geometry
+- a generic particle/status-effect framework becomes necessary
 - Current Source materially conflicts with this Task.
-
----
-
-# Implementation Evidence Required
-
-Completion Report must include a table:
-
-| Design Requirement | Implemented As | Verified By |
-|---|---|---|
-
-At minimum cover:
-
-- accepted gate -> permanent Product promotion
-- exact permanent runtime paths
-- source ownership/hash
-- red->blue derivation
-- accepted-pixel preservation
-- Counter-only max_missed=80
-- explicit geometry/pivots
-- accepted 35-degree motion preservation
-- temporary gate cleanup
-- SPEC/ARCHITECTURE update
-- gameplay unchanged.
 
 ---
 
@@ -506,24 +538,18 @@ At minimum cover:
 Include:
 
 - Result
-- Preflight
-- accepted source hash
-- accepted gate pixel hashes
-- permanent pixel hashes
-- proof gate == permanent pixels
-- permanent runtime paths
-- permanent exporter/recipe ownership
-- renamed/deleted temporary gate files
-- geometry/pivots/body-core
-- mask diagnostics
-- 35-degree motion preservation
-- tests/build/checks
-- browser smoke
-- gameplay unchanged evidence
+- final sweat shape/render method
+- final R-relative offsets/sizes
+- alpha rule
+- changed files
+- scenario coverage A-E
+- focused/full verification
+- browser smoke screenshots/results
+- proof gameplay unchanged
+- proof Product art assets unchanged
 - Design Deviations
 - Unexpected Scope
-- Known Untested Items
-- Final User Regression Play Test Required
+- User Visual Gate: REQUIRED
 - Git delivery.
 
 If none:
@@ -549,7 +575,7 @@ Normal successful Task:
 
 Suggested commit:
 
-`refactor(art): promote counter product pose`
+`feat(presentation): add kuzushi sweat visual gate`
 
 Do not modify:
 
@@ -559,262 +585,9 @@ Do not modify:
 
 # Final Instruction
 
-Promote the already accepted Counter visual result into the permanent Product art contract.
+Add only a presentation-only Kuzushi sweat overlay.
 
-Preserve exact accepted pixels and exact accepted 35-degree presentation motion.
+Use the existing `pose === 'kuzushi'` and `kuzushiStrength`.
 
-Remove temporary gate naming only.
-Keep Counter gameplay completely unchanged.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-22
-Overall Result: TECHNICAL PASS / FINAL USER REGRESSION PLAY TEST REQUIRED
-Accepted Technical Baseline: 6c6a3f0cc2fcaffa2cef26d057713a8e783bf9c7
-
-## Reported Implementation vs Design
-
-Accepted as aligned with ACTION-08C.
-
-Confirmed from Current Source / diff:
-
-- accepted Counter gate textures were promoted by rename/move into permanent Product paths
-- permanent red/blue Counter pixels are unchanged from the accepted gate baseline
-- permanent Product metadata preserves accepted dimensions/pivots/body-core
-- accepted 35-degree sine rotation is unchanged
-- accepted red + / blue - sign convention is unchanged
-- temporary counter-gate runtime path is removed
-- temporary gate module/tool/recipe names were promoted to permanent Product names
-- WRESTLER_PRODUCT_ART_SPEC and ARCHITECTURE now describe the permanent Counter Product contract
-- src/game/sumo and src/game/input are unchanged.
-
-## Permanent Counter Product Contract
-
-Accepted technical contract:
-
-```
-public/assets/action/wrestler/counter/red.png
-public/assets/action/wrestler/counter/blue.png
-```
-
-Permanent presentation ownership:
-
-```
-src/game/presentation/productCounterArt.ts
-```
-
-Permanent tooling ownership:
-
-```
-tools/wrestler_art/counter_recipe.json
-tools/wrestler_art/export_counter.py
-```
-
-Current authored source identity:
-
-```
-tools/wrestler_art/input.local/candidate_red_counter.png
-```
-
-decoded RGBA SHA-256:
-
-```
-5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8
-```
-
-## Accepted Pixel Preservation
-
-Permanent Product decoded RGBA hashes:
-
-- red:
-  `83b96783ebdd741ab07e435d25ce7a4ce6557b734d40c8873560bab2b630d5d3`
-- blue:
-  `1dec7025670ba375287166078cbb52dd3b6701fa52618646107fd4f50153e439`
-
-These are the same accepted ACTION-08A1/08B gate pixels.
-
-Permanent geometry remains:
-
-- red: 210 x 207, pivot (74, 115)
-- blue: 210 x 207, pivot (74, 92)
-- body core: 123.076923 px.
-
-No visual renormalization occurred during promotion.
-
-## Accepted Counter Derivation
-
-Permanent mapping remains:
-
-```
-red = normalized authored red Counter source
-blue = local-Y reflection(red) + shared accepted mawashi recolor
-```
-
-The shared recolor rule remains owned by:
-
-```
-runtime_wrestler_recipe.json
-```
-
-No runtime reflection/recolor is introduced.
-
-## Counter-Specific Mask Allowance
-
-Accepted and preserved:
-
-```
-max_missed_px = 80
-```
-
-for this Counter source only.
-
-Current diagnostics:
-
-- mask: 1724 px
-- missed: 70 px
-- fringe: 75 px.
-
-The idle/Tsuppari limits remain unchanged at 60.
-
-Do not generalize this Counter-specific allowance into a global art rule.
-
-## Accepted Motion Preservation
-
-Permanent presentation motion remains exactly:
-
-```
-phaseProgress = 1 - counter.ticksRemaining / COUNTER_WINDOW_TICKS
-magnitude = sin(pi * phaseProgress) * 35 degrees
-
-red  = canonical facing + magnitude
-blue = canonical facing - magnitude
-```
-
-Outside Counter:
-- rotation offset = 0.
-
-The body sprite alone receives this offset.
-
-Unchanged:
-- participant.facing
-- shadow rotation
-- canonical position
-- scale
-- Simulation state.
-
-## Temporary Gate Cleanup
-
-Confirmed promoted/removed from current ownership:
-
-- `counter-gate/` runtime path
-- `counterGateArt.ts`
-- `counter_gate_recipe.json`
-- `export_counter_gate.py`
-- temporary gate texture keys.
-
-Historical gate information remains only as documentation/history where useful.
-
-The active runtime contract is now the permanent Product Counter contract above.
-
-## Gameplay Preservation
-
-Confirmed no diff under:
-
-- `src/game/sumo/`
-- `src/game/input/`.
-
-Therefore ACTION-08C does not change:
-
-- COUNTER_WINDOW_TICKS
-- Counter Best / Success / Fail
-- Counter vs Push
-- Counter vs Tsuppari
-- CounterTransition
-- side/rear target semantics
-- Kuzushi
-- ArrowDown
-- input priority
-- canonical participant facing.
-
-Do not reopen these in Product-art cleanup tasks.
-
-## Verification Review
-
-Reported and accepted:
-
-- focused permanent Counter exporter: 17 PASS
-- full wrestler-art suite: 168 PASS
-- presentation tests: 57 PASS
-- pnpm test: 23 files / 364 PASS
-- pnpm build / typecheck: PASS
-- git diff --check: PASS
-- permanent Counter exporter deterministic rerun: PASS
-- permanent Counter exporter --check: PASS
-- idle exporter --check: PASS
-- Tsuppari exporter --check: PASS
-- browser/runtime smoke on GPU: 28 / 28 PASS.
-
-This is sufficient for Technical PASS.
-
-## Product SPEC / Architecture Review
-
-Accepted:
-
-- WRESTLER_PRODUCT_ART_SPEC §0 now includes permanent Counter art
-- one authored red Counter master is the Product source
-- blue is derived offline
-- explicit pivots/body-core are documented
-- Counter pose selection remains presentation-driven by `pose === 'counter'`
-- accepted 35-degree sine body-sabaki is documented as presentation-only
-- Simulation facing remains canonical and unchanged
-- sprite shape does not own gameplay collision.
-
-## Final User Regression Play Test
-
-REQUIRED.
-
-This is not a new design gate.
-
-The User already accepted:
-- Counter pose
-- blue derivation
-- 35-degree motion
-- red + / blue - directions.
-
-Only verify that promotion/cleanup changed nothing:
-
-1. ArrowDown shows the same accepted Counter pose
-2. red/blue look identical to pre-promotion
-3. 0 -> 35 -> 0 movement feels identical
-4. Tsuppari remains clearly distinct
-5. Success / Best transitions are unchanged
-6. no pivot / scale jump appears
-7. Counter gameplay is unchanged.
-
-If this regression Play Test is OK:
-- ACTION-08C can be considered fully accepted
-- Counter Visual Gate phase is closed
-- future tasks should treat the permanent Product Counter art and 35-degree motion as the baseline.
-
-## Do Not Reopen
-
-Unless explicitly requested:
-
-- permanent Counter red/blue pixels
-- accepted source image
-- Counter-specific max_missed_px = 80
-- 35-degree maximum
-- sine curve
-- red + / blue - signs
-- current Counter gameplay
-- current CounterTransition
-- accepted idle/Tsuppari Product art.
-
-## Next Task Constraint
-
-Do not start another Counter art redesign before the final ACTION-08C regression Play Test result.
-
-After acceptance, Counter art/motion should be treated as a closed Product baseline unless the User explicitly requests changes.
+Do not add a Kuzushi sprite or body wobble yet.
+Keep all gameplay and accepted Product art unchanged.
