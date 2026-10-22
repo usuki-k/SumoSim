@@ -1,83 +1,257 @@
-Task-ID: ACTION-08A1-COUNTER-ART-CANDIDATE-REFRESH
+Task-ID: ACTION-08B-COUNTER-PRESENTATION-ROTATION-GATE
 Status: READY
-Task-Type: ART VISUAL GATE REFRESH / PRESENTATION VERIFICATION
+Task-Type: PRESENTATION MOTION VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: bc95f7117dbadf57cceee9d2a0b2a67e6fd10b56
-Review-Handoff: ACTION-08A technical review at abccf9d16287864b2ba9733cbdacef555f2f6860
+Source-Baseline: 592cbd86988fd9270ab03c7f0a04993b11ae2bfa
+Review-Handoff: ACTION-08A1 implementation is current at 592cbd86988fd9270ab03c7f0a04993b11ae2bfa; User Play Test found the static Counter pose still insufficiently differentiated from Tsuppari
 Handoff-Mode: GITHUB
 
-# ACTION-08A1 — Refresh Counter / Hiki-Sabaki Candidate
+# ACTION-08B — Counter Presentation Rotation Visual Gate
 
 ## Purpose
 
-Replace only the current provisional Counter / 引き・捌き Visual-Gate image with the User's newly generated candidate.
+Make 引き・捌き / Counter visually distinct from Tsuppari by adding a short **presentation-only body rotation animation** to the current provisional Counter pose.
 
-The previous candidate was technically integrated correctly but failed the User Visual Gate because it looked too similar to Tsuppari.
+The User Play Test result for the current static Counter image is:
 
-The new candidate is visually more suitable because:
-- the active arm sweeps laterally instead of extending straight forward
-- the opposite arm is pulled toward the torso
-- the torso/stance is asymmetric and reads more like receiving / parrying / sabaki than pushing.
+- the image itself is more sabaki-like than earlier candidates
+- but a static sprite swap still reads too similarly to Tsuppari at game scale.
 
-This Task is still a **Visual Gate refresh**, not permanent Product-art promotion.
+For this Task, keep the current Counter candidate art and gameplay unchanged.
 
-Do NOT change Counter gameplay.
-Do NOT change CounterTransition.
-Do NOT change accepted idle/Tsuppari Product art.
+Add only:
+
+```
+0° -> max 35° -> 0°
+```
+
+during the existing Counter window.
+
+This is a Visual / Game Feel Gate.
+Technical PASS does not mean the motion is accepted until User Play Test.
 
 ---
 
-# Required Local Input
+# Current Accepted / Preserved Baseline
 
-Overwrite:
+Do not reopen or retune:
 
-```
-tools/wrestler_art/input.local/candidate_red_counter.png
-```
+- Counter gameplay
+- COUNTER_WINDOW_TICKS = 12
+- Counter Best / Success / Fail
+- Counter vs Push
+- Counter vs Tsuppari
+- CounterTransition side/rear movement
+- Kuzushi
+- ArrowDown binding
+- input priority
+- Push / Tsuppari gameplay
+- TSUPPARI_HAND_REACH = 0.55 m
+- permanent idle Product art
+- permanent four Tsuppari Product textures.
 
-with the newly supplied image.
-
-Expected new source:
-
-- size: 1265 x 1244
-- mode: RGBA
-- decoded RGBA pixel SHA-256:
-
-```
-5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8
-```
-
-- file SHA-256 (reference only):
+Current Counter Visual-Gate art remains the current source/runtime candidate from ACTION-08A1:
 
 ```
-a62f4f5e…fa46
+public/assets/action/wrestler/counter-gate/red.png
+public/assets/action/wrestler/counter-gate/blue.png
 ```
 
-Previous rejected ACTION-08A1 candidate decoded RGBA pixel SHA-256:
+Do not regenerate or modify those PNGs in this Task.
+
+---
+
+# Architecture
+
+Keep:
 
 ```
-11d5157b9a25a4717d78808f2005b2d541f4f100e041bd00e34d2f5c5b3b9e85
+BoutSimulation / Snapshot
+-> WrestlerVisualState
+-> pure Presentation motion calculation
+-> WrestlerView
 ```
 
-Old ACTION-08A decoded RGBA pixel SHA-256:
+Simulation owns:
+- Counter state
+- ticksRemaining
+- results / transitions.
+
+Presentation owns:
+- extra temporary visual rotation only.
+
+Do NOT:
+- change participant.facing
+- write presentation rotation back into Simulation
+- derive motion from raw keyboard state
+- add a new gameplay action/state
+- add a Scene-owned timer.
+
+---
+
+# Counter Progress
+
+Current `WrestlerVisualState.phaseProgress` is already used for other timed visual poses.
+
+For Counter, populate it from the existing Simulation-owned Counter action:
+
+```ts
+progress(action.ticksRemaining, COUNTER_WINDOW_TICKS)
+```
+
+Import/reuse `COUNTER_WINDOW_TICKS`.
+
+Do not add a Counter-specific stored timer.
+
+The value remains presentation-derived from current canonical action state.
+
+---
+
+# Rotation Motion
+
+Maximum absolute visual rotation:
 
 ```
-eb0f2e6058fe35c239ed571e1e576fc30b4648988c347b89d4e227a3a8b3e040
+35 degrees
 ```
 
-Preflight:
-- confirm the file exists
-- confirm 1265x1244 RGBA
-- confirm the new decoded pixel hash exactly matches the expected value above
-- confirm it differs from both the old ACTION-08A hash and the previous rejected ACTION-08A1 candidate hash.
+Use radians internally:
 
-If it does not match:
+```
+35 * Math.PI / 180
+```
+
+The curve must be deterministic and symmetric:
+
+```
+offsetMagnitude = sin(PI * phaseProgress) * 35°
+```
+
+Intent:
+
+- beginning of Counter: near 0°
+- middle of Counter window: 35°
+- end of Counter window: back near 0°
+- leaving Counter state: exactly 0° because no Counter visual offset applies.
+
+Do not use render delta or wall-clock time.
+
+---
+
+# Rotation Direction
+
+Because blue Counter art is the local-Y reflection of red, apply opposite signs so both wrestlers visually sweep **away from the forward strike line** rather than one becoming more attack-forward.
+
+Use:
+
+```
+red  Counter visual offset = +magnitude
+blue Counter visual offset = -magnitude
+```
+
+where magnitude is the 0..35° curve above.
+
+This sign convention is presentation-only.
+
+Do not change the actual canonical facing.
+
+If Current Source inspection proves these signs rotate the accepted candidate toward the forward/Tsuppari line rather than away from it:
 - STOP
-- report observed hash
-- do not substitute another image.
+- report with concrete visual/vector evidence
+- do not silently flip the design.
 
-Do not commit `input.local/`.
+---
+
+# Preferred Small Implementation
+
+Keep this explicit and small.
+
+Preferred:
+
+- extend `wrestlerVisualState.ts` so Counter has meaningful `phaseProgress`
+- add a pure function in the current Counter presentation module, e.g.:
+
+```ts
+counterVisualRotationOffset(id, state): number
+```
+
+- `WrestlerView` applies:
+
+```ts
+participant.facing + counterVisualRotationOffset(...)
+```
+
+to the **body sprite only**.
+
+Do not build a generic animation/easing framework.
+
+Do not add a Global Event Bus or pose timeline system.
+
+---
+
+# Shadow
+
+Keep the current procedural shadow behavior unchanged.
+
+The extra Counter body rotation is a pose/presentation effect.
+
+Do not add the +/-35° offset to Simulation facing.
+
+Do not add extra Counter translation in this Task.
+
+No lateral position offset yet.
+
+Reason:
+- this Task isolates whether rotation alone solves the differentiation problem.
+
+If rotation is insufficient, lateral visual offset may be evaluated in a separate User-directed Task.
+
+---
+
+# Counter Success / Best
+
+Do not extend the rotation with a new timer after Counter resolves.
+
+If a Push is caught and the existing Counter action ends:
+- Counter visual offset stops
+- existing CounterTransition begins exactly as today.
+
+No changes to:
+- transition path
+- transition duration
+- side/rear target
+- stagger
+- Kuzushi.
+
+A snap back caused by an early successful catch is acceptable for this Visual Gate and must be judged by User Play Test.
+
+Do not solve it preemptively by adding new state.
+
+---
+
+# Tsuppari Distinction Goal
+
+The intended visual language is now:
+
+## Tsuppari
+
+```
+forward-directed hand strike
+body facing remains canonical
+```
+
+## Counter / 引き・捌き
+
+```
+lateral-sweep Counter pose
++
+whole body visibly turns sideways up to 35°
++
+returns toward canonical facing
+```
+
+At game scale, the motion direction itself should distinguish Counter from Tsuppari.
 
 ---
 
@@ -85,247 +259,171 @@ Do not commit `input.local/`.
 
 ## In Scope
 
-- update the Counter gate recipe source identity
-- remeasure / renormalize the new red candidate
-- regenerate provisional Counter red/blue runtime textures
-- update Counter gate metadata dimensions/pivots
-- update focused art tests / expected mask values as necessary
-- change only the Counter gate recipe's `max_missed_px` from 60 to 80 if the final diagnostics remain consistent with the preflight evidence
-- browser smoke for the refreshed pose
-- User Visual Gate.
+- Counter `phaseProgress` derived from existing Counter ticks
+- pure presentation rotation calculation
+- max 35° visual rotation
+- mirrored sign by red/blue Product wrestler id
+- WrestlerView body rotation integration
+- focused tests
+- browser/runtime visual smoke
+- User Play Test.
 
 ## Scope Out
 
 Do NOT:
-- change `src/game/sumo/`
-- change `src/game/input/`
-- change Counter window/timing
-- change Best / Success / Fail
-- change side/rear CounterTransition
-- change Kuzushi
-- change ArrowDown binding
-- change Push / Tsuppari
-- change idle Product art
-- change permanent Tsuppari Product art
-- add animation frames
-- add presentation timers
-- promote Counter art into permanent Product SPEC
-- create a generic pose framework
+
+- change Counter image assets
+- change Counter exporter / recipe / mask rules
+- change Counter gameplay
+- change CounterTransition
+- add position offset
+- add scale animation
+- add camera animation
+- add impact animation
+- change Tsuppari
+- change Push
+- change idle art
+- add multi-frame sprites
+- add a generic animation framework
+- update permanent Counter Product-art SPEC
 - modify PROJECT_HANDOFF.md.
 
 ---
 
-# Existing Presentation Contract
+# Tests
 
-Preserve the ACTION-08A architecture exactly:
+At minimum verify:
 
-```
-BoutSimulation / Snapshot
--> WrestlerVisualState.pose === 'counter'
--> selectWrestlerPoseArt()
--> Counter Visual-Gate texture
--> WrestlerView
-```
+1. non-Counter states have rotation offset exactly 0
+2. Counter progress is derived from `COUNTER_WINDOW_TICKS`
+3. offset magnitude follows the specified sine curve
+4. maximum is 35° at/around the midpoint represented by the tick sequence
+5. red and blue have equal magnitude / opposite sign
+6. rotation depends only on canonical visual state + wrestler art id
+7. Snapshot / participant.facing is unchanged
+8. Tsuppari art selection and body rotation remain unchanged
+9. idle/move/Push/Grip remain unchanged
+10. Counter art is still selected only during Counter
+11. current CounterTransition gameplay tests remain unchanged
+12. `src/game/sumo/` and `src/game/input/` have no semantic modification.
 
-Show the candidate only while the existing visual state is `counter`.
-
-Do not infer Counter from keyboard input.
-Do not add a new state or timer.
-
----
-
-# Normalization
-
-Do not reuse the old candidate's measurements.
-
-Re-run the established Counter-gate normalization against the accepted idle red master.
-
-Required:
-- explicit FRONT
-- explicit root/pivot
-- explicit body-core
-- body-core normalized to 2R
-- deterministic /4 runtime export
-- no clipping
-- no arbitrary manual runtime offset.
-
-The new pose has a more asymmetric torso/leg/arm silhouette, so verify especially:
-- canonical body center
-- head alignment
-- apparent body scale
-- idle -> Counter switch.
-
-If the established landmark method cannot normalize this candidate cleanly:
-- STOP
-- report
-- do not modify the algorithm simply to force a result.
-
----
-
-# Counter-Specific Recolor Validation Allowance
-
-The new candidate fixes the previous disconnected-mawashi problem: the visible red mawashi is now one connected main region.
-
-A scratchpad-only preflight measured:
-- missed band pixels: 70
-- of those, 69 are semi-transparent outline/fringe pixels with alpha < 128
-- no material skin / hair / arm contamination.
-
-For this Counter Visual Gate only, explicitly allow:
-
-```
-counter_gate_recipe.json:
-mask_limits.max_missed_px = 80
-```
-
-This is an allowed validation-threshold change for this provisional Counter candidate.
-
-Important:
-- do NOT change the actual recolor algorithm
-- do NOT change the shared recolor rule in `runtime_wrestler_recipe.json`
-- do NOT change idle/Tsuppari mask limits
-- Counter must still fail closed if missed band pixels > 80
-- Counter must STOP if any material skin/hair/arm contamination appears, regardless of the numeric limit
-- report the final mask / missed / fringe counts after the real normalized export.
-
-The reason for 80 is narrow and image-specific: it admits the observed 70 missed pixels while retaining a small guard band. It is not a new global Product-art standard.
-
----
-
-# Red / Blue Derivation
-
-Keep exactly the existing gate strategy:
-
-```
-red = normalized authored red candidate
-blue = local-Y reflection(red) + accepted mawashi-only recolor
-```
-
-Recolor ownership remains:
-
-```
-tools/wrestler_art/runtime_wrestler_recipe.json
-```
-
-No runtime reflection/recolor.
-
-Runtime paths remain:
-
-```
-public/assets/action/wrestler/counter-gate/red.png
-public/assets/action/wrestler/counter-gate/blue.png
-```
-
-Do not promote to permanent `counter/` yet.
-
----
-
-# Visual Intent
-
-The new candidate should preserve the visual distinction that motivated this refresh.
-
-In runtime it should read as:
-- lateral sweep / parry / sabaki
-- one arm extended sideways
-- opposite arm pulled in
-- not a straight forward strike
-- clearly distinguishable from Tsuppari at game scale.
-
-Do not alter the art to make it more forward-facing merely to resemble the old candidate.
-
-The User Visual Gate decides whether it is good enough.
+Do not weaken existing tests.
 
 ---
 
 # Verification
 
 Verification Level:
-Standard focused Art Refresh + User Visual Gate
+Standard Presentation / Game Feel Gate
 
 Required:
-- focused `test_export_counter_gate.py`
-- wrestler-art suite
-- focused presentation tests
+
+- focused `wrestlerVisualState` / Counter presentation tests
+- existing Counter gate presentation tests
+- relevant Counter gameplay tests
 - `pnpm test`
 - `pnpm build`
 - `git diff --check`
-- deterministic Counter export
-- `export_counter_gate.py --check`
-- idle exporter `--check`
-- permanent Tsuppari exporter `--check`
-- prove `src/game/sumo/` and `src/game/input/` unchanged.
+- browser/runtime smoke
+- prove `src/game/sumo/` and `src/game/input/` unchanged
+- prove Counter PNG hashes unchanged
+- prove idle and Tsuppari Product assets unchanged.
 
 ---
 
-# Browser Smoke
+# Browser / Runtime Smoke
 
 Required.
 
 Verify:
-1. pre-bout / Enter works
-2. ArrowDown shows new blue Counter candidate
-3. red Counter candidate can be observed
-4. texture is shown for existing Counter state only
-5. idle -> Counter -> next state does not visibly jump in canonical center/scale
-6. Counter Fail behavior unchanged
-7. Push Counter Success / Best and side/rear transition unchanged
-8. Tsuppari images unchanged
-9. Push / Grip / movement unchanged
-10. no console / texture load errors.
+
+1. Enter starts Bout
+2. ArrowDown still starts the same Counter action
+3. blue Counter body visibly turns in the specified mirrored direction
+4. red Counter body turns the opposite mirrored direction
+5. peak observed rotation is approximately 35°
+6. body rotates around the explicit sprite pivot / canonical participant center
+7. no visual position or scale translation is added
+8. participant.facing in Snapshot does not change because of the effect
+9. Counter whiff / Fail gameplay remains unchanged
+10. Push Counter Success / Best remains unchanged
+11. CounterTransition side/rear movement remains unchanged
+12. Tsuppari remains unrotated by this effect
+13. Push / Grip / movement remain unchanged
+14. R restart works
+15. no console errors.
+
+Capture representative screenshots/measurements at:
+- early Counter
+- near peak
+- late Counter
+
+for both blue and red if practical.
 
 ---
 
-# Acceptance Criteria
+# User Play Test
 
-Technical completion requires:
-- new source hash is actually used
-- red candidate is freshly normalized
-- blue is derived from the new red candidate
-- exactly two counter-gate runtime textures remain
-- metadata matches exported size/pivot
-- accepted idle/Tsuppari assets unchanged
-- Counter gameplay unchanged
-- tests/build/smoke pass.
+REQUIRED.
 
-Final art acceptance remains User-only.
+Primary question:
 
----
+> Does the 35° body-sabaki rotation make ArrowDown clearly distinguishable from Tsuppari?
 
-# Completion Report
+Judge:
 
-Include:
-- Result
-- Preflight
-- old/new source hashes
-- new normalization measurements
-- red/blue runtime size/pivot/body-core
-- old/new runtime pixel hashes
-- recolor/mask result, including the Counter-only 60 -> 80 max_missed_px allowance and the final missed/fringe counts
-- presentation integration status
-- verification
-- browser smoke
-- gameplay unchanged evidence
-- Design Deviations
-- Unexpected Scope
-- User Visual Gate: REQUIRED
-- Git delivery.
+- Counter now looks like a body sabaki / receiving motion
+- 35° is enough / too much / too little
+- red and blue both read naturally
+- rotation direction feels correct
+- idle -> Counter motion is not distracting
+- early Success / Best snap-back is acceptable
+- existing side/rear CounterTransition still reads correctly
+- Tsuppari remains clearly a forward strike.
 
-If none:
-`Design Deviations: NONE`
+Do not permanently accept the Counter image/motion until the User says it is acceptable.
 
 ---
 
 # Stop Conditions
 
 STOP if:
-- new source hash does not match
-- normalization cannot cleanly align the candidate
-- Counter missed band pixels exceed 80
-- recolor contaminates skin/hair/arms
-- accepted idle/Tsuppari assets would need changes
-- gameplay changes are required
-- CounterTransition changes are required
-- broad refactor becomes necessary.
+
+- achieving the rotation requires Simulation gameplay changes
+- participant.facing would need to be changed
+- CounterTransition would need semantic changes
+- current Counter image/runtime assets must be regenerated
+- red/blue mirrored sign cannot be determined consistently from Current Source
+- a generic animation framework becomes necessary
+- Current Source materially conflicts with this Task.
+
+---
+
+# Completion Report
+
+Include:
+
+- Result
+- exact max angle
+- exact rotation curve
+- red / blue sign convention
+- Counter progress derivation
+- changed files
+- proof participant.facing / Simulation unchanged
+- focused/full tests
+- browser smoke
+- representative observed rotation values
+- Counter/Transition regression result
+- Design Deviations
+- Unexpected Scope
+- User Play Test: REQUIRED
+- Git delivery.
+
+If none:
+
+```
+Design Deviations: NONE
+```
 
 ---
 
@@ -334,8 +432,9 @@ STOP if:
 Follow `AGENTS.md`.
 
 Normal successful Task:
+
 - stage Task-owned files only
-- one commit
+- one implementation commit
 - fetch / fast-forward safety
 - push `origin/develop`
 - verify remote SHA
@@ -343,16 +442,22 @@ Normal successful Task:
 
 Suggested commit:
 
-`art(action): refresh counter pose candidate`
+`feat(presentation): animate counter body rotation`
 
 Do not modify:
+
 - `main`
 - `PROJECT_HANDOFF.md`
 - `CURRENT_TASK.md`.
 
 # Final Instruction
 
-Refresh only the provisional Counter / 引き・捌き candidate.
+Add only a presentation-only Counter body rotation:
 
-Preserve all existing gameplay and accepted Product art.
-Do not permanently accept this Counter art until the User reviews it in runtime.
+```
+0° -> 35° -> 0°
+```
+
+with mirrored red/blue direction.
+
+Keep Counter gameplay, CounterTransition, assets, position, scale and canonical facing unchanged.
