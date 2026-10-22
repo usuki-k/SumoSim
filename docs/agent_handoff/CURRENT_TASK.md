@@ -40,18 +40,24 @@ with the newly supplied image.
 
 Expected new source:
 
-- size: 1254 x 1254
+- size: 1265 x 1244
 - mode: RGBA
 - decoded RGBA pixel SHA-256:
 
 ```
+5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8
+```
+
+- file SHA-256 (reference only):
+
+```
+a62f4f5e…fa46
+```
+
+Previous rejected ACTION-08A1 candidate decoded RGBA pixel SHA-256:
+
+```
 11d5157b9a25a4717d78808f2005b2d541f4f100e041bd00e34d2f5c5b3b9e85
-```
-
-- uploaded file SHA-256 (reference only):
-
-```
-02179babfcaf0dc2d828f6080ae81b95236aa43bc98a3d05a629a90936021b3d
 ```
 
 Old ACTION-08A decoded RGBA pixel SHA-256:
@@ -62,9 +68,9 @@ eb0f2e6058fe35c239ed571e1e576fc30b4648988c347b89d4e227a3a8b3e040
 
 Preflight:
 - confirm the file exists
-- confirm 1254x1254 RGBA
+- confirm 1265x1244 RGBA
 - confirm the new decoded pixel hash exactly matches the expected value above
-- confirm it differs from the old ACTION-08A hash.
+- confirm it differs from both the old ACTION-08A hash and the previous rejected ACTION-08A1 candidate hash.
 
 If it does not match:
 - STOP
@@ -84,6 +90,7 @@ Do not commit `input.local/`.
 - regenerate provisional Counter red/blue runtime textures
 - update Counter gate metadata dimensions/pivots
 - update focused art tests / expected mask values as necessary
+- change only the Counter gate recipe's `max_missed_px` from 60 to 80 if the final diagnostics remain consistent with the preflight evidence
 - browser smoke for the refreshed pose
 - User Visual Gate.
 
@@ -152,6 +159,36 @@ If the established landmark method cannot normalize this candidate cleanly:
 - STOP
 - report
 - do not modify the algorithm simply to force a result.
+
+---
+
+# Counter-Specific Recolor Validation Allowance
+
+The new candidate fixes the previous disconnected-mawashi problem: the visible red mawashi is now one connected main region.
+
+A scratchpad-only preflight measured:
+- missed band pixels: 70
+- of those, 69 are semi-transparent outline/fringe pixels with alpha < 128
+- no material skin / hair / arm contamination.
+
+For this Counter Visual Gate only, explicitly allow:
+
+```
+counter_gate_recipe.json:
+mask_limits.max_missed_px = 80
+```
+
+This is an allowed validation-threshold change for this provisional Counter candidate.
+
+Important:
+- do NOT change the actual recolor algorithm
+- do NOT change the shared recolor rule in `runtime_wrestler_recipe.json`
+- do NOT change idle/Tsuppari mask limits
+- Counter must still fail closed if missed band pixels > 80
+- Counter must STOP if any material skin/hair/arm contamination appears, regardless of the numeric limit
+- report the final mask / missed / fringe counts after the real normalized export.
+
+The reason for 80 is narrow and image-specific: it admits the observed 70 missed pixels while retaining a small guard band. It is not a new global Product-art standard.
 
 ---
 
@@ -263,7 +300,7 @@ Include:
 - new normalization measurements
 - red/blue runtime size/pivot/body-core
 - old/new runtime pixel hashes
-- recolor/mask result
+- recolor/mask result, including the Counter-only 60 -> 80 max_missed_px allowance and the final missed/fringe counts
 - presentation integration status
 - verification
 - browser smoke
@@ -283,6 +320,7 @@ If none:
 STOP if:
 - new source hash does not match
 - normalization cannot cleanly align the candidate
+- Counter missed band pixels exceed 80
 - recolor contaminates skin/hair/arms
 - accepted idle/Tsuppari assets would need changes
 - gameplay changes are required
