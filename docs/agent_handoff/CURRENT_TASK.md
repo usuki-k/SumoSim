@@ -1,5 +1,5 @@
 Task-ID: ACTION-10A-PUSH-CHARGE-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION ONLY / CORE MOVEMENT-COLLISION-PUSH
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -721,3 +721,243 @@ Do not modify:
 Investigate, do not implement.
 
 Find the smallest deterministic Simulation design that makes ArrowUp a roughly 3x-longer committed straight-line charge, allows ordinary lateral Move to evade it, preserves Push impact semantics as much as possible, and naturally allows a missed outward charge to self-ring-out through the existing ring-out system.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: PASS — INVESTIGATION COMPLETE / USER DECISION REQUIRED BEFORE ACTION-10B
+Accepted Investigation Baseline: 2480fb71951028e6c2e109efb3764c9c4419a24a
+
+## Production Change Review
+
+Confirmed:
+
+- ACTION-10A made no Production source/test/spec changes
+- only CURRENT_COMPLETION_REPORT.md changed
+- Investigation Only scope was respected.
+
+Production Changes: NONE
+
+## Accepted Findings
+
+The investigation is sufficient to proceed to a design decision.
+
+Current measured Push baseline from stationary / open-space / no-contact:
+
+- startup: 6 ticks
+- active: 8 ticks
+- recovery: 10 ticks
+- active-only self travel: 0.100000 m
+- recovery/coast travel: 0.026667 m
+- full Push travel: 0.126667 m
+- peak self speed: 1.333333 m/s
+- contact force duration: 8 ticks
+- representative contact shove: 0.5325 m.
+
+The User's requested ~3x travel target is reproduced by the 14-tick charge candidate:
+
+- full travel: 0.3861 m
+- ratio: 3.05x.
+
+## Accepted Architecture Recommendation
+
+Option B is the accepted recommendation for the next implementation design:
+
+```
+Push press
+-> startup
+-> committed straight charge using press-time direction
+-> first contact opens a bounded 8-tick impact window
+-> impact window owns Push force / Counter tier timing
+-> if no contact, charge runs to its charge limit
+-> recovery
+```
+
+Key ownership remains Simulation-side.
+
+Do not use:
+- Phaser Physics
+- homing
+- dodge state
+- special tackle collision
+- ring-edge wall / clamp.
+
+Existing circle contact and ring-out are sufficient.
+
+## Why Option A Is Rejected
+
+Simply extending the current active phase couples longer movement with longer Push force.
+
+Measured result at 14 ticks:
+
+- receiver shove grows from 0.5325 m to ~0.957 m
+- receiver external speed reaches the existing clamp
+- Counter catch duration expands
+- Push/Tsuppari coupled duration expands.
+
+This is not a movement-only change.
+
+## Why Option C Is Rejected
+
+Keeping 8 ticks and raising Push-specific acceleration reaches ~3x travel but:
+
+- reaches 3 m/s within the short 133 ms active window
+- at 0.8 m, even the earliest ordinary lateral Move test can still be hit
+- does not produce a readable committed rush
+- still cannot naturally self-ring-out from a valid opponent-facing start.
+
+## Lateral Dodge Finding
+
+Existing ordinary Move + existing circle contact are sufficient for dodge outcomes.
+
+No special dodge mechanic is needed.
+
+For viable longer-charge candidates:
+
+- early lateral reactions can miss
+- later reactions can be hit
+- the attacker remains on the original stored Push direction
+- a miss continues forward through the committed charge.
+
+This directly supports the intended read / evade interaction.
+
+## Facing Finding
+
+Current Push movement direction is already locked at press time.
+
+However canonical participant.facing continues to track the sidestepping opponent during Push, producing a visual sideways-slide mismatch.
+
+Accepted recommendation for ACTION-10B:
+
+- freeze canonical facing for the participant for the entire Push action (startup through recovery)
+- keep Simulation as the sole facing owner
+- do not create a separate presentation-facing truth.
+
+This is preferred over deriving a different sprite orientation in Phaser.
+
+## Ring-Out Finding / Required User Decision
+
+A material geometric constraint was correctly identified.
+
+Because Push direction is initially toward the opponent, and the two centers must be at least approximately 0.70 m apart, a total travel of only ~0.386 m cannot carry the attacker beyond a still-in-ring opponent and across the boundary after a whiff.
+
+Therefore these two goals cannot both be achieved with the same charge distance:
+
+### Choice A — ~3x travel
+
+```
+PUSH_CHARGE_TICKS = 14
+full open-space travel ~= 0.386 m
+current ratio ~= 3.05x
+```
+
+Pros:
+- matches the original ~3x request
+- early sidestep can evade
+- current Push impact can remain bounded to 8 ticks.
+
+Cons:
+- a normal opponent-facing whiff cannot naturally self-ring-out.
+
+### Choice B — natural whiff self-ring-out
+
+```
+PUSH_CHARGE_TICKS = 24
+full open-space travel ~= 0.938 m
+current ratio ~= 7.41x
+```
+
+Pros:
+- early sidestep can evade
+- near-edge outward whiff can naturally carry attacker OUT through existing ring-out
+- no special self-ring-out rule is needed
+- contact Push impact can still remain bounded to 8 ticks.
+
+Cons:
+- substantially longer than the original ~3x request.
+
+The User must choose the charge-length priority before ACTION-10B is finalized.
+
+## Interaction Clarification
+
+The report's phrase that Option B keeps Counter / Push-vs-Tsuppari / Push-vs-Push "completely the same" must be interpreted narrowly.
+
+Accepted meaning:
+
+- once the impact window begins, the force window length and existing impact semantics can remain at the current 8 ticks
+- contact-start fixtures can reproduce the current shove / Counter tier timing / Kuzushi behavior.
+
+Not identical globally:
+
+- the longer charge reaches distances the current Push cannot reach
+- therefore Counter, Tsuppari coupling and Push-vs-Push encounters can now occur from previously unreachable starting separations
+- the report's matrices correctly show these new encounter opportunities.
+
+This is an expected consequence of increasing charge reach, not an Investigation failure.
+
+## Counter Recommendation
+
+For ACTION-10B, if Option B is chosen:
+
+- Counter should catch only while the impact window is active and actual contact exists
+- Best / Success tier timing should be measured from impact-window start / first contact, not from the beginning of the long charge
+- existing Counter result / Kuzushi / CounterTransition semantics remain unchanged.
+
+This preserves the meaning of "Counter the impact" rather than penalizing a longer run-up.
+
+## Kuzushi Preservation
+
+ACTION-09B remains compatible.
+
+At contact-start fixtures, Option B preserves:
+
+- first Push force on Kuzushi = 1.5x
+- Kuzushi consumed that tick
+- later force ticks = 1.0x.
+
+Do not redesign Kuzushi in ACTION-10B.
+
+## Tokudawara / Ring-Out
+
+Existing ring-out architecture is sufficient.
+
+Tokudawara only changes the local allowed radius; no special Push rule is required.
+
+Do not introduce:
+- edge braking
+- auto-clamp
+- Push-specific ring-out logic.
+
+## Verification Review
+
+Accepted investigation coverage includes:
+
+- deterministic Current baseline measurement
+- Option A / B / C
+- additional B18 / B20 / B24 / B28 edge candidates
+- 4 separation x 4 reaction timing dodge matrix
+- no-homing trace
+- pass-by / whiff
+- normal ring + Tokudawara edge matrix
+- Counter timing sweep
+- Push-vs-Tsuppari timing sweep
+- Push-vs-Push
+- ACTION-09B Kuzushi compatibility
+- clean Production diff.
+
+Heavy Investigation requirement is satisfied.
+
+## Next Task Constraint
+
+Do not create ACTION-10B until the User selects the charge-length direction:
+
+- 14 ticks / ~3.05x travel
+or
+- 24 ticks / ~7.41x travel with natural near-edge self-ring-out.
+
+All other major ACTION-10B design choices may use the accepted Option B recommendation above.
+
+No User Play Test was required for ACTION-10A because it was Investigation Only.
