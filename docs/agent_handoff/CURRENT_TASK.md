@@ -1,308 +1,405 @@
-Task-ID: ACTION-07C2-TSUPPARI-RIGHT-POSE-AND-REACH-TUNE
-Status: REVIEWED
-Task-Type: ART REFRESH + SMALL GAMEPLAY TUNE
+Task-ID: ACTION-07D-TSUPPARI-PRODUCT-ART-PROMOTION
+Status: READY
+Task-Type: IMPLEMENTATION / PRODUCT ART PROMOTION / VISUAL-GATE CLEANUP
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 4ba81157e3525bfb150e374f9937259b77d55a03
-Review-Handoff: ACTION-07C1 technical review accepted at b290eda7979045e9e78629554ee1d2ce6353e61c
+Source-Baseline: df2575d8520f2bb05edfb1c4f2677b6af207c060
+Review-Handoff: ACTION-07C2 accepted by User Play Test at d73f717e957ae73baf0775644be073ca4f1223ce
 Handoff-Mode: GITHUB
 
-# ACTION-07C2 — Refresh Right Tsuppari Pose + Small Reach Tune
+# ACTION-07D — Promote SEPARATE Tsuppari Art to Product Baseline
 
 ## Purpose
 
-Apply exactly two small follow-up changes:
+Promote the User-accepted SEPARATE Tsuppari art result from the temporary ACTION-07C Visual Gate into the permanent Product art/runtime contract.
 
-1. replace the current red right-hand Tsuppari candidate with the User's newly regenerated shorter-arm image
-2. increase Tsuppari reach slightly.
+The User has accepted through Play Test:
 
-This is a focused follow-up to ACTION-07C1.
+- SEPARATE is the Tsuppari art strategy to keep
+- current left-hand pose
+- refreshed shorter right-hand pose
+- derived blue counterparts
+- current Tsuppari reach = 0.55 m
+- current Push / Tsuppari gameplay feel is acceptable.
 
-Do NOT reopen broad Tsuppari design.
-Do NOT retune Push.
-Do NOT redesign the Visual Gate comparison system.
+This Task is primarily presentation/art tooling cleanup and Product-baseline promotion.
 
----
-
-# Current Baseline
-
-- ACTION-07B gameplay is the accepted technical baseline for Tsuppari.
-- ACTION-07C / 07C1 provide the current 3-mode Art Visual Gate.
-- User currently prefers **SEPARATE** because MIRROR modes visibly flip head/body asymmetry.
-- ACTION-07C1 improved right-hand strike direction.
-- User now wants:
-  - one more right-pose replacement to better match left/right arm length
-  - a slightly longer Tsuppari reach.
-
-SEPARATE is still a User preference, not yet the permanent Product art baseline.
+Do NOT redesign Tsuppari gameplay.
+Do NOT retune reach or force.
+Do NOT reopen MIRROR-L / MIRROR-R as Product candidates.
 
 ---
 
-# Required Local Inputs
+# Accepted Baseline — Do Not Reopen
 
-The User has replaced:
+## Gameplay
+
+Keep ACTION-07B / 07C2 semantics unchanged:
+
+- ArrowLeft = left-hand Tsuppari
+- ArrowRight = right-hand Tsuppari
+- startup / active / recovery = 6 / 1 / 9 ticks
+- per-hand cooldown = 60 ticks
+- TSUPPARI_HAND_REACH = 0.55 m
+- equal-radius effective center threshold = 0.90 m
+- TSUPPARI_IMPULSE = 2.13 m/s
+- TSUPPARI_COUPLED_SHARE = 0.5
+- 5 ordinary successful hits -> 6th hit adds Kuzushi
+- Countered Tsuppari = in-place Kuzushi, no CounterTransition
+- current Push acceleration / Push-vs-Tsuppari contest unchanged.
+
+Do not change Simulation gameplay code except if a documentation/comment-only correction is strictly required.
+
+## Idle Product art
+
+Keep the accepted idle baseline:
+
+- authored red idle master
+- derived blue idle via offline local-Y reflection + mawashi recolor
+- existing runtime red.png / blue.png unchanged.
+
+## Tsuppari Product art
+
+Accepted SEPARATE mapping:
 
 ```
-tools/wrestler_art/input.local/candidate_red_tsuppari_right.png
+red left  = authored red-left pose
+red right = authored refreshed red-right pose
+blue left = reflect(red-right) + accepted blue mawashi recolor
+blue right = reflect(red-left) + accepted blue mawashi recolor
 ```
 
-with the newly regenerated right-hand candidate.
+Accepted red source identities from ACTION-07C2:
 
-These should remain unchanged:
+- red-left decoded RGBA SHA-256:
+  `219d66dcf13585e7149382f01c964fdd9074bf61e615b5d3f9bbb15b38cb84b3`
+- red-right decoded RGBA SHA-256:
+  `d7d5632f8357bd1e4427d2bcdcee5a6e74307fcd9d0caca2d86d102ec8719011`
+
+Accepted current normalized runtime geometry:
+
+- red-left: 198 x 177, pivot (83, 94)
+- blue-right: 198 x 177, pivot (83, 83)
+- red-right: 193 x 163, pivot (79, 87)
+- blue-left: 193 x 163, pivot (79, 76)
+- all body-core diameters = 123.076923 px.
+
+Do not change the accepted visual result while promoting it.
+
+---
+
+# Required Local Sources
+
+Expected local files:
 
 ```
 tools/wrestler_art/input.local/candidate_red_tsuppari_left.png
-tools/wrestler_art/input.local/candidate_blue_tsuppari_left.png
-tools/wrestler_art/input.local/candidate_blue_tsuppari_right.png
+tools/wrestler_art/input.local/candidate_red_tsuppari_right.png
 ```
 
-Preflight:
+The authored blue candidates may remain available as historical/reference inputs, but they are not Product runtime sources.
 
-- confirm all four files exist
-- confirm the new red-right decoded pixel hash differs from ACTION-07C1
-- confirm the other three candidate pixel hashes are unchanged.
+Preflight must validate the accepted red source hashes above.
 
-ACTION-07C1 red-right decoded RGBA SHA-256:
-
-```
-3db3260bc3d90a88694bb65959c83919f148985847c4575c104394261e92cace
-```
-
-If red-right still has that hash:
+If either accepted red source does not match:
 - STOP
-- report that the replacement has not been applied.
+- report exact mismatch
+- do not regenerate Product assets from a different source.
 
 Do not commit `input.local/`.
 
 ---
 
-# Scope
+# Permanent Runtime Contract
 
-## In Scope
+Replace the temporary 3-mode gate runtime with exactly four permanent Tsuppari Product textures.
 
-- update red-right source identity in the gate recipe
-- remeasure / renormalize the new red-right pose
-- regenerate red-right-derived Visual-Gate textures
-- regenerate affected offline preview evidence
-- update metadata/tests/hashes as required
-- increase Tsuppari reach slightly
-- focused runtime/browser verification.
+Preferred permanent location:
 
-## Scope Out
+```
+public/assets/action/wrestler/tsuppari/
+```
 
-Do NOT:
+Preferred filenames:
 
-- change Push tuning
-- change Tsuppari impulse
-- change cooldown
-- change startup / active / recovery
-- change buildup threshold
-- change Counter behavior
-- change pair-force rules
-- change left Tsuppari source
-- change authored-blue candidates
-- change idle Product art
-- remove MIRROR-L / MIRROR-R
-- remove key-4 gate toggle
-- promote SEPARATE into WRESTLER_PRODUCT_ART_SPEC
-- refactor the art tool broadly.
+```
+red_left.png
+red_right.png
+blue_left.png
+blue_right.png
+```
+
+If a closely related naming/location is materially smaller because of Current Source, it is acceptable, but report it.
+
+Permanent assets must reproduce the accepted SEPARATE pixels exactly.
+
+Before deleting/renaming gate assets, capture their accepted pixel hashes and prove the permanent four textures match:
+
+- permanent red_left == current `separate_red_left.png`
+- permanent red_right == current `separate_red_right.png`
+- permanent blue_left == current `separate_blue_left.png`
+- permanent blue_right == current `separate_blue_right.png`.
+
+Do not re-normalize into a visually different result merely because tooling is being cleaned up.
 
 ---
 
-# Accepted Gameplay Change
+# Remove Temporary Visual-Gate Runtime Machinery
 
-Only Tsuppari reach changes.
+The Product no longer needs runtime comparison modes.
 
-Current:
+Remove/retire, as appropriate:
 
-```
-TSUPPARI_HAND_REACH = 0.525 m
-```
+- MIRROR-L runtime textures
+- MIRROR-R runtime textures
+- gate-only SEPARATE naming
+- key `4` art-mode cycling
+- `TsuppariArtMode`
+- `TSU ART: ...` debug mode label
+- gate-only mode mapping tables.
 
-Current equal-radius effective center threshold:
+Do NOT remove useful historical/offline comparison evidence if it is cheap to retain as history.
 
-```
-0.525 + BODY_RADIUS(0.35) = 0.875 m
-```
+The browser/runtime should have one permanent Tsuppari art mapping after this Task.
 
-New provisional value:
-
-```
-TSUPPARI_HAND_REACH = 0.55 m
-```
-
-New equal-radius effective center threshold:
-
-```
-0.55 + BODY_RADIUS(0.35) = 0.90 m
-```
-
-This is intentionally a small increase (+0.025 m).
-
-Keep the existing center-based hit rule:
-
-```
-hit iff centerDistance <= TSUPPARI_HAND_REACH + receiver.bodyRadius
-```
-
-Do not use sprite collision.
-
-This remains Provisional / User Play Test.
+Do not leave dead runtime assets preloaded.
 
 ---
 
-# Gameplay Values That Must Not Change
+# Permanent Presentation Mapping
 
-Do not change:
+Keep the architecture:
 
-- `PUSH_EXTERNAL_ACCELERATION`
-- `TSUPPARI_IMPULSE`
-- `TSUPPARI_COUPLED_SHARE`
-- per-hand cooldown
-- startup / active / recovery
-- deterministic 5 ordinary hits -> 6th Kuzushi
-- Countered Tsuppari semantics
-- Push Counter semantics
-- Push/Tsuppari contest
-- Tsuppari/Tsuppari contest
-- global clamp / decay
-- ring-out rules.
+```
+BoutSimulation / Snapshot
+-> WrestlerVisualState
+-> Product Tsuppari art selection
+-> WrestlerView
+```
 
-Production gameplay source delta should be limited to the reach constant and directly related test/document expectations.
+Permanent selection is only by:
+- wrestler art id: red / blue
+- Tsuppari hand: left / right.
+
+No Visual-Gate mode parameter should remain in runtime selection.
+
+Prefer a small explicit pure presentation module, e.g.:
+
+```ts
+productTsuppariArt.ts
+```
+
+or a similarly clear extension of existing Product wrestler art metadata.
+
+It should own:
+- texture key
+- asset path
+- dimensions
+- pivot
+- body-core diameter
+- left/right mapping.
+
+Do not introduce a generic skin/pose framework.
+
+`WrestlerView` should:
+- show Product Tsuppari texture while `WrestlerVisualState.pose === 'tsuppari'`
+- use the explicit pivot and body-core scale
+- return to accepted idle art afterward
+- preserve canonical position/facing.
+
+Keep the currently accepted full-action held pose behavior unless explicitly required otherwise:
+- startup + active + recovery.
+
+Do not change gameplay timing.
 
 ---
 
-# Art Refresh
+# Permanent Art Export Tooling
 
-Re-run the existing ACTION-07C / 07C1 red-right path using the new image.
+Promote the accepted SEPARATE generation path into a permanent deterministic exporter.
 
-Do not blindly reuse the 07C1 right-pose measurements.
+Preferred small design:
 
-Use the same explicit normalization method:
+- a permanent Tsuppari runtime recipe/config
+- a deterministic export/check command
+- reuse the existing accepted red->blue recolor rule from `runtime_wrestler_recipe.json`
+- no duplicate live recolor constants.
 
-- source identity validation
-- FRONT normalization
-- root/pivot measurement
-- body-core measurement
-- normalize body core to 2R
-- deterministic Product-scale export.
+You may evolve/rename the current gate exporter if that is smaller than creating parallel code.
 
-Do not alter the normalization algorithm merely to fit this image.
+Requirements:
 
-If it cannot be normalized cleanly:
-- STOP and report.
-
----
-
-# Hand / Color Mapping
-
-Preserve existing semantics exactly.
-
-SEPARATE:
-
-```
-red left  = authored red-left
-red right = NEW authored red-right
-blue left = reflect(NEW red-right) + accepted blue mawashi recolor
-blue right = reflect(red-left) + accepted blue mawashi recolor
-```
-
-MIRROR-R also derives from the new red-right and must be regenerated consistently.
-
-MIRROR-L must remain pixel-identical unless a understood metadata-only reason exists.
-
----
-
-# Expected Gate Asset Delta
-
-Expected changed pixels:
-
-```
-separate_red_right.png
-separate_blue_left.png
-
-mirror_r_red_right.png
-mirror_r_red_left.png
-mirror_r_blue_right.png
-mirror_r_blue_left.png
-```
-
-Expected unchanged pixels:
-
-```
-separate_red_left.png
-separate_blue_right.png
-
-mirror_l_red_left.png
-mirror_l_red_right.png
-mirror_l_blue_left.png
-mirror_l_blue_right.png
-
-public/assets/action/wrestler/red.png
-public/assets/action/wrestler/blue.png
-```
-
-If an expected-unchanged texture changes:
-- investigate
-- do not silently accept it.
-
----
-
-# Recolor / Mask
-
-Revalidate accepted red->blue mawashi recolor on the newly normalized red-right pose.
-
-Required:
-
+- exactly two authored red pose sources
+- exactly four permanent runtime outputs
+- blue left derived from reflected red right
+- blue right derived from reflected red left
 - alpha preserved
-- no material skin/hair/arm contamination
-- pixels outside the mask unchanged
-- configured mask limits still pass.
+- mask-outside pixels unchanged
+- deterministic bytes
+- fail closed on source/hash mismatch
+- `--check` writes nothing.
 
-Do not change the accepted recolor rule to fit the new pose.
+Do not keep the 12-texture gate as the permanent exporter contract.
 
-If it fails:
-- STOP and report.
+Historical preview comparison tooling may remain separate if useful.
 
 ---
 
-# Reach Verification
+# Measurement Reproducibility — Must Fix Now
 
-Update focused Tsuppari tests for the new boundary.
+This is a required part of Product promotion.
+
+Known issue from 07C1/07C2:
+
+- recipe prose says "7 px erosion"
+- the calibrated measurement procedure actually used:
+  - 1/2 BOX scale
+  - max(RGB) < 80
+  - alpha > 200
+  - **7 px opening (erosion + dilation)**
+  - largest hair component
+- the measurement helper currently exists only in scratchpad, not Repository.
+
+For Product promotion, make the accepted normalization measurement reproducible.
+
+Implement the smallest deterministic solution.
+
+Preferred:
+
+- add a small helper under `tools/wrestler_art/`, for example
+  `measure_tsuppari_pose.py`
+- it reads the accepted source(s)
+- computes/reports the landmarks and derived normalization evidence
+- no manual image editing
+- no ML/OpenCV/NumPy dependency unless already required
+- output should be deterministic.
+
+At minimum it must reproduce, within explicit documented rounding/tolerance, the accepted red-left and red-right measurements currently recorded in the recipe.
+
+Update recipe prose so it says the actual implemented method.
+
+Do not use the helper to alter the already accepted runtime pixels unless the existing recorded values are proven materially wrong.
+
+If formalizing the helper reveals a material mismatch with the accepted normalized art:
+- STOP
+- report
+- do not silently move the accepted pose.
+
+---
+
+# Product Art SPEC Update
+
+Update `docs/WRESTLER_PRODUCT_ART_SPEC.md` so §0 is truthful.
+
+Current Product baseline should state:
+
+## Idle
+- authored red idle master
+- derived blue idle
+- rigid sprite / canonical facing / explicit pivot.
+
+## Tsuppari
+- two authored red pose masters:
+  - left
+  - right
+- blue variants derived deterministically:
+  - blue left <- reflected red right + recolor
+  - blue right <- reflected red left + recolor
+- explicit pivot/body-core per texture
+- pose selected from Simulation presentation state only
+- pose held for current whole Tsuppari action
+- no runtime mirror/recolor
+- no sprite-based gameplay collision
+- SEPARATE is the accepted Product strategy
+- MIRROR-L / MIRROR-R were Visual-Gate experiments and are not the Product baseline.
+
+Do not rewrite unrelated historical sections beyond removing contradictions.
+
+---
+
+# ARCHITECTURE Update
+
+Update Product wrestler/Tsuppari presentation paragraphs so Current Architecture describes:
+
+- permanent four Tsuppari Product textures
+- deterministic red-source -> blue derivation
+- permanent art selection by hand
+- no key-4 Visual Gate mode
+- no gameplay ownership in presentation.
+
+Keep `TSUPPARI_HAND_REACH = 0.55 m` as the accepted current Prototype value.
+
+Do not change gameplay formulas.
+
+---
+
+# Historical Gate Assets / Tools
+
+It is acceptable to retain:
+
+- historical gate recipe
+- offline comparison sheets/tool
+
+only if they are clearly marked historical and do not participate in current runtime/export ownership.
+
+Prefer removing committed runtime-only 12 gate textures once the four permanent assets replace them.
+
+Avoid duplicated current Sources of Truth.
+
+The Completion Report must state:
+- what was deleted
+- what remains as history
+- what is the single current Product source/export contract.
+
+---
+
+# Tests
+
+Update/add tests for the permanent contract.
 
 At minimum verify:
 
-1. equal-radius center distance just below 0.90 m -> hit
-2. just above 0.90 m -> whiff
-3. ordinary contact hit still works
-4. non-contact hit in the newly extended band works
-5. Counter can catch Tsuppari within the new reach
-6. whiff outside new reach remains whiff
-7. Push/Tsuppari interaction semantics unchanged
-8. all Tsuppari gameplay constants except reach remain unchanged.
-
-Do not weaken existing tests.
+1. accepted red-left/red-right source hashes
+2. permanent exporter uses exactly the two red sources
+3. four runtime textures are produced
+4. permanent four pixels match the accepted SEPARATE gate pixels
+5. blue-left hand mapping = reflected red-right + recolor
+6. blue-right hand mapping = reflected red-left + recolor
+7. alpha preserved
+8. mask-outside pixels unchanged
+9. body-core remains 123.076923 px
+10. permanent metadata matches exporter dimensions/pivots
+11. repeated export is deterministic
+12. `--check` is read-only and detects stale assets
+13. accepted idle red/blue unchanged
+14. runtime presentation has no art-mode dependency
+15. no key-4 Tsuppari art toggle remains
+16. Tsuppari still displays the correct left/right pose for the full action
+17. non-Tsuppari states still use accepted idle art
+18. Simulation gameplay source unchanged from ACTION-07C2 baseline.
 
 ---
 
-# Offline Preview Refresh
+# Verification
 
-Regenerate current local gate evidence.
+Verification Level:
+Standard Product Art Promotion + Browser Runtime + final User check
 
-At minimum update/confirm:
+Required:
 
-- red-right pivot guide
-- SEPARATE sheet
-- MIRROR-R sheet
-- idle/Tsuppari alignment
-- rotations
-- faceoff sheet using current reach
-  - contact ~0.70 m
-  - new Tsuppari reach ~0.90 m
-- mawashi diagnostics
-- blue-reference comparison.
+- focused permanent Tsuppari-art tool tests
+- full wrestler-art suite
+- focused presentation tests
+- `pnpm test`
+- `pnpm build`
+- `git diff --check`
+- permanent exporter deterministic rerun
+- permanent exporter `--check`
+- accepted idle exporter `--check`
+- verify `src/game/sumo` and `src/game/input` have no semantic change.
 
-MIRROR-L may be regenerated but its textures must remain unchanged.
+If Product promotion requires gameplay changes:
+- STOP and report.
 
 ---
 
@@ -310,42 +407,75 @@ MIRROR-L may be regenerated but its textures must remain unchanged.
 
 Required.
 
-Focus on:
+Verify:
 
-1. Enter starts Bout
-2. key 4 still cycles all gate modes
-3. SEPARATE uses the new red-right candidate
-4. SEPARATE derived blue-left uses the new red-right path
-5. right-arm length looks closer to left-arm length
-6. idle -> pose -> idle has no new position/scale jump
-7. reach is slightly longer than before
-8. situations around 0.88–0.90 m behave according to the new reach
-9. Push / Counter / Grip still work
-10. dummy mode 3 still works
-11. no missing texture / console errors.
-
-The smoke verifies integration only.
-Final visual/game-feel acceptance remains User-owned.
+- pre-bout works
+- Enter starts Bout
+- ArrowLeft always shows permanent left Tsuppari Product pose
+- ArrowRight always shows permanent right Tsuppari Product pose
+- red CPU and blue player both map to the accepted derived textures
+- pose held through current Tsuppari action
+- returns to idle cleanly
+- no key-4 Visual Gate switching remains
+- no gate mode debug label remains
+- dummy mode 3 remains useful
+- Push / Counter / Grip unaffected
+- current 0.55 m reach behavior unchanged
+- R restart works
+- no missing texture / console errors.
 
 ---
 
-# Measurement Reproducibility Guardrail
+# Final User Play Test
 
-ACTION-07C1 review identified a deferred issue:
+Required as a final integration regression gate.
 
-- the normalization measurement helper used in 07C was not committed
-- recipe prose says "7 px erosion"
-- 07C1 reconstructed the actual behavior as "7 px opening (erosion + dilation)".
+The visual strategy and reach are already accepted.
+The User only needs to confirm that Product promotion/cleanup did not alter the accepted result.
 
-For this small Task:
+Check:
 
-- do not broaden Scope into a large art-tool refactor
-- use the same 07C1-calibrated measurement interpretation for consistency
-- record any new measurement evidence clearly.
+- same accepted SEPARATE left/right look
+- same right-arm length balance
+- same blue variants
+- same 0.55 m reach feel
+- no texture/pivot jump
+- no gameplay regression.
 
-If a tiny deterministic helper is absolutely necessary to avoid another ambiguous measurement, it may be added only if it stays narrowly scoped and is reported.
+Technical PASS does not replace this final integrated check.
 
-Permanent Product promotion must later reconcile this measurement method explicitly.
+---
+
+# Scope Out
+
+Do NOT:
+
+- retune gameplay
+- change reach
+- change Push
+- change cooldown/timing/buildup/Counter
+- change idle Product art
+- regenerate new candidate art
+- re-evaluate MIRROR modes
+- add multi-frame animation
+- add skeletal animation
+- add generic pose/skin systems
+- change Management/Save/CPU/Touch systems
+- update PROJECT_HANDOFF.md.
+
+---
+
+# Stop Conditions
+
+STOP if:
+
+- accepted red source hashes do not match
+- permanent outputs cannot reproduce accepted SEPARATE pixels
+- formalized measurement helper materially disagrees with accepted normalization
+- recolor/mask contaminates non-mawashi regions
+- runtime cleanup requires gameplay changes
+- removing gate modes causes a broad presentation redesign
+- Current Source materially conflicts with this Task.
 
 ---
 
@@ -353,57 +483,45 @@ Permanent Product promotion must later reconcile this measurement method explici
 
 Likely:
 
-- `tools/wrestler_art/tsuppari_gate_recipe.json`
-- red-right-derived runtime gate PNGs
-- `src/game/presentation/tsuppariGateArt.ts`
-- focused art test expectation(s)
-- `src/game/sumo/BoutSimulation.ts` — reach constant only
-- focused Tsuppari test(s) — reach boundary only
-- `docs/ARCHITECTURE.md` — update current provisional reach
+- permanent Tsuppari runtime recipe/config
+- permanent export/check tool
+- deterministic measurement helper
+- focused art tests
+- `tools/wrestler_art/README.md`
+- four permanent Tsuppari runtime PNGs
+- removal of 12 temporary gate PNGs
+- permanent pure presentation metadata module
+- `WrestlerView.ts`
+- `BoutScene.ts` cleanup of key 4 / gate debug state
+- presentation tests
+- `docs/WRESTLER_PRODUCT_ART_SPEC.md`
+- `docs/ARCHITECTURE.md`
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`.
 
 Do not modify `CURRENT_TASK.md`.
 
 ---
 
-# Verification
+# Implementation Evidence Required
 
-Verification Level:
-Standard focused follow-up
+Completion Report must include:
 
-Required:
+| Design Requirement | Implemented As | Verified By |
+|---|---|---|
 
-- focused wrestler-art tests
-- full wrestler-art suite
-- focused Tsuppari Simulation tests
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`
-- deterministic gate exporter `--check`
-- accepted idle runtime art unchanged
-- verify gameplay source change is limited to the intended reach tune.
+At minimum:
 
-Do not claim PASS if another gameplay semantic changed.
-
----
-
-# Acceptance Criteria
-
-Technical completion requires:
-
-- new right-pose source is actually used
-- new red-right normalization is explicit
-- SEPARATE red-right updated
-- SEPARATE blue-left updated
-- MIRROR-R regenerated consistently
-- red-left / MIRROR-L unchanged
-- idle sprites unchanged
-- `TSUPPARI_HAND_REACH: 0.525 -> 0.55`
-- effective equal-radius threshold: 0.875 -> 0.90 m
-- no other gameplay semantic changed
-- tests/build/runtime smoke pass.
-
-Final visual/game-feel acceptance is User-only.
+- accepted SEPARATE promotion
+- permanent red left/right source ownership
+- permanent blue derivation mapping
+- exact four runtime asset paths
+- accepted-pixel preservation
+- explicit pivot/body-core metadata
+- deterministic export/check
+- measurement helper/procedure
+- Visual-Gate runtime cleanup
+- gameplay unchanged
+- SPEC/ARCHITECTURE updated.
 
 ---
 
@@ -413,23 +531,21 @@ Include:
 
 - Result
 - Preflight
-- old vs new red-right source hashes
-- new red-right normalization measurements
-- changed gate texture hashes
-- unchanged texture evidence
-- recolor/mask result
-- exact gameplay change:
-  - old/new `TSUPPARI_HAND_REACH`
-  - old/new effective equal-radius threshold
-- focused reach tests
-- full verification
-- browser/runtime smoke
+- accepted source hashes
+- permanent source-of-truth ownership
+- measurement-helper method/results
+- old gate -> permanent asset mapping
+- proof permanent pixels equal accepted SEPARATE pixels
+- deleted/retained historical gate files
+- runtime metadata
+- tests/build
+- browser smoke
 - changed files
-- files explicitly not changed
-- measurement-method note
+- gameplay files explicitly unchanged
 - Design Deviations
 - Unexpected Scope
-- User Visual Gate / Play Test Required
+- Known Untested Items
+- Final User Play Test Required
 - Git delivery.
 
 If none:
@@ -437,28 +553,14 @@ If none:
 
 ---
 
-# Stop Conditions
-
-STOP if:
-
-- red-right source hash is still the ACTION-07C1 value
-- any other candidate source unexpectedly changed
-- new right pose cannot be normalized with the established method
-- recolor contaminates non-mawashi regions
-- extending reach requires broader collision redesign
-- any gameplay semantic besides reach must change
-- expected-unchanged textures change for unknown reasons.
-
----
-
 # Git Delivery
 
 Follow `AGENTS.md`.
 
-Normal success:
+Normal successful Task:
 
 - stage only Task-owned files
-- one commit
+- one implementation commit
 - fetch / fast-forward safety
 - push `origin/develop`
 - verify remote SHA
@@ -466,195 +568,16 @@ Normal success:
 
 Suggested commit:
 
-`art(action): refresh right tsuppari pose and tune reach`
+`refactor(art): promote tsuppari product poses`
 
 Do not modify:
-
 - `main`
 - `PROJECT_HANDOFF.md`.
 
 # Final Instruction
 
-Apply exactly two functional changes:
+Promote the User-accepted SEPARATE Tsuppari art into the permanent Product runtime/export contract.
 
-1. refresh the red right-hand Tsuppari candidate again
-2. increase Tsuppari reach from 0.525 m to 0.55 m.
-
-Keep everything else unchanged as much as possible.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-22
-Overall Result: PASS / USER PLAY TEST ACCEPTED
-Accepted Technical Baseline: df2575d8520f2bb05edfb1c4f2677b6af207c060
-
-## Reported Implementation vs Design
-
-Accepted as aligned with ACTION-07C2.
-
-Confirmed from Current Source / diff:
-
-- the red-right Tsuppari candidate was replaced again
-- only red-right-derived Visual-Gate textures changed
-- red-left-derived textures remain unchanged
-- MIRROR-L remains unchanged
-- accepted idle red/blue sprites remain unchanged
-- Tsuppari gameplay source changed only at the reach constant / comment
-- input / scene gameplay logic is unchanged
-- reach tests were extended rather than weakened.
-
-## Accepted Art Refresh
-
-New red-right source identity:
-
-- decoded RGBA SHA-256:
-  d7d5632f8357bd1e4427d2bcdcee5a6e74307fcd9d0caca2d86d102ec8719011
-
-Accepted current Visual-Gate normalization result:
-
-- source_front_deg: 157.8
-- root_source_px: (818, 688)
-- body_core_source_px: (663, 309) - (920, 940)
-- runtime red-right: 193 x 163
-- red-right pivot: (79, 87)
-- reflected blue-left pivot: (79, 76)
-- body core: 123.076923 px.
-
-User Play Test reports the refreshed right-arm visual is acceptable.
-
-## Accepted Reach Tune
-
-User Play Test reports the reach tune is acceptable.
-
-Accepted current Prototype value:
-
-- TSUPPARI_HAND_REACH = 0.55 m
-
-Current equal-radius center threshold:
-
-- 0.55 + BODY_RADIUS(0.35) = 0.90 m
-
-Keep the existing center-distance rule:
-
-- hit iff centerDistance <= TSUPPARI_HAND_REACH + receiver.bodyRadius.
-
-Do not revert to 0.525 m in unrelated tasks.
-
-## Gameplay Preservation Review
-
-Confirmed unchanged:
-
-- PUSH_EXTERNAL_ACCELERATION
-- TSUPPARI_IMPULSE
-- TSUPPARI_COUPLED_SHARE
-- cooldown
-- startup / active / recovery
-- 5 ordinary hits -> 6th Kuzushi
-- Tsuppari Counter semantics
-- Push Counter semantics
-- Push/Tsuppari contest
-- Tsuppari/Tsuppari contest
-- clamp / decay
-- ring-out.
-
-No material gameplay deviation found.
-
-## Asset Delta Review
-
-Changed as expected:
-
-- separate_red_right.png
-- separate_blue_left.png
-- mirror_r_red_right.png
-- mirror_r_red_left.png
-- mirror_r_blue_right.png
-- mirror_r_blue_left.png
-
-Confirmed unchanged:
-
-- separate_red_left.png
-- separate_blue_right.png
-- mirror_l_red_left.png
-- mirror_l_red_right.png
-- mirror_l_blue_left.png
-- mirror_l_blue_right.png
-- accepted idle red.png
-- accepted idle blue.png.
-
-## Verification Review
-
-Reported and accepted:
-
-- focused wrestler-art: 19 PASS
-- full wrestler-art: 144 PASS
-- focused BoutTsuppari: 45 PASS
-- pnpm test: 22 files / 350 tests PASS
-- pnpm build: PASS
-- git diff --check: PASS
-- deterministic gate exporter --check: PASS
-- browser/runtime smoke: 52 / 52 PASS.
-
-Reach-specific coverage includes:
-
-- 0.90 m boundary
-- old-to-new extension band
-- Counter within the extended reach
-- unchanged non-reach Tsuppari constants.
-
-## User Play Test Result
-
-ACCEPTED.
-
-The User reports the current Play Test is OK.
-
-Accepted current Prototype baseline:
-
-- SEPARATE visual strategy is the preferred/accepted visual result for Tsuppari
-- refreshed shorter red-right pose is accepted
-- derived blue-left from that right pose is accepted
-- TSUPPARI_HAND_REACH = 0.55 m is accepted for the current Prototype
-- current Push / Tsuppari force relationship remains accepted from the previous Play Test context.
-
-This acceptance is sufficient to proceed to permanent Product-art promotion.
-
-## Measurement Reproducibility — Required Follow-up
-
-Before or as part of permanent Product promotion, resolve the known measurement-method ambiguity:
-
-- repository prose currently says 7 px erosion
-- the calibrated procedure used by 07C1/07C2 is 7 px opening (erosion + dilation)
-- the measurement helper itself is not committed.
-
-The promotion Task should make the normalization measurement reproducible and align documentation with the actual method.
-
-Do not reopen the accepted visual result while fixing this tooling/documentation reproducibility issue.
-
-## Do Not Reopen
-
-Unless explicitly requested:
-
-- refreshed red-right pose
-- SEPARATE Tsuppari visual choice
-- Tsuppari reach 0.55 m
-- current left/right hand mapping
-- current gameplay timing / cooldown / buildup / Counter semantics
-- accepted idle red-master art baseline.
-
-## Next Task Constraint
-
-Recommended next Task:
-
-ACTION-07D-TSUPPARI-PRODUCT-ART-PROMOTION
-
-It should:
-
-- promote SEPARATE from temporary gate to permanent Tsuppari Product art baseline
-- retire/remove temporary MIRROR-L / MIRROR-R runtime gate machinery as appropriate
-- keep the accepted SEPARATE textures/hand mapping
-- update WRESTLER_PRODUCT_ART_SPEC and ARCHITECTURE
-- formalize the normalization measurement method/helper
-- keep ACTION-07B/07C2 gameplay unchanged
-- run final integrated browser/user check.
+Remove temporary runtime comparison machinery.
+Formalize measurement reproducibility.
+Keep ACTION-07C2 gameplay exactly unchanged.
