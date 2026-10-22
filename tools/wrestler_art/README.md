@@ -5,7 +5,7 @@ Offline review and export tools for SumoSim Product wrestler art:
 | Tool | Task | Status |
 |---|---|---|
 | `export_tsuppari.py` / `measure_tsuppari_pose.py` / `preview_tsuppari.py` | ACTION-07D | **current runtime export** of the four Product Tsuppari poses (accepted SEPARATE) + measurement helper + review preview ([below](#product-tsuppari-poses-action-07d)) |
-| `export_counter_gate.py` | ACTION-08A | **Visual-Gate candidate** for the Counter pose (provisional; not accepted art) ([below](#counter-visual-gate-action-08a-provisional)) |
+| `export_counter.py` | ACTION-08C | **current runtime export** of the Product Counter pose (red + derived blue; accepted) ([below](#product-counter-pose-action-08c)) |
 | `export_runtime_wrestlers.py` | ART-WRESTLER-04B | **current runtime export**: red master + derived blue ([below](#runtime-export-art-wrestler-04b-red-master)) |
 | `preview_idle_mirror_workflow.py` | ART-WRESTLER-04A | mirror / recolor comparison (history; red-master branch promoted) |
 | `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | two separately authored sprites as rigid objects (history / comparison; runtime no longer uses the blue source) ([below](#dual-rigid-sprites-art-wrestler-03a)) |
@@ -343,26 +343,35 @@ History: the ACTION-07C Visual Gate exported 12 textures (SEPARATE / MIRROR-L / 
 runtime toggle. MIRROR-L / MIRROR-R were rejected (they flip the head / body asymmetry between idle and
 pose); the gate exporter, recipe and textures were replaced by the Product files above (git history only).
 
-## Counter Visual Gate (ACTION-08A, provisional)
+## Product Counter pose (ACTION-08C)
 
-Provisional Counter / hiki-sabaki (ArrowDown) pose for the User Visual Gate. **Not an accepted Product art
-contract**; the idle and Product Tsuppari textures and recipes are not touched.
+The Counter / hiki-sabaki (ArrowDown) pose of the Product wrestlers, accepted by User Play Test together with its
+presentation-only body rotation (ACTION-08B) and promoted from the ACTION-08A / 08A1 / 08B Visual Gate. The idle
+and Product Tsuppari textures and recipes are not touched.
 
 ```bash
-PY tools/wrestler_art/export_counter_gate.py            # write public/assets/action/wrestler/counter-gate/
-PY tools/wrestler_art/export_counter_gate.py --check    # verify the committed red.png / blue.png, write nothing
+PY tools/wrestler_art/export_counter.py            # write public/assets/action/wrestler/counter/ (red.png / blue.png)
+PY tools/wrestler_art/export_counter.py --check    # verify the committed red.png / blue.png, write nothing
 ```
 
 - Input: `input.local/candidate_red_counter.png` only (never committed; identity = decoded RGBA pixel SHA-256
-  in `counter_gate_recipe.json`).
-- red = the pose normalized like the idle red (ACTION-08A1 lateral-sweep candidate, 1265x1244 source: front
-  178.8, root (863, 553), body core (853, 111)-(868, 846), measured once with the Product Tsuppari landmark
-  registration; `measurement_evidence` records it).
+  in `counter_recipe.json`).
+- red = the pose normalized like the idle red (1265x1244 source: front 178.8, root (863, 553), body core
+  (853, 111)-(868, 846), measured once with the Product Tsuppari landmark registration; `measurement_evidence`
+  records it).
 - blue = red reflected across the local X axis + the accepted mawashi recolor of `runtime_wrestler_recipe.json`
-  (single owner), validated against `mask_limits` (fail closed; `max_missed_px` is 80 for this candidate only,
-  its missed pixels being semi-transparent outline fringe). Counter has no hand, so there is one pose per colour.
-- Runtime: `src/game/presentation/counterGateArt.ts` mirrors the two sizes / pivots (checked by
-  `tests/test_export_counter_gate.py`); the pose is shown exactly while the visual pose is `counter`.
+  (single owner), validated against `mask_limits` (fail closed). `max_missed_px` is 80 as a narrow, accepted
+  property of this Counter source only (its missed pixels are semi-transparent outline fringe); idle / Tsuppari
+  keep 60. Counter has no hand, so there is one pose per colour.
+- Runtime: `src/game/presentation/productCounterArt.ts` mirrors the two sizes / pivots (checked by
+  `tests/test_export_counter.py`, which also pins both pixels to the accepted gate textures). The pose is shown
+  exactly while the visual pose is `counter`, and the body sprite turns `sin(pi * progress) * 35 deg` (red +,
+  blue -) on top of the canonical facing.
+
+History: ACTION-08A ran a first Counter candidate as a temporary `counter-gate` Visual Gate (rejected as too
+similar to Tsuppari); ACTION-08A1 replaced it with the lateral-sweep pose and ACTION-08B added the body rotation.
+`counter_gate_recipe.json` / `export_counter_gate.py` / `counter-gate/` were renamed to the Product files above
+(git history keeps the gate stages).
 
 ## Idle mirror + mawashi recolor (ART-WRESTLER-04A, comparison / history)
 

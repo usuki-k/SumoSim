@@ -3,9 +3,9 @@
 // per-limb transforms or body deformation). A procedural world shadow sits below both bodies.
 // During a Tsuppari action the sprite swaps to the held Product Tsuppari pose texture of that hand (ACTION-07D);
 // each texture keeps its own pivot / body-core scale, so the canonical center and facing are unchanged by the
-// swap. ACTION-08A Visual Gate: while the pose is Counter the provisional Counter candidate is shown the same way;
-// ACTION-08B adds its presentation-only body turn on top of the canonical facing (body sprite only, never the
-// shadow or the Simulation facing).
+// swap. While the pose is Counter the Product Counter pose is shown the same way (ACTION-08C), with its
+// presentation-only body turn on top of the canonical facing (body sprite only, never the shadow or the
+// Simulation facing).
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -13,7 +13,7 @@ import {
   productWrestlerScale,
   type ProductWrestlerArt,
 } from '../presentation/productWrestlerArt.ts'
-import { allCounterGateArts, counterVisualRotationOffset, selectWrestlerPoseArt } from '../presentation/counterGateArt.ts'
+import { allProductCounterArts, counterVisualRotationOffset, selectWrestlerPoseArt } from '../presentation/productCounterArt.ts'
 import { allProductTsuppariArts } from '../presentation/productTsuppariArt.ts'
 import type { WrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
 import type { ParticipantState } from '../sumo/BoutTypes.ts'
@@ -27,7 +27,7 @@ const SHADOW_ALPHA = 0.28
 const SHADOW_OFFSET = { x: 0.07, y: 0.12 }
 
 export function preloadProductWrestlers(scene: Phaser.Scene): void {
-  for (const art of [...Object.values(PRODUCT_WRESTLER_ART), ...allProductTsuppariArts(), ...allCounterGateArts()]) {
+  for (const art of [...Object.values(PRODUCT_WRESTLER_ART), ...allProductTsuppariArts(), ...allProductCounterArts()]) {
     scene.load.image(art.textureKey, `${import.meta.env.BASE_URL}${art.assetPath}`)
   }
 }

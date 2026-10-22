@@ -1,7 +1,7 @@
 {
   "recipe_schema": 1,
-  "name": "counter-visual-gate-08a",
-  "status": "Visual Gate candidate (ACTION-08A). Provisional Counter / hiki-sabaki pose for the User Visual Gate; not an accepted Product art contract.",
+  "name": "counter-product-08c",
+  "status": "Product Counter / hiki-sabaki art contract (ACTION-08C): the ACTION-08A1 pose with the ACTION-08B body rotation, accepted by User Play Test. ACTION-08A / 08A1 / 08B ran it as a temporary `counter-gate` Visual Gate (counter_gate_recipe.json / export_counter_gate.py); that naming is no longer the Product contract.",
   "note": "One authored red Counter pose is the only source. It is normalized like the accepted idle red (one whole-sprite rotation so FRONT = local +X, explicit root, body core = 2R, exact /4 downscale). Blue reuses the accepted red -> blue rule of runtime_wrestler_recipe.json (single owner): local-Y reflection ((x, y) -> (x, H - y)) + mawashi-only recolor. Counter has no hand semantics, so one red pose and its reflected blue are enough.",
   "runtime_recipe": "runtime_wrestler_recipe.json",
   "alpha_threshold": 8,
@@ -36,7 +36,7 @@
     }
   },
   "mask_limits": {
-    "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component. max_missed_px 80 (ACTION-08A1, Counter gate only, image-specific): the candidate's missed pixels are semi-transparent outline fringe, not a disconnected mawashi part; not a global Product-art standard.",
+    "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component. max_missed_px 80 is a narrow, accepted property of this Counter source only (ACTION-08A1: its 70 missed pixels, 69 of them with alpha < 128, are semi-transparent outline fringe, not a disconnected mawashi part); idle / Tsuppari keep 60 and it is not a global Product-art standard.",
     "min_mask_px": 1500,
     "max_missed_px": 80,
     "max_fringe_px": 120

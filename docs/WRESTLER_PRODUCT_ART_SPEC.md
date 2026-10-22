@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本。**現在の採用方針は §0**（描いた1枚のred masterと、そこから決定的に作ったblueの、2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合、ART-WRESTLER-04Bでred master方式へ移行。Tsuppariの左右のposeは、ACTION-07DでSEPARATE方式の4枚をProductに昇格）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
+Status: Product力士artの正本。**現在の採用方針は §0**（描いた1枚のred masterと、そこから決定的に作ったblueの、2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合、ART-WRESTLER-04Bでred master方式へ移行。Tsuppariの左右のposeは、ACTION-07DでSEPARATE方式の4枚をProductに昇格。Counter / 引き・捌きのposeと体の回転は、ACTION-08CでProductに昇格）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -13,7 +13,7 @@ Status: Product力士artの正本。**現在の採用方針は §0**（描いた
 
 ---
 
-## 0. 現在の採用方針（ACTION-ART-03A → ART-WRESTLER-04A / 04B User Visual Gate → ACTION-07D Tsuppari）
+## 0. 現在の採用方針（ACTION-ART-03A → ART-WRESTLER-04A / 04B User Visual Gate → ACTION-07D Tsuppari → ACTION-08C Counter）
 
 **Accepted（現在のprototype）**
 - 2枚の全身sprite（赤まわし・青まわし）を、剛体として使う
@@ -30,9 +30,9 @@ Status: Product力士artの正本。**現在の採用方針は §0**（描いた
   - 位置: canonicalなparticipantの位置に、明示したpivotを置く
   - 向き: canonicalな `participant.facing` で、sprite全体を連続的に回転する
   - 表示scale: `2 × bodyRadiusPx / bodyCoreDiameterPx`（現在は約1.0）
-- idle・移動・push・counter・grip・組み・drive・崩し: すべて同じidleのspriteを使う（Tsuppariだけは下記の専用pose）
+- idle・移動・push・grip・組み・drive・崩し: すべて同じidleのspriteを使う（Tsuppari / Counterだけは下記の専用pose）
   - 動きは、canonicalな位置の移動（平行移動）だけ。これを最小の基準とする
-  - presentation専用のよろけのoffsetや回転は、足さない
+  - presentation専用のよろけのoffsetや回転は、足さない（例外は下記のCounterの体の捌きだけ）
 - 影は手続き的な、ほぼ円形のもの（world上で右下へずらす）
 - 割り当て（presentation）: `wrestler-a` → blue、`wrestler-b` → red
 
@@ -50,8 +50,23 @@ Status: Product力士artの正本。**現在の採用方針は §0**（描いた
 - runtimeでの反転・動的な塗り替えはしない。命中判定は中心距離（`TSUPPARI_HAND_REACH`）で行い、spriteの形は使わない
 - **SEPARATEがProductの方式**。MIRROR-L / MIRROR-R（1枚のred poseから左右を作る方式）はACTION-07CのVisual Gateの実験で、idleとposeのあいだで頭と体の左右非対称が入れ替わるため、Productの基準ではない
 
+**Accepted: Counter / 引き・捌きのpose（ACTION-08C。ACTION-08A1のposeとACTION-08Bの体の回転を、User Play Testで採用）**
+- 描いたCounterのmasterは、**redの1枚だけ**（`input.local/candidate_red_counter.png`、decoded RGBAのpixel SHA-256で同一性を確かめる）
+- runtimeのtextureは2枚: `public/assets/action/wrestler/counter/red.png` / `blue.png`
+  - red: red masterを、idleと同じ方法で正規化したもの（sprite全体を1回だけ回転してlocal +X = 前、明示したroot、body-coreを2R、正確に1/4へ縮小）
+  - **blue: 正規化したredを、offlineでlocal X軸について反射 + まわしの塗り替え**（ruleは `runtime_wrestler_recipe.json` の1か所。Counterには手の区別が無いので、色ごとに1枚）
+  - 書き出しは `tools/wrestler_art/export_counter.py`（`--check` は何も書かない）。値の正本は `counter_recipe.json`
+  - まわしのmaskの `max_missed_px` は、このCounterのsourceだけ80（取りこぼしは半透明の輪郭の縁だけ）。idle / Tsuppariは60のままで、全体の基準ではない
+- textureごとに、明示したpivotとbody-core（直径123.076923 px = 2R）を持つ（red 210×207 / pivot (74, 115)、blue 210×207 / pivot (74, 92)）
+- どのposeを出すかは、`WrestlerVisualState.pose === 'counter'`（Simulationの `action.kind === 'counter'`）だけで決める。今のCounterの行動のあいだだけ表示し、独自のtimerは持たない
+- **presentation専用の体の捌き**: Counterのあいだ、体のspriteだけを canonical facing に加えて **0° → 35° → 0°** 回す（`sin(π · progress) · 35°`、progressはSimulationの `ticksRemaining` / `COUNTER_WINDOW_TICKS`）。向きは **red + / blue −**（伸ばした腕を前方の線から外へ払う向き）
+  - この回転はSimulationの `participant.facing` を変えない。影・位置・scaleも変えない
+- runtimeでの反転・動的な塗り替えはしない。spriteの形はgameplayの当たり判定を決めない
+- この統合した見た目（pose + 回転）は、User Play Testで採用した
+- ACTION-08A / 08A1 / 08Bの `counter-gate`（`counter_gate_recipe.json` / `export_counter_gate.py` / `counterGateArt.ts`）は一時的なVisual Gateの仕組みで、Productの契約ではなくなった
+
 **Deferred**
-- push・接触・grip・組みの専用pose: runtimeのUser Play Testで必要とわかったときだけ、後の混合poseのTaskで足す（Tsuppariは上記で採用済み）
+- push・接触・grip・組みの専用pose: runtimeのUser Play Testで必要とわかったときだけ、後の混合poseのTaskで足す（Tsuppari / Counterは上記で採用済み）
 - 8方向のsprite、animationのframe数、poseの数、skeletal rig、手足ごとのanimation: 決めない・作らない
 
 **履歴**

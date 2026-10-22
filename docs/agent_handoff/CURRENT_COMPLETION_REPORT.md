@@ -1,151 +1,164 @@
-Task-ID: ACTION-08B-COUNTER-PRESENTATION-ROTATION-GATE
+Task-ID: ACTION-08C-COUNTER-PRODUCT-ART-PROMOTION
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 592cbd86988fd9270ab03c7f0a04993b11ae2bfa
-Agent-Start-Head: 3d523e31bd464dc2ca14255a2f57a01c3ddac8fd
+Source-Baseline: b65ab9a2e01835dc955248d5d4f7492361b78c1c
+Agent-Start-Head: 5411ab102e91dc5826f533d3fe8d918d767627c8
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 27 / 27 PASS（SwiftShader）、GPUでの再実行も27 / 27 PASS。回転がCounterをTsuppariと見分けられるようにしたかは、User Play Testで判断する）。
+PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 28 / 28 PASS（GPU）。昇格と整理で受理済みの見た目が変わっていないかは、最後のUser Regression Play Testで確認する）。
 
-- Counter windowのあいだだけ、体のspriteに、presentation専用の回転 **0° → 35° → 0°** を足した
-  - 経路: `WrestlerVisualState.phaseProgress` → `counterVisualRotationOffset` → `WrestlerView`
-- redは+、blueは−（同じ大きさで、逆の向き）
-- 次のものは変えていない:
-  - `participant.facing`、Simulation、CounterTransition
-  - Counterの画像、影、位置、scale
+- User Play Testで受理されたCounter / 引き・捌き（ACTION-08A1のpose + ACTION-08Bの35°の体の回転）を、恒久のProductの契約に昇格した
+  - 2枚のruntime texture: `public/assets/action/wrestler/counter/red.png` / `blue.png`
+  - exporter: `export_counter.py` + `counter_recipe.json`
+  - metadata / 選択 / 回転: `productCounterArt.ts`
+- 2枚とも、受理済みの `counter-gate` textureと、**decoded pixelもPNG byteも同じ**（`git mv` で移した）
+- 35°・sin曲線・red + / blue −の動きは、そのまま変えていない
+- gameplayは変えていない（`src/game/sumo`、`src/game/input` は差分0行）
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
-- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `592cbd8`（`origin/develop` のancestor）、Handoff-Mode GITHUB
-- `592cbd8..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `3d523e3`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `b65ab9a`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+- `b65ab9a..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `5411ab1`
+- 受理済みのsource: `input.local/candidate_red_counter.png`
+  - 1265×1244 RGBA
+  - decoded RGBA pixel SHA-256 `5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8`（一致）
 
-# 実装
+# Gate → 恒久Productの昇格と、pixelが同じことの証明
 
-## 角度・曲線・符号
+| 受理済みのgate（移す前） | 恒久のProduct | size / pivot | pixel SHA-256（両方で同じ） | file SHA-256（両方で同じ） |
+|---|---|---|---|---|
+| `counter-gate/red.png` | `public/assets/action/wrestler/counter/red.png` | 210×207 / (74, 115) | `83b96783ebdd741ab07e435d25ce7a4ce6557b734d40c8873560bab2b630d5d3` | `a6128071c1a4137d7fbab66e8d51b90e72fe3ebe187c85ac73bd17fcfd2a6b4e` |
+| `counter-gate/blue.png` | `public/assets/action/wrestler/counter/blue.png` | 210×207 / (74, 92) | `1dec7025670ba375287166078cbb52dd3b6701fa52618646107fd4f50153e439` | `3aa893ce83621b66071fe77fd20c4b577b9fc22ef17d944e6768217448b457f3` |
 
-| 項目 | 値 |
+- 移した後に `export_counter.py --check` と再実行をした。新しいexportとpixelもbyteも一致した
+- `tests/test_export_counter.py` の `ACCEPTED_COUNTER_PIXELS` で、この2つのhashを固定した
+- body-coreは2枚とも123.076923 px
+- 正規化の値（front 178.8、root (863, 553)、body core (853, 111)–(868, 846)）、pivot、sourceは変えていない
+
+# 恒久の正本（Single Source of Truth）
+
+| 何 | 正本 |
 |---|---|
-| 最大角度 | **35°**（`COUNTER_VISUAL_MAX_ROTATION_RAD = 35 · π / 180`） |
-| 曲線 | `offset = sign · sin(π · phaseProgress) · 35°`。render deltaや壁時計は使わない |
-| 符号 | **red = +1、blue = −1**（`COUNTER_ROTATION_SIGN`）。Phaserの+回転は、画面上で時計回り（local +X → +Y） |
-| Counter以外 | **ちょうど0**（`state.pose !== 'counter'`） |
+| 描いたsource | `input.local/candidate_red_counter.png` の1枚（commitしない。同一性はrecipeのpixel SHA-256） |
+| 正規化の値、mask_limits | `tools/wrestler_art/counter_recipe.json`（`master`） |
+| red → blueの規則 | `tools/wrestler_art/runtime_wrestler_recipe.json`（idle / Tsuppariと共有。複製しない） |
+| 書き出し / `--check` | `tools/wrestler_art/export_counter.py`（`--out-dir`。既定は `public/assets/action/wrestler/counter/`） |
+| runtimeのmetadata、選択、35°の回転 | `src/game/presentation/productCounterArt.ts`（`PRODUCT_COUNTER_ART`、`selectWrestlerPoseArt`、`counterVisualRotationOffset`、`COUNTER_VISUAL_MAX_ROTATION_RAD`） |
+| 文書 | `docs/WRESTLER_PRODUCT_ART_SPEC.md` §0（Counterの節を新設）、`docs/ARCHITECTURE.md` |
 
-## 符号の根拠（Current Sourceで検証した）
+# 名前を変えた / 消した一時的なgate（すべて `git mv` で、履歴を保っている）
 
-- Counterのtextureで、pivotから一番遠い不透明画素（伸ばした腕の先）の角度を測った
-  - red: FRONTから **+31.6°**（local +Y側）
-  - blue: **−31.6°**（反射したので逆）
-- red +35°なら腕先は約+66.6°、blue −35°なら約−66.6°へ動く。どちらも、前方（Tsuppariの線）から**離れる**
-- 逆の符号にすると、腕先は前方の±3°付近に来て、Tsuppariに近づく。したがって、Taskの符号どおりで正しい
-- 実際の画面でも確かめた（GPUのscreenshot）: blueは体が横を向き、腕は横へ大きく開いた
+| 旧（gate） | 新（Product） |
+|---|---|
+| `public/assets/action/wrestler/counter-gate/red.png` / `blue.png` | `public/assets/action/wrestler/counter/red.png` / `blue.png`（byteは同じ） |
+| `src/game/presentation/counterGateArt.ts`（+ `.test.ts`） | `src/game/presentation/productCounterArt.ts`（+ `.test.ts`） |
+| `tools/wrestler_art/counter_gate_recipe.json` | `tools/wrestler_art/counter_recipe.json` |
+| `tools/wrestler_art/export_counter_gate.py` | `tools/wrestler_art/export_counter.py` |
+| `tools/wrestler_art/tests/test_export_counter_gate.py` | `tools/wrestler_art/tests/test_export_counter.py` |
 
-## Counterのprogress
+識別子の変更:
 
-- `wrestlerVisualState.ts`: Counterのとき `phaseProgress = progress(action.ticksRemaining, COUNTER_WINDOW_TICKS)`
-  - `COUNTER_WINDOW_TICKS` をimportした。ほかのposeと同じ `progress()` を使う
-  - Counter専用のtimerや状態は足していない
-- 押したtickのあとの最初のSnapshotは、ticksRemaining 11（progress 1/12）
-- 最後は1（11/12）。その次のtickでCounterが終わる
-- そのため、角度の列は9.06° → 17.50 → 24.75 → 30.31 → 33.81 → **35.00**（残り6）→ 33.81 → … → 9.06°。Counterが終われば0
+- `COUNTER_GATE_ART` → `PRODUCT_COUNTER_ART`
+- `COUNTER_GATE_BODY_CORE_DIAMETER_PX` → `PRODUCT_COUNTER_BODY_CORE_DIAMETER_PX`
+- `allCounterGateArts` → `allProductCounterArts`
+- texture keyは `counter-gate-red/blue` → `product-counter-red/blue`
+- exporterの `DEFAULT_GATE_DIR` / `--gate-dir` → `DEFAULT_COUNTER_DIR` / `--out-dir`
+- 次は値も名前もそのまま: `counterVisualRotationOffset`、`COUNTER_VISUAL_MAX_ROTATION_RAD`、`selectWrestlerPoseArt`
 
-## 適用
+履歴として残したもの:
 
-- `src/game/presentation/counterGateArt.ts`: `counterVisualRotationOffset(id, state)`（pure、Phaser非依存）
-- `src/game/scenes/WrestlerView.ts`: **体のspriteだけ** を `participant.facing + counterVisualRotationOffset(this.idleArt.id, state)` で回す
-  - 影の回転は `participant.facing` のまま
-  - 位置とscaleは変えていない
-  - 回転の中心は、既存の明示pivot（= canonicalなparticipantの中心）
+- `counter_recipe.json` の `status`
+- exporterのdocstring
+- READMEのHistory
+- SPEC §0
 
-# Changed Files
+上の4か所に、08A / 08A1 / 08Bの `counter-gate` の経緯を書いた。現在の正本と二重にはなっていない。
 
-- `src/game/presentation/wrestlerVisualState.ts`（Counterの `phaseProgress`）
-- `src/game/presentation/counterGateArt.ts`（定数、符号、`counterVisualRotationOffset`、comment）
-- `src/game/scenes/WrestlerView.ts`（体の回転に、offsetを加える）
-- `src/game/presentation/counterGateArt.test.ts`（08Bのtestを追加。既存のinput helperにpush / grip / moveを追加）
-- `src/game/presentation/wrestlerVisualState.test.ts`（Counterのprogressのtestを追加）
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+# Mask（Counterだけの許容は維持）
 
-## 変更していないもの
+- `counter_recipe.json` の `mask_limits.max_missed_px = 80` はそのまま
+  - noteを「このCounterのsourceだけの、受理済みの狭い性質（全体の基準ではない）」に書き直した
+- idle / Tsuppariの上限は60のまま（testで確かめている）
+- 塗り替えのalgorithmと、共通の規則は変えていない
 
-- `src/game/sumo/`、`src/game/input/`（`592cbd8` から差分0行）
-- `BoutScene.ts`
-- `public/`、`tools/`（差分0行。Counterの2枚、idleの2枚、Tsuppariの4枚は不変）
-- SPEC、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md`
+| 値 | 結果 |
+|---|---|
+| mask px | 1724 |
+| missed | 70（上限80。うち69はalpha < 128の輪郭の縁） |
+| fringe | 75（上限120） |
+
+- 80を超えれば、引き続きfail closedで止まる
+- 混入が無いことは、08A1でmaskの画像を目視して確かめた。pixelが同じなので変わらない
+
+# 35°の動きを保つこと
+
+`productCounterArt.ts` に、そのまま移した:
+
+- `COUNTER_VISUAL_MAX_ROTATION_RAD = 35 · π / 180`
+- `counterVisualRotationOffset = sign · sin(π · phaseProgress) · 35°`（red +1、blue −1）
+- Counter以外では0
+
+その他:
+
+- `wrestlerVisualState.ts`（`progress(ticksRemaining, COUNTER_WINDOW_TICKS)`）は変えていない
+- `WrestlerView` は、importとcommentだけを変えた
+  - 体だけを `facing + offset` で回す
+  - 影・位置・scaleは変えない
+- 08Bのtest（曲線、35°、符号、0、Snapshot / facingは不変）は、すべて残してPASS
+
+# Implementation Evidence
+
+| Design Requirement | Implemented As | Verified By |
+|---|---|---|
+| 受理済みgate → 恒久Productへの昇格 | `git mv` で、asset / module / exporter / recipe / testを恒久の名前へ移した | pixelとbyteのhashの一致（上の表）、`test_product_pixels_equal_the_accepted_counter_gate` |
+| 恒久のruntime path | `public/assets/action/wrestler/counter/red.png` / `blue.png`（ちょうど2枚） | `test_exactly_two_files_from_the_one_red_pose`、TSの `two Product textures under counter/`、smokeのtexture読み込み |
+| sourceの持ち主とhash | `counter_recipe.json` の `master`（pixel SHA-256 `5429d02f…`）。合わなければ止まる | `test_accepted_source_identity`、`test_missing_or_changed_source_fails_closed` |
+| red → blueの導出 | local Y反射 + 共通のまわしの塗り替え（ruleはidle recipe） | `test_only_one_local_y_reflection`、`test_recolor_rule_is_owned_by_the_idle_runtime_recipe`、`test_red_is_the_normalized_pose_and_blue_its_reflected_recolor`（alpha、mask外が不変） |
+| 受理済みpixelを保つ | 正規化の値もpivotも変えていない。byteが同じものを移した | `ACCEPTED_COUNTER_PIXELS`、`export_counter.py --check`、決定的な再実行 |
+| Counterだけ `max_missed` 80 | recipeの値は維持、noteを更新。idle / Tsuppariは60 | `test_counter_only_missed_allowance`、`test_mask_limits_fail_closed`、`test_real_mask_covers_the_mawashi` |
+| 明示したgeometry / pivot | `PRODUCT_COUNTER_ART`（210×207、(74, 115) / (74, 92)、123.076923） | `test_typescript_metadata_matches_the_export`、TSの `texture keys / paths are Product names; geometry …`、smokeのorigin = pivot |
+| 35°の動きを保つ | 定数と関数をそのまま移した | TSの08Bのtest（曲線、35°、中間点、red / blueの符号、Counter以外は0、Snapshot / facingは不変）、smokeの観測値 |
+| 一時的なgateの整理 | gateの名前、path、texture keyは、runtime / tool / testに残っていない | TSの `no temporary counter-gate runtime dependency remains`、smokeの「gate textureは0枚」、`counter-gate/` が無いことのtest |
+| SPEC / ARCHITECTUREの更新 | SPEC §0に「Accepted: Counter / 引き・捌きのpose」を新設し、idle共通の記述の例外も直した。ARCHITECTUREの段落をProduct Counterに置き換えた | 文書の差分 |
+| gameplayは不変 | `src/game/sumo`、`src/game/input` は差分0行 | `git diff b65ab9a -- src/game/sumo src/game/input` = 0行、sumoのtestは全PASS |
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| presentationのtest（`counterGateArt` / `wrestlerVisualState` などを含む） | 55 tests PASS |
-| `src/game/sumo` のtest（Counter / CounterTransition / Tsuppari / Push） | 13 files / 274 tests PASS（変えていない） |
-| `pnpm test` | 23 files / 362 tests PASS |
+| `test_export_counter.py`（focused） | 17 tests OK |
+| wrestler-art全suite | 168 tests OK |
+| presentationのtest（`productCounterArt` / `wrestlerVisualState` などを含む） | 57 tests PASS |
+| `pnpm test`（sumoのCounter / CounterTransitionのregressionを含む） | 23 files / 364 tests PASS |
 | `pnpm build` / `tsc --noEmit` | PASS（以前からあるchunk size警告だけ） |
 | `git diff --check` | OK |
-| `export_counter_gate.py --check` / `export_runtime_wrestlers.py --check` / `export_tsuppari.py --check` | どれもexit 0（Counter / idle / Tsuppariのassetは不変） |
-| `git diff 592cbd8 -- src/game/sumo src/game/input public tools` | 0行 |
-
-追加したtestと、Taskの検証項目との対応:
-
-| Taskの項目 | test |
-|---|---|
-| 1. Counter以外の状態は0 | idle / move / push / tsuppari / grip、Counterを出た後 |
-| 2. progressは `COUNTER_WINDOW_TICKS` から作る | `wrestlerVisualState.test` で、window全体の各tickについて `1 − ticksRemaining / 12` を確かめる |
-| 3. 曲線 | tickごとに `sin(π p) · 35°` と一致する |
-| 4. 最大値 | ちょうど35°、中間点（index 5 = 残り6）で出る。始めと終わりは対称で、10°未満 |
-| 5. red / blueは同じ大きさで逆の符号 | tickごとに確かめる |
-| 6. visual state + idだけで決まる | 同じ入力なら同じ値 |
-| 7. Snapshot / facingは不変 | JSON、facingの配列が変わらない |
-| 8〜10. Tsuppariの選択、idle / move / Push / Grip、Counterの選択 | 08Aの既存testがそのまま通る |
-| 11. CounterTransitionのgameplay test | sumoのtest、変えずにPASS |
-| 12. sumo / inputに意味の変更が無い | diff 0行 |
+| `export_counter.py` の決定的な再実行 / `--check` | 再実行でbyteが同じ（red `a6128071…`、blue `3aa893ce…`）/ exit 0 |
+| `export_runtime_wrestlers.py --check`（idle） / `export_tsuppari.py --check`（Tsuppari） | どちらもexit 0（idle / Tsuppariは不変） |
+| `src/game/sumo/` / `src/game/input/` | `b65ab9a` から差分0行 |
 
 # Browser / Runtime Smoke
 
-- `pnpm dev`（port 5199）+ headless Chrome（CDP）
-- 08A1のsmokeに、回転の判定を加えた
-  - logに、`phaseProgress` と影のrotationを記録する
-  - Counter frameでは、`body.rotation − facing = ±sin(π p) · 35°` であることを確かめる
-  - それ以外のframeでは、回転差が0であることを確かめる
-- CPU redのCounterは、smoke scriptの中だけで、`dummy.nextIntent` を一時的に包んで出した（ソースは変えていない）
-
-結果: SwiftShaderで **27 / 27 PASS**、GPU（D3D11）で再実行して **27 / 27 PASS**
+- `pnpm dev`（port 5199）+ Chrome（CDP、GPU: ANGLE D3D11）
+- 08Bのsmokeを、Productのtexture keyで実行した
+- CPU redのCounterは、smoke scriptの中だけで `dummy.nextIntent` を一時的に包んで出した（ソースは変えていない）
+- 結果: **28 / 28 PASS**
 
 | 確認 | 結果 |
 |---|---|
-| Enterで開始。ArrowDownで同じCounterが始まる | PASS |
-| blue: 全Counter frameで、rotation − facing = −sin(πp)·35°。観測した値（GPU）: −9.06 → −17.50 → −24.75 → −30.31 → −33.81 → **−35.00** → −33.81 → … → −9.06° | PASS |
-| red: +の鏡像。観測した値は +9.06 → … → +33.81°。この時点でPushをBestで捕まえてCounterが終わり、既存のCounterTransitionへ移ったので、redは35°に届く前に戻った | PASS |
-| 回転はpivot（canonicalな中心）のまわり。位置 = Snapshot center、scale 1.0、影のrotation = facing | PASS |
-| Snapshotの `participant.facing` は、Counterのあいだ変わらない（blueは0のまま） | PASS |
-| Counter以外のframe（CounterTransitionを含む）、Tsuppariの左右は回転差0 | PASS |
-| Counterの空振り → 既存どおりFail / Kuzushi。PushのBestの捕獲 → 既存のCounterTransition（`active`） | PASS |
-| Push / Grip / 移動、idle / moveのsprite、R restart、console error / 失敗したrequestが無い | PASS |
+| Productの `product-counter-red/blue`（210×207）が読み込まれる。gateのtextureは0枚。Tsuppari / idleのsizeは変わらない | PASS |
+| Enterで開始。ArrowDown → blueは全Counter frameで `product-counter-blue` | PASS |
+| blueの回転（観測値）: −9.06 → −17.50 → −24.75 → −30.31 → −33.81 → **−35.00** → … → −9.06°（08Bと同じ） | PASS |
+| red: `product-counter-red`。+9.06 → … → +33.81°でPushをBestで捕まえ、既存のCounterTransition（`active`）へ | PASS |
+| pivotのまわりに回る。位置 = Snapshot center、scale 1.0、影 = facing、Snapshotのfacingは不変 | PASS |
+| Counterの空振り → Fail / Kuzushi。Counter以外（CounterTransitionを含む）、Tsuppariは回転差0 | PASS |
+| Tsuppariの左右はProductのまま。Push / Grip / 移動、R restart、console error / 失敗したrequestが無い | PASS |
 
-代表のscreenshot（scratchpadの `smoke7/`、GPU）:
-
-| tag | progress | 観測したoffset |
-|---|---|---|
-| `09_blue_early` | 0.1667 | −17.50° |
-| `09_blue_peak` | 0.4167 | −33.81° |
-| `09_blue_late` | 0.8333 | −17.50° |
-| `10_red_early` | 0.25 | +24.75° |
-| `10_red_peak` | 0.4167 | +33.81° |
-
-- redのlateは無い（早く捕まえてCounterが終わったため）
-- logの中では、blueは中間点で−35.00°に達している
-
-## 描画の問題の切り分け（参考。実装の不具合ではない）
-
-- SwiftShader（headless既定のsoftware GL）では、0°/90°以外の角度に回したspriteで、blueの体の一部が三角形に欠けた
-- 同じ欠けは、**idleのspriteに手で一定の回転を足しただけでも出た**。Counterの実装とは関係なく、回転したsprite一般で起きる
-- 実GPU（ANGLE D3D11、RTX 3060 Ti）で同じ実験をすると、欠けは出なかった
-- そのため、headlessのsoftware renderer固有の描画の問題と判断した
-- 判定は、SwiftShader / GPUの両方で27 / 27 PASS（判定は画素ではなく、sprite / Snapshotの値で行っている）
+screenshot（scratchpadの `smoke8/`、GPU）で、08Bと同じposeと回転を確かめた（`09_blue_early/peak/late`、`10_red_peak`、`11_after_red_counter`）。
 
 # Design Deviations
 
@@ -153,37 +166,27 @@ Design Deviations: NONE
 
 # Unexpected Scope
 
-NONE（上記のSwiftShaderの描画の問題は、testの環境だけの問題。repositoryの範囲外）
+NONE
 
 # Known Untested Items
 
-- 実機でのUser Play Test（Game Feel）
+- 実機での最後のUser Regression Play Test
 
-# User Play Test: REQUIRED
+# Final User Regression Play Test: REQUIRED
 
-主な問い:
+pose・blueの版・35°の回転は、すでに受理済み。確認してほしいのは、昇格と整理で何も変わっていないことだけ:
 
-> 35°の体の捌き（回転）で、ArrowDownがTsuppariとはっきり見分けられるようになったか
-
-判断してほしい点:
-
-- 体の捌き / 受けの動きに見えるか
-- 35°は十分か、多すぎるか、少なすぎるか
-- red / blueの両方が自然か
-- 回転の向き
-- idle → Counterの動きが気にならないか
-- 早くSuccess / Bestしたときに、回転が途中で戻ることを許容できるか
-- 既存の横 / 後ろへのCounterTransitionが、引き続き読み取れるか
-- Tsuppariは、引き続き前への突きに見えるか
+- Counterのposeと、red / blueの見た目が同じか
+- 35°の動きが同じか、Tsuppariと見分けられるか
+- Success / Bestの遷移
+- pivot / scaleの飛びや、gameplayの劣化が無いか
 
 確認の手順:
 
 1. `pnpm dev` → Enter → ArrowDown（blue）
 2. CPUのPushをArrowDownで返す（dummy `2`）
 
-Technical PASSは、動きを受理したという意味ではない。
-
 # Git Delivery
 
-- stageするのはTask-owned fileだけ。commit `feat(presentation): animate counter body rotation` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
-- `main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない
+- stageするのはTask-owned fileだけ。commit `refactor(art): promote counter product pose` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
+- `input.local/`、`main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない

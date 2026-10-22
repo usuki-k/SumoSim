@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { BODY_RADIUS, BoutSimulation, COUNTER_WINDOW_TICKS } from '../sumo/BoutSimulation.ts'
 import type { BoutSnapshot, ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
 import {
-  COUNTER_GATE_ART,
+  PRODUCT_COUNTER_ART,
   COUNTER_VISUAL_MAX_ROTATION_RAD,
-  allCounterGateArts,
+  allProductCounterArts,
   counterVisualRotationOffset,
   selectWrestlerPoseArt,
-} from './counterGateArt.ts'
-import gateSource from './counterGateArt.ts?raw'
+} from './productCounterArt.ts'
+import * as productCounter from './productCounterArt.ts'
+import counterSource from './productCounterArt.ts?raw'
+import sceneSource from '../scenes/BoutScene.ts?raw'
+import viewSource from '../scenes/WrestlerView.ts?raw'
 import { PRODUCT_TSUPPARI_ART, allProductTsuppariArts } from './productTsuppariArt.ts'
 import { PRODUCT_WRESTLER_ART, productWrestlerOrigin } from './productWrestlerArt.ts'
 import { resolveWrestlerVisualState } from './wrestlerVisualState.ts'
@@ -39,24 +42,24 @@ const newSim = () =>
 const visualOf = (s: BoutSnapshot, moving = false) =>
   resolveWrestlerVisualState(s.participants[0], s.participants[1], s.engagement, s.outcome, moving)
 
-describe('Counter art Visual Gate (ACTION-08A)', () => {
-  it('two provisional textures under counter-gate/, distinct from the idle and Tsuppari Product art', () => {
-    expect(allCounterGateArts().map((a) => a.assetPath)).toEqual([
-      'assets/action/wrestler/counter-gate/red.png',
-      'assets/action/wrestler/counter-gate/blue.png',
+describe('Product Counter art (ACTION-08C)', () => {
+  it('two Product textures under counter/, distinct from the idle and Tsuppari Product art', () => {
+    expect(allProductCounterArts().map((a) => a.assetPath)).toEqual([
+      'assets/action/wrestler/counter/red.png',
+      'assets/action/wrestler/counter/blue.png',
     ])
     const others = [...Object.values(PRODUCT_WRESTLER_ART), ...allProductTsuppariArts()]
-    for (const art of allCounterGateArts()) {
+    for (const art of allProductCounterArts()) {
       expect(others.map((o) => o.textureKey)).not.toContain(art.textureKey)
       expect(others.map((o) => o.assetPath)).not.toContain(art.assetPath)
     }
   })
 
   it('explicit pivot / body core; blue = red reflected across the local X axis', () => {
-    const { red, blue } = COUNTER_GATE_ART
+    const { red, blue } = PRODUCT_COUNTER_ART
     expect([red.width, red.height, red.pivot]).toEqual([210, 207, { x: 74, y: 115 }])
     expect([blue.width, blue.height, blue.pivot]).toEqual([red.width, red.height, { x: red.pivot.x, y: red.height - red.pivot.y }])
-    for (const art of allCounterGateArts()) {
+    for (const art of allProductCounterArts()) {
       const origin = productWrestlerOrigin(art)
       expect(origin.x * art.width).toBeCloseTo(art.pivot.x, 9)
       expect(origin.y * art.height).toBeCloseTo(art.pivot.y, 9)
@@ -73,8 +76,8 @@ describe('Counter art Visual Gate (ACTION-08A)', () => {
     while (visualOf(sim.getSnapshot()).pose === 'counter' && held < 100) {
       const visual = visualOf(sim.getSnapshot())
       expect(sim.getSnapshot().participants[0].action.kind).toBe('counter')
-      expect(selectWrestlerPoseArt(red, visual)).toBe(COUNTER_GATE_ART.red)
-      expect(selectWrestlerPoseArt(blue, visual)).toBe(COUNTER_GATE_ART.blue)
+      expect(selectWrestlerPoseArt(red, visual)).toBe(PRODUCT_COUNTER_ART.red)
+      expect(selectWrestlerPoseArt(blue, visual)).toBe(PRODUCT_COUNTER_ART.blue)
       held++
       sim.step(intents())
     }
@@ -82,7 +85,7 @@ describe('Counter art Visual Gate (ACTION-08A)', () => {
     expect(held).toBe(COUNTER_WINDOW_TICKS - 1)
     const after = visualOf(sim.getSnapshot())
     expect(after.pose).not.toBe('counter')
-    expect(selectWrestlerPoseArt(blue, after)).not.toBe(COUNTER_GATE_ART.blue)
+    expect(selectWrestlerPoseArt(blue, after)).not.toBe(PRODUCT_COUNTER_ART.blue)
   })
 
   it('Tsuppari still selects its permanent Product pose; idle / move use the idle sprite', () => {
@@ -108,12 +111,12 @@ describe('Counter art Visual Gate (ACTION-08A)', () => {
   })
 
   it('stays Phaser-free and Simulation-free', () => {
-    expect(gateSource).not.toMatch(/from ['"]phaser['"]/)
-    expect(gateSource).not.toMatch(/BoutSimulation/)
+    expect(counterSource).not.toMatch(/from ['"]phaser['"]/)
+    expect(counterSource).not.toMatch(/BoutSimulation/)
   })
 })
 
-describe('Counter body rotation Visual Gate (ACTION-08B)', () => {
+describe('Product Counter body rotation (accepted ACTION-08B motion)', () => {
   const DEG = Math.PI / 180
 
   it('the maximum is exactly 35 degrees', () => {
@@ -176,5 +179,28 @@ describe('Counter body rotation Visual Gate (ACTION-08B)', () => {
     expect(counterVisualRotationOffset('red', { ...visual })).toBe(first)
     expect(JSON.stringify(sim.getSnapshot())).toBe(before)
     expect(sim.getSnapshot().participants.map((p) => p.facing)).toEqual(facing)
+  })
+})
+
+describe('Counter Product promotion (ACTION-08C)', () => {
+  it('texture keys / paths are Product names; geometry is the accepted 08A1 export', () => {
+    expect(allProductCounterArts().map((a) => [a.textureKey, a.width, a.height, a.pivot.x, a.pivot.y, a.bodyCoreDiameterPx])).toEqual([
+      ['product-counter-red', 210, 207, 74, 115, 123.076923],
+      ['product-counter-blue', 210, 207, 74, 92, 123.076923],
+    ])
+  })
+
+  it('no temporary counter-gate runtime dependency remains', () => {
+    expect(Object.keys(productCounter).sort()).toEqual([
+      'COUNTER_VISUAL_MAX_ROTATION_RAD',
+      'PRODUCT_COUNTER_ART',
+      'PRODUCT_COUNTER_BODY_CORE_DIAMETER_PX',
+      'allProductCounterArts',
+      'counterVisualRotationOffset',
+      'selectWrestlerPoseArt',
+    ])
+    for (const source of [counterSource, sceneSource, viewSource]) {
+      expect(source).not.toMatch(/counter-gate|counterGateArt|COUNTER_GATE|allCounterGateArts/)
+    }
   })
 })
