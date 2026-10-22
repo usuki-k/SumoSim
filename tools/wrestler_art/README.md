@@ -4,7 +4,7 @@ Offline review and export tools for SumoSim Product wrestler art:
 
 | Tool | Task | Status |
 |---|---|---|
-| `export_tsuppari_gate.py` / `preview_tsuppari_gate.py` | ACTION-07C | **Visual-Gate candidates** for the left / right Tsuppari pose (3 comparison modes; not accepted art) ([below](#tsuppari-visual-gate-action-07c)) |
+| `export_tsuppari.py` / `measure_tsuppari_pose.py` / `preview_tsuppari.py` | ACTION-07D | **current runtime export** of the four Product Tsuppari poses (accepted SEPARATE) + measurement helper + review preview ([below](#product-tsuppari-poses-action-07d)) |
 | `export_runtime_wrestlers.py` | ART-WRESTLER-04B | **current runtime export**: red master + derived blue ([below](#runtime-export-art-wrestler-04b-red-master)) |
 | `preview_idle_mirror_workflow.py` | ART-WRESTLER-04A | mirror / recolor comparison (history; red-master branch promoted) |
 | `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | two separately authored sprites as rigid objects (history / comparison; runtime no longer uses the blue source) ([below](#dual-rigid-sprites-art-wrestler-03a)) |
@@ -286,54 +286,61 @@ metadata in `src/game/presentation/productWrestlerArt.ts` must match this output
 `tests/test_export_runtime_wrestlers.py` checks the committed PNGs (with only the
 red source visible) and that TypeScript contract against a fresh export.
 
-## Tsuppari Visual Gate (ACTION-07C)
+## Product Tsuppari poses (ACTION-07D)
 
-Temporary runtime comparison of three ways to produce the held left / right Tsuppari pose. **Nothing here is
-an accepted Product art contract**; the User Visual Gate picks the strategy. The idle `red.png` / `blue.png`
-and their recipe are not touched.
+The held left / right Tsuppari pose of the Product wrestlers (User-accepted **SEPARATE** strategy, promoted
+from the ACTION-07C / 07C1 / 07C2 Visual Gate). The idle `red.png` / `blue.png` and their recipe are not
+touched.
 
 ```bash
-PY tools/wrestler_art/export_tsuppari_gate.py            # write public/assets/action/wrestler/tsuppari-gate/
-PY tools/wrestler_art/export_tsuppari_gate.py --check    # verify the committed 12 files, write nothing
-PY tools/wrestler_art/preview_tsuppari_gate.py           # -> output-tsuppari-gate.local/ (git-ignored)
+PY tools/wrestler_art/export_tsuppari.py               # write public/assets/action/wrestler/tsuppari/ (4 files)
+PY tools/wrestler_art/export_tsuppari.py --check       # verify the committed 4 files, write nothing
+PY tools/wrestler_art/measure_tsuppari_pose.py         # print the normalization measurement (JSON)
+PY tools/wrestler_art/measure_tsuppari_pose.py --check # compare it with the recipe (tolerance), write nothing
+PY tools/wrestler_art/preview_tsuppari.py              # -> output-tsuppari.local/ (git-ignored)
 ```
 
 Inputs (`input.local/`, never committed; identity = decoded RGBA pixel SHA-256 in the recipe):
 `candidate_red_tsuppari_left.png` / `candidate_red_tsuppari_right.png` (the only runtime sources) and
-`candidate_blue_tsuppari_left.png` / `candidate_blue_tsuppari_right.png` (reference sheets only). The preview
-also rebuilds the idle sprites from `wrestler_red.png`.
+`candidate_blue_tsuppari_left.png` / `candidate_blue_tsuppari_right.png` (preview reference sheets only). The
+measurement helper and the preview also read the idle `wrestler_red.png`.
 
-Recipe (`tsuppari_gate_recipe.json`, Provisional):
+Recipe (`tsuppari_recipe.json`, Product contract):
 
-- Per authored pose: `hand`, `source_front_deg`, `root_source_px`, `body_core_source_px` (same 03A
-  normalization as the idle red: one whole-sprite rotation, body core = 2R, exact /4 downscale). The values
-  register each pose body to the idle red master with two torso landmarks (hair blob centroid, mawashi
-  centroid; `measurement` documents the method, `measurement_evidence` the measured numbers).
-- `modes`: for every `<color>_<hand>` texture the red master and whether it is reflected. The local-Y
-  reflection swaps the wrestler's hand, so the loader rejects any entry whose master hand XOR reflect is not
-  the texture's hand:
+- Per red pose: `hand`, `source_front_deg`, `root_source_px`, `body_core_source_px` (same 03A
+  normalization as the idle red: one whole-sprite rotation, body core = 2R, exact /4 downscale). These
+  recorded values are what the exporter uses.
+- `measurement`: the method, implemented by `measure_tsuppari_pose.py`. Each pose body is registered to the
+  idle red master with two torso landmarks on the source at 1/2 BOX scale: the hair blob (max(R, G, B) < 80,
+  alpha > 200, 7 px opening, largest component) and the mawashi (accepted hue band, components >= 5% of the
+  largest). `measurement_evidence` is the exact helper output; the recorded front / points must agree with a
+  fresh measurement within `measurement.tolerance` (0.1 deg / 1 source px).
+- Fixed mapping (`export_tsuppari.OUTPUTS`; the local-Y reflection swaps the wrestler's hand):
 
-  | texture | separate | mirror_l | mirror_r |
-  |---|---|---|---|
-  | red left | red L | red L | red R reflected |
-  | red right | red R | red L reflected | red R |
-  | blue left | red R reflected + recolor | red L + recolor | red R reflected + recolor |
-  | blue right | red L reflected + recolor | red L reflected + recolor | red R + recolor |
+  | texture | source |
+  |---|---|
+  | `red_left.png` | red L |
+  | `red_right.png` | red R |
+  | `blue_left.png` | red R reflected + recolor |
+  | `blue_right.png` | red L reflected + recolor |
 
 - Blue recolor = the accepted red -> blue rule of `runtime_wrestler_recipe.json` (single owner), validated
   per pose at runtime scale against `mask_limits` (mask size, band pixels outside the largest component,
   fringe); the run fails closed otherwise.
 
-Runtime: `src/game/presentation/tsuppariGateArt.ts` mirrors the 12 sizes / pivots (checked by
-`tests/test_export_tsuppari_gate.py`). In the browser, key `4` cycles SEPARATE -> MIRROR-L -> MIRROR-R
-(presentation only; shown in the key-0 debug line), and the selected pose is held for the whole Tsuppari
-action.
+Runtime: `src/game/presentation/productTsuppariArt.ts` mirrors the 4 sizes / pivots (checked by
+`tests/test_export_tsuppari.py`, which also pins the four pixels to the accepted ACTION-07C2 SEPARATE
+textures). The pose is selected only by wrestler (red / blue) and hand, and held for the whole Tsuppari action.
 
-Preview outputs: `pivot_guide_<pose>.png` (4 authored candidates, master scale), `mode_<mode>.png`,
-`idle_tsuppari_alignment.png` (each pose with the same-colour idle outline), `rotations_<mode>.png`
-(0 / 45 / 90 / 180 / 270), `faceoff_<mode>.png` (0.70 m contact and 0.90 m Tsuppari reach; one or both
-striking), `mawashi_mask_diagnostics.png`, `blue_reference_vs_derived.png`, `tsuppari_gate.json` (texture
-table, mask reports, landmark alignment, mawashi HSV stats) and `build_tsuppari_gate_manifest.json`.
+Preview outputs: `pivot_guide_<pose>.png` (2 red poses + 2 blue references, master scale),
+`product_tsuppari.png` (idle + four poses), `idle_tsuppari_alignment.png` (each pose with the same-colour
+idle outline), `rotations.png` (0 / 45 / 90 / 180 / 270), `faceoff.png` (0.70 m contact and 0.90 m
+Tsuppari reach; one or both striking), `mawashi_mask_diagnostics.png`, `blue_reference_vs_derived.png`,
+`tsuppari.json` and `build_tsuppari_manifest.json`.
+
+History: the ACTION-07C Visual Gate exported 12 textures (SEPARATE / MIRROR-L / MIRROR-R) behind a key-4
+runtime toggle. MIRROR-L / MIRROR-R were rejected (they flip the head / body asymmetry between idle and
+pose); the gate exporter, recipe and textures were replaced by the Product files above (git history only).
 
 ## Idle mirror + mawashi recolor (ART-WRESTLER-04A, comparison / history)
 

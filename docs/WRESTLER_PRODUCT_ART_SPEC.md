@@ -1,6 +1,6 @@
 # WRESTLER_PRODUCT_ART_SPEC — Product力士artの仕様と制作計画
 
-Status: Product力士artの正本。**現在の採用方針は §0**（描いた1枚のred masterと、そこから決定的に作ったblueの、2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合、ART-WRESTLER-04Bでred master方式へ移行）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
+Status: Product力士artの正本。**現在の採用方針は §0**（描いた1枚のred masterと、そこから決定的に作ったblueの、2枚の全身spriteを剛体として使う。ACTION-ART-03AでPhaserへ統合、ART-WRESTLER-04Bでred master方式へ移行。Tsuppariの左右のposeは、ACTION-07DでSEPARATE方式の4枚をProductに昇格）。§1〜§21のうち、部位の組み立て・腕の2関節を前提にした記述は、**履歴**（ACTION-ART-03の設計時点の案）であり、現在の実装方針ではない。
 
 この文書で使う区分：
 - **Accepted**: 承認済み
@@ -13,7 +13,7 @@ Status: Product力士artの正本。**現在の採用方針は §0**（描いた
 
 ---
 
-## 0. 現在の採用方針（ACTION-ART-03A → ART-WRESTLER-04A / 04B User Visual Gate）
+## 0. 現在の採用方針（ACTION-ART-03A → ART-WRESTLER-04A / 04B User Visual Gate → ACTION-07D Tsuppari）
 
 **Accepted（現在のprototype）**
 - 2枚の全身sprite（赤まわし・青まわし）を、剛体として使う
@@ -30,14 +30,28 @@ Status: Product力士artの正本。**現在の採用方針は §0**（描いた
   - 位置: canonicalなparticipantの位置に、明示したpivotを置く
   - 向き: canonicalな `participant.facing` で、sprite全体を連続的に回転する
   - 表示scale: `2 × bodyRadiusPx / bodyCoreDiameterPx`（現在は約1.0）
-- idle・移動・push・counter・grip・組み・drive・崩し: すべて同じspriteを使う
+- idle・移動・push・counter・grip・組み・drive・崩し: すべて同じidleのspriteを使う（Tsuppariだけは下記の専用pose）
   - 動きは、canonicalな位置の移動（平行移動）だけ。これを最小の基準とする
   - presentation専用のよろけのoffsetや回転は、足さない
 - 影は手続き的な、ほぼ円形のもの（world上で右下へずらす）
 - 割り当て（presentation）: `wrestler-a` → blue、`wrestler-b` → red
 
+**Accepted: Tsuppariのpose（ACTION-07D。ACTION-07C2のUser Play Testで採用したSEPARATE方式）**
+- 描いたTsuppariのmasterは、**redの2枚だけ**（左手の突き / 右手の突き。`input.local/candidate_red_tsuppari_left.png` / `_right.png`、decoded RGBAのpixel SHA-256で同一性を確かめる）
+- runtimeのtextureは4枚: `public/assets/action/wrestler/tsuppari/red_left.png` / `red_right.png` / `blue_left.png` / `blue_right.png`
+  - red left / red right: それぞれのred masterを、idleと同じ方法で正規化したもの（sprite全体を1回だけ回転してlocal +X = 前、明示したroot、body-coreを2R、正確に1/4へ縮小）
+  - **blue left = red rightを反射 + まわしの塗り替え**、**blue right = red leftを反射 + まわしの塗り替え**（local X軸についての反射は力士の左右を入れ替えるため、手の意味を保つには反対の手のred masterを使う）
+  - 反射と塗り替えのruleは、idleと同じ `runtime_wrestler_recipe.json` の1か所だけが持つ
+  - 書き出しは `tools/wrestler_art/export_tsuppari.py`（`--check` は何も書かない）。値の正本は `tsuppari_recipe.json`
+  - 正規化の値（front、root、body-core）は、`measure_tsuppari_pose.py` で再現できる（髪の塊とまわしの重心でidle red masterに合わせる。記録値との差は0.1°・1 source px以内）
+- textureごとに、明示したpivotとbody-core（直径123.076923 px = 2R）を持つ。表示の位置・回転・scaleの規則はidleと同じ
+- どのposeを出すかは、Simulationから導いたpresentationの状態（`WrestlerVisualState` のpose = tsuppariと手）だけで決める。art modeのような切り替えは無い
+- poseは、Tsuppariの行動全体（startup / active / recovery）のあいだ保持し、終われば受理済みのidle spriteに戻る。画像の時間はgameplayを決めない
+- runtimeでの反転・動的な塗り替えはしない。命中判定は中心距離（`TSUPPARI_HAND_REACH`）で行い、spriteの形は使わない
+- **SEPARATEがProductの方式**。MIRROR-L / MIRROR-R（1枚のred poseから左右を作る方式）はACTION-07CのVisual Gateの実験で、idleとposeのあいだで頭と体の左右非対称が入れ替わるため、Productの基準ではない
+
 **Deferred**
-- push・接触・grip・組みの専用pose: runtimeのUser Play Testで必要とわかったときだけ、後の混合poseのTaskで足す
+- push・接触・grip・組みの専用pose: runtimeのUser Play Testで必要とわかったときだけ、後の混合poseのTaskで足す（Tsuppariは上記で採用済み）
 - 8方向のsprite、animationのframe数、poseの数、skeletal rig、手足ごとのanimation: 決めない・作らない
 
 **履歴**

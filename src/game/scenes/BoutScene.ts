@@ -10,11 +10,6 @@ import { ENGLISH_BOUT_HUD_COPY } from '../presentation/boutHudCopy.ts'
 import { PROTOTYPE_HUD_FIXTURE, assertHudContextMatches, formatOutcome } from '../presentation/boutHudPresentation.ts'
 import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
 import { PRODUCT_WRESTLER_ART, type ProductWrestlerArtId } from '../presentation/productWrestlerArt.ts'
-import {
-  TSUPPARI_ART_MODE_LABEL,
-  nextTsuppariArtMode,
-  type TsuppariArtMode,
-} from '../presentation/tsuppariGateArt.ts'
 import { createBoutHud } from './BoutHudView.ts'
 import { createPreBoutComparison } from './PreBoutComparisonView.ts'
 import { addProductDohyo, drawArenaBoundaryDebug, preloadProductDohyo } from './DohyoView.ts'
@@ -175,7 +170,7 @@ export class BoutScene extends Phaser.Scene {
   private readonly dummy = new PushDummyController('wrestler-b', 'wrestler-a')
   private modeText: Phaser.GameObjects.Text | null = null
   private engagementText: Phaser.GameObjects.Text | null = null
-  // Debug-only Tsuppari art mode + cooldown / buildup line (key 0).
+  // Debug-only Tsuppari cooldown / buildup line (key 0).
   private tsuppariText: Phaser.GameObjects.Text | null = null
   private resultText: Phaser.GameObjects.Text | null = null
   private grappleLine: Phaser.GameObjects.Graphics | null = null
@@ -188,8 +183,6 @@ export class BoutScene extends Phaser.Scene {
   // Prototype debug display toggle (key 0). Off = game-readable view.
   private debug = false
   private dummyMode: DummyMode = 'stationary'
-  // ACTION-07C Visual Gate: presentation-only Tsuppari art mode (key 4); never reaches the Simulation.
-  private tsuppariArtMode: TsuppariArtMode = 'separate'
   private origin: Vec2 = { x: 0, y: 0 }
 
   constructor() {
@@ -226,7 +219,6 @@ export class BoutScene extends Phaser.Scene {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE).on('down', () => this.setDummyMode('stationary'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO).on('down', () => this.setDummyMode('push'))
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE).on('down', () => this.setDummyMode('tsuppari'))
-      keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR).on('down', () => this.cycleTsuppariArtMode())
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO).on('down', () => this.setDebug(!this.debug))
       // Prototype-only start input for the pre-bout comparison (not the final control scheme).
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => this.startBout())
@@ -345,11 +337,6 @@ export class BoutScene extends Phaser.Scene {
     this.tsuppariRightLatch.clear()
   }
 
-  // Presentation only: the Simulation, cooldowns, buildup and positions are untouched (next syncViews shows it).
-  private cycleTsuppariArtMode(): void {
-    this.tsuppariArtMode = nextTsuppariArtMode(this.tsuppariArtMode)
-  }
-
   private setDummyMode(mode: DummyMode): void {
     this.dummy.setMode(mode)
     this.dummyMode = mode
@@ -379,7 +366,7 @@ export class BoutScene extends Phaser.Scene {
     const dummy =
       this.dummyMode === 'push' ? 'DUMMY: PUSH' : this.dummyMode === 'tsuppari' ? 'DUMMY: TSUPPARI' : 'DUMMY: STATIONARY'
     this.modeText?.setText(
-      `${dummy}   WASD move  Up push/drive  Left/Right tsuppari  Down counter  Shift grip  1/2/3 dummy  4 tsu art  R restart  0 debug off`,
+      `${dummy}   WASD move  Up push/drive  Left/Right tsuppari  Down counter  Shift grip  1/2/3 dummy  R restart  0 debug off`,
     )
   }
 
@@ -417,9 +404,7 @@ export class BoutScene extends Phaser.Scene {
     const snapshot = this.simulation.getSnapshot()
     const pairSpeed = Math.hypot(snapshot.participants[0].externalVelocity.x, snapshot.participants[0].externalVelocity.y)
     this.resultText?.setText(formatOutcome(snapshot.outcome, PROTOTYPE_HUD_FIXTURE, ENGLISH_BOUT_HUD_COPY))
-    this.tsuppariText?.setText(
-      [`TSU ART: ${TSUPPARI_ART_MODE_LABEL[this.tsuppariArtMode]}`, ...snapshot.participants.map(tsuppariLabel)].join('     '),
-    )
+    this.tsuppariText?.setText(snapshot.participants.map(tsuppariLabel).join('     '))
     this.engagementText?.setText(
       snapshot.engagement.kind === 'grappled'
         ? `${engagementLabel(snapshot.engagement)}  pair v: ${pairSpeed.toFixed(2)} m/s`
@@ -450,7 +435,7 @@ export class BoutScene extends Phaser.Scene {
       const opponent = snapshot.participants.find((q) => q.id !== participant.id)
       if (opponent) {
         const visual = resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving)
-        view.wrestler.apply(visual, participant, pos, this.tsuppariArtMode)
+        view.wrestler.apply(visual, participant, pos)
       }
       const label =
         counterTransitionLabel(snapshot.counterTransition, participant.id) || phaseLabel(participant.action, participant.posture)

@@ -1,11 +1,11 @@
-"""Offline comparison evidence for the ACTION-07C Tsuppari Visual Gate (git-ignored output, no runtime assets).
+"""Offline review evidence for the four Product Tsuppari textures (ACTION-07D; git-ignored output, no runtime assets).
 
-Rebuilds exactly the textures of export_tsuppari_gate.py (same recipe, same code path) and renders the sheets
-the User Visual Gate needs: normalized pivot guides, one sheet per art mode, idle <-> Tsuppari alignment,
-rotations, faceoffs at body contact / Tsuppari reach, mawashi mask diagnostics and the authored blue
-reference vs derived blue comparison. The authored blue candidates appear here only as references.
+Rebuilds exactly the textures of export_tsuppari.py (same recipe, same code path) and renders: normalized pivot
+guides, the Product sheet (idle + four poses), idle <-> Tsuppari alignment, rotations, faceoffs at body contact /
+Tsuppari reach, mawashi mask diagnostics and the authored blue reference vs derived blue comparison. The authored
+blue candidates appear here only as references.
 
-    PY tools/wrestler_art/preview_tsuppari_gate.py      # -> tools/wrestler_art/output-tsuppari-gate.local/
+    PY tools/wrestler_art/preview_tsuppari.py      # -> tools/wrestler_art/output-tsuppari.local/
 """
 
 from __future__ import annotations
@@ -26,36 +26,36 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import assemble_wrestler as aw
 import export_runtime_wrestlers as ex
-import export_tsuppari_gate as eg
+import export_tsuppari as et
 import preview_dual_rigid_wrestlers as pd
 import preview_idle_mirror_workflow as im
 import preview_single_wrestler as ps
 from assemble_wrestler import AssemblyError, Part, Vec
 
-TOOL_NAME = "sumosim-wrestler-tsuppari-gate"
-TOOL_VERSION = "0.1.0"
+TOOL_NAME = "sumosim-wrestler-tsuppari"
+TOOL_VERSION = "1.0.0"
 MANIFEST_SCHEMA = 1
 
-DEFAULT_OUTPUT_DIR = aw.TOOL_DIR / "output-tsuppari-gate.local"
+DEFAULT_OUTPUT_DIR = aw.TOOL_DIR / "output-tsuppari.local"
 FACEOFF_VIEW_PX = (600, 440)
 OUTLINE_COLOR = (0, 255, 255, 255)
 SHEET_BACKGROUND = im.SHEET_BACKGROUND
 # blue band used only to measure the authored blue references (the historical blue -> red source band)
 BLUE_BAND = {"source_hue_deg": [190, 250], "min_saturation": 0.3, "min_value": 0.06}
 
-OUTPUT_GUIDES = {key: f"pivot_guide_{key}.png" for key in eg.MASTERS + eg.REFERENCES}
-OUTPUT_MODE_SHEETS = {mode: f"mode_{mode}.png" for mode in eg.MODES}
+OUTPUT_GUIDES = {key: f"pivot_guide_{key}.png" for key in et.MASTERS + et.REFERENCES}
+OUTPUT_SHEET = "product_tsuppari.png"
 OUTPUT_ALIGNMENT = "idle_tsuppari_alignment.png"
-OUTPUT_ROTATIONS = {mode: f"rotations_{mode}.png" for mode in eg.MODES}
-OUTPUT_FACEOFF = {mode: f"faceoff_{mode}.png" for mode in eg.MODES}
+OUTPUT_ROTATIONS = "rotations.png"
+OUTPUT_FACEOFF = "faceoff.png"
 OUTPUT_MASKS = "mawashi_mask_diagnostics.png"
 OUTPUT_BLUE_REFERENCE = "blue_reference_vs_derived.png"
-OUTPUT_JSON = "tsuppari_gate.json"
-OUTPUT_MANIFEST = "build_tsuppari_gate_manifest.json"
+OUTPUT_JSON = "tsuppari.json"
+OUTPUT_MANIFEST = "build_tsuppari_manifest.json"
 
 
 @dataclass
-class GateBuild:
+class TsuppariBuild:
     images: Dict[str, Image.Image]
     info: dict
     manifest: dict
@@ -149,32 +149,33 @@ def landmarks(part: Part, rule: dict) -> dict:
 # ---------------------------------------------------------------- previews
 
 
-def build_mode_sheet(mode: str, textures: Dict[str, eg.GateTexture], idle: Dict[str, Part], tile: int) -> Image.Image:
-    tiles = [(f"idle {color}", _tile(idle[color], color, tile)) for color in eg.COLORS]
-    tiles += [(f"{mode} {t.variant.replace('_', ' ')} hand ({t.master}{' refl' if t.reflect else ''})",
-               _tile(t.part, t.file, tile)) for t in (textures[v] for v in eg.VARIANTS)]
+def _source(t: et.TsuppariTexture) -> str:
+    return f"{t.master}{' refl' if t.reflect else ''}"
+
+
+def build_sheet(textures: Dict[str, et.TsuppariTexture], idle: Dict[str, Part], tile: int) -> Image.Image:
+    tiles = [(f"idle {color}", _tile(idle[color], color, tile)) for color in et.COLORS]
+    tiles += [(f"{t.variant.replace('_', ' ')} hand ({_source(t)})", _tile(t.part, t.file, tile))
+              for t in (textures[v] for v in et.VARIANTS)]
     return im._labeled_grid(tiles, 3)
 
 
-def build_alignment(textures: List[eg.GateTexture], idle: Dict[str, Part], tile: int) -> Image.Image:
+def build_alignment(textures: List[et.TsuppariTexture], idle: Dict[str, Part], tile: int) -> Image.Image:
     """Each pose with the same-colour idle silhouette outline (cyan), both on the same pivot / FRONT."""
-    rows = []
-    for mode in eg.MODES:
-        tiles = []
-        for t in (x for x in textures if x.mode == mode):
-            base = _tile(t.part, t.file, tile)
-            base.alpha_composite(_silhouette_outline(idle[t.variant.split("_")[0]], base.size, (tile / 2, tile / 2)))
-            tiles.append((f"{mode} {t.variant} + idle outline", base))
-        rows.append(im._labeled_grid(tiles, len(tiles)))
-    return _stack(rows)
+    tiles = []
+    for t in textures:
+        base = _tile(t.part, t.file, tile)
+        base.alpha_composite(_silhouette_outline(idle[t.variant.split("_")[0]], base.size, (tile / 2, tile / 2)))
+        tiles.append((f"{t.variant} + idle outline", base))
+    return im._labeled_grid(tiles, len(tiles))
 
 
-def build_rotations(mode: str, textures: Dict[str, eg.GateTexture], angles: List[float], tile: int) -> Image.Image:
-    tiles = [(f"{v} {a:g}°", _tile(textures[v].part, v, tile, a)) for v in eg.VARIANTS for a in angles]
+def build_rotations(textures: Dict[str, et.TsuppariTexture], angles: List[float], tile: int) -> Image.Image:
+    tiles = [(f"{v} {a:g}°", _tile(textures[v].part, v, tile, a)) for v in et.VARIANTS for a in angles]
     return im._labeled_grid(tiles, len(angles))
 
 
-def build_faceoffs(mode: str, textures: Dict[str, eg.GateTexture], idle: Dict[str, Part], arena: Image.Image,
+def build_faceoffs(textures: Dict[str, et.TsuppariTexture], idle: Dict[str, Part], arena: Image.Image,
                    distances: List[dict]) -> Image.Image:
     """Blue (player, left) faces red (right) as in the prototype; one or both strike."""
     shadow = aw.shadow_part(aw.R_RUNTIME)
@@ -191,23 +192,22 @@ def build_faceoffs(mode: str, textures: Dict[str, eg.GateTexture], idle: Dict[st
         for d in distances:
             frame = pd.pair(d["distance_m"] / aw.BODY_RADIUS_M, 0.0)
             box = pd.view_box(aw.ARENA_CENTER, FACEOFF_VIEW_PX)
-            label = f"{mode} | {name} | {d['label']}"
-            tiles.append((label, pd.render_view(arena, parts, shadow, frame, box).convert("RGBA")))
+            tiles.append((f"{name} | {d['label']}", pd.render_view(arena, parts, shadow, frame, box).convert("RGBA")))
     return im._labeled_grid(tiles, len(distances))
 
 
 def build_mask_diagnostics(recipe: dict, masters: Dict[str, Part]) -> Tuple[Image.Image, dict]:
-    """Every distinct blue derivation: red source (after the optional reflection), mask, recolored result."""
+    """Both red sources, unreflected and reflected (the reflected rows are the Product blue derivations)."""
     rule = recipe["recolor"]
     rows, info = [], {}
-    for master in eg.MASTERS:
+    for master in et.MASTERS:
         for reflect in (False, True):
             source = aw.mirror_part(masters[master]) if reflect else masters[master]
             mask = im.mawashi_mask(source.image, rule)
-            report = eg.mask_report(source.image, mask, rule)
+            report = et.mask_report(source.image, mask, rule)
             out = im.recolor(source.image, mask, rule)
             key = f"{master}{'_reflected' if reflect else ''}"
-            report["hand_after"] = eg.OPPOSITE[recipe["masters"][master]["hand"]] if reflect else recipe["masters"][master]["hand"]
+            report["hand_after"] = et.expected_hand(recipe, master, reflect)
             report["mask_hsv_before"] = im.mask_hsv_stats(source.image, mask)
             report["mask_hsv_after"] = im.mask_hsv_stats(out, mask)
             info[key] = report
@@ -219,15 +219,15 @@ def build_mask_diagnostics(recipe: dict, masters: Dict[str, Part]) -> Tuple[Imag
     return _stack(rows), info
 
 
-def build_blue_reference(textures: List[eg.GateTexture], references: Dict[str, Part], idle_blue: Part,
+def build_blue_reference(textures: Dict[str, et.TsuppariTexture], references: Dict[str, Part], idle_blue: Part,
                          tile: int) -> Image.Image:
     rows = []
-    for hand in eg.HANDS:
+    for hand in et.HANDS:
         variant = f"blue_{hand}"
-        tiles = [(f"authored blue {hand} (reference)", _tile(references[variant], variant, tile))]
-        tiles += [(f"{t.mode} {variant} ({t.master}{' refl' if t.reflect else ''})", _tile(t.part, t.file, tile))
-                  for t in textures if t.variant == variant]
-        tiles.append(("idle blue (accepted)", _tile(idle_blue, "idle blue", tile)))
+        t = textures[variant]
+        tiles = [(f"authored blue {hand} (reference)", _tile(references[variant], variant, tile)),
+                 (f"Product {variant} ({_source(t)})", _tile(t.part, t.file, tile)),
+                 ("idle blue (accepted)", _tile(idle_blue, "idle blue", tile))]
         rows.append(im._labeled_grid(tiles, len(tiles)))
     return _stack(rows)
 
@@ -236,7 +236,7 @@ def build_guides(recipe: dict, input_dir: Path) -> Dict[str, Image.Image]:
     out = {}
     for group in ("masters", "references"):
         for key, spec in sorted(recipe[group].items()):
-            master = eg.normalize_master(spec, input_dir / spec["file"], key, recipe["alpha_threshold"])
+            master = et.normalize_master(spec, input_dir / spec["file"], key, recipe["alpha_threshold"])
             out[OUTPUT_GUIDES[key]] = ps.build_pivot_guide(master)
     return out
 
@@ -244,28 +244,27 @@ def build_guides(recipe: dict, input_dir: Path) -> Dict[str, Image.Image]:
 # ---------------------------------------------------------------- build
 
 
-def build(recipe: dict, input_dir: Path, arena_dir: Path) -> GateBuild:
-    masters = eg.build_masters(recipe, input_dir)
-    references = eg.build_references(recipe, input_dir)
-    textures = [eg.derive_texture(recipe, masters, mode, v) for mode in eg.MODES for v in eg.VARIANTS]
-    by_mode = {mode: {t.variant: t for t in textures if t.mode == mode} for mode in eg.MODES}
+def build(recipe: dict, input_dir: Path, arena_dir: Path) -> TsuppariBuild:
+    masters = et.build_masters(recipe, input_dir)
+    references = et.build_references(recipe, input_dir)
+    textures = [et.derive_texture(recipe, masters, v) for v in et.VARIANTS]
+    by_variant = {t.variant: t for t in textures}
     idle = ex.export_parts(ex.load_recipe(ex.DEFAULT_RECIPE), input_dir)
     arena, arena_assets = ps.load_arena(arena_dir)
     tile = _tile_size([t.part for t in textures] + list(references.values()) + list(idle.values()))
 
     images: Dict[str, Image.Image] = build_guides(recipe, input_dir)
-    for mode in eg.MODES:
-        images[OUTPUT_MODE_SHEETS[mode]] = build_mode_sheet(mode, by_mode[mode], idle, tile)
-        images[OUTPUT_ROTATIONS[mode]] = build_rotations(mode, by_mode[mode], recipe["angles_deg"], tile)
-        images[OUTPUT_FACEOFF[mode]] = build_faceoffs(mode, by_mode[mode], idle, arena, recipe["faceoff"])
+    images[OUTPUT_SHEET] = build_sheet(by_variant, idle, tile)
+    images[OUTPUT_ROTATIONS] = build_rotations(by_variant, recipe["angles_deg"], tile)
+    images[OUTPUT_FACEOFF] = build_faceoffs(by_variant, idle, arena, recipe["faceoff"])
     images[OUTPUT_ALIGNMENT] = build_alignment(textures, idle, tile)
     images[OUTPUT_MASKS], mask_info = build_mask_diagnostics(recipe, masters)
-    images[OUTPUT_BLUE_REFERENCE] = build_blue_reference(textures, references, idle["blue"], tile)
+    images[OUTPUT_BLUE_REFERENCE] = build_blue_reference(by_variant, references, idle["blue"], tile)
 
     rule = recipe["recolor"]
     idle_marks = landmarks(idle["red"], rule)
     alignment = {"idle_red": idle_marks}
-    for key in eg.MASTERS:
+    for key in et.MASTERS:
         marks = landmarks(masters[key], rule)
         alignment[key] = {
             **marks,
@@ -273,9 +272,9 @@ def build(recipe: dict, input_dir: Path, arena_dir: Path) -> GateBuild:
             "note": "reflection mirrors these local offsets (y -> -y); the recolor does not move them",
         }
     info = {
-        "status": "Visual Gate candidate (ACTION-07C) - pending User Visual Gate; no Tsuppari art strategy accepted",
+        "status": "Product Tsuppari art (ACTION-07D): User-accepted SEPARATE strategy",
         "hand_convention": "local +X = FRONT, +Y = wrestler RIGHT; local-Y reflection swaps the wrestler's hand",
-        "textures": [eg.describe(t, ex.png_bytes(t.part.image)) for t in textures],
+        "textures": [et.describe(t, ex.png_bytes(t.part.image)) for t in textures],
         "mawashi_masks": mask_info,
         "alignment_runtime_px": alignment,
         "references": {
@@ -301,13 +300,13 @@ def build(recipe: dict, input_dir: Path, arena_dir: Path) -> GateBuild:
         "pillow_version": PIL.__version__,
         "recipe_canonical_sha256": hashlib.sha256(aw.json_text(recipe).encode("ascii")).hexdigest(),
         "arena_assets": arena_assets,
-        "tsuppari_gate_json_sha256": hashlib.sha256(aw.json_text(info).encode("ascii")).hexdigest(),
+        "tsuppari_json_sha256": hashlib.sha256(aw.json_text(info).encode("ascii")).hexdigest(),
         "outputs": outputs,
     }
-    return GateBuild(images, info, manifest)
+    return TsuppariBuild(images, info, manifest)
 
 
-def write_outputs(result: GateBuild, output_dir: Path) -> List[Path]:
+def write_outputs(result: TsuppariBuild, output_dir: Path) -> List[Path]:
     output_dir = output_dir.resolve()
     names = sorted(result.images) + [OUTPUT_JSON, OUTPUT_MANIFEST]
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -326,9 +325,9 @@ def write_outputs(result: GateBuild, output_dir: Path) -> List[Path]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Render the Tsuppari Visual-Gate comparison evidence (ACTION-07C).")
-    parser.add_argument("--recipe", type=Path, default=eg.DEFAULT_RECIPE)
-    parser.add_argument("--input-dir", type=Path, default=aw.DEFAULT_INPUT_DIR, help="local Tsuppari candidates + idle red")
+    parser = argparse.ArgumentParser(description="Render the Product Tsuppari review evidence (ACTION-07D).")
+    parser.add_argument("--recipe", type=Path, default=et.DEFAULT_RECIPE)
+    parser.add_argument("--input-dir", type=Path, default=aw.DEFAULT_INPUT_DIR, help="local red Tsuppari poses, blue references + idle red")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--arena-dir", type=Path, default=aw.DEFAULT_ARENA_DIR)
     return parser
@@ -337,7 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        recipe = eg.load_recipe(args.recipe)
+        recipe = et.load_recipe(args.recipe)
         written = write_outputs(build(recipe, args.input_dir, args.arena_dir), args.output_dir)
     except AssemblyError as exc:
         print(f"error: {exc}", file=sys.stderr)

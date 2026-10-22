@@ -1,15 +1,15 @@
-"""Deterministic export of the ACTION-07C Tsuppari Visual-Gate runtime textures (candidates, not accepted art).
+"""Deterministic export of the four Product Tsuppari pose textures (ACTION-07D; User-accepted SEPARATE strategy).
 
-Two authored red Tsuppari poses (tsuppari_gate_recipe.json `masters`) are the only runtime sources:
+Two authored red Tsuppari poses (tsuppari_recipe.json `masters`) are the only sources:
   red master  -> ART-WRESTLER-03A normalization (source identity check, one whole-sprite rotation so
                  FRONT = +X, explicit root, body core scaled to 2R, exact /4 downscale)
-  per mode    -> optional local-Y reflection ((x, y) -> (x, H - y): swaps the wrestler's hand, FRONT kept)
-              -> blue only: the accepted mawashi-only recolor (runtime_wrestler_recipe.json, single owner)
-Three comparison modes (separate / mirror_l / mirror_r) x red/blue x left/right = 12 textures under
-public/assets/action/wrestler/tsuppari-gate/. They are only ever written by this script.
+  blue        -> local-Y reflection ((x, y) -> (x, H - y): swaps the wrestler's hand, FRONT kept)
+                 + the accepted mawashi-only recolor (runtime_wrestler_recipe.json, single owner)
+Fixed mapping (OUTPUTS): red L / R = the authored poses; blue L = reflected red R; blue R = reflected red L.
+The four files under public/assets/action/wrestler/tsuppari/ are only ever written by this script.
 
-    PY tools/wrestler_art/export_tsuppari_gate.py            # write the Visual-Gate textures
-    PY tools/wrestler_art/export_tsuppari_gate.py --check    # verify the committed files, write nothing
+    PY tools/wrestler_art/export_tsuppari.py            # write the Product Tsuppari textures
+    PY tools/wrestler_art/export_tsuppari.py --check    # verify the committed files, write nothing
 """
 
 from __future__ import annotations
@@ -35,29 +35,28 @@ import preview_idle_mirror_workflow as im
 import preview_single_wrestler as ps
 from assemble_wrestler import AssemblyError, Part
 
-DEFAULT_RECIPE = aw.TOOL_DIR / "tsuppari_gate_recipe.json"
-DEFAULT_GATE_DIR = ex.DEFAULT_RUNTIME_DIR / "tsuppari-gate"
-MODES = ("separate", "mirror_l", "mirror_r")
+DEFAULT_RECIPE = aw.TOOL_DIR / "tsuppari_recipe.json"
+DEFAULT_TSUPPARI_DIR = ex.DEFAULT_RUNTIME_DIR / "tsuppari"
 COLORS = ("red", "blue")
 HANDS = ("left", "right")
 VARIANTS = tuple(f"{color}_{hand}" for color in COLORS for hand in HANDS)
 MASTERS = ("red_left", "red_right")
 REFERENCES = ("blue_left", "blue_right")
 OPPOSITE = {"left": "right", "right": "left"}
+# variant -> (red master, local-Y reflection). The reflection swaps the hand, so blue L comes from red R.
+OUTPUTS: Dict[str, Tuple[str, bool]] = {
+    "red_left": ("red_left", False),
+    "red_right": ("red_right", False),
+    "blue_left": ("red_right", True),
+    "blue_right": ("red_left", True),
+}
 SPEC_FIELDS = ("hand", "file", "size", "pixel_sha256", "source_front_deg", "root_source_px", "body_core_source_px",
                "body_core_target_r")
-
-
-def gate_file(mode: str, variant: str) -> str:
-    return f"{mode}_{variant}.png"
-
-
-GATE_FILES = [gate_file(mode, variant) for mode in MODES for variant in VARIANTS]
+OUTPUT_FILES = [f"{variant}.png" for variant in VARIANTS]
 
 
 @dataclass
-class GateTexture:
-    mode: str
+class TsuppariTexture:
     variant: str  # "<color>_<hand>": semantic hand of the wrestler in this texture
     master: str
     reflect: bool
@@ -66,7 +65,7 @@ class GateTexture:
 
     @property
     def file(self) -> str:
-        return gate_file(self.mode, self.variant)
+        return f"{self.variant}.png"
 
 
 # ---------------------------------------------------------------- recipe
@@ -98,10 +97,10 @@ def _check_spec(key: str, spec: dict) -> None:
         raise AssemblyError(f"{key}: body_core_target_r must be > 0")
 
 
-def expected_hand(recipe: dict, entry: dict) -> str:
+def expected_hand(recipe: dict, master: str, reflect: bool) -> str:
     """Semantic hand after the optional local-Y reflection (the reflection swaps the wrestler's hand)."""
-    hand = recipe["masters"][entry["master"]]["hand"]
-    return OPPOSITE[hand] if entry["reflect"] else hand
+    hand = recipe["masters"][master]["hand"]
+    return OPPOSITE[hand] if reflect else hand
 
 
 def load_recipe(path: Path) -> dict:
@@ -124,18 +123,10 @@ def load_recipe(path: Path) -> dict:
             _check_spec(key, spec)
             if spec["hand"] != key.split("_")[1]:
                 raise AssemblyError(f"{key}: hand {spec['hand']!r} does not match its key")
-    if sorted(recipe.get("modes", {})) != sorted(MODES):
-        raise AssemblyError(f"modes must be exactly {list(MODES)}")
-    for mode in MODES:
-        entries = recipe["modes"][mode]
-        if sorted(entries) != sorted(VARIANTS):
-            raise AssemblyError(f"mode {mode!r} must define exactly {list(VARIANTS)}")
-        for variant, entry in entries.items():
-            if entry.get("master") not in MASTERS or not isinstance(entry.get("reflect"), bool):
-                raise AssemblyError(f"{mode}.{variant}: needs a red master and a boolean reflect")
-            if expected_hand(recipe, entry) != variant.split("_")[1]:
-                raise AssemblyError(f"{mode}.{variant}: master {entry['master']} reflect={entry['reflect']} "
-                                    f"gives the {expected_hand(recipe, entry)} hand")
+    for variant, (master, reflect) in OUTPUTS.items():
+        if expected_hand(recipe, master, reflect) != variant.split("_")[1]:
+            raise AssemblyError(f"{variant}: master {master} reflect={reflect} gives the "
+                                f"{expected_hand(recipe, master, reflect)} hand")
     # the accepted red -> blue rule has exactly one owner: the idle runtime recipe
     runtime = ex.load_recipe(path.parent / recipe.get("runtime_recipe", ex.DEFAULT_RECIPE.name))
     recipe["recolor"] = runtime["derived"]["recolor"]
@@ -169,7 +160,7 @@ def build_masters(recipe: dict, input_dir: Path) -> Dict[str, Part]:
 
 
 def build_references(recipe: dict, input_dir: Path) -> Dict[str, Part]:
-    """Authored blue candidates, normalized for comparison sheets only (never runtime textures)."""
+    """Authored blue candidates, normalized for preview reference sheets only (never runtime textures)."""
     return {key: normalize(spec, input_dir / spec["file"], key, recipe["alpha_threshold"])
             for key, spec in sorted(recipe["references"].items())}
 
@@ -203,31 +194,30 @@ def check_mask(label: str, report: dict, limits: dict) -> None:
         raise AssemblyError(f"{label}: mawashi mask fringe {report['fringe_px']} px")
 
 
-def derive_texture(recipe: dict, masters: Dict[str, Part], mode: str, variant: str) -> GateTexture:
-    entry = recipe["modes"][mode][variant]
-    part = masters[entry["master"]]
-    if entry["reflect"]:
+def derive_texture(recipe: dict, masters: Dict[str, Part], variant: str) -> TsuppariTexture:
+    master, reflect = OUTPUTS[variant]
+    part = masters[master]
+    if reflect:
         part = aw.mirror_part(part)
     mask: Set[Tuple[int, int]] = set()
     if variant.startswith("blue_"):
         rule = recipe["recolor"]
         mask = im.mawashi_mask(part.image, rule)
-        check_mask(f"{mode}.{variant}", mask_report(part.image, mask, rule), recipe["mask_limits"])
+        check_mask(variant, mask_report(part.image, mask, rule), recipe["mask_limits"])
         part = Part(im.recolor(part.image, mask, rule), part.pivot, dict(part.joints))
-    return GateTexture(mode, variant, entry["master"], entry["reflect"], part, mask)
+    return TsuppariTexture(variant, master, reflect, part, mask)
 
 
-def build_textures(recipe: dict, input_dir: Path) -> List[GateTexture]:
+def build_textures(recipe: dict, input_dir: Path) -> List[TsuppariTexture]:
     masters = build_masters(recipe, input_dir)
-    return [derive_texture(recipe, masters, mode, variant) for mode in MODES for variant in VARIANTS]
+    return [derive_texture(recipe, masters, variant) for variant in VARIANTS]
 
 
-def describe(texture: GateTexture, data: bytes) -> dict:
+def describe(texture: TsuppariTexture, data: bytes) -> dict:
     part = texture.part
     core = (part.joints["core_a"], part.joints["core_b"])
     return {
         "file": texture.file,
-        "mode": texture.mode,
         "variant": texture.variant,
         "source": f"{texture.master}{' reflected' if texture.reflect else ''}"
                   f"{' + mawashi recolor' if texture.variant.startswith('blue_') else ''}",
@@ -239,27 +229,27 @@ def describe(texture: GateTexture, data: bytes) -> dict:
     }
 
 
-def export(recipe: dict, input_dir: Path, gate_dir: Path) -> List[dict]:
+def export(recipe: dict, input_dir: Path, out_dir: Path) -> List[dict]:
     textures = build_textures(recipe, input_dir)
     encoded = {t.file: ex.png_bytes(t.part.image) for t in textures}
-    gate_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     for name, data in encoded.items():  # write each file atomically
-        handle, temp = tempfile.mkstemp(prefix=".staging-", dir=gate_dir)
+        handle, temp = tempfile.mkstemp(prefix=".staging-", dir=out_dir)
         with os.fdopen(handle, "wb") as out:
             out.write(data)
-        os.replace(temp, gate_dir / name)
+        os.replace(temp, out_dir / name)
     return [describe(t, encoded[t.file]) for t in textures]
 
 
-def check(recipe: dict, input_dir: Path, gate_dir: Path) -> List[dict]:
+def check(recipe: dict, input_dir: Path, out_dir: Path) -> List[dict]:
     """Fresh export compared with the committed files (decoded pixels, encoded bytes, no extra files)."""
     textures = build_textures(recipe, input_dir)
-    present = sorted(p.name for p in gate_dir.glob("*")) if gate_dir.is_dir() else []
-    if present != sorted(GATE_FILES):
-        raise AssemblyError(f"{gate_dir}: files {present} != expected {sorted(GATE_FILES)}")
+    present = sorted(p.name for p in out_dir.glob("*")) if out_dir.is_dir() else []
+    if present != sorted(OUTPUT_FILES):
+        raise AssemblyError(f"{out_dir}: files {present} != expected {sorted(OUTPUT_FILES)}")
     report = []
     for texture in textures:
-        path = gate_dir / texture.file
+        path = out_dir / texture.file
         with Image.open(path) as committed:
             committed.load()
             pixels = aw.pixel_sha256(committed.convert("RGBA"))
@@ -274,10 +264,10 @@ def check(recipe: dict, input_dir: Path, gate_dir: Path) -> List[dict]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Export (or --check) the Tsuppari Visual-Gate runtime textures.")
-    parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE, help="Tsuppari Visual-Gate recipe")
-    parser.add_argument("--input-dir", type=Path, default=aw.DEFAULT_INPUT_DIR, help="directory with the candidates")
-    parser.add_argument("--gate-dir", type=Path, default=DEFAULT_GATE_DIR, help="Visual-Gate runtime asset directory")
+    parser = argparse.ArgumentParser(description="Export (or --check) the four Product Tsuppari pose textures.")
+    parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE, help="Product Tsuppari recipe")
+    parser.add_argument("--input-dir", type=Path, default=aw.DEFAULT_INPUT_DIR, help="directory with the red poses")
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_TSUPPARI_DIR, help="Product Tsuppari asset directory")
     parser.add_argument("--check", action="store_true", help="verify committed files against a fresh export")
     return parser
 
@@ -286,7 +276,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         recipe = load_recipe(args.recipe)
-        report = (check if args.check else export)(recipe, args.input_dir, args.gate_dir)
+        report = (check if args.check else export)(recipe, args.input_dir, args.out_dir)
     except AssemblyError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

@@ -1,0 +1,100 @@
+{
+  "recipe_schema": 1,
+  "name": "tsuppari-product-07d",
+  "status": "Product Tsuppari art contract (ACTION-07D): the User-accepted SEPARATE strategy (ACTION-07C2 Play Test).",
+  "note": "Two authored red Tsuppari poses are the only runtime sources. Each is normalized like the accepted idle red (one whole-sprite rotation so FRONT = local +X, explicit root, body core = 2R, exact /4 downscale). Blue reuses the accepted red -> blue rule of runtime_wrestler_recipe.json (single owner): local-Y reflection ((x, y) -> (x, H - y)) swaps the wrestler's hand, the mawashi-only recolor keeps it, so blue left = reflected red right and blue right = reflected red left (export_tsuppari.py OUTPUTS). The authored blue candidates (references) are normalized only for preview reference sheets and never become runtime textures.",
+  "runtime_recipe": "runtime_wrestler_recipe.json",
+  "alpha_threshold": 8,
+  "measurement": {
+    "method": "Implemented by measure_tsuppari_pose.py (--check verifies this recipe). Each red pose is registered to the accepted idle red master (runtime_wrestler_recipe.json) with two torso landmarks measured on the source at 1/2 scale (BOX): H = hair blob centroid (max(R, G, B) < 80 and alpha > 200, 7 px opening = erosion then dilation to drop the outline, largest 4-connected component), B = mawashi centroid (pixels in the accepted recolor hue band with its saturation / value floors, every 4-connected component >= 5% of the largest). Centroids are pixel centers in source px; areas are counted at 1/2 scale and reported x 4. rotation delta = angle(H -> B) - idle angle(H -> B); scale s = mean(sqrt(hair area ratio), sqrt(mawashi area ratio)); the idle root and body-core points are carried by s * Rot(delta) about the H/B midpoint; source_front_deg = idle 160.7 + delta. The recorded values (front 0.1 deg, points 1 px) are what the exporter uses and must agree with a fresh measurement within the tolerance below; measurement_evidence is the exact helper output.",
+    "tolerance": {"front_deg": 0.1, "point_px": 1.0},
+    "history": "red_left values were recorded in ACTION-07C by an uncommitted earlier implementation of the same method (7 px erosion only); the helper reproduces them within 0.71 source px / 0.03 deg. red_right was recorded in ACTION-07C2 with this exact method. The accepted runtime pixels were not re-normalized.",
+    "idle_reference": {
+      "hair_centroid": [428.7, 542.7],
+      "mawashi_centroid": [878.6, 565.5],
+      "hair_px": 42652,
+      "mawashi_px": 56028
+    }
+  },
+  "masters": {
+    "red_left": {
+      "hand": "left",
+      "file": "candidate_red_tsuppari_left.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "219d66dcf13585e7149382f01c964fdd9074bf61e615b5d3f9bbb15b38cb84b3",
+      "reviewed_file_sha256": "24a00ca64c448dcd53c1705e424a3d893fb57bc07893cfdebcc02cd26fb917af",
+      "hand_evidence": "Faces image left like the idle master; the extended arm is the screen-lower one = the wrestler's LEFT (-Y after normalization).",
+      "source_front_deg": 160.7,
+      "root_source_px": [704, 620],
+      "body_core_source_px": [[575, 253], [790, 864]],
+      "body_core_target_r": 2.0,
+      "measurement_evidence": {
+        "hair_centroid": [478.5, 551.8],
+        "mawashi_centroid": [941.1, 575.1],
+        "hair_px": 44352,
+        "mawashi_px": 59800,
+        "rotation_delta_deg": -0.023,
+        "scale": 1.0264
+      }
+    },
+    "red_right": {
+      "hand": "right",
+      "file": "candidate_red_tsuppari_right.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "d7d5632f8357bd1e4427d2bcdcee5a6e74307fcd9d0caca2d86d102ec8719011",
+      "reviewed_file_sha256": "8c2067a50b73708c1c2a3eb078ac3390f6aab35b838e73c09cba4da69198426a",
+      "hand_evidence": "Faces image left like the idle master; the extended arm is the screen-upper one = the wrestler's RIGHT (+Y after normalization).",
+      "source_front_deg": 157.8,
+      "root_source_px": [818, 688],
+      "body_core_source_px": [[663, 309], [920, 940]],
+      "body_core_target_r": 2.0,
+      "measurement_evidence": {
+        "hair_centroid": [590.4, 628.5],
+        "mawashi_centroid": [1051.9, 628.8],
+        "hair_px": 48892,
+        "mawashi_px": 66024,
+        "rotation_delta_deg": -2.858,
+        "scale": 1.0781
+      }
+    }
+  },
+  "references": {
+    "blue_left": {
+      "hand": "left",
+      "file": "candidate_blue_tsuppari_left.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "060bfbf4319ed4fbb79d030f9dc6ae90c378f5b8968a28a8ad1d195913e68777",
+      "reviewed_file_sha256": "1b4763367b27f7ad788825e5fec916a97ccd7300e44522177c6c021ba0af5f2b",
+      "hand_evidence": "Faces image right; the extended arm is the screen-upper one = the wrestler's LEFT.",
+      "note": "Preview reference only (never a runtime source); normalization recorded in ACTION-07C against the screen-mirrored idle red, not checked by measure_tsuppari_pose.py.",
+      "source_front_deg": 26.4,
+      "root_source_px": [567, 642],
+      "body_core_source_px": [[736, 303], [456, 867]],
+      "body_core_target_r": 2.0
+    },
+    "blue_right": {
+      "hand": "right",
+      "file": "candidate_blue_tsuppari_right.png",
+      "size": [1254, 1254],
+      "pixel_sha256": "17782b1155f86ad249f4af1a3704f3ea34f89a6e0e06b86447b924f47f4a1071",
+      "reviewed_file_sha256": "b5a9d8ef8dbe2e211b662479d6ba1a414e0b96005b6b8d5237ed828675bf9345",
+      "hand_evidence": "Faces image right; the extended arm is the screen-lower one = the wrestler's RIGHT.",
+      "note": "Preview reference only (never a runtime source); normalization recorded in ACTION-07C against the screen-mirrored idle red, not checked by measure_tsuppari_pose.py.",
+      "source_front_deg": 29.7,
+      "root_source_px": [583, 639],
+      "body_core_source_px": [[762, 326], [464, 848]],
+      "body_core_target_r": 2.0
+    }
+  },
+  "mask_limits": {
+    "note": "Per-pose validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component.",
+    "min_mask_px": 1500,
+    "max_missed_px": 60,
+    "max_fringe_px": 120
+  },
+  "angles_deg": [0, 45, 90, 180, 270],
+  "faceoff": [
+    {"label": "contact 0.70 m", "distance_m": 0.7},
+    {"label": "tsuppari reach 0.90 m", "distance_m": 0.9}
+  ]
+}
