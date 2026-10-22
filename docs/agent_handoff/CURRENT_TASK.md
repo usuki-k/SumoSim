@@ -1,5 +1,5 @@
 Task-ID: ACTION-08C-COUNTER-PRODUCT-ART-PROMOTION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT ART PROMOTION / TEMP-GATE CLEANUP
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -565,3 +565,256 @@ Preserve exact accepted pixels and exact accepted 35-degree presentation motion.
 
 Remove temporary gate naming only.
 Keep Counter gameplay completely unchanged.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / FINAL USER REGRESSION PLAY TEST REQUIRED
+Accepted Technical Baseline: 6c6a3f0cc2fcaffa2cef26d057713a8e783bf9c7
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-08C.
+
+Confirmed from Current Source / diff:
+
+- accepted Counter gate textures were promoted by rename/move into permanent Product paths
+- permanent red/blue Counter pixels are unchanged from the accepted gate baseline
+- permanent Product metadata preserves accepted dimensions/pivots/body-core
+- accepted 35-degree sine rotation is unchanged
+- accepted red + / blue - sign convention is unchanged
+- temporary counter-gate runtime path is removed
+- temporary gate module/tool/recipe names were promoted to permanent Product names
+- WRESTLER_PRODUCT_ART_SPEC and ARCHITECTURE now describe the permanent Counter Product contract
+- src/game/sumo and src/game/input are unchanged.
+
+## Permanent Counter Product Contract
+
+Accepted technical contract:
+
+```
+public/assets/action/wrestler/counter/red.png
+public/assets/action/wrestler/counter/blue.png
+```
+
+Permanent presentation ownership:
+
+```
+src/game/presentation/productCounterArt.ts
+```
+
+Permanent tooling ownership:
+
+```
+tools/wrestler_art/counter_recipe.json
+tools/wrestler_art/export_counter.py
+```
+
+Current authored source identity:
+
+```
+tools/wrestler_art/input.local/candidate_red_counter.png
+```
+
+decoded RGBA SHA-256:
+
+```
+5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8
+```
+
+## Accepted Pixel Preservation
+
+Permanent Product decoded RGBA hashes:
+
+- red:
+  `83b96783ebdd741ab07e435d25ce7a4ce6557b734d40c8873560bab2b630d5d3`
+- blue:
+  `1dec7025670ba375287166078cbb52dd3b6701fa52618646107fd4f50153e439`
+
+These are the same accepted ACTION-08A1/08B gate pixels.
+
+Permanent geometry remains:
+
+- red: 210 x 207, pivot (74, 115)
+- blue: 210 x 207, pivot (74, 92)
+- body core: 123.076923 px.
+
+No visual renormalization occurred during promotion.
+
+## Accepted Counter Derivation
+
+Permanent mapping remains:
+
+```
+red = normalized authored red Counter source
+blue = local-Y reflection(red) + shared accepted mawashi recolor
+```
+
+The shared recolor rule remains owned by:
+
+```
+runtime_wrestler_recipe.json
+```
+
+No runtime reflection/recolor is introduced.
+
+## Counter-Specific Mask Allowance
+
+Accepted and preserved:
+
+```
+max_missed_px = 80
+```
+
+for this Counter source only.
+
+Current diagnostics:
+
+- mask: 1724 px
+- missed: 70 px
+- fringe: 75 px.
+
+The idle/Tsuppari limits remain unchanged at 60.
+
+Do not generalize this Counter-specific allowance into a global art rule.
+
+## Accepted Motion Preservation
+
+Permanent presentation motion remains exactly:
+
+```
+phaseProgress = 1 - counter.ticksRemaining / COUNTER_WINDOW_TICKS
+magnitude = sin(pi * phaseProgress) * 35 degrees
+
+red  = canonical facing + magnitude
+blue = canonical facing - magnitude
+```
+
+Outside Counter:
+- rotation offset = 0.
+
+The body sprite alone receives this offset.
+
+Unchanged:
+- participant.facing
+- shadow rotation
+- canonical position
+- scale
+- Simulation state.
+
+## Temporary Gate Cleanup
+
+Confirmed promoted/removed from current ownership:
+
+- `counter-gate/` runtime path
+- `counterGateArt.ts`
+- `counter_gate_recipe.json`
+- `export_counter_gate.py`
+- temporary gate texture keys.
+
+Historical gate information remains only as documentation/history where useful.
+
+The active runtime contract is now the permanent Product Counter contract above.
+
+## Gameplay Preservation
+
+Confirmed no diff under:
+
+- `src/game/sumo/`
+- `src/game/input/`.
+
+Therefore ACTION-08C does not change:
+
+- COUNTER_WINDOW_TICKS
+- Counter Best / Success / Fail
+- Counter vs Push
+- Counter vs Tsuppari
+- CounterTransition
+- side/rear target semantics
+- Kuzushi
+- ArrowDown
+- input priority
+- canonical participant facing.
+
+Do not reopen these in Product-art cleanup tasks.
+
+## Verification Review
+
+Reported and accepted:
+
+- focused permanent Counter exporter: 17 PASS
+- full wrestler-art suite: 168 PASS
+- presentation tests: 57 PASS
+- pnpm test: 23 files / 364 PASS
+- pnpm build / typecheck: PASS
+- git diff --check: PASS
+- permanent Counter exporter deterministic rerun: PASS
+- permanent Counter exporter --check: PASS
+- idle exporter --check: PASS
+- Tsuppari exporter --check: PASS
+- browser/runtime smoke on GPU: 28 / 28 PASS.
+
+This is sufficient for Technical PASS.
+
+## Product SPEC / Architecture Review
+
+Accepted:
+
+- WRESTLER_PRODUCT_ART_SPEC §0 now includes permanent Counter art
+- one authored red Counter master is the Product source
+- blue is derived offline
+- explicit pivots/body-core are documented
+- Counter pose selection remains presentation-driven by `pose === 'counter'`
+- accepted 35-degree sine body-sabaki is documented as presentation-only
+- Simulation facing remains canonical and unchanged
+- sprite shape does not own gameplay collision.
+
+## Final User Regression Play Test
+
+REQUIRED.
+
+This is not a new design gate.
+
+The User already accepted:
+- Counter pose
+- blue derivation
+- 35-degree motion
+- red + / blue - directions.
+
+Only verify that promotion/cleanup changed nothing:
+
+1. ArrowDown shows the same accepted Counter pose
+2. red/blue look identical to pre-promotion
+3. 0 -> 35 -> 0 movement feels identical
+4. Tsuppari remains clearly distinct
+5. Success / Best transitions are unchanged
+6. no pivot / scale jump appears
+7. Counter gameplay is unchanged.
+
+If this regression Play Test is OK:
+- ACTION-08C can be considered fully accepted
+- Counter Visual Gate phase is closed
+- future tasks should treat the permanent Product Counter art and 35-degree motion as the baseline.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- permanent Counter red/blue pixels
+- accepted source image
+- Counter-specific max_missed_px = 80
+- 35-degree maximum
+- sine curve
+- red + / blue - signs
+- current Counter gameplay
+- current CounterTransition
+- accepted idle/Tsuppari Product art.
+
+## Next Task Constraint
+
+Do not start another Counter art redesign before the final ACTION-08C regression Play Test result.
+
+After acceptance, Counter art/motion should be treated as a closed Product baseline unless the User explicitly requests changes.
