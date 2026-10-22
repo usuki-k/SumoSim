@@ -1,0 +1,44 @@
+{
+  "recipe_schema": 1,
+  "name": "grip-attempt-gate-11a",
+  "status": "Temporary Grip attempt Visual Gate (ACTION-11A). Shown only during Grip reach. Not Product art until User Play Test accepts it; the Grip success / grappled look is a separate, later Task.",
+  "note": "One authored red Grip attempt pose is the only source. It is normalized like the accepted idle red (one whole-sprite rotation so FRONT = local +X, explicit root, body core = 2R, exact /4 downscale). Blue reuses the accepted red -> blue rule of runtime_wrestler_recipe.json (single owner): local-Y reflection ((x, y) -> (x, H - y)) + mawashi-only recolor. Grip attempt has no left/right hand semantics, so one red pose and its reflected blue are enough.",
+  "runtime_recipe": "runtime_wrestler_recipe.json",
+  "alpha_threshold": 8,
+  "measurement": {
+    "method": "Same landmark registration as the Product Tsuppari / Counter poses (measure_tsuppari_pose.measure_landmarks / normalization, run once for this candidate): hair blob and mawashi centroids at 1/2 BOX scale registered to the accepted idle red master; rotation delta = angle(H -> B) - idle angle(H -> B); scale s = mean(sqrt(hair area ratio), sqrt(mawashi area ratio)); idle root / body core carried by s * Rot(delta) about the H/B midpoint; source_front_deg = idle 160.7 + delta. Recorded values rounded: front 0.1 deg, points 1 px.",
+    "idle_reference": {
+      "hair_centroid": [428.7, 542.7],
+      "mawashi_centroid": [878.6, 565.5],
+      "hair_px": 42652,
+      "mawashi_px": 56028
+    }
+  },
+  "master": {
+    "key": "red",
+    "file": "candidate_red_grip_attempt.png",
+    "size": [1254, 1254],
+    "pixel_sha256": "323a7e79829c371345e8561ef3dd8ff6f49541eceb74450ec418b16c328478e0",
+    "reviewed_file_sha256": "2dcc3b3f87a931098463a4168a0f31873c83b71e8b6badda376d4b1cc20f61f9",
+    "source_front_deg": 162.5,
+    "root_source_px": [683, 608],
+    "body_core_source_px": [[568, 244], [759, 850]],
+    "body_core_target_r": 2.0,
+    "measurement_evidence": {
+      "candidate": "ACTION-11A User-provided Grip attempt pose (both arms reaching forward with open hands).",
+      "hair_centroid": [473.8, 534.9],
+      "mawashi_centroid": [908.0, 570.9],
+      "hair_px": 42820,
+      "mawashi_px": 56876,
+      "rotation_delta_deg": 1.841,
+      "scale": 1.005,
+      "note": "Torso, head and mawashi are drawn at the idle scale and nearly the idle orientation (hair sqrt ratio 1.002, mawashi 1.008); only the arms differ."
+    }
+  },
+  "mask_limits": {
+    "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). Same limits as idle / Tsuppari (no Grip-specific allowance).",
+    "min_mask_px": 1500,
+    "max_missed_px": 60,
+    "max_fringe_px": 120
+  }
+}

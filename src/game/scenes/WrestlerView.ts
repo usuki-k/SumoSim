@@ -8,6 +8,8 @@
 // Simulation facing).
 // ACTION-09A Visual Gate: while the pose is Kuzushi two procedural sweat drops (an overlay above the body) sit
 // beside the head on the canonical facing, faded by kuzushiStrength; the body itself is untouched.
+// ACTION-11A Visual Gate: during Grip reach the temporary Grip attempt pose is shown the same rigid way (no extra
+// turn); Grip recovery and the grapple keep the existing selection.
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -15,7 +17,8 @@ import {
   productWrestlerScale,
   type ProductWrestlerArt,
 } from '../presentation/productWrestlerArt.ts'
-import { allProductCounterArts, counterVisualRotationOffset, selectWrestlerPoseArt } from '../presentation/productCounterArt.ts'
+import { allProductCounterArts, counterVisualRotationOffset } from '../presentation/productCounterArt.ts'
+import { allGripAttemptGateArts, selectWrestlerDisplayArt } from '../presentation/gripAttemptGateArt.ts'
 import { allProductTsuppariArts } from '../presentation/productTsuppariArt.ts'
 import { KUZUSHI_SWEAT_DROPS, kuzushiSweatOffsetPx, kuzushiSweatVisual } from '../presentation/kuzushiVisualEffect.ts'
 import type { WrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
@@ -35,7 +38,12 @@ const SWEAT_RIM = 0x2a78c0
 const SWEAT_TEXTURE_SCALE = 4
 
 export function preloadProductWrestlers(scene: Phaser.Scene): void {
-  for (const art of [...Object.values(PRODUCT_WRESTLER_ART), ...allProductTsuppariArts(), ...allProductCounterArts()]) {
+  for (const art of [
+    ...Object.values(PRODUCT_WRESTLER_ART),
+    ...allProductTsuppariArts(),
+    ...allProductCounterArts(),
+    ...allGripAttemptGateArts(),
+  ]) {
     scene.load.image(art.textureKey, `${import.meta.env.BASE_URL}${art.assetPath}`)
   }
 }
@@ -109,7 +117,7 @@ export class WrestlerView {
   // `positionPx` is the canonical center already converted to canvas pixels; facing is applied exactly.
   apply(state: WrestlerVisualState, participant: ParticipantState, positionPx: { x: number; y: number }): void {
     this.moving = state.pose === 'move'
-    this.show(selectWrestlerPoseArt(this.idleArt, state))
+    this.show(selectWrestlerDisplayArt(this.idleArt, state))
     this.body
       .setPosition(positionPx.x, positionPx.y)
       .setRotation(participant.facing + counterVisualRotationOffset(this.idleArt.id, state))
