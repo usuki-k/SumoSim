@@ -1,5 +1,5 @@
 Task-ID: ACTION-09B-KUZUSHI-FOLLOWUP-WINDOW
-Status: READY
+Status: REVIEWED
 Task-Type: CORE GAMEPLAY IMPLEMENTATION / KUZUSHI SEMANTICS
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -667,3 +667,213 @@ Push and Tsuppari receive the 1.5x follow-up benefit and then consume Kuzushi.
 Valid Grip keeps the existing Morozashi benefit and consumes Kuzushi.
 
 Preserve all existing Kuzushi entry sources, CounterTransition semantics, Product art and sweat presentation ownership.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: PASS / USER PLAY TEST ACCEPTED / MINOR DOCUMENTATION CORRECTION NOTED
+Accepted Technical Baseline: 82e62f7d0ebd7de0362d49cb11e4f20494cc31b8
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-09B.
+
+Confirmed from Current Source / diff:
+
+- KUZUSHI_TICKS changed from 30 to 90
+- 90 ticks = 1.5 s at current 60 Hz
+- the old Push-only susceptibility constant was replaced by one shared Kuzushi follow-up multiplier
+- first actual Push follow-up uses 1.5x and consumes Kuzushi
+- first successful Tsuppari follow-up uses 1.5x impulse before the existing clamp and consumes Kuzushi
+- valid Grip keeps the existing Morozashi benefit and consumes Kuzushi
+- whiffs / out-of-range / startup / recovery / non-contact / cancelled Pushes do not consume
+- 6th-hit ordering preserves "creating hit does not benefit from the Kuzushi it creates"
+- already-Kuzushi + 6th hit uses old Kuzushi for 1.5x, consumes it, then creates a fresh 90-tick Kuzushi
+- CounterTransition pause / fresh restart semantics are preserved
+- presentation continues to read Simulation posture only.
+
+## Accepted Kuzushi Baseline
+
+User Play Test result: ACCEPTED.
+
+Current Kuzushi definition:
+
+> A maximum 1.5-second vulnerability state.  
+> The first successful Push, Tsuppari, or valid Grip follow-up uses the Kuzushi benefit and consumes the state.  
+> If unused, Kuzushi expires naturally after 90 full ticks.
+
+Accepted constants:
+
+```
+KUZUSHI_TICKS = 90
+KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER = 1.5
+```
+
+Do not revert to the old 30-tick / 0.5-second baseline in unrelated tasks.
+
+## Push Follow-up
+
+Accepted:
+
+- only a real received Push force qualifies
+- first qualifying Push force tick uses 1.5x
+- Kuzushi is consumed after that force is resolved
+- later active Push ticks are ordinary 1.0x
+- cancelled/equal Pushes do not consume.
+
+Base Push tuning remains unchanged.
+
+## Tsuppari Follow-up
+
+Accepted:
+
+- receiver must already be Kuzushi before the hit
+- impulse calculation is:
+  `TSUPPARI_IMPULSE * 1.5`
+- existing MAX_EXTERNAL_SPEED clamp remains in force
+- Kuzushi is consumed after the hit
+- ordinary Tsuppari remains unchanged.
+
+Current base impulse remains 2.13 m/s.
+
+## Grip Follow-up
+
+Accepted:
+
+- valid range rules are unchanged
+- Kuzushi does not bypass Grip range
+- valid Grip on a Kuzushi target consumes Kuzushi
+- existing Morozashi holder benefit is the Grip follow-up benefit
+- no separate numeric 1.5x Grip force was introduced.
+
+## 6th-Hit Ordering
+
+Accepted deterministic order:
+
+```
+capture old Kuzushi state
+-> resolve hit / force using old state
+-> consume old Kuzushi if follow-up used
+-> apply fresh 6th-hit Kuzushi afterward
+```
+
+Therefore:
+
+- stable receiver + 6th hit = ordinary impulse + fresh 90-tick Kuzushi
+- already-Kuzushi receiver + 6th hit = 1.5x follow-up, old Kuzushi consumed, then fresh 90-tick Kuzushi.
+
+Do not change this ordering casually.
+
+## CounterTransition
+
+Preserved:
+
+- Push Counter catch puts pusher in Kuzushi
+- CounterTransition still lasts 90 ticks
+- pusher Kuzushi timer is paused during transition
+- normal follow-up actions do not resolve during transition
+- completion starts a fresh full 90-tick Kuzushi
+- first valid post-transition Push/Tsuppari/Grip consumes it using the same rules.
+
+No transition path / side / rear / stagger change was introduced.
+
+## Sweat / Presentation
+
+ACTION-09A sweat remains accepted and unchanged.
+
+Because it reads:
+
+```
+kuzushiStrength = ticksRemaining / KUZUSHI_TICKS
+```
+
+the accepted behavior is now:
+
+- fresh Kuzushi: full sweat
+- ~half duration: ~0.5 alpha
+- qualifying follow-up consumption: sweat disappears immediately
+- CounterTransition: full sweat stays visible while timer is paused
+- post-transition: fresh 90-tick fade window.
+
+No dedicated Kuzushi sprite or body wobble exists.
+
+## Determinism / Ownership
+
+Accepted architecture:
+
+```
+Pure Simulation owns:
+- duration
+- multiplier
+- consumption
+- ordering
+
+Snapshot/posture
+-> WrestlerVisualState
+-> sweat presentation
+```
+
+The follow-up decision is made from the pre-force Kuzushi set, then consumed only after forces are applied, avoiding participant-order dependence.
+
+No duplicate consumed flag/state was added.
+
+## Verification Review
+
+Reported and accepted:
+
+- required D / P / T / G / C / V boundary cases: ALL PASS
+- focused gameplay/presentation: 182 PASS
+- pnpm test: 25 files / 400 PASS
+- pnpm build / typecheck: PASS
+- git diff --check: PASS
+- Product art exporter checks: PASS
+- Browser/runtime smoke: 51 / 51 PASS
+- Product art assets unchanged.
+
+This satisfies the Task's Heavy Verification requirement.
+
+## Documentation Correction
+
+One stale statement remains in `docs/ARCHITECTURE.md` inside the older "Counter + Kuzushi (ACTION-04A1)" paragraph:
+
+> the Grip guarantee is described as a future/unimplemented boundary.
+
+This is no longer true.
+
+Current Source and later Architecture sections correctly show:
+
+- Grip is implemented
+- a valid in-range Grip on Kuzushi consumes Kuzushi
+- gripper receives Morozashi.
+
+Treat the stale sentence as documentation debt only, not as Current gameplay truth.
+
+Before relying on that paragraph for future design, correct/remove that obsolete "未実装" wording in a suitable documentation/task edit.
+
+Do not reinterpret Current Source to match the stale sentence.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- Kuzushi duration = 90 ticks / 1.5 s
+- one-successful-follow-up consumption model
+- follow-up multiplier = 1.5
+- Push consumption timing
+- Tsuppari 1.5x + existing clamp
+- Grip -> Morozashi consumption
+- 6th-hit ordering
+- CounterTransition pause/restart semantics
+- accepted sweat effect
+- current Counter / Tsuppari Product art.
+
+## User Goal Attainment
+
+User Play Test was reported as good.
+
+Therefore the current slower Kuzushi window and one-follow-up consumption model are accepted as the current Game Feel baseline.
+
+Future tuning should treat this as an accepted decision unless the User explicitly asks to change it.
