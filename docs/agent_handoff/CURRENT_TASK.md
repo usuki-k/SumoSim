@@ -1,5 +1,5 @@
 Task-ID: ACTION-08B-COUNTER-PRESENTATION-ROTATION-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION MOTION VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -461,3 +461,159 @@ Add only a presentation-only Counter body rotation:
 with mirrored red/blue direction.
 
 Keep Counter gameplay, CounterTransition, assets, position, scale and canonical facing unchanged.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: PASS / USER VISUAL PLAY TEST ACCEPTED
+Accepted Technical Baseline: b65ab9a2e01835dc955248d5d4f7492361b78c1c
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-08B.
+
+Confirmed from Current Source / diff:
+
+- Counter phaseProgress is derived from existing Simulation-owned Counter ticks
+- maximum visual body rotation is exactly 35 degrees
+- curve is deterministic: sin(pi * phaseProgress)
+- red uses positive rotation, blue uses equal-magnitude negative rotation
+- only the wrestler body sprite receives the additional rotation
+- the procedural shadow remains on canonical facing
+- participant.facing is unchanged
+- position and scale are unchanged
+- Counter gameplay and CounterTransition are unchanged
+- Counter PNGs and all accepted idle / Tsuppari assets are unchanged.
+
+## Accepted Counter Motion Baseline
+
+User visual confirmation: ACCEPTED.
+
+Current accepted Counter / 引き・捌き presentation motion:
+
+```
+phaseProgress = 1 - counter.ticksRemaining / COUNTER_WINDOW_TICKS
+magnitude = sin(pi * phaseProgress) * 35 degrees
+
+red  = canonical facing + magnitude
+blue = canonical facing - magnitude
+```
+
+Outside `pose === 'counter'`:
+
+```
+visual rotation offset = 0
+```
+
+This presentation rotation is now an accepted visual/game-feel baseline.
+
+Do not change the 35-degree maximum or the sign convention in unrelated tasks.
+
+## Accepted Current Counter Visual Combination
+
+The User has now accepted the current runtime result as visually OK.
+
+Treat the current combination as the accepted Counter visual baseline:
+
+- current ACTION-08A1 Counter candidate textures
+- current red/blue derivation
+- current explicit pivots / body-core
+- current 0 -> 35 -> 0 presentation rotation
+- current red + / blue - direction.
+
+This acceptance concerns the integrated visual result, not Counter gameplay redesign.
+
+## Current Counter Gate Assets
+
+Current accepted visual pixels remain under the provisional gate paths:
+
+```
+public/assets/action/wrestler/counter-gate/red.png
+public/assets/action/wrestler/counter-gate/blue.png
+```
+
+They are visually accepted now, but the Repository has not yet promoted them into a permanent Product Counter art contract.
+
+A follow-up promotion Task may rename/move these while preserving exact pixels.
+
+## Gameplay Preservation
+
+Confirmed no diff under:
+
+- `src/game/sumo/`
+- `src/game/input/`.
+
+Therefore ACTION-08B did not change:
+
+- COUNTER_WINDOW_TICKS = 12
+- Counter Best / Success / Fail
+- Counter vs Push
+- Counter vs Tsuppari
+- CounterTransition
+- side / rear target semantics
+- Kuzushi
+- ArrowDown binding
+- participant canonical facing.
+
+Do not conflate the accepted body turn with gameplay facing.
+
+## Verification Review
+
+Reported and accepted:
+
+- presentation tests: 55 PASS
+- Simulation regression tests: 13 files / 274 PASS
+- pnpm test: 23 files / 362 PASS
+- pnpm build / typecheck: PASS
+- git diff --check: PASS
+- Counter / idle / Tsuppari exporter checks: PASS
+- browser smoke: 27 / 27 PASS under SwiftShader
+- browser smoke: 27 / 27 PASS under real GPU.
+
+Observed blue sequence includes the exact -35 degree midpoint.
+
+Observed red sequence was interrupted by an early successful Counter before reaching the midpoint, while unit/presentation tests prove the full mirrored +35-degree curve.
+
+## Renderer Note
+
+A sprite-clipping artifact was observed only under SwiftShader for arbitrary rotated sprites.
+
+The same artifact reproduces with unrelated rotated sprites and does not occur with the tested real GPU / ANGLE D3D11 path.
+
+This is not considered an ACTION-08B implementation regression.
+
+Do not change Product art or Counter motion to work around this headless software-renderer-only artifact unless it reproduces in a supported real-user runtime.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- 35-degree Counter body rotation
+- sine rotation curve
+- red + / blue - mirrored direction
+- current Counter candidate visual result
+- current Counter gameplay
+- current CounterTransition behavior
+- accepted idle and Tsuppari Product art
+- Tsuppari reach 0.55 m.
+
+## Next Task Constraint
+
+The Counter Visual Gate can now be considered visually accepted.
+
+Recommended next focused Task:
+
+`ACTION-08C-COUNTER-PRODUCT-ART-PROMOTION`
+
+It should:
+- promote the accepted Counter gate textures into a permanent Product Counter art contract
+- preserve the exact accepted pixels
+- preserve the accepted 35-degree presentation motion unchanged
+- remove temporary `counter-gate` naming as appropriate
+- update WRESTLER_PRODUCT_ART_SPEC / ARCHITECTURE
+- keep Counter gameplay completely unchanged.
+
+Do not redesign the Counter pose or motion during promotion.
