@@ -3,10 +3,11 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_WINDOW_TICKS,
-  GRIP_RANGE_MARGIN,
+  GRIP_MIN_ATTEMPT_TICKS,
   GRIP_REACH_TICKS,
   GRIP_RECOVERY_TICKS,
   PUSH_CHARGE_TICKS,
+  TSUPPARI_STARTUP_TICKS,
 } from '../sumo/BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
 import {
@@ -44,7 +45,8 @@ const intents = (a: Input = {}, b: Input = {}): Map<ParticipantId, ParticipantIn
     ['b', intent(b)],
   ])
 const COMBINED = 2 * BODY_RADIUS
-const RANGE = COMBINED + GRIP_RANGE_MARGIN
+// Beyond the ~0.10 m Grip lunge (ACTION-11C): a Grip from here whiffs.
+const FAR = COMBINED + 0.6
 const setupAt = (gap: number): BoutSetup => ({
   arena: { radius: 100 },
   participants: [
@@ -88,7 +90,7 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
   })
 
   it('A1-A4 / W1-W3: attempt art exactly through Grip reach; whiff recovery and idle use the idle sprite', () => {
-    const sim = newSim(RANGE + 0.5) // out of range: the reach whiffs
+    const sim = newSim(FAR) // beyond the lunge: the reach whiffs
     expect(selectWrestlerDisplayArt(red, visualOf(sim.getSnapshot()))).toBe(red) // A1
     sim.step(intents({ grip: true }))
     let reach = 0
@@ -118,7 +120,7 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
   })
 
   it('A5: both participants reaching independently show their own attempt texture', () => {
-    const sim = newSim(RANGE + 0.5)
+    const sim = newSim(FAR)
     sim.step(intents({ grip: true }, { grip: true }))
     const s = sim.getSnapshot()
     expect(selectWrestlerDisplayArt(red, visualOf(s, 0))).toBe(GRIP_ATTEMPT_GATE_ART.red)
@@ -126,8 +128,8 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
   })
 
   it('S1-S3: a Grip that lands during reach enters the grapple and drops the attempt art on that tick', () => {
-    // A reaches just out of range; B walks in during the reach
-    const sim = newSim(RANGE + 0.02)
+    // A lunges from just beyond its own lunge reach; B walks in during the reach (ACTION-11C: contact success)
+    const sim = newSim(COMBINED + 0.11)
     sim.step(intents({ grip: true }, { move: [-1, 0] }))
     let shown = 0
     while (sim.getSnapshot().engagement.kind === 'free' && shown < GRIP_REACH_TICKS) {
@@ -147,7 +149,7 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
   })
 
   it('S4: Kuzushi Grip -> Morozashi is unchanged; the attempt art disappears once the grapple starts', () => {
-    // B whiffs a Counter (-> Kuzushi at the end of its window) while A is already reaching in range
+    // B whiffs a Counter (-> Kuzushi at the end of its window) while A is already reaching in contact
     const sim = newSim(COMBINED)
     sim.step(intents({}, { counter: true }))
     for (let t = 1; t < COUNTER_WINDOW_TICKS - 2; t++) sim.step(intents())
@@ -167,12 +169,12 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
   })
 
   it('R1 / R2 / R4: Tsuppari / Counter / Kuzushi presentation is the existing selection', () => {
-    const tsuppari = newSim(RANGE + 0.5)
+    const tsuppari = newSim(FAR)
     tsuppari.step(intents({ left: true }))
     expect(selectWrestlerDisplayArt(red, visualOf(tsuppari.getSnapshot()))).toBe(PRODUCT_TSUPPARI_ART.red.left)
     expect(selectWrestlerDisplayArt(blue, visualOf(tsuppari.getSnapshot()))).toBe(PRODUCT_TSUPPARI_ART.blue.left)
 
-    const counter = newSim(RANGE + 0.5)
+    const counter = newSim(FAR)
     counter.step(intents({ counter: true }))
     const cv = visualOf(counter.getSnapshot())
     expect(selectWrestlerDisplayArt(red, cv)).toBe(PRODUCT_COUNTER_ART.red)
@@ -187,7 +189,7 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
   })
 
   it('R3: Push (24-tick charge) keeps the idle sprite through startup, charge and recovery', () => {
-    const sim = newSim(RANGE + 5)
+    const sim = newSim(FAR + 5)
     sim.step(intents({ push: true }))
     let pushTicks = 0
     while (visualOf(sim.getSnapshot()).pose === 'push') {
@@ -199,8 +201,34 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
     expect(pushTicks).toBeGreaterThan(PUSH_CHARGE_TICKS)
   })
 
+  it('V6 (ACTION-11C): a Grip started in contact shows the attempt for the minimum attempt, then the grapple fallback', () => {
+    const sim = newSim(COMBINED)
+    sim.step(intents({ grip: true }))
+    const keys: string[] = []
+    while (sim.getSnapshot().engagement.kind === 'free') {
+      keys.push(selectWrestlerDisplayArt(red, visualOf(sim.getSnapshot())).textureKey)
+      sim.step(intents())
+    }
+    expect(keys).toEqual(Array(GRIP_MIN_ATTEMPT_TICKS).fill(GRIP_ATTEMPT_GATE_ART.red.textureKey))
+    expect(selectWrestlerDisplayArt(red, visualOf(sim.getSnapshot()))).toBe(red)
+  })
+
+  it('V6 (ACTION-11C): a Tsuppari hit that defeats the reach switches to the idle sprite on that tick', () => {
+    const sim = newSim(COMBINED)
+    sim.step(intents({ grip: true }, { left: true }))
+    const seen: string[] = []
+    for (let t = 1; t <= TSUPPARI_STARTUP_TICKS; t++) {
+      seen.push(selectWrestlerDisplayArt(red, visualOf(sim.getSnapshot())).textureKey)
+      sim.step(intents())
+    }
+    expect(seen).toEqual(Array(TSUPPARI_STARTUP_TICKS).fill(GRIP_ATTEMPT_GATE_ART.red.textureKey))
+    const s = sim.getSnapshot()
+    expect(visualOf(s)).toMatchObject({ pose: 'grip', gripPhase: 'recovery' })
+    expect(selectWrestlerDisplayArt(red, visualOf(s))).toBe(red)
+  })
+
   it('selection is presentation only: the Snapshot is unchanged', () => {
-    const sim = newSim(RANGE + 0.5)
+    const sim = newSim(FAR)
     sim.step(intents({ grip: true }))
     const before = JSON.stringify(sim.getSnapshot())
     selectWrestlerDisplayArt(red, visualOf(sim.getSnapshot()))

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_RADIUS, BoutSimulation, COUNTER_TRANSITION_TICKS, PUSH_STARTUP_TICKS } from './BoutSimulation.ts'
+import {
+  BODY_RADIUS,
+  BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
+  GRIP_MIN_ATTEMPT_TICKS,
+  PUSH_STARTUP_TICKS,
+} from './BoutSimulation.ts'
 import type { ArenaSetup, BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, Vec2 } from './BoutTypes.ts'
 import {
   RING_OUT_SIMULTANEOUS_EPSILON,
@@ -475,6 +481,7 @@ describe('Tokudawara in BoutSimulation (TOKUDAWARA-01A)', () => {
   it('Grappled Drive yorikiri toward -x crosses the Tokudawara; outcome matches the resolver on resolved centers', () => {
     const sim = new BoutSimulation(setup({ x: -1.4 + COMBINED / 2, y: 0 }, { x: -1.4 - COMBINED / 2, y: 0 }))
     sim.step(intents({ grip: true }))
+    for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) sim.step(intents()) // ACTION-11C minimum attempt
     expect(sim.getSnapshot().engagement.kind).toBe('grappled')
     const { before, after, maxOngoing } = runUntilDecided(sim, () => intents({ drive: true }), (s) => B(s).position)
     expect(after.outcome).toEqual(win('a', 'b'))

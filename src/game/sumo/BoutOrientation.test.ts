@@ -3,6 +3,7 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
+  GRIP_MIN_ATTEMPT_TICKS,
   GRIP_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
   TICK_SECONDS,
@@ -67,7 +68,14 @@ const ready = (s: BoutSnapshot, which: 0 | 1) =>
 
 // B pushes on tick 0; A counters (Best on tick 0 -> rear, or Success later -> side), waits out the
 // Counter transition (ACTION-04A4) and grips the
-// Kuzushi B on the next tick. Returns the simulation right after the grip tick.
+// Kuzushi B (ACTION-11C: pressed on the next tick, landing GRIP_MIN_ATTEMPT_TICKS later). Returns the simulation
+// right after the grip (grapple) tick.
+// ACTION-11C: a Grip pressed in contact lands on reach elapsed GRIP_MIN_ATTEMPT_TICKS (the press tick is 0).
+function pressGrip(sim: BoutSimulation): void {
+  sim.step(intents({ grip: true }))
+  for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) sim.step(IDLE)
+}
+
 function counterGrip(kind: 'side' | 'rear'): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
   const counterTick = kind === 'rear' ? 0 : PUSH_STARTUP_TICKS + 4
@@ -75,7 +83,7 @@ function counterGrip(kind: 'side' | 'rear'): BoutSimulation {
   for (let t = 0; t <= resolveTick; t++) sim.step(intents({ counter: t === counterTick }, { push: t === 0 }))
   for (let t = 0; t < COUNTER_TRANSITION_TICKS; t++) sim.step(IDLE)
   expect(B(sim.getSnapshot()).posture.kind).toBe('kuzushi')
-  sim.step(intents({ grip: true }))
+  pressGrip(sim)
   const s = sim.getSnapshot()
   expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
   return sim
@@ -94,7 +102,7 @@ function turnUpdatesUntilReady(sim: BoutSimulation): number {
 
 function frontGrip(): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
-  sim.step(intents({ grip: true }))
+  pressGrip(sim)
   expect(sim.getSnapshot().engagement.kind).toBe('grappled')
   return sim
 }
@@ -177,8 +185,8 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
     const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
     for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
     for (let t = 0; t < COUNTER_TRANSITION_TICKS; t++) sim.step(IDLE)
-    const before = B(sim.getSnapshot()).facing
-    sim.step(intents({ grip: true }))
+    const before = B(sim.getSnapshot()).facing // frozen by Kuzushi until the grapple tick
+    pressGrip(sim)
     expect(normalizeAngle(B(sim.getSnapshot()).facing - before)).toBeCloseTo(STEP, 9)
   })
 
@@ -247,15 +255,15 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
     one.step(intents({}, { grip: true }))
     let s = one.getSnapshot()
     expect(s.engagement).toEqual({ kind: 'free' })
-    expect(B(s).action).toEqual({ kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS - 1 })
+    expect(B(s).action).toMatchObject({ kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS - 1 })
     expect(A(s).action).toEqual({ kind: 'idle' })
 
     const both = frontGrip()
     both.step(intents({ grip: true }, { grip: true }))
     s = both.getSnapshot()
     expect(s.engagement).toEqual({ kind: 'free' })
-    expect(A(s).action).toEqual(B(s).action)
-    expect(A(s).action.kind).toBe('grip')
+    expect(A(s).action).toMatchObject({ kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS - 1 })
+    expect(B(s).action).toMatchObject({ kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS - 1 })
   })
 
   it('T125: READY + TURNING both press: only the READY participant releases', () => {

@@ -3,6 +3,7 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
+  GRIP_REACH_TICKS,
   PUSH_IMPACT_TICKS,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
@@ -269,15 +270,18 @@ describe('PushDummyController (ACTION-03B2)', () => {
 
   // ACTION-05C1: while grappled the Mode 2 dummy now holds Drive (was: emits nothing).
   it('T110: grappled dummy emits only held Drive; after release its cooldown runs deterministically', () => {
-    // Just outside the dummy's contact tolerance but inside Grip range: the player grips on tick 0.
+    // Just outside the dummy's contact tolerance: the player's Grip (pressed on tick 0) lunges into contact and lands
+    // inside its reach (ACTION-11C). The dummy is only consulted from the first grappled tick on: a FREE Mode 2 dummy
+    // in contact would Push, and its impact defeats the reaching Grip (Push > Grip).
     const sim = new BoutSimulation(setup(-COMBINED / 2 - 0.025, COMBINED / 2 + 0.025))
     const dummy = newDummy()
     const releaseAt = 60
     let firstFree = -1
     let nextEdge = -1
+    let grippedAt = -1
     for (let t = 0; t < 200 && nextEdge < 0; t++) {
       const before = sim.getSnapshot()
-      const intent = dummy.nextIntent(before)
+      const intent = grippedAt < 0 ? IDLE_INTENT : dummy.nextIntent(before)
       if (before.engagement.kind === 'grappled') {
         expect(intent).toEqual({ ...IDLE_INTENT, driveHeld: true })
       } else if (t > releaseAt) {
@@ -290,8 +294,10 @@ describe('PushDummyController (ACTION-03B2)', () => {
           ['b', intent],
         ]),
       )
-      if (t === 0) expect(sim.getSnapshot().engagement.kind).toBe('grappled')
+      if (grippedAt < 0 && sim.getSnapshot().engagement.kind === 'grappled') grippedAt = t
     }
+    expect(grippedAt).toBeGreaterThan(0)
+    expect(grippedAt).toBeLessThan(GRIP_REACH_TICKS)
     expect(firstFree).toBe(releaseAt + 1)
     expect(nextEdge - firstFree).toBe(DUMMY_PUSH_COOLDOWN_TICKS)
   })

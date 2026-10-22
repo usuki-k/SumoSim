@@ -4,6 +4,8 @@ import {
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
+  GRIP_MIN_ATTEMPT_TICKS,
+  GRIP_REACH_TICKS,
   KUZUSHI_TICKS,
   PUSH_CHARGE_TICKS,
   PUSH_IMPACT_TICKS,
@@ -141,7 +143,9 @@ describe('wrestler visual state (VISUAL-01A)', () => {
     const g = new BoutSimulation(setupAt(-2, 0, 2, 0))
     g.step(intents({ grip: true }))
     expect(vis(g.getSnapshot(), 0)).toMatchObject({ pose: 'grip', gripPhase: 'reach' })
-    for (let k = 0; k < 6; k++) g.step(intents())
+    for (let k = 0; k < GRIP_REACH_TICKS - 2; k++) g.step(intents())
+    expect(vis(g.getSnapshot(), 0)).toMatchObject({ pose: 'grip', gripPhase: 'reach' })
+    g.step(intents())
     expect(vis(g.getSnapshot(), 0)).toMatchObject({ pose: 'grip', gripPhase: 'recovery' })
   })
 
@@ -159,6 +163,7 @@ describe('wrestler visual state (VISUAL-01A)', () => {
   it('grapple roles: neutral, Morozashi holder / disadvantaged (mirrored by participant)', () => {
     const neutral = touching()
     neutral.step(intents({ grip: true }))
+    for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) neutral.step(intents()) // ACTION-11C minimum attempt
     expect(vis(neutral.getSnapshot(), 0)).toMatchObject({ pose: 'grapple', grappleRole: 'neutral', turning: false })
     expect(vis(neutral.getSnapshot(), 1)).toMatchObject({ pose: 'grapple', grappleRole: 'neutral', turning: false })
 
@@ -168,6 +173,7 @@ describe('wrestler visual state (VISUAL-01A)', () => {
         sim.step(holder === 'a' ? intents({}, { counter: t === 0 }) : intents({ counter: t === 0 }))
       }
       sim.step(holder === 'a' ? intents({ grip: true }) : intents({}, { grip: true }))
+      for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) sim.step(intents())
       const s = sim.getSnapshot()
       const h = holder === 'a' ? 0 : 1
       expect(vis(s, h).grappleRole).toBe('morozashi-holder')
@@ -180,6 +186,7 @@ describe('wrestler visual state (VISUAL-01A)', () => {
     for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
     for (let t = 0; t < COUNTER_TRANSITION_TICKS; t++) sim.step(intents())
     sim.step(intents({ grip: true }))
+    for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) sim.step(intents())
     let s = sim.getSnapshot()
     expect(vis(s, 1)).toMatchObject({ pose: 'grapple', grappleRole: 'morozashi-disadvantaged', turning: true })
     expect(vis(s, 0)).toMatchObject({ grappleRole: 'morozashi-holder', turning: false })

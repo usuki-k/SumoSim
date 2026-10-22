@@ -5,6 +5,7 @@ import {
   COUNTER_STAGGER_DISTANCE,
   COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
+  GRIP_MIN_ATTEMPT_TICKS,
   KUZUSHI_TICKS,
   PUSH_STARTUP_TICKS,
   TICK_SECONDS,
@@ -521,6 +522,8 @@ describe('Counter transition (ACTION-04A4)', () => {
     const { sim } = catchCounter({ counterTick: 0 })
     for (let k = 0; k < N; k++) sim.step(IDLE)
     sim.step(intents({ grip: true }, { push: true, grip: true }))
+    // ACTION-11C: the Grip lands after GRIP_MIN_ATTEMPT_TICKS; the Kuzushi pusher's edges keep being ignored
+    for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) sim.step(intents({}, { push: true, grip: true }))
     const s = sim.getSnapshot()
     expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
   })

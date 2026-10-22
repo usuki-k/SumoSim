@@ -4,7 +4,7 @@ import {
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
-  GRIP_RANGE_MARGIN,
+  GRIP_MIN_ATTEMPT_TICKS,
   GRIP_REACH_TICKS,
   KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
@@ -27,7 +27,8 @@ import type { BoutSnapshot, ParticipantId, ParticipantIntent, ParticipantState }
 const R = BODY_RADIUS
 const J = TSUPPARI_IMPULSE
 const M = KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER
-const RANGE = 2 * R + GRIP_RANGE_MARGIN
+// ACTION-11C: beyond what the ~0.10 m Grip lunge can close against a stationary target (~0.80 m)
+const BEYOND_LUNGE = 2 * R + 0.11
 
 interface Input {
   move?: [number, number]
@@ -295,17 +296,20 @@ describe('Kuzushi follow-up window (ACTION-09B)', () => {
   })
 
   describe('Grip follow-up', () => {
-    it('G1: a valid in-range Grip consumes the Kuzushi and gives the gripper Morozashi', () => {
+    it('G1: a valid Grip in contact consumes the Kuzushi and gives the gripper Morozashi', () => {
       const s = sim(-R, R)
       failCounterB(s)
       s.step(intents({ grip: true }))
+      for (let k = 1; k < GRIP_MIN_ATTEMPT_TICKS; k++) s.step(IDLE)
+      expect(B(s.getSnapshot()).posture.kind).toBe('kuzushi') // the lunge / contact alone consumes nothing
+      s.step(IDLE)
       const snap = s.getSnapshot()
       expect(snap.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
       expect(B(snap).posture).toEqual({ kind: 'stable' })
     })
 
-    it('G2 / G3 / G4: an out-of-range Grip whiffs through its reach and recovery; the Kuzushi is not consumed or bypassed', () => {
-      const s = sim(-RANGE / 2 - 1e-6, RANGE / 2 + 1e-6)
+    it('G2 / G3 / G4: a Grip that cannot reach whiffs through its reach and recovery; the Kuzushi is not consumed or bypassed', () => {
+      const s = sim(-BEYOND_LUNGE / 2, BEYOND_LUNGE / 2)
       failCounterB(s)
       s.step(intents({ grip: true }))
       for (let t = 0; t < GRIP_REACH_TICKS + 2; t++) {
@@ -352,6 +356,7 @@ describe('Kuzushi follow-up window (ACTION-09B)', () => {
     it('C6a: the first post-transition Grip consumes the Kuzushi (Morozashi)', () => {
       const s = afterTransition()
       s.step(intents({ grip: true }))
+      stepN(s, GRIP_MIN_ATTEMPT_TICKS)
       const snap = s.getSnapshot()
       expect(snap.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
       expect(B(snap).posture.kind).toBe('stable')

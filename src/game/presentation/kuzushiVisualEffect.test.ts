@@ -4,6 +4,7 @@ import {
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
+  GRIP_MIN_ATTEMPT_TICKS,
   KUZUSHI_TICKS,
   PUSH_STARTUP_TICKS,
   TSUPPARI_KUZUSHI_BUILDUP,
@@ -221,6 +222,12 @@ describe('Kuzushi sweat Visual Gate (ACTION-09A): every Kuzushi entry', () => {
     for (let t = 0; t < COUNTER_WINDOW_TICKS; t++) s.step(intents({}, { counter: t === 0 }))
     expect(sweatB(s.getSnapshot()).visible).toBe(true)
     s.step(intents({ grip: true }))
+    // ACTION-11C: the lunge in contact consumes nothing; the Grip lands after the minimum attempt
+    for (let k = 1; k < GRIP_MIN_ATTEMPT_TICKS; k++) {
+      s.step(intents())
+      expect(sweatB(s.getSnapshot()).visible).toBe(true)
+    }
+    s.step(intents())
     const snap = s.getSnapshot()
     expect(snap.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
     expect(sweatB(snap)).toMatchObject({ visible: false, alpha: 0 })

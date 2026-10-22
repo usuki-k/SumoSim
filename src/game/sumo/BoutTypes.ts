@@ -89,6 +89,9 @@ export type ParticipantActionState =
       readonly phase: GripPhase
       // Ticks left in the current phase, including the next tick (always >= 1).
       readonly ticksRemaining: number
+      // ACTION-11C: unit lunge direction locked when the Grip began (the canonical facing stays on it during
+      // reach). A release recovery carries the facing at release; recovery never moves along it.
+      readonly direction: Vec2
     }
   | {
       readonly kind: 'tsuppari'

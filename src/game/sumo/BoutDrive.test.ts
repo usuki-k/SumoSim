@@ -7,6 +7,8 @@ import {
   EXTERNAL_DECELERATION,
   GRAPPLE_DRIVE_ACCELERATION,
   GRAPPLE_DRIVE_SPEED,
+  GRIP_MIN_ATTEMPT_TICKS,
+  GRIP_REACH_TICKS,
   GRIP_RECOVERY_TICKS,
   MAX_EXTERNAL_SPEED,
   MOROZASHI_DRIVE_FACTOR,
@@ -68,6 +70,12 @@ const ready = (s: BoutSnapshot, which: 0 | 1) =>
 const errorOf = (self: ParticipantState, other: ParticipantState) =>
   Math.abs(grappleFacingError(self.position, self.facing, other.position))
 
+// ACTION-11C: a Grip pressed in contact lands on reach elapsed GRIP_MIN_ATTEMPT_TICKS (the press tick is 0).
+function pressGrip(sim: BoutSimulation): void {
+  sim.step(intents({ grip: true }))
+  stepN(sim, GRIP_MIN_ATTEMPT_TICKS)
+}
+
 function stepN(sim: BoutSimulation, n: number, i = IDLE): void {
   for (let k = 0; k < n; k++) sim.step(i)
 }
@@ -83,7 +91,7 @@ function expectFinite(s: BoutSnapshot): void {
 // Frontal neutral grapple (both READY), pair on the x axis, A on the left.
 function frontGrip(radius = 100): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0, radius))
-  sim.step(intents({ grip: true }))
+  pressGrip(sim)
   expect(sim.getSnapshot().engagement).toEqual({ kind: 'grappled', advantage: { kind: 'neutral' } })
   return sim
 }
@@ -92,7 +100,7 @@ function frontGrip(radius = 100): BoutSimulation {
 function frontMorozashi(): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
   for (let t = 0; t < COUNTER_WINDOW_TICKS; t++) sim.step(intents({}, { counter: t === 0 }))
-  sim.step(intents({ grip: true }))
+  pressGrip(sim)
   const s = sim.getSnapshot()
   expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
   expect(ready(s, 0) && ready(s, 1)).toBe(true)
@@ -104,7 +112,7 @@ function rearMorozashi(): BoutSimulation {
   const sim = new BoutSimulation(setupAt(-COMBINED / 2, 0, COMBINED / 2, 0))
   for (let t = 0; t <= PUSH_STARTUP_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === 0 }))
   stepN(sim, COUNTER_TRANSITION_TICKS)
-  sim.step(intents({ grip: true }))
+  pressGrip(sim)
   const s = sim.getSnapshot()
   expect(s.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
   expect(ready(s, 0)).toBe(true)
@@ -286,7 +294,7 @@ describe('Grappled Drive (ACTION-05C1)', () => {
     sim.step(intents({ drive: true, grip: true }, { drive: true }))
     const s = sim.getSnapshot()
     expect(s.engagement).toEqual({ kind: 'free' })
-    expect(A(s).action).toEqual({ kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS - 1 })
+    expect(A(s).action).toMatchObject({ kind: 'grip', phase: 'recovery', ticksRemaining: GRIP_RECOVERY_TICKS - 1 })
     expect(B(s).action).toEqual({ kind: 'idle' })
     expect(A(s).externalVelocity.x).toBeCloseTo(Math.max(0, v0 - DECAY_STEP), 12) // FREE decay, no Drive gain
     for (let k = 0; k < 30; k++) {
@@ -339,15 +347,25 @@ describe('Grappled Drive (ACTION-05C1)', () => {
   })
 
   it('T146: Dummy Mode 2 holds Drive while grappled; the Simulation gates it by readiness', () => {
-    // Frontal: the player grips the dummy, which pushes back from the next tick.
+    // Frontal: the player grips the dummy (ACTION-11C: lands after the minimum attempt), which pushes back from the
+    // first grappled tick. The dummy is switched to Mode 2 only once grappled: a FREE Mode 2 dummy in contact would
+    // Push, and its impact defeats the reaching Grip (ACTION-11C Push > Grip).
     const sim = new BoutSimulation(setupAt(-COMBINED / 2 - 0.025, 0, COMBINED / 2 + 0.025, 0))
     const dummy = new PushDummyController('b', 'a')
-    dummy.setMode('push')
+    let grappledTicks = 0
     for (let t = 0; t < 30; t++) {
-      const intent = dummy.nextIntent(sim.getSnapshot())
-      if (t > 0) expect(intent).toEqual({ ...one({}), driveHeld: true })
+      const before = sim.getSnapshot()
+      if (before.engagement.kind === 'grappled' && dummy.getMode() !== 'push') dummy.setMode('push')
+      const intent = dummy.nextIntent(before)
+      if (before.engagement.kind === 'grappled') {
+        expect(intent).toEqual({ ...one({}), driveHeld: true })
+        grappledTicks++
+      }
       sim.step(new Map([['a', one({ grip: t === 0 })], ['b', intent]]))
     }
+    // the 0.05 m gap is closed by the lunge: the grapple starts inside the reach, no earlier than the minimum attempt
+    expect(grappledTicks).toBeLessThanOrEqual(30 - 1 - GRIP_MIN_ATTEMPT_TICKS)
+    expect(grappledTicks).toBeGreaterThanOrEqual(30 - GRIP_REACH_TICKS)
     expect(B(sim.getSnapshot()).action.kind).toBe('drive')
     expect(A(sim.getSnapshot()).externalVelocity.x).toBeCloseTo(-GRAPPLE_DRIVE_SPEED, 12)
 
@@ -384,7 +402,7 @@ describe('Grappled Drive (ACTION-05C1)', () => {
         { id: 'a', position: { x: -COMBINED / 2, y: 0 } },
       ],
     })
-    swapped.step(intents({ grip: true }))
+    pressGrip(swapped)
     const normal = frontGrip()
     for (let k = 0; k < 40; k++) {
       const i = intents({ drive: true }, { drive: k > 20 })

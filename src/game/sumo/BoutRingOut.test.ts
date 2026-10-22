@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_RADIUS, BoutSimulation, COUNTER_TRANSITION_TICKS, PUSH_STARTUP_TICKS } from './BoutSimulation.ts'
+import {
+  BODY_RADIUS,
+  BoutSimulation,
+  COUNTER_TRANSITION_TICKS,
+  GRIP_MIN_ATTEMPT_TICKS,
+  GRIP_REACH_TICKS,
+  PUSH_STARTUP_TICKS,
+} from './BoutSimulation.ts'
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent, Vec2 } from './BoutTypes.ts'
 import {
   RING_OUT_SIMULTANEOUS_EPSILON,
@@ -213,6 +220,7 @@ describe('Ring-out / BoutOutcome (ACTION-06A)', () => {
     const ring = 2.275
     const sim = new BoutSimulation(setupAt(1.4 - COMBINED / 2, 0, 1.4 + COMBINED / 2, 0, ring))
     sim.step(intents({ grip: true }))
+    for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) sim.step(intents()) // ACTION-11C minimum attempt
     expect(sim.getSnapshot().engagement.kind).toBe('grappled')
     const { after } = runUntilDecided(sim, () => intents({ drive: true }))
     expect(after.outcome).toEqual(win('a', 'b'))
@@ -269,12 +277,17 @@ describe('Ring-out / BoutOutcome (ACTION-06A)', () => {
   })
 
   it('T170: ring-out uses only the previous and final resolved centers (no hidden solver sub-steps)', () => {
-    // Grip attach on the deciding tick: B starts exactly on the line, is pulled inward by the attach;
-    // the resolved tick ends IN, so there is no ring-out even though B began on the boundary.
+    // Grip on a target exactly on the line (ACTION-11C): the lunge closes the 0.08 m gap, contact never displaces
+    // the stationary target and the contact attach has no snap, so B stays on the boundary and is still IN.
     const ring = 2.275
     const sim = new BoutSimulation(setupAt(ring - COMBINED - 0.08, 0, ring, 0, ring))
     sim.step(intents({ grip: true }))
+    for (let k = 1; k < GRIP_REACH_TICKS && sim.getSnapshot().engagement.kind === 'free'; k++) {
+      sim.step(intents())
+      expect(B(sim.getSnapshot()).position).toEqual({ x: ring, y: 0 })
+    }
     expect(sim.getSnapshot().engagement.kind).toBe('grappled')
+    expect(B(sim.getSnapshot()).position.x).toBeCloseTo(ring, 12)
     expect(sim.getSnapshot().outcome).toEqual({ kind: 'ongoing' })
 
     // Drive ticks include a bond correction; the decision matches the helper on resolved snapshots.

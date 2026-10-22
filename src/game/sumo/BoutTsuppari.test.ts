@@ -4,6 +4,7 @@ import {
   BoutSimulation,
   COUNTER_WINDOW_TICKS,
   EXTERNAL_DECELERATION,
+  GRIP_MIN_ATTEMPT_TICKS,
   KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
   MAX_EXTERNAL_SPEED,
@@ -741,6 +742,7 @@ describe('Tsuppari (ACTION-07B)', () => {
     it('TS40: Tsuppari edges while grappled are dropped', () => {
       const s = sim(-R, R)
       s.step(intents({ grip: true }))
+      for (let k = 0; k < GRIP_MIN_ATTEMPT_TICKS; k++) s.step(intents()) // ACTION-11C minimum attempt
       expect(s.getSnapshot().engagement.kind).toBe('grappled')
       for (let t = 0; t < 30; t++) {
         s.step(intents({ left: true, right: true }, { right: true }))
