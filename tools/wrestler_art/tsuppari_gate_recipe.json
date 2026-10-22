@@ -39,20 +39,21 @@
       "hand": "right",
       "file": "candidate_red_tsuppari_right.png",
       "size": [1254, 1254],
-      "pixel_sha256": "d0e6070e2359a8309b07e7c3d76eba905c50fd379cf7e4b4d50bf14c1816d33b",
-      "reviewed_file_sha256": "f94a6e5a084f08194a3d97f2a498958ed32644edfcc73e6f4d2bdf5ecbc9fc8b",
+      "pixel_sha256": "3db3260bc3d90a88694bb65959c83919f148985847c4575c104394261e92cace",
+      "reviewed_file_sha256": "8f255caa95842483f1d8893e4a1616db55a6f299a950c89bf4106c19e1e25ea5",
       "hand_evidence": "Faces image left like the idle master; the extended arm is the screen-upper one = the wrestler's RIGHT (+Y after normalization).",
-      "source_front_deg": 160.1,
-      "root_source_px": [768, 640],
-      "body_core_source_px": [[637, 281], [854, 880]],
+      "source_front_deg": 157.8,
+      "root_source_px": [818, 688],
+      "body_core_source_px": [[663, 310], [920, 940]],
       "body_core_target_r": 2.0,
       "measurement_evidence": {
-        "hair_centroid": [557.5, 576.5],
-        "mawashi_centroid": [989.3, 593.7],
-        "hair_px": 42680,
-        "mawashi_px": 57884,
-        "rotation_delta_deg": -0.611,
-        "scale": 1.0093
+        "remeasured": "ACTION-07C1: User replacement (more forward strike). Same method; hair blob taken as the 7 px opening (erosion + dilation) of max(RGB) < 80, alpha > 200 at 1/2 BOX scale, with the idle reference re-measured the same way (hair (428.7, 542.7), 42652 px). Calibration on the replaced 07C pose: delta -0.617 / s 1.0093 / front 160.1 / root (768, 641) / core (637, 281)-(854, 880).",
+        "hair_centroid": [590.2, 628.8],
+        "mawashi_centroid": [1051.9, 628.9],
+        "hair_px": 48696,
+        "mawashi_px": 66208,
+        "rotation_delta_deg": -2.885,
+        "scale": 1.0778
       }
     }
   },

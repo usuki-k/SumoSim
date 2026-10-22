@@ -286,7 +286,7 @@ class CommittedGateTests(unittest.TestCase):
             for source in (part, aw.mirror_part(part)):
                 report = eg.mask_report(source.image, im.mawashi_mask(source.image, rule), rule)
                 self.assertEqual(report, {"red_left": {"mask_px": 2239, "missed_band_px": 17, "fringe_px": 48},
-                                          "red_right": {"mask_px": 2265, "missed_band_px": 10, "fringe_px": 61}}[key])
+                                          "red_right": {"mask_px": 2276, "missed_band_px": 11, "fringe_px": 67}}[key])
 
     def test_accepted_idle_sprites_unchanged(self) -> None:
         for key, expected in (("red", ACCEPTED_RED_PIXELS), ("blue", ACCEPTED_BLUE_PIXELS)):

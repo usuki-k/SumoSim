@@ -1,291 +1,232 @@
-Task-ID: ACTION-07C-TSUPPARI-ART-VISUAL-GATE
+Task-ID: ACTION-07C1-TSUPPARI-RIGHT-POSE-REFRESH
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: 7b38c3ac3cef62115a7082f824b3eb56f29493d5
-Agent-Start-Head: ecdebc8e365f678b76ef09dd1a12cc0e972f6a85
+Source-Baseline: e30d6b407c3c98f086f4765a0847f3f74038fe0f
+Agent-Start-Head: e01d75ad130412bef2680595cf679068743da416
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS + Browser Smoke 38/38 PASS。Tsuppari artの方式は未選択で、User Visual Gateが必要）。
+PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 47 / 47 PASS。新しいright poseが見た目として良いかは、User Visual Gateで判断する）。
 
-- User提供の4枚の候補PNGから、比較できるTsuppari Art Visual Gateを作った
-  - 3方式（SEPARATE / MIRROR-L / MIRROR-R）× red / blue × 左右 = 12枚のruntime texture
-  - 生成は決定的なtoolとrecipeで行い、出力は `public/assets/action/wrestler/tsuppari-gate/`
-- browserでは、key `4` で3方式を切り替える。presentationだけの切り替えで、key 0のdebug行に `TSU ART: SEPARATE` などと表示する
-- Tsuppariの行動中（startup / active / recovery の全体）は、押した手のposeを1枚で保持する。行動が終われば、承認済みのidle spriteに戻る
-- ACTION-07Bのgameplayは変えていない（`src/game/sumo/`、`src/game/input/` の差分は0行）。idleの `red.png` / `blue.png` も不変
-- 3方式のどれも、受理済みとして扱っていない
+- red right Tsuppariの候補を、Userが差し替えた新しい画像に入れ替えた
+- 07Cと同じ方法で測り直して正規化し、red-right由来の6枚のruntime textureを作り直した
+- red-left、SEPARATEのblue-right、MIRROR-Lの4枚、idleの `red.png` / `blue.png` は、pixelもPNG byteも変わっていない
+- 打突の向き（pivotから一番遠い不透明画素の方向。FRONTから測る）は、**46.1° → 27.8°** になった。旧候補より前向き
+- gameplay（`src/game/sumo/`、`src/game/input/`、`src/game/scenes/`）の差分は0行
+
+```
+SEPARATE is still a User preference, not yet promoted to permanent Product baseline.
+```
 
 # Preflight
 
-- 1回目の開始指示では、required pathの4枚が無かった（実体は `*.png.png` の二重拡張子）。Preflight STOPとして、repositoryには何も書かずに報告した。Userがリネームした後に再開した
-- 再開時: working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `7b38c3a`（`origin/develop` のancestor）、Handoff-Mode GITHUB
-- `7b38c3a..origin/develop` の変更は `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `ecdebc8`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `e30d6b4`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+- `e30d6b4..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `e01d75a`
 
-## 4枚のlocal input（`tools/wrestler_art/input.local/`、commitしない）
+## Local input（`tools/wrestler_art/input.local/`、commitしない）
 
-すべて1254×1254、PNG RGBA。透過は使える（alpha 0 の画素が68〜71%。不透明部の分布は承認済みの `wrestler_red.png` と同じ傾向）。
-
-| file | bytes | file SHA-256 | decoded RGBA pixel SHA-256 |
+| file | file SHA-256 | decoded RGBA pixel SHA-256 | 07Cとの比較 |
 |---|---|---|---|
-| candidate_red_tsuppari_left.png | 750,627 | `24a00ca64c448dcd53c1705e424a3d893fb57bc07893cfdebcc02cd26fb917af` | `219d66dcf13585e7149382f01c964fdd9074bf61e615b5d3f9bbb15b38cb84b3` |
-| candidate_red_tsuppari_right.png | 759,683 | `f94a6e5a084f08194a3d97f2a498958ed32644edfcc73e6f4d2bdf5ecbc9fc8b` | `d0e6070e2359a8309b07e7c3d76eba905c50fd379cf7e4b4d50bf14c1816d33b` |
-| candidate_blue_tsuppari_left.png | 737,222 | `1b4763367b27f7ad788825e5fec916a97ccd7300e44522177c6c021ba0af5f2b` | `060bfbf4319ed4fbb79d030f9dc6ae90c378f5b8968a28a8ad1d195913e68777` |
-| candidate_blue_tsuppari_right.png | 702,315 | `b5a9d8ef8dbe2e211b662479d6ba1a414e0b96005b6b8d5237ed828675bf9345` | `17782b1155f86ad249f4af1a3704f3ea34f89a6e0e06b86447b924f47f4a1071` |
+| candidate_red_tsuppari_right.png（新） | `8f255caa95842483f1d8893e4a1616db55a6f299a950c89bf4106c19e1e25ea5` | `3db3260bc3d90a88694bb65959c83919f148985847c4575c104394261e92cace` | **変更あり**（旧 `d0e6070e…d33b`） |
+| candidate_red_tsuppari_left.png | `24a00ca6…b917af` | `219d66dc…cb84b3` | 同じ |
+| candidate_blue_tsuppari_left.png | `1b476336…5f2b` | `060bfbf4…8e77` | 同じ |
+| candidate_blue_tsuppari_right.png | `b5a9d8ef…9345` | `17782b11…1071` | 同じ |
 
-Toolは、recipeにあるpixel SHA-256との一致を確かめる。一致しなければ、何も書かずにexit 2で止まる。
+- 新しいrightも1254×1254のRGBA
+- `input.local/` にある `candidate_red_tsuppari_right_backup1.png` は、旧07C rightとpixelが同じ（`d0e6070e…`）。runtimeでは使っていない。下の測定方法の校正にだけ使った
 
-# Normalization Measurements
+# Red-Right Normalization（新）
 
-方法（`tsuppari_gate_recipe.json` の `measurement`）:
+方法は07Cの `measurement` と同じ:
 
-- 各poseの体を、承認済みのidle red masterに合わせる。sourceの1/2 scaleで、胴体のlandmarkを2つ測った
-  - H = 髪の塊の重心（暗い不透明画素を7 pxで収縮して輪郭線を除き、最大の成分）
-  - B = まわしの重心（hue bandに入る画素のうち、最大成分の5%以上の成分すべて）
-- 回転差 = angle(H→B) − idleのangle(H→B)
-- scale s = 平均(√髪の面積比, √まわしの面積比)
-- idleのroot / body coreの点を、H/Bの中点を中心に s·Rot(差) で運ぶ。`source_front_deg` = idleの160.7 + 回転差
-- idleの値はそのまま流用していない。候補の体は、idleより右に50〜120 px（source px）ずれていた
+- 髪の重心Hとまわしの重心Bを使い、承認済みのidle red masterに合わせる
+- 回転差、scale `s`、idleのroot / body coreを `s·Rot` で運ぶ
+- `source_front_deg` = 160.7 + 回転差
 
-最初は、まわし+髪のIoUを最大にする相似変換を試した。しかし、回転が探索範囲の端（−12°）に張り付いた。overlayで見ても誤りだったため、使っていない。
+## 測定方法の再現について
 
-| pose | 役割 | front (deg) | root (source px) | body core (source px) | 回転差 | s |
-|---|---|---|---|---|---|---|
-| red_left | runtime source | 160.7 | (704, 620) | (575, 253)–(790, 864) | −0.05° | 1.025 |
-| red_right | runtime source | 160.1 | (768, 640) | (637, 281)–(854, 880) | −0.61° | 1.009 |
-| blue_left | referenceだけ | 26.4 | (567, 642) | (736, 303)–(456, 867) | +7.05°（左右反転したidle基準） | 0.996 |
-| blue_right | referenceだけ | 29.7 | (583, 639) | (762, 326)–(464, 848) | +10.39° | 0.952 |
+07Cの測定scriptはcommitされていなかった。そこで、recipeに書かれた手順から測定を組み立て直した。
 
-正規化はidleと同じ03Aの手順で行う。全体の1回回転 → body core = 2R → master /4。limbのwarp、骨格の操作、塗り直しはしていない。
+- まわしの値: 07C値と完全に一致（idle、left、旧rightのすべて）
+- 髪の値: 書かれた通りの「7 px erosion」だけでは、07Cの面積に届かなかった
+  - 「1/2 BOX縮小、max(RGB) < 80、alpha > 200、7 px opening（erosionの後にdilation）、最大成分」が最も近かった
+  - idleの基準も同じ方法で測り直した。結果は (428.7, 542.7)、42652 px
+- 校正: 旧rightに同じ方法を使うと、07Cの値がほぼ再現できた
+  - 回転差: −0.617（07Cは −0.611）
+  - s: 1.0093（同じ）
+  - front: 160.1（同じ）
+  - root: (768, 641)（07Cは (768, 640)。1 source px = 0.25 runtime pxの差）
+  - body core: (637, 281)–(854, 880)（同じ）
+- leftの差も、どの点でも1 source px以内だった
 
-runtimeでの照合（runtime px、idle redとの差。preview `tsuppari_gate.json`）:
+正規化のalgorithm（`export_tsuppari_gate.py` / `ps.normalize_sprite`）は変えていない。recipeの `red_right` の値だけを更新した。red-leftの値とsource identityは変えていない。
 
-- red_left: 髪 (+0.02, +0.05)、まわし (−0.03, +0.16)。ほぼ完全に一致
-- red_right: 髪 (−1.9, −1.0)、まわし (+2.0, +0.7)。2 px程度
-- body coreは、全12枚が123.0769 px（= idleと同じ2R。runtime scaleは1.0）
-
-# Hand / Reflection Mapping（全runtime texture）
-
-規約: local +X = FRONT、+Y = wrestlerのRIGHT。local-Yの反転 `(x, y) → (x, H − y)` で手が入れ替わる。
-
-- source側の手は絵で確かめた。red_leftは画面下側の腕を伸ばしている（idleと同じく左向き）＝本人の左手。red_rightは上側の腕＝本人の右手
-- runtimeでも確かめた。red_leftの伸ばした手は −Y、red_rightは +Y にある
-- recipeのloaderは、各textureについて「masterの手 XOR 反転」がtextureの手と一致することを検査する。違えば拒否する
-
-| texture | separate | mirror_l | mirror_r |
-|---|---|---|---|
-| red left | red L | red L | red R 反転 |
-| red right | red R | red L 反転 | red R |
-| blue left | red R 反転 + recolor | red L + recolor（二重反転 = 恒等） | red R 反転 + recolor |
-| blue right | red L 反転 + recolor | red L 反転 + recolor | red R + recolor |
-
-同じ導出のfileは同一のpixelになる（自動Testで確認）:
-
-- separate_red_left = mirror_l_red_left
-- separate_red_right = mirror_r_red_right
-- separate_blue_right = mirror_l_blue_right
-- separate_blue_left = mirror_r_blue_left
-
-authored blueの2枚は、比較sheetにだけ使った。runtime textureの元にはしていない（exportはred 2枚しか読まない。自動Testで確認）。
-
-# Recolor / Mask Result（poseごと、runtime scale）
-
-規則は、承認済みのred→blue（`runtime_wrestler_recipe.json` が唯一の持ち主）。hue band + 最大の4連結成分。alphaは保つ。mask外の画素は変えない（自動Testで全画素を照合）。
-
-| source | mask px | 最大成分の外のband px | fringe px | 結果の手 |
-|---|---|---|---|---|
-| red_left | 2239 | 17 | 48 | left |
-| red_left 反転 | 2239 | 17 | 48 | right |
-| red_right | 2265 | 10 | 61 | right |
-| red_right 反転 | 2265 | 10 | 61 | left |
-| （参考）承認済みidle | 2196 | 16 | 67 | — |
-
-- 肌、腕、髪への混入は無い（`mawashi_mask_diagnostics.png` で目視確認）。まわしの取り残しも無い
-- source解像度では、red_rightの帯の下半分が別の成分に分かれる。しかしmaskをかけるruntime scaleでは1つの成分になり、問題は出ない
-- recipeの `mask_limits`（mask ≥ 1500、外のband ≤ 60、fringe ≤ 120）で、poseごとにfail-closedで検査する
-
-# Runtime Visual-Gate Assets
-
-`public/assets/action/wrestler/tsuppari-gate/` の12枚（`export_tsuppari_gate.py` だけが書く）:
-
-| file | size | pivot |
+| 項目 | 旧07C right | 新07C1 right |
 |---|---|---|
-| separate_red_left / mirror_l_red_left / mirror_l_blue_left | 198×177 | (83, 94) |
-| separate_blue_right / mirror_l_red_right / mirror_l_blue_right | 198×177 | (83, 83) |
-| separate_red_right / mirror_r_red_right / mirror_r_blue_right | 197×205 | (79, 88) |
-| separate_blue_left / mirror_r_red_left / mirror_r_blue_left | 197×205 | (79, 117) |
+| hair centroid / px | (557.5, 576.5) / 42680 | (590.2, 628.8) / 48696 |
+| mawashi centroid / px | (989.3, 593.7) / 57884 | (1051.9, 628.9) / 66208 |
+| 回転差 | −0.611° | −2.885° |
+| scale s | 1.0093 | 1.0778 |
+| source_front_deg | 160.1 | **157.8** |
+| root_source_px | (768, 640) | **(818, 688)** |
+| body_core_source_px | (637, 281)–(854, 880) | **(663, 310)–(920, 940)** |
+| runtime size / pivot | 197×205 / (79, 88) | **209×167 / (79, 87)** |
 
-pixel SHA-256（exportの出力）:
+- 新しい画像は、旧画像より体が大きく描かれている（s = 1.078）。そのため、body coreを2Rに合わせると、旧画像より縮小率が大きくなる
+- body coreとfront軸の直交check、clipのcheck、body core 123.0769 pxは、どれもPASS
+- hand: 腕を伸ばしているのは画面上側の手。正規化した後は+Y、つまりwrestlerのRIGHTになる（`hand_evidence` は07Cと同じ）
 
-- separate_red_left `ab5043bf…3f2f`、separate_red_right `633ecd86…a5b1`、separate_blue_left `83efd9c7…99b6`、separate_blue_right `c9369b4b…b1ef`
-- mirror_l_red_right `b5ee0bfb…0833`、mirror_l_blue_left `11625cc7…b194`
-- mirror_r_red_left `d0aae241…45c9`、mirror_r_blue_right `082f9479…d836`
-- 全文は `export_tsuppari_gate.py --check` の出力に出る
+# Runtime Gate Textures（`public/assets/action/wrestler/tsuppari-gate/`）
 
-texture sizeは揃えていない（Taskのとおり）。各textureが自分のpivotとbody coreを持つ。
+## 変わった6枚（どれもred-right由来）
 
-# Presentation State Ownership
+| file | 由来 | size | pivot | pixel SHA-256 | file SHA-256 |
+|---|---|---|---|---|---|
+| separate_red_right.png | red_right | 209×167 | (79, 87) | `c576134a69f41c641a61a8fbe4d0d350aa04a4510458ed0acafba2b8f16bcae7` | `03747e92…d23f` |
+| mirror_r_red_right.png | red_right | 209×167 | (79, 87) | `c576134a…cae7`（separate_red_rightと同じ） | `03747e92…d23f` |
+| separate_blue_left.png | red_right反転 + mawashi recolor | 209×167 | (79, 80) | `8389fbca13754273f7b166cfa29099b283219b61bed03dd40a7cb90d800e9e84` | `43f26f5a…3ef8` |
+| mirror_r_blue_left.png | red_right反転 + mawashi recolor | 209×167 | (79, 80) | `8389fbca…9e84`（separate_blue_leftと同じ） | `43f26f5a…3ef8` |
+| mirror_r_red_left.png | red_right反転 | 209×167 | (79, 80) | `898c41fc00832bf17989e0cc07dbff369df1aff5e900d587395570837de0778f` | `729b9946…475d` |
+| mirror_r_blue_right.png | red_right + mawashi recolor | 209×167 | (79, 87) | `bf4fc4abd503e5a1237b724bdd5ee0c5a57ac39edc7224ea7bef94d1763750e1` | `398ea7db…4599` |
 
-- `TsuppariArtMode = 'separate' | 'mirror-left' | 'mirror-right'`: 新しいpure module `src/game/presentation/tsuppariGateArt.ts` が持つ。Phaserにも `BoutSimulation` にも依存しない
-- 現在のmodeは `BoutScene.tsuppariArtMode` が持つ（Scene内のpresentation状態）
-  - key `4` → `nextTsuppariArtMode`
-  - Rでrestartしてもmodeは保つ（presentationの選択なので）
-- 流れ: `Snapshot → resolveWrestlerVisualState`（既存。`pose === 'tsuppari'` と `tsuppariHand`）→ `selectWrestlerArt(idleArt, visual, mode)` → `WrestlerView.show(art)`
-  - textureが変わったときだけ、setTexture / setOrigin（そのtextureのpivot）/ setScale（そのtextureのbody core）を行う
-- 位置と回転は、これまでどおりSnapshotのcenter / facingをそのまま使う
-- Simulation、Snapshotの型、gameplayの値は一切変えていない
+## 変わっていないことを確かめた6枚と、idleの2枚
 
-# Mode Toggle Key
+export前とexport後で、pixel SHA-256とfile SHA-256の両方が一致した。
 
-`4`（Current Sourceでは未使用）。key 0のdebug表示で、左下の行の先頭に `TSU ART: SEPARATE / MIRROR-L / MIRROR-R` と出る。操作ヘルプ行に `4 tsu art` を足した。
+| file | pixel SHA-256 |
+|---|---|
+| separate_red_left.png | `ab5043bf…2f3f` |
+| separate_blue_right.png | `c9369b4b…b1ef` |
+| mirror_l_red_left.png | `ab5043bf…2f3f` |
+| mirror_l_red_right.png | `b5ee0bfb…0833` |
+| mirror_l_blue_left.png | `11625cc7…b194` |
+| mirror_l_blue_right.png | `c9369b4b…b1ef` |
+| idle red.png | `d66895bf…cdaa` |
+| idle blue.png | `9d5feead…a2a6` |
 
-# Changed Files
+`src/game/presentation/tsuppariGateArt.ts` では、変わった6件のsize / pivotだけを更新した。
 
-- `tools/wrestler_art/tsuppari_gate_recipe.json`（新規）: Visual-Gateのrecipe。測定値、hand mapping、mask_limits、preview設定
-- `tools/wrestler_art/export_tsuppari_gate.py`（新規）: 決定的なexportと `--check`
-- `tools/wrestler_art/preview_tsuppari_gate.py`（新規）: offlineの比較sheet
-- `tools/wrestler_art/tests/test_export_tsuppari_gate.py`（新規）: 19件
-- `tools/wrestler_art/README.md`: 表に1行、ACTION-07Cの節を追加
-- `public/assets/action/wrestler/tsuppari-gate/*.png`（新規12枚）
-- `src/game/presentation/tsuppariGateArt.ts`（新規）、`src/game/presentation/tsuppariGateArt.test.ts`（新規、7件）
-- `src/game/scenes/WrestlerView.ts`: gate textureのpreload、poseに応じたtexture / origin / scaleの切り替え
-- `src/game/scenes/BoutScene.ts`: key 4、`tsuppariArtMode`、debug行の表示、`apply` へmodeを渡す
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+# Recolor / Mask（新red right）
 
-# Files Explicitly Not Changed
+承認済みのrecolor ruleは変えていない（ruleの持ち主は `runtime_wrestler_recipe.json`）。
 
-- `src/game/sumo/*`（BoutSimulation、BoutTypesなど）、`src/game/input/*`
-  - Push / Tsuppariの力、reach、cooldown、timing、buildup、Counter、組の力、ring-out、Grip / Drive は変えていない
-- `public/assets/action/wrestler/red.png` / `blue.png`（`export_runtime_wrestlers.py --check` OK。pixel `d66895bf…` / `9d5feead…` は承認値のまま）
-- `runtime_wrestler_recipe.json`、`productWrestlerArt.ts`、`docs/WRESTLER_PRODUCT_ART_SPEC.md`
-- `CURRENT_TASK.md`、`PROJECT_HANDOFF.md`
-- `input.local/` のfile（commitしていない）
+| pose | mask px | missed band px（上限60） | fringe px（上限120） |
+|---|---|---|---|
+| red_right（新）/ 反転 | 2276 | 11 | 67 |
+| red_left / 反転（不変） | 2239 | 17 | 48 |
+
+- `mawashi_mask_diagnostics.png` を目視した。maskはまわしの帯だけにかかっていて、skin、hair、腕への混入はない
+- recolor後のHSV: mean hue 216.0°、sat 0.867
+- 「alphaが変わらない」「mask外の画素が変わらない」は、既存のtest（`test_geometry_and_recolor_per_variant`、`test_real_masks_cover_the_mawashi`）でPASSした
+
+# Offline Preview（`tools/wrestler_art/output-tsuppari-gate.local/`、git-ignored）
+
+既存のtoolでまとめて作り直した:
+
+- `pivot_guide_red_right.png`（新）と、ほかのpivot guide 3枚
+- `mode_separate / mode_mirror_l / mode_mirror_r.png`
+- `idle_tsuppari_alignment.png`: 新rightとSEPARATE blue-leftの体は、idleのoutlineと重なっている。中心やscaleの飛びは見えない
+- `rotations_*.png`、`faceoff_*.png`（0.70 m / 0.875 m）
+- `mawashi_mask_diagnostics.png`、`blue_reference_vs_derived.png`、`tsuppari_gate.json`、`build_tsuppari_gate_manifest.json`
+
+MIRROR-Lのsheetも作り直したが、元になるtextureはpixelが変わっていない。
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| focused wrestler-art test（`test_export_tsuppari_gate.py`） | 19 / 19 PASS（合成fixture、および実際の候補での committed `--check`、TSのmetadata一致、mask値、idle不変、previewの決定性） |
-| full wrestler-art suite（`unittest discover`） | 144 / 144 PASS |
-| focused presentation test（`tsuppariGateArt.test.ts`） | 7 / 7 PASS（mode循環、12 file、pivot / scale、hand mapping、全行動中の保持とidleへの復帰、Snapshot不変、Phaser-free） |
-| `pnpm test` | 347 / 347 PASS（22 files） |
-| `pnpm build` | PASS（`tsc && vite build`。chunk sizeの警告は以前からのもの）。dist に12枚がコピーされる |
-| `git diff --check` | PASS（新規fileも含む） |
-| 決定的な再生成 | exportを再実行 → 12枚の file SHA-256 が完全一致。`--check` OK |
-| idleの `red.png` / `blue.png` 不変 | `export_runtime_wrestlers.py --check` OK、git diffなし |
-| Simulationのgameplay file不変 | `git diff -- src/game/sumo src/game/input` = 0行 |
+| `test_export_tsuppari_gate.py`（focused） | 19 tests OK |
+| wrestler-art全suite | 144 tests OK |
+| `export_tsuppari_gate.py --check` | exit 0（12枚。pixelもbyteも、新しいexportと一致） |
+| `pnpm test` | 22 files / 347 tests PASS（`tsuppariGateArt.test.ts` を含む） |
+| `pnpm build` | PASS（以前からあるchunk size警告だけ） |
+| `git diff --check` | OK |
+| idleの `red.png` / `blue.png` | pixelもbyteも変わっていない |
+| `src/game/sumo`、`src/game/input`、`src/game/scenes` | `e30d6b4` からの差分0行 |
 
-# Browser / Runtime Smoke
+testの変更は1か所だけ: `test_real_masks_cover_the_mawashi` のred_rightのmask期待値を、新しいposeの値（2276 / 11 / 67）に更新した。red_leftの期待値は変えていない。
+
+# Browser Smoke
 
 方法:
 
-- `pnpm dev` + headless Chrome（CDP、SwiftShader）
-- Vite devでは同じmoduleを共有するので、`import('/src/game/scenes/WrestlerView.ts')` で `WrestlerView.prototype.apply` を読み取りだけで包んだ。毎frame、表示中のtexture key、origin、scale、位置、回転と、Snapshotのcenter / facingを記録した
-- 待ちは、壁時計ではなくSimulationの状態で行った
-- script: scratchpadの `smoke_07c.mjs`。結果は `smoke/smoke_07c_results.json` とscreenshot 10枚
+- `pnpm dev`（port 5199）+ headless Chrome（CDP、SwiftShader）
+- 07Cのsmoke scriptを流用した。`WrestlerView.prototype.apply` を読み取りだけで包み、毎frameのtexture key、origin、位置、回転、scaleを記録した
 
-結果: **38 / 38 PASS**（3回目の実行。1〜2回目のFAILは、どれもscript側の原因だった。固定待ちによるcooldown中の押下、決着後の操作確認、faviconの404 を直した）。
+07C1で足した確認:
+
+- 読み込んだ12枚のtextureの実寸
+- 表示したpose spriteのorigin × size = exportしたpivot
+- dummy mode 3で、CPUのred **right** を確実に観測する
+
+結果: **47 / 47 PASS**（3回目の実行）。
+
+- 1回目は、pageの読み込みを待つ時間が足りなかった
+- 2回目は、−πとπを別の角度として比べていた
+- どちらもscript側の原因で、直してから再実行した
 
 | 確認 | 結果 |
 |---|---|
-| gate textureが12枚とも読み込まれる | PASS |
-| pre-boutが動く（Simulationは進まない） | PASS |
-| pre-bout中のkey 4: SEPARATE→MIRROR-L→MIRROR-R→SEPARATE、Snapshotは不変 | PASS |
-| Enterで開始。debug行に `TSU ART: SEPARATE`、ヘルプに `4 tsu art` | PASS |
-| 3 mode × ArrowLeft / ArrowRight: Tsuppariの全frameで、押した手の `<mode>_blue_<hand>` が出る（startup / active / recoveryを観測） | PASS（6 / 6） |
-| 行動の後は `product-wrestler-blue` に戻る | PASS（6 / 6） |
-| 全frameで、image位置 = Snapshot center、rotation = facing。scaleはidleもposeも1.0 | PASS |
-| bout中にmodeを切り替える: 同じframeのSnapshot JSONが完全に同じ | PASS（3 mode） |
-| dummy mode 3: CPUのTsuppariで `separate_red_left / right` が出る | PASS |
-| Push / Counter / Grip（組みに入る）が使える | PASS |
-| idle / moveはidle spriteのまま | PASS |
-| R restart: pre-bout、位置 −0.7、buildup 0、art modeは保つ | PASS |
-| console error / 失敗したrequestが無い（faviconの404だけ除外。以前からある） | PASS |
+| 12枚が読み込まれ、実寸がexportと一致する（新right系は209×167、MIRROR-Lは198×177） | PASS |
+| Enterで開始、debug `0`、`TSU ART: SEPARATE` | PASS |
+| key 4: SEPARATE → MIRROR-L → MIRROR-R → SEPARATE。Snapshotは変わらない | PASS |
+| 3 mode × Left / Right: Tsuppariの全frame（startup / active / recovery）で `<mode>_blue_<hand>` が出て、終わるとidleに戻る | PASS（6 / 6） |
+| **SEPARATE ArrowLeft → `separate_blue_left`（新しいred-rightの反転）**。origin = (79, 80) / 209×167 | PASS |
+| 全frameで、位置 = Snapshot center、rotation = facing、scale 1.0（idleもposeも）。中心やscaleの飛びはない | PASS |
+| MIRROR-L: `mirror_l_blue_*` の実寸とpivotは07Cと同じ（198×177、(83, 94) / (83, 83)） | PASS |
+| **dummy 3: CPU redで `separate_red_right` が出る**。origin = pivot、位置、facing、scale | PASS |
+| Push / Counter / Gripが使える。idle / moveはidle sprite。R restart | PASS |
+| console error、失敗したrequestが無い | PASS |
 
-screenshot（`smoke/03_<mode>_blue_<hand>.png`）で、pose spriteが実際に描かれていることを確かめた。
+screenshot（scratchpadの `smoke/`）:
 
-# Offline Preview Output
-
-`tools/wrestler_art/output-tsuppari-gate.local/`（git-ignored、約7秒）:
-
-- `pivot_guide_red_left / red_right / blue_left / blue_right.png`: 正規化したsourceとpivotのguide（authored候補4枚）
-- `mode_separate.png`、`mode_mirror_l.png`、`mode_mirror_r.png`: 各modeのred / blue × 左右と、idle
-- `idle_tsuppari_alignment.png`: 12枚それぞれに、同じ色のidleの輪郭（cyan）を重ねたもの
-- `rotations_<mode>.png`: 0 / 45 / 90 / 180 / 270°
-- `faceoff_<mode>.png`: 0.70 m（接触）と0.875 m（Tsuppariの到達閾値）。blue L / R、red L / R、両者L、両者R
-- `mawashi_mask_diagnostics.png`: 4つの導出ごとに、source、mask、recolor後
-- `blue_reference_vs_derived.png`: authored blueの参照、各modeの派生blue、idle blue
-- `tsuppari_gate.json`、`build_tsuppari_gate_manifest.json`（timestampなし）
-
-# Authored-Blue-Reference Comparison Findings
-
-- 青の色調: 派生blueのまわし（hue 215.9°、sat 0.887、value p50 0.447）は、承認済みidle blue（215.8° / 0.870 / 0.451）とほぼ同じ。authored参照（215–216° / 0.96–0.98 / 0.51–0.52）よりは少しだけ暗く、彩度も少し低い。これはidleで受理した色と同じ傾向
-- 体型とシルエット: separateの派生blue（red Rの反転 / red Lの反転）は、authoredの参照と腕の向き、体の太さ、頭の位置がほぼ同じに見える。red-masterからの導出で、目に見えて悪くなった点は見つからなかった
-- 反転による問題: 単体のspriteで、反転が明らかに破綻している所は無い。ただし、下の「modeごとの注目点」にある「頭がidleと逆側に出る」点がある
-- authored参照のregistrationは、回転差が+7〜+10°と大きい。参照の絵は、もともと胴体の向きが少し違う（参照だけの話で、runtimeには影響しない）
-
-## User Visual Gateで判断してほしい点（観察した事実。採否は判断していない）
-
-- **mirror modeでの頭の跳び**: idleの頭は、local +Y側（本人の右前）に描かれている（runtimeで +25.8 px）
-  - mirror_lのred right / blue left、mirror_rのred left / blue right は、反転の有無がidleと逆になる。そのため、切り替えた瞬間に頭が反対側（約52 px ≈ 0.3 m）へ移る
-  - separateでは、全12枚で頭の側がidleと一致する（`idle_tsuppari_alignment.png`）
-- **authored red Rの向き**: 突き出した手の先は、red_leftでは真正面（local −0.3°、1.76R）にある。red_rightでは、本人の右前へ斜め（+46°、2.4R）に出ている
-  - SEPARATEでは、左右で打つ方向が非対称に見える
-  - MIRROR-Rでは、両手とも外側の斜めに打つ
-  - MIRROR-Lでは、両手とも正面へ打つ
-- poseは、Tsuppari全体（16 tick ≈ 267 ms）で保持する。保持として読みやすいか、長すぎるかは、User Play Testで判断してほしい
+- `03_separate_blue_left.png`: 新しい前向きの打突が描かれている
+- `04_dummy3_separate_red_right.png`: 接触距離なので、redの腕がblueの体と重なり、見た目では判別しにくい。red-rightの見た目は、offline sheet（`mode_separate.png`、`faceoff_separate.png`）で確認した
 
 # Design Deviations
 
-Design Deviations: NONE
-
-Taskの範囲内で、細部として決めたもの:
-
-- art modeの表示は、Taskの推奨どおりdebug UIの中に置いた
-  - 操作ヘルプ行に足すと1920 pxを超える。そのため、毎frame更新している左下のTsuppari debug行（y = 944）の先頭に出す
-  - key 0がoffのProduct表示では見えない
-- 正規化の測定は、idle masterへのlandmark照合にした（方法と値はrecipeに明記）。IoUで相似変換を合わせる方式は、誤った回転になったため使っていない
-- blue参照は比較のために正規化した。左右反転したidle redに対して測っているので、参照のためだけにidle blueの03A sourceを使うことはない
-- recipeのmode keyは `mirror_l` / `mirror_r`（file名に合わせた）。TSの型は、Taskの例どおり `'mirror-left' | 'mirror-right'`
-- 一時的なgate textureの寸法は、TSのmetadataに表で持つ（`productWrestlerArt.ts` には混ぜない）。Python testで、新しいexportとの一致を検査する
+- 測定scriptを組み立て直した（上の「測定方法の再現について」）
+  - 07Cの髪landmarkの実装がrepositoryに無かった。recipeに書かれた手順に最も近い形（7 px opening）で組み立て直した
+  - 旧rightで校正し、差は1 source px以内（runtimeでは0.25 px以内）だった
+  - 新rightの測定値は、この組み立て直した方法で測った。recipeの `red_right.measurement_evidence.remeasured` に記録した
+  - 測定helperは、scope外なのでrepositoryに追加していない（scratchpadのみ）
+- 正規化のalgorithm、mode mapping、recolor rule、key 4の切り替え、gameplayは、どれも変えていない
 
 # Unexpected Scope
 
-- dev serverで `favicon.ico` が404になる（以前から。今回は直していない）
-- build時に、chunk sizeが500 kBを超えるという警告が出る（以前から。Phaserのbundle）
+- 07Cの測定helperがcommitされていないため、今回のようにposeを差し替えるたびに測定を組み立て直す必要がある。必要なら別Taskで、helperとして正式に追加することを検討してほしい（今回は追加していない）
+
+# Changed Files
+
+- `tools/wrestler_art/tsuppari_gate_recipe.json`（red_rightのsource identity、測定値、evidence）
+- `public/assets/action/wrestler/tsuppari-gate/` の6枚（separate_red_right、separate_blue_left、mirror_r_*の4枚）
+- `src/game/presentation/tsuppariGateArt.ts`（6件のsize / pivot）
+- `tools/wrestler_art/tests/test_export_tsuppari_gate.py`（red_rightのmask期待値）
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
 # Known Untested Items
 
-- 実機のUser Play Test（Game Feel、見た目の評価）。headlessのsmokeは、texture選択と配置の正しさまでしか確かめていない
-- 実ブラウザの通常のframe rateでの見え方（headless SwiftShaderでは、16 tickの行動が3〜18 frameで描かれた）
-- Touch入力（このTaskの範囲外。key 4はkeyboardだけ）
+- 実機でのUser Visual Gate / Play Test
+  - 新しいright poseの打突が十分に前向きで自然か
+  - SEPARATEで、右手の打突と左手の打突の見た目がつり合っているか
+- headlessのsmokeが確かめたのは、textureの選択と配置の正しさまで
 
-# User Visual Gate
+# User Visual Gate: REQUIRED
 
-**User Visual Gate: REQUIRED**（Product Tsuppari artの受理は主張しない）
+見てほしい点:
 
-手順:
+- debug `0` → key `4` でSEPARATEにして、ArrowRightを押す。player blueはLeft / Rightの両方を見る
+- dummy `3` にすると、CPU redの左右の打突も繰り返し見られる
+- 新しい右手（red right / blue left）の打突が、旧候補（約46°）より前向き（約28°）に見えるか
+- idle → pose → idleで、体の中心やscaleが飛ばないか
 
-1. `pnpm dev` → Enter
-2. 0でdebug表示 → 4で方式を切り替え（左下に `TSU ART:` が出る）
-3. 3でdummy mode 3（CPUが繰り返しTsuppariを打つ）。自分はArrowLeft / ArrowRightで打つ
-
-各方式で見てほしい点:
-
-- 左右の手が分かるか
-- idle → poseで体の位置、大きさ、向きが跳ばないか（特にmirrorで頭が逆側に出る点）
-- reachがそれらしく見えるか（red Rの斜めの突き）
-- 派生blueの色と形
-- リズムやimpactを判断できるくらい見えるか
-- 全行動の保持が読みやすいか、長すぎるか
-
-選んだ方式を、後続Taskで `WRESTLER_PRODUCT_ART_SPEC` とruntimeの契約へ昇格させるかどうかは、Userが決める。
+SEPARATE is still a User preference, not yet promoted to permanent Product baseline.
 
 # Git Delivery
 
-- Task-ownedのfileだけを明示的にstageし、1 commit（`feat(art): add tsuppari visual gate`）
-- fetch → fast-forwardの安全を確認 → `origin/develop` へpush → remote SHAを確認 → working tree clean
+- stageするのはTask-owned fileだけ。commit `art: refresh right tsuppari candidate` → fetch → fast-forwardできることを確認 → push `origin/develop`
+- `input.local/`、`output-*.local/`、`main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない
