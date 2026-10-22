@@ -3,6 +3,9 @@
 // red = the authored red Counter pose normalized like the idle master; blue = that red reflected across the local
 // X axis + the accepted offline mawashi recolor (Counter has no hand, so one pose per colour).
 // Shown exactly while the Simulation-derived visual pose is 'counter'; no presentation timer of its own.
+// ACTION-08B Visual Gate: during the Counter window the body also turns 0 -> 35 deg -> 0 (sin of the window
+// progress) on top of the canonical facing, mirrored by colour: the red pose sweeps its arm toward local +Y,
+// the reflected blue toward -Y, so +turn (red) / -turn (blue) both swing the arm away from the forward line.
 import type { ProductWrestlerArt, ProductWrestlerArtId } from './productWrestlerArt.ts'
 import { selectWrestlerArt } from './productTsuppariArt.ts'
 import type { WrestlerVisualState } from './wrestlerVisualState.ts'
@@ -30,6 +33,15 @@ export const COUNTER_GATE_ART: Readonly<Record<ProductWrestlerArtId, ProductWres
     pivot: { x: 74, y: 92 }, // red pivot (74, 115) reflected: y -> 207 - 115
     bodyCoreDiameterPx: COUNTER_GATE_BODY_CORE_DIAMETER_PX,
   },
+}
+
+export const COUNTER_VISUAL_MAX_ROTATION_RAD = (35 * Math.PI) / 180
+const COUNTER_ROTATION_SIGN: Readonly<Record<ProductWrestlerArtId, number>> = { red: 1, blue: -1 }
+
+// Extra presentation-only body rotation (radians) added to participant.facing; exactly 0 outside Counter.
+export function counterVisualRotationOffset(id: ProductWrestlerArtId, state: WrestlerVisualState): number {
+  if (state.pose !== 'counter') return 0
+  return COUNTER_ROTATION_SIGN[id] * Math.sin(Math.PI * state.phaseProgress) * COUNTER_VISUAL_MAX_ROTATION_RAD
 }
 
 export function allCounterGateArts(): ProductWrestlerArt[] {

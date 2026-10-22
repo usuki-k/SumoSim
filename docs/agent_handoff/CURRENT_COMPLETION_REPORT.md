@@ -1,187 +1,189 @@
-Task-ID: ACTION-08A1-COUNTER-ART-CANDIDATE-REFRESH
+Task-ID: ACTION-08B-COUNTER-PRESENTATION-ROTATION-GATE
 Result: PASS WITH KNOWN UNTESTED ITEMS
 Branch: develop
-Source-Baseline: bc95f7117dbadf57cceee9d2a0b2a67e6fd10b56
-Agent-Start-Head: 395136266c490523605b7f1d12cea6eb881fb475
+Source-Baseline: 592cbd86988fd9270ab03c7f0a04993b11ae2bfa
+Agent-Start-Head: 3d523e31bd464dc2ca14255a2f57a01c3ddac8fd
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 20 / 20 PASS。新しいCounter / 引き・捌きの候補が十分かは、User Visual Gateで判断する）。
+PASS WITH KNOWN UNTESTED ITEMS（Technical PASS、Browser Smoke 27 / 27 PASS（SwiftShader）、GPUでの再実行も27 / 27 PASS。回転がCounterをTsuppariと見分けられるようにしたかは、User Play Testで判断する）。
 
-- 暫定のCounter Visual-Gateの画像を、Userの新しい候補（腕を横へ払う構図）に差し替えた
-- 07Cから続くlandmarkの方法で正規化し直し、`counter-gate/red.png` / `blue.png` を作り直した
-- Taskが認めた範囲で、Counter gateのrecipeの `max_missed_px` だけを60 → 80にした
+- Counter windowのあいだだけ、体のspriteに、presentation専用の回転 **0° → 35° → 0°** を足した
+  - 経路: `WrestlerVisualState.phaseProgress` → `counterVisualRotationOffset` → `WrestlerView`
+- redは+、blueは−（同じ大きさで、逆の向き）
 - 次のものは変えていない:
-  - 塗り替えの規則、idle / Tsuppariのmaskの上限
-  - presentationの経路（`pose === 'counter'` → `selectWrestlerPoseArt`）
-  - gameplay、idle / Product Tsuppari art
+  - `participant.facing`、Simulation、CounterTransition
+  - Counterの画像、影、位置、scale
 
 # Preflight
 
 - working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
-- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `bc95f71`（`origin/develop` のancestor）、Handoff-Mode GITHUB
-- `bc95f71..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `3951362`
-- この開始指示の前に、2回STOPしている。どちらもrepositoryには何も書いていない
-  1. 1回目: 当時の指定画像（`11d5157b…`）は、まわしが2つに分かれていて、mask（missed 175）が上限を超えたため、BLOCKEDとして報告した
-  2. 2回目: Userが画像を差し替えたが、当時のTaskの指定hashと合わなかったため止めた。そのとき、scratchpadで事前診断だけをした
-  - 今回のTaskは、その差し替えた画像と、事前診断で分かったmaskの上限を反映している
+- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `592cbd8`（`origin/develop` のancestor）、Handoff-Mode GITHUB
+- `592cbd8..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `3d523e3`
 
-## Source（`tools/wrestler_art/input.local/candidate_red_counter.png`、commitしない）
+# 実装
 
-| 項目 | 期待値 | 実測 |
-|---|---|---|
-| size / mode | 1265×1244 RGBA | 1265×1244 RGBA |
-| decoded RGBA pixel SHA-256 | `5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8` | 一致 |
-| file SHA-256（参考） | `a62f4f5e…fa46` | `a62f4f5e69605079d4cba3fd7ac3c40cdcd4ee673f708e80fd20db9ef5a1fa46` |
-| 08Aの旧画像 `eb0f2e60…e040` と違う | 違う | 違う |
-| 08A1で不採用の画像 `11d5157b…9e85` と違う | 違う | 違う |
+## 角度・曲線・符号
 
-# Normalization（新しい候補。旧値は流用していない）
-
-- 方法は08Aと同じ: `measure_tsuppari_pose.measure_landmarks` / `normalization` を、この候補に1回実行した
-- 髪とまわしの重心を、1/2 BOXのscaleで測り、受理済みのidle red masterに合わせる
-- 正規化のalgorithmは変えていない
-
-| 項目 | 08A（旧） | 08A1（新） |
-|---|---|---|
-| source size | 1254×1254 | **1265×1244** |
-| hair centroid / px | (543.7, 494.4) / 63152 | (659.3, 405.8) / 73976 |
-| mawashi centroid / px | (992.6, 597.3) / 70984 | (1118.3, 582.2) / 57052 |
-| 回転差 / scale s | +10.004° / 1.1712 | **+18.115° / 1.163** |
-| `source_front_deg` | 170.7 | **178.8**（実測178.815） |
-| `root_source_px` | (750, 608) | **(863, 553)**（実測862.66, 552.68） |
-| `body_core_source_px` | (678, 170)–(798, 899) | **(853, 111)–(868, 846)**（front軸との直交のずれは約0.03°） |
-
-- 頭が体より大きく描かれているため、2つの面積比が食い違う（√比で、髪1.317、まわし1.009）
-  - 既存の方法どおり、sは2つの平均にした（`measurement_evidence.note` に記録した）
-  - 体がidleよりやや小さく見える可能性があり、User Visual Gateで確認してほしい点になる
-- clipはない
-- idleの輪郭との重ね合わせ（scratchpadの `counter_alignment.png`）で確かめた:
-  - 頭と胴体はidleとほぼ同じ位置に重なる
-  - 腕は前方へまっすぐではなく、斜め横へ払う向き
-  - 反対の腕は胴体へ引き寄せている
-- 手で調整したoffsetは無い
-
-# Runtime（Visual-Gate asset。pathは変えていない）
-
-| path | size | pivot | body core | 旧pixel SHA-256（08A） | 新pixel SHA-256 | 新file SHA-256 |
-|---|---|---|---|---|---|---|
-| `public/assets/action/wrestler/counter-gate/red.png` | 203×190 → **210×207** | (79, 96) → **(74, 115)** | 123.0769 px | `ac2a6ca8…0da1` | `83b96783ebdd741ab07e435d25ce7a4ce6557b734d40c8873560bab2b630d5d3` | `a6128071c1a4137d7fbab66e8d51b90e72fe3ebe187c85ac73bd17fcfd2a6b4e` |
-| `public/assets/action/wrestler/counter-gate/blue.png` | 203×190 → **210×207** | (79, 94) → **(74, 92)**（= redを反射） | 123.0769 px | `4d563d82…d198` | `1dec7025670ba375287166078cbb52dd3b6701fa52618646107fd4f50153e439` | `3aa893ce83621b66071fe77fd20c4b577b9fc22ef17d944e6768217448b457f3` |
-
-- runtimeのtextureは、この2枚だけ
-- `src/game/presentation/counterGateArt.ts` のsize / pivotを更新した
-
-# Recolor / Mask
-
-- 塗り替えのalgorithmと共通の規則（`runtime_wrestler_recipe.json`）は変えていない
-- idle / Tsuppariのmaskの上限（60）も変えていない（testで確かめている）
-- **Counter gateだけの許容**: `counter_gate_recipe.json` の `mask_limits.max_missed_px` を60 → 80にした（Taskが明記した許容。image-specificで、Product全体の基準ではない）
-- 80を超えれば、引き続きfail closedで止まる
-
-| 最終の値（実際に正規化してexportした後） | 値 |
+| 項目 | 値 |
 |---|---|
-| mask px | 1724 |
-| missed band px | **70**（上限80）。そのうち69 pxはalpha < 128の半透明な輪郭の縁 |
-| fringe px | 75（上限120） |
+| 最大角度 | **35°**（`COUNTER_VISUAL_MAX_ROTATION_RAD = 35 · π / 180`） |
+| 曲線 | `offset = sign · sin(π · phaseProgress) · 35°`。render deltaや壁時計は使わない |
+| 符号 | **red = +1、blue = −1**（`COUNTER_ROTATION_SIGN`）。Phaserの+回転は、画面上で時計回り（local +X → +Y） |
+| Counter以外 | **ちょうど0**（`state.pose !== 'counter'`） |
 
-- 事前診断（scratchpad）の値と完全に一致した
-- まわしは、つながった1つの帯になっている（08A1で最初に不採用だった画像のような、前側の別の塊は無い）
-- `counter_mask.png` を目視した。skin、hair、腕への混入は無く、blueに目立つ赤の残りも無い
+## 符号の根拠（Current Sourceで検証した）
 
-# Presentation Integration
+- Counterのtextureで、pivotから一番遠い不透明画素（伸ばした腕の先）の角度を測った
+  - red: FRONTから **+31.6°**（local +Y側）
+  - blue: **−31.6°**（反射したので逆）
+- red +35°なら腕先は約+66.6°、blue −35°なら約−66.6°へ動く。どちらも、前方（Tsuppariの線）から**離れる**
+- 逆の符号にすると、腕先は前方の±3°付近に来て、Tsuppariに近づく。したがって、Taskの符号どおりで正しい
+- 実際の画面でも確かめた（GPUのscreenshot）: blueは体が横を向き、腕は横へ大きく開いた
 
-08Aの経路のままで、変えていない:
+## Counterのprogress
 
-- 経路: `BoutSimulation / Snapshot → WrestlerVisualState.pose === 'counter' → selectWrestlerPoseArt() → counter-gate texture → WrestlerView`
-- 状態もtimerも足していない。キー入力から推測もしない
-- 変えたのは、metadataの数値（size / pivot）だけ
+- `wrestlerVisualState.ts`: Counterのとき `phaseProgress = progress(action.ticksRemaining, COUNTER_WINDOW_TICKS)`
+  - `COUNTER_WINDOW_TICKS` をimportした。ほかのposeと同じ `progress()` を使う
+  - Counter専用のtimerや状態は足していない
+- 押したtickのあとの最初のSnapshotは、ticksRemaining 11（progress 1/12）
+- 最後は1（11/12）。その次のtickでCounterが終わる
+- そのため、角度の列は9.06° → 17.50 → 24.75 → 30.31 → 33.81 → **35.00**（残り6）→ 33.81 → … → 9.06°。Counterが終われば0
+
+## 適用
+
+- `src/game/presentation/counterGateArt.ts`: `counterVisualRotationOffset(id, state)`（pure、Phaser非依存）
+- `src/game/scenes/WrestlerView.ts`: **体のspriteだけ** を `participant.facing + counterVisualRotationOffset(this.idleArt.id, state)` で回す
+  - 影の回転は `participant.facing` のまま
+  - 位置とscaleは変えていない
+  - 回転の中心は、既存の明示pivot（= canonicalなparticipantの中心）
+
+# Changed Files
+
+- `src/game/presentation/wrestlerVisualState.ts`（Counterの `phaseProgress`）
+- `src/game/presentation/counterGateArt.ts`（定数、符号、`counterVisualRotationOffset`、comment）
+- `src/game/scenes/WrestlerView.ts`（体の回転に、offsetを加える）
+- `src/game/presentation/counterGateArt.test.ts`（08Bのtestを追加。既存のinput helperにpush / grip / moveを追加）
+- `src/game/presentation/wrestlerVisualState.test.ts`（Counterのprogressのtestを追加）
+- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+
+## 変更していないもの
+
+- `src/game/sumo/`、`src/game/input/`（`592cbd8` から差分0行）
+- `BoutScene.ts`
+- `public/`、`tools/`（差分0行。Counterの2枚、idleの2枚、Tsuppariの4枚は不変）
+- SPEC、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md`
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| `test_export_counter_gate.py`（focused） | 16 tests OK（Counterだけ80、idle / Tsuppariは60のtestを追加。sourceのhash / size、maskの期待値を更新） |
-| wrestler-art全suite | 167 tests OK |
-| presentationのtest / `pnpm test` | 23 files / 358 tests PASS |
+| presentationのtest（`counterGateArt` / `wrestlerVisualState` などを含む） | 55 tests PASS |
+| `src/game/sumo` のtest（Counter / CounterTransition / Tsuppari / Push） | 13 files / 274 tests PASS（変えていない） |
+| `pnpm test` | 23 files / 362 tests PASS |
 | `pnpm build` / `tsc --noEmit` | PASS（以前からあるchunk size警告だけ） |
 | `git diff --check` | OK |
-| Counterのexport: 決定的な再実行 / `--check` | 再実行でbyteが同じ（file SHA-256は上の表のとおり）/ exit 0 |
-| `export_runtime_wrestlers.py --check`（idle） / `export_tsuppari.py --check`（Product Tsuppari） | どちらもexit 0（idle / Tsuppariは不変） |
-| `src/game/sumo/` / `src/game/input/` | `bc95f71` から差分0行 |
+| `export_counter_gate.py --check` / `export_runtime_wrestlers.py --check` / `export_tsuppari.py --check` | どれもexit 0（Counter / idle / Tsuppariのassetは不変） |
+| `git diff 592cbd8 -- src/game/sumo src/game/input public tools` | 0行 |
 
-# Browser Smoke
+追加したtestと、Taskの検証項目との対応:
 
-`pnpm dev`（port 5199）+ headless Chrome（CDP）。08Aのsmokeを、新しいsize / pivotで実行した。
+| Taskの項目 | test |
+|---|---|
+| 1. Counter以外の状態は0 | idle / move / push / tsuppari / grip、Counterを出た後 |
+| 2. progressは `COUNTER_WINDOW_TICKS` から作る | `wrestlerVisualState.test` で、window全体の各tickについて `1 − ticksRemaining / 12` を確かめる |
+| 3. 曲線 | tickごとに `sin(π p) · 35°` と一致する |
+| 4. 最大値 | ちょうど35°、中間点（index 5 = 残り6）で出る。始めと終わりは対称で、10°未満 |
+| 5. red / blueは同じ大きさで逆の符号 | tickごとに確かめる |
+| 6. visual state + idだけで決まる | 同じ入力なら同じ値 |
+| 7. Snapshot / facingは不変 | JSON、facingの配列が変わらない |
+| 8〜10. Tsuppariの選択、idle / move / Push / Grip、Counterの選択 | 08Aの既存testがそのまま通る |
+| 11. CounterTransitionのgameplay test | sumoのtest、変えずにPASS |
+| 12. sumo / inputに意味の変更が無い | diff 0行 |
 
-- CPU redのCounterは、smoke scriptの中だけで `dummy.nextIntent` を一時的に包んで出した。ソースは変えていない
-- 結果: **20 / 20 PASS**
+# Browser / Runtime Smoke
+
+- `pnpm dev`（port 5199）+ headless Chrome（CDP）
+- 08A1のsmokeに、回転の判定を加えた
+  - logに、`phaseProgress` と影のrotationを記録する
+  - Counter frameでは、`body.rotation − facing = ±sin(π p) · 35°` であることを確かめる
+  - それ以外のframeでは、回転差が0であることを確かめる
+- CPU redのCounterは、smoke scriptの中だけで、`dummy.nextIntent` を一時的に包んで出した（ソースは変えていない）
+
+結果: SwiftShaderで **27 / 27 PASS**、GPU（D3D11）で再実行して **27 / 27 PASS**
 
 | 確認 | 結果 |
 |---|---|
-| Counterの2枚（210×207）が読み込まれる。Tsuppariの4枚とidleの2枚のsizeは変わらない | PASS |
-| pre-bout → Enter | PASS |
-| ArrowDown: blueが、counterの全frame（13 frame）で新しい `counter-gate-blue` を表示 | PASS |
-| origin = pivot、位置 = Snapshot center、rotation = facing、scale 1.0（idle → Counter → 次の状態で、飛びは無い） | PASS |
-| Counter以外の状態では表示しない | PASS |
-| Counterの空振り → 既存どおりFail / Kuzushi → idleのsprite | PASS |
-| red CPUのCounter（`counter-gate-red`）。PushをBestで捕まえ、既存のCounterTransition（`active`）になる | PASS |
-| Tsuppariの左右はProductのまま。Push / Counter / Grip、移動、R restart | PASS |
-| console error、失敗したrequestが無い | PASS |
+| Enterで開始。ArrowDownで同じCounterが始まる | PASS |
+| blue: 全Counter frameで、rotation − facing = −sin(πp)·35°。観測した値（GPU）: −9.06 → −17.50 → −24.75 → −30.31 → −33.81 → **−35.00** → −33.81 → … → −9.06° | PASS |
+| red: +の鏡像。観測した値は +9.06 → … → +33.81°。この時点でPushをBestで捕まえてCounterが終わり、既存のCounterTransitionへ移ったので、redは35°に届く前に戻った | PASS |
+| 回転はpivot（canonicalな中心）のまわり。位置 = Snapshot center、scale 1.0、影のrotation = facing | PASS |
+| Snapshotの `participant.facing` は、Counterのあいだ変わらない（blueは0のまま） | PASS |
+| Counter以外のframe（CounterTransitionを含む）、Tsuppariの左右は回転差0 | PASS |
+| Counterの空振り → 既存どおりFail / Kuzushi。PushのBestの捕獲 → 既存のCounterTransition（`active`） | PASS |
+| Push / Grip / 移動、idle / moveのsprite、R restart、console error / 失敗したrequestが無い | PASS |
 
-screenshot `09_blue_counter_pose.png` / `10_red_counter_pose.png`（scratchpad）で、新しいposeが描かれていることを確かめた。
+代表のscreenshot（scratchpadの `smoke7/`、GPU）:
 
-# Changed Files
+| tag | progress | 観測したoffset |
+|---|---|---|
+| `09_blue_early` | 0.1667 | −17.50° |
+| `09_blue_peak` | 0.4167 | −33.81° |
+| `09_blue_late` | 0.8333 | −17.50° |
+| `10_red_early` | 0.25 | +24.75° |
+| `10_red_peak` | 0.4167 | +33.81° |
 
-- `tools/wrestler_art/counter_gate_recipe.json`（sourceの同一性、測定値、evidence、`max_missed_px` 80）
-- `public/assets/action/wrestler/counter-gate/red.png` / `blue.png`
-- `src/game/presentation/counterGateArt.ts`（size / pivot）
-- `src/game/presentation/counterGateArt.test.ts`（期待するgeometry）
-- `tools/wrestler_art/tests/test_export_counter_gate.py`（source、maskの期待値、Counterだけの許容のtest）
-- `tools/wrestler_art/README.md`（Counter gateの節の値）
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- redのlateは無い（早く捕まえてCounterが終わったため）
+- logの中では、blueは中間点で−35.00°に達している
 
-## 変更していないもの
+## 描画の問題の切り分け（参考。実装の不具合ではない）
 
-- `src/game/sumo/`、`src/game/input/`、`wrestlerVisualState.ts`、`WrestlerView.ts`、`BoutScene.ts`
-- `runtime_wrestler_recipe.json`、`tsuppari_recipe.json`
-- idle / Tsuppariのasset
-- `WRESTLER_PRODUCT_ART_SPEC.md`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md`
+- SwiftShader（headless既定のsoftware GL）では、0°/90°以外の角度に回したspriteで、blueの体の一部が三角形に欠けた
+- 同じ欠けは、**idleのspriteに手で一定の回転を足しただけでも出た**。Counterの実装とは関係なく、回転したsprite一般で起きる
+- 実GPU（ANGLE D3D11、RTX 3060 Ti）で同じ実験をすると、欠けは出なかった
+- そのため、headlessのsoftware renderer固有の描画の問題と判断した
+- 判定は、SwiftShader / GPUの両方で27 / 27 PASS（判定は画素ではなく、sprite / Snapshotの値で行っている）
 
 # Design Deviations
 
-Design Deviations: NONE（`max_missed_px` 60 → 80は、Taskが明記した許容）
+Design Deviations: NONE
 
 # Unexpected Scope
 
-NONE
+NONE（上記のSwiftShaderの描画の問題は、testの環境だけの問題。repositoryの範囲外）
 
 # Known Untested Items
 
-- 実機でのUser Visual Gate
+- 実機でのUser Play Test（Game Feel）
 
-# User Visual Gate: REQUIRED
+# User Play Test: REQUIRED
 
-確認の手順:
+主な問い:
 
-1. `pnpm dev` → Enter → ArrowDownで、blueのCounterを見る
-2. redのCounterは、CPUのPushをArrowDownで返す場面で見る。CPUはdummyではCounterを押さない
+> 35°の体の捌き（回転）で、ArrowDownがTsuppariとはっきり見分けられるようになったか
 
 判断してほしい点:
 
-- 引き・捌き（横へ払う）に見えるか。Tsuppariと見分けられるか
-- 頭と体の位置
-- 見た目の大きさ（頭が大きく描かれているため、体がやや小さく見える可能性がある）
-- red / blueの両方
-- idle → Counterへの切り替え
-- 約12 tickの静止poseが読み取れるか
+- 体の捌き / 受けの動きに見えるか
+- 35°は十分か、多すぎるか、少なすぎるか
+- red / blueの両方が自然か
+- 回転の向き
+- idle → Counterの動きが気にならないか
+- 早くSuccess / Bestしたときに、回転が途中で戻ることを許容できるか
+- 既存の横 / 後ろへのCounterTransitionが、引き続き読み取れるか
+- Tsuppariは、引き続き前への突きに見えるか
 
-Technical PASSは、恒久の受理ではない。
+確認の手順:
+
+1. `pnpm dev` → Enter → ArrowDown（blue）
+2. CPUのPushをArrowDownで返す（dummy `2`）
+
+Technical PASSは、動きを受理したという意味ではない。
 
 # Git Delivery
 
-- stageするのはTask-owned fileだけ。commit `art(action): refresh counter pose candidate` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
-- `input.local/`、`main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない
+- stageするのはTask-owned fileだけ。commit `feat(presentation): animate counter body rotation` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
+- `main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない

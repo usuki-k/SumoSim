@@ -3,7 +3,9 @@
 // per-limb transforms or body deformation). A procedural world shadow sits below both bodies.
 // During a Tsuppari action the sprite swaps to the held Product Tsuppari pose texture of that hand (ACTION-07D);
 // each texture keeps its own pivot / body-core scale, so the canonical center and facing are unchanged by the
-// swap. ACTION-08A Visual Gate: while the pose is Counter the provisional Counter candidate is shown the same way.
+// swap. ACTION-08A Visual Gate: while the pose is Counter the provisional Counter candidate is shown the same way;
+// ACTION-08B adds its presentation-only body turn on top of the canonical facing (body sprite only, never the
+// shadow or the Simulation facing).
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -11,7 +13,7 @@ import {
   productWrestlerScale,
   type ProductWrestlerArt,
 } from '../presentation/productWrestlerArt.ts'
-import { allCounterGateArts, selectWrestlerPoseArt } from '../presentation/counterGateArt.ts'
+import { allCounterGateArts, counterVisualRotationOffset, selectWrestlerPoseArt } from '../presentation/counterGateArt.ts'
 import { allProductTsuppariArts } from '../presentation/productTsuppariArt.ts'
 import type { WrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
 import type { ParticipantState } from '../sumo/BoutTypes.ts'
@@ -67,7 +69,9 @@ export class WrestlerView {
   apply(state: WrestlerVisualState, participant: ParticipantState, positionPx: { x: number; y: number }): void {
     this.moving = state.pose === 'move'
     this.show(selectWrestlerPoseArt(this.idleArt, state))
-    this.body.setPosition(positionPx.x, positionPx.y).setRotation(participant.facing)
+    this.body
+      .setPosition(positionPx.x, positionPx.y)
+      .setRotation(participant.facing + counterVisualRotationOffset(this.idleArt.id, state))
     this.shadow.setPosition(positionPx.x + SHADOW_OFFSET.x * this.R, positionPx.y + SHADOW_OFFSET.y * this.R)
     this.shadow.setRotation(participant.facing)
   }

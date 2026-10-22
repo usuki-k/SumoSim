@@ -119,6 +119,15 @@ describe('wrestler visual state (VISUAL-01A)', () => {
     const c = new BoutSimulation(setupAt(-2, 0, 2, 0))
     c.step(intents({ counter: true }))
     expect(vis(c.getSnapshot(), 0).pose).toBe('counter')
+    // progress over the whole Counter window, derived from the Simulation's ticksRemaining
+    for (let k = 0; k < COUNTER_WINDOW_TICKS - 1; k++) {
+      const a = c.getSnapshot().participants[0]
+      expect(a.action.kind).toBe('counter')
+      const remaining = a.action.kind === 'counter' ? a.action.ticksRemaining : NaN
+      expect(vis(c.getSnapshot(), 0).phaseProgress).toBeCloseTo(1 - remaining / COUNTER_WINDOW_TICKS, 12)
+      c.step(intents())
+    }
+    expect(vis(c.getSnapshot(), 0).pose).not.toBe('counter')
     const g = new BoutSimulation(setupAt(-2, 0, 2, 0))
     g.step(intents({ grip: true }))
     expect(vis(g.getSnapshot(), 0)).toMatchObject({ pose: 'grip', gripPhase: 'reach' })

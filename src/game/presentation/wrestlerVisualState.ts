@@ -2,6 +2,7 @@
 // Pure TypeScript; must not import Phaser. It reads gameplay state and existing pure helpers only and
 // never decides anything about gameplay.
 import {
+  COUNTER_WINDOW_TICKS,
   GRIP_REACH_TICKS,
   GRIP_RECOVERY_TICKS,
   KUZUSHI_TICKS,
@@ -131,7 +132,9 @@ export function resolveWrestlerVisualState(
       phaseProgress: progress(action.ticksRemaining, TSUPPARI_PHASE_TICKS[action.phase]),
     }
   }
-  if (action.kind === 'counter') return { ...base, pose: 'counter' }
+  if (action.kind === 'counter') {
+    return { ...base, pose: 'counter', phaseProgress: progress(action.ticksRemaining, COUNTER_WINDOW_TICKS) }
+  }
   if (action.kind === 'grip') {
     return {
       ...base,
