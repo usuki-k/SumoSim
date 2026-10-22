@@ -1,5 +1,5 @@
 Task-ID: ACTION-10B-PUSH-CHARGE-IMPLEMENTATION
-Status: READY
+Status: REVIEWED
 Task-Type: CORE GAMEPLAY IMPLEMENTATION / MOVEMENT-COLLISION-PUSH
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -1081,3 +1081,266 @@ Lock movement direction and canonical facing for the Push.
 Keep impact force bounded to the accepted 8-tick Push behavior.
 
 Use ordinary Move + circle contact for sidesteps and ordinary ring-out for both defender push-outs and attacker whiff self-ring-outs.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: TECHNICAL PASS / USER PLAY TEST REQUIRED
+Accepted Technical Baseline: ed55d79ccd0907ab5f33f715e75f06956e6047f1
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-10B.
+
+Confirmed from Current Source / diff:
+
+- PUSH_STARTUP_TICKS remains 6
+- PUSH_CHARGE_TICKS = 24
+- PUSH_IMPACT_TICKS = 8 and old PUSH_ACTIVE_TICKS numeric ownership was removed/renamed
+- PUSH_RECOVERY_TICKS remains 10
+- Push state now carries impactTicksRemaining
+- press-time direction remains locked
+- canonical facing is frozen for the whole Push action
+- first contact opens the impact window before Counter / force resolution
+- impact expiry enters recovery directly; unused charge does not resume
+- a full whiff completes the 24-tick committed charge
+- existing circle contact and existing ring-out remain the owners of collision / outcome
+- no special dodge, homing, tackle collider, edge brake or Push-specific ring-out rule was added.
+
+## Accepted Technical Push State
+
+Current canonical Push state:
+
+```
+{
+  kind: 'push'
+  phase: 'startup' | 'active' | 'recovery'
+  ticksRemaining
+  direction
+  impactTicksRemaining: number | null
+}
+```
+
+Semantics:
+
+- `impactTicksRemaining = null`: no impact has opened
+- first active-charge body contact opens an 8-tick impact window internally on that same tick
+- the first impact tick is consumed within that tick, so the post-step Snapshot normally reports 7
+- positive impact value: impact remains active
+- impact expiry enters recovery and reports 0 in recovery
+- whiff recovery keeps impact null.
+
+This Snapshot convention is consistent with the implementation and tests.
+
+## Movement / Travel
+
+Verified reported free-space result:
+
+- startup: 6 ticks
+- no-contact charge: 24 ticks
+- recovery: 10 ticks
+- full action: 40 applied ticks
+- total open-space travel: approximately 0.938333 m
+- peak self speed: 3.0 m/s.
+
+This is intentionally about 7.41x the previous full Push travel because the User explicitly selected the natural self-ring-out version.
+
+Do not reduce this to the earlier 14-tick / ~3x proposal unless explicitly requested after Play Test.
+
+## Impact / Push Force
+
+Accepted technical preservation:
+
+- impact window = 8 ticks
+- PUSH_EXTERNAL_ACCELERATION remains 26.25 m/s^2
+- contact-start representative shove remains approximately 0.5325 m
+- receiver peak external velocity remains approximately 2.566667 m/s
+- long run-up does not multiply per-tick Push force.
+
+The longer charge changes encounter reach, not the base Push force.
+
+## Facing / No Homing
+
+Accepted technical behavior:
+
+- Push direction is captured from canonical facing at acceptance
+- Push direction does not retarget
+- canonical facing is frozen during startup / active / recovery
+- sidestepping opponent does not rotate the charging wrestler
+- after Push ends, normal FREE facing resumes and may snap back toward the opponent.
+
+The recovery-end snap remains a User Play Test question, not a technical failure.
+
+## Lateral Dodge
+
+The full required D1-D16 matrix was executed.
+
+Confirmed qualitative result:
+
+- early reads produce real MISS outcomes
+- later reactions produce real HIT outcomes
+- ordinary Move only
+- ordinary circle contact only
+- no dodge invulnerability / special evade state
+- whiff attacker completes the committed forward movement.
+
+This satisfies the target "read the charge and sidestep it" mechanically.
+
+## Risk / Reward Near Edge
+
+The required complementary scenarios passed using ordinary ring-out:
+
+### Direct hit
+
+Representative near-edge fixture:
+
+- first contact around tick 13
+- existing impact force only
+- defender ring-out around tick 19
+- no Push force retuning.
+
+Thus the selected design can produce the desired high-reward near-edge direct-hit outcome.
+
+This does NOT mean every hit or every near-edge geometry guarantees a win.
+
+### Early sidestep / whiff
+
+Representative near-edge fixture:
+
+- no contact
+- no impact window
+- attacker continues full commitment
+- attacker ring-out around tick 33 during recovery
+- existing reason = ring-out.
+
+No special self-ring-out rule exists.
+
+This is the intended natural risk.
+
+## Push vs Push
+
+Accepted technical result:
+
+- both impact windows can open on the collision
+- net Push external-force contribution cancels while both are active
+- participant ordering does not change the symmetric result
+- representative near-edge clash remained ongoing rather than one side receiving the attacker's one-sided shove.
+
+Important:
+Push force cancellation does not imply all self movement/contact correction is zero.
+
+## Counter
+
+Accepted:
+
+- no-contact run-up cannot be caught as Push impact
+- first body contact opens impact before Counter resolution
+- first impact elapsed ticks 0..2 remain Best
+- later impact ticks remain Success
+- a long run-up can still be Countered Best on first contact
+- existing Counter result / Kuzushi / CounterTransition semantics remain unchanged.
+
+Counter timing is now correctly based on impact timing, not charge-start timing.
+
+## Push vs Tsuppari
+
+Accepted:
+
+- Tsuppari during no-contact run-up is ordinary Tsuppari
+- only impact/contact uses Push/Tsuppari coupled semantics
+- coupled duration is bounded by the 8-tick impact window
+- Tsuppari base reach / impulse / timing are unchanged.
+
+The longer charge creates new encounter opportunities; this is an expected gameplay consequence.
+
+## Kuzushi
+
+ACTION-09B is preserved:
+
+- run-up without impact does not consume Kuzushi
+- first qualifying impact Push force on Kuzushi gets 1.5x
+- Kuzushi is consumed that tick
+- later impact ticks use 1.0x
+- sweat remains presentation-derived and unchanged.
+
+## Presentation
+
+No Push Product art / VFX / camera / sound changes were added.
+
+Existing body sprite follows canonical facing, so the Simulation facing freeze now makes the charge visually point along its travel direction.
+
+Product assets remain unchanged.
+
+## Verification Review
+
+Heavy Verification accepted:
+
+- new Push charge suite: 39 PASS
+- required M / I / F / D1-D16 / C / PP / PT / K / R / G cases: ALL PASS
+- pnpm test: 26 files / 439 PASS
+- pnpm build / typecheck: PASS
+- git diff --check: PASS
+- Product art exporter checks: PASS
+- Browser/runtime smoke: 64 / 64 PASS
+- Product asset diff: none.
+
+This is sufficient for Technical PASS.
+
+## Unexpected-but-Expected Interaction Change
+
+The updated existing Tsuppari test correctly exposes one semantic consequence of longer reach:
+
+- a pusher knocked backward by Tsuppari during Push startup may still have enough remaining 24-tick charge to return to contact later and open impact
+- the previous short 8-tick movement could not reach again.
+
+This follows the accepted committed-charge design and is not treated as a regression.
+
+Do not "fix" this back to the old short-range behavior without a User-directed design change.
+
+## User Play Test
+
+REQUIRED before Gameplay Acceptance.
+
+Judge especially:
+
+1. Does ArrowUp feel like a committed sumo rush / tackle rather than a tiny shove?
+2. Is 24 ticks / about 0.4 s of charge readable and enjoyable?
+3. Is early lateral evasion achievable in real play?
+4. Does late evasion fail in a fair/readable way?
+5. Does the attacker continuing forward after MISS feel convincing?
+6. Is near-edge whiff self-ring-out fun rather than overly punishing?
+7. Is the direct-hit near-edge reward satisfying?
+8. Does Push-vs-Push feel like an understandable contest?
+9. Does facing freeze make the line of attack clear?
+10. Is the snap back toward the opponent after recovery acceptable?
+11. Do Counter / Tsuppari / Kuzushi remain readable with the longer charge?
+
+Technical PASS does not accept Game Feel.
+
+## Do Not Reopen Yet
+
+Until User Play Test feedback:
+
+- do not retune 24-tick charge
+- do not retune 8-tick impact
+- do not retune Push force
+- do not add Push animation/VFX/audio/camera
+- do not add bounce / mass / stamina
+- do not redesign Counter / Tsuppari / Kuzushi to compensate preemptively.
+
+## Documentation Note
+
+The unrelated stale ACTION-09B ARCHITECTURE sentence about Kuzushi Grip remains known documentation debt and was correctly left outside ACTION-10B scope.
+
+## Next Task Constraint
+
+Do not treat ACTION-10B as Game Feel accepted until the User reports the Play Test result.
+
+If accepted:
+- 24-tick committed charge + 8-tick impact becomes the current Push baseline.
+
+If rejected/tuned:
+- adjust only the specific reported feel issue first; do not reopen the entire Push architecture by default.
