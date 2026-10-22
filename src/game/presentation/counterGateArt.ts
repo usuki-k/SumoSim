@@ -16,18 +16,18 @@ export const COUNTER_GATE_ART: Readonly<Record<ProductWrestlerArtId, ProductWres
     id: 'red',
     textureKey: 'counter-gate-red',
     assetPath: 'assets/action/wrestler/counter-gate/red.png',
-    width: 203,
-    height: 190,
-    pivot: { x: 79, y: 96 },
+    width: 210,
+    height: 207,
+    pivot: { x: 74, y: 115 },
     bodyCoreDiameterPx: COUNTER_GATE_BODY_CORE_DIAMETER_PX,
   },
   blue: {
     id: 'blue',
     textureKey: 'counter-gate-blue',
     assetPath: 'assets/action/wrestler/counter-gate/blue.png',
-    width: 203,
-    height: 190,
-    pivot: { x: 79, y: 94 }, // red pivot (79, 96) reflected: y -> 190 - 96
+    width: 210,
+    height: 207,
+    pivot: { x: 74, y: 92 }, // red pivot (74, 115) reflected: y -> 207 - 115
     bodyCoreDiameterPx: COUNTER_GATE_BODY_CORE_DIAMETER_PX,
   },
 }

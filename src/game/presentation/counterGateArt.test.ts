@@ -47,7 +47,7 @@ describe('Counter art Visual Gate (ACTION-08A)', () => {
 
   it('explicit pivot / body core; blue = red reflected across the local X axis', () => {
     const { red, blue } = COUNTER_GATE_ART
-    expect([red.width, red.height, red.pivot]).toEqual([203, 190, { x: 79, y: 96 }])
+    expect([red.width, red.height, red.pivot]).toEqual([210, 207, { x: 74, y: 115 }])
     expect([blue.width, blue.height, blue.pivot]).toEqual([red.width, red.height, { x: red.pivot.x, y: red.height - red.pivot.y }])
     for (const art of allCounterGateArts()) {
       const origin = productWrestlerOrigin(art)

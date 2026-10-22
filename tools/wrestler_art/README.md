@@ -355,11 +355,12 @@ PY tools/wrestler_art/export_counter_gate.py --check    # verify the committed r
 
 - Input: `input.local/candidate_red_counter.png` only (never committed; identity = decoded RGBA pixel SHA-256
   in `counter_gate_recipe.json`).
-- red = the pose normalized like the idle red (front 170.7, root (750, 608), body core (678, 170)-(798, 899),
-  measured once with the Product Tsuppari landmark registration; `measurement_evidence` records it).
+- red = the pose normalized like the idle red (ACTION-08A1 lateral-sweep candidate, 1265x1244 source: front
+  178.8, root (863, 553), body core (853, 111)-(868, 846), measured once with the Product Tsuppari landmark
+  registration; `measurement_evidence` records it).
 - blue = red reflected across the local X axis + the accepted mawashi recolor of `runtime_wrestler_recipe.json`
-  (single owner), validated against `mask_limits` (fail closed). Counter has no hand, so there is one pose per
-  colour.
+  (single owner), validated against `mask_limits` (fail closed; `max_missed_px` is 80 for this candidate only,
+  its missed pixels being semi-transparent outline fringe). Counter has no hand, so there is one pose per colour.
 - Runtime: `src/game/presentation/counterGateArt.ts` mirrors the two sizes / pivots (checked by
   `tests/test_export_counter_gate.py`); the pose is shown exactly while the visual pose is `counter`.
 

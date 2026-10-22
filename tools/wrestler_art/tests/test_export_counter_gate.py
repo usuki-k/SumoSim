@@ -36,7 +36,7 @@ from test_preview_dual_rigid_wrestlers import front_point, sprite_recipe  # noqa
 
 TS_METADATA = aw.REPO_ROOT / "src" / "game" / "presentation" / "counterGateArt.ts"
 RECIPE = ec.load_recipe(ec.DEFAULT_RECIPE)
-ACCEPTED_SOURCE_PIXELS = "eb0f2e6058fe35c239ed571e1e576fc30b4648988c347b89d4e227a3a8b3e040"
+ACCEPTED_SOURCE_PIXELS = "5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8"
 FRONT_DEG = 165.0
 
 
@@ -86,6 +86,12 @@ class RecipeTests(unittest.TestCase):
     def test_accepted_source_identity(self) -> None:
         self.assertEqual(RECIPE["master"]["pixel_sha256"], ACCEPTED_SOURCE_PIXELS)
         self.assertEqual(RECIPE["master"]["file"], "candidate_red_counter.png")
+        self.assertEqual(RECIPE["master"]["size"], [1265, 1244])
+
+    def test_counter_only_missed_allowance(self) -> None:
+        # ACTION-08A1: image-specific 60 -> 80 for this gate only; idle / Tsuppari limits stay 60
+        self.assertEqual(RECIPE["mask_limits"]["max_missed_px"], 80)
+        self.assertEqual(et.load_recipe(et.DEFAULT_RECIPE)["mask_limits"]["max_missed_px"], 60)
 
     def test_recolor_rule_is_owned_by_the_idle_runtime_recipe(self) -> None:
         self.assertEqual(RECIPE["recolor"], ex.load_recipe(ex.DEFAULT_RECIPE)["derived"]["recolor"])
@@ -259,7 +265,7 @@ class CommittedGateTests(unittest.TestCase):
         source = aw.mirror_part(red)
         rule = RECIPE["recolor"]
         self.assertEqual(et.mask_report(source.image, im.mawashi_mask(source.image, rule), rule),
-                         {"mask_px": 2085, "missed_band_px": 14, "fringe_px": 74})
+                         {"mask_px": 1724, "missed_band_px": 70, "fringe_px": 75})
 
     def test_accepted_idle_and_tsuppari_textures_unchanged(self) -> None:
         for key, expected in (("red", ACCEPTED_RED_PIXELS), ("blue", ACCEPTED_BLUE_PIXELS)):

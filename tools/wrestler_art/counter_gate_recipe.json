@@ -17,27 +17,28 @@
   "master": {
     "key": "red",
     "file": "candidate_red_counter.png",
-    "size": [1254, 1254],
-    "pixel_sha256": "eb0f2e6058fe35c239ed571e1e576fc30b4648988c347b89d4e227a3a8b3e040",
-    "reviewed_file_sha256": "842900c1a41b4b06ed16f2c0d167f7e132bc7fbf6956865a4699ddcc77d9d979",
-    "source_front_deg": 170.7,
-    "root_source_px": [750, 608],
-    "body_core_source_px": [[678, 170], [798, 899]],
+    "size": [1265, 1244],
+    "pixel_sha256": "5429d02f6f7ffad36754cbd5958c77bb1197027cce45572f81c825d1a02c37b8",
+    "reviewed_file_sha256": "a62f4f5e69605079d4cba3fd7ac3c40cdcd4ee673f708e80fd20db9ef5a1fa46",
+    "source_front_deg": 178.8,
+    "root_source_px": [863, 553],
+    "body_core_source_px": [[853, 111], [868, 846]],
     "body_core_target_r": 2.0,
     "measurement_evidence": {
-      "hair_centroid": [543.7, 494.4],
-      "mawashi_centroid": [992.6, 597.3],
-      "hair_px": 63152,
-      "mawashi_px": 70984,
-      "rotation_delta_deg": 10.004,
-      "scale": 1.1712,
-      "note": "The torso is drawn turned ~10 deg and ~17% larger than the idle master; the two area ratios disagree more than for the Tsuppari poses (hair sqrt ratio 1.217, mawashi 1.126), so s is their mean."
+      "candidate": "ACTION-08A1 lateral-sweep candidate (replaces the ACTION-08A pose, rejected as too similar to Tsuppari).",
+      "hair_centroid": [659.3, 405.8],
+      "mawashi_centroid": [1118.3, 582.2],
+      "hair_px": 73976,
+      "mawashi_px": 57052,
+      "rotation_delta_deg": 18.115,
+      "scale": 1.163,
+      "note": "The torso is drawn turned ~18 deg; the head is drawn large relative to the body, so the two area ratios disagree (hair sqrt ratio 1.317, mawashi 1.009) and s is their mean."
     }
   },
   "mask_limits": {
-    "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component.",
+    "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component. max_missed_px 80 (ACTION-08A1, Counter gate only, image-specific): the candidate's missed pixels are semi-transparent outline fringe, not a disconnected mawashi part; not a global Product-art standard.",
     "min_mask_px": 1500,
-    "max_missed_px": 60,
+    "max_missed_px": 80,
     "max_fringe_px": 120
   }
 }
