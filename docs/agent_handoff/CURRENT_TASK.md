@@ -1,5 +1,5 @@
 Task-ID: ACTION-08A-COUNTER-ART-VISUAL-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: ART VISUAL GATE / PRESENTATION INTEGRATION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -533,3 +533,243 @@ Use the supplied image only as a provisional Counter / 引き・捌き Visual Ga
 
 Wire it to the existing Counter presentation state.
 Keep all Counter gameplay and all accepted Tsuppari/idle baselines unchanged.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: bc95f7117dbadf57cceee9d2a0b2a67e6fd10b56
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-08A.
+
+Confirmed from Current Source / diff:
+
+- the User-supplied red Counter candidate is wired only as a provisional Visual Gate
+- one authored red source is normalized offline
+- blue is derived offline from normalized red by local-Y reflection + the accepted mawashi recolor
+- runtime uses ordinary red/blue PNGs
+- Counter art appears only when `WrestlerVisualState.pose === 'counter'`
+- no new Counter timer/state was added
+- accepted idle and permanent Tsuppari Product art are unchanged
+- Counter gameplay, CounterTransition, input, Push and Tsuppari gameplay are unchanged
+- WRESTLER_PRODUCT_ART_SPEC was correctly left unchanged because this candidate is not permanently accepted.
+
+## Source Identity
+
+Confirmed expected candidate contract:
+
+```
+tools/wrestler_art/input.local/candidate_red_counter.png
+```
+
+Decoded RGBA SHA-256:
+
+```
+eb0f2e6058fe35c239ed571e1e576fc30b4648988c347b89d4e227a3a8b3e040
+```
+
+The committed gate recipe pins this identity and the exporter fails closed on mismatch.
+
+## Provisional Runtime Contract
+
+Current Visual-Gate assets:
+
+```
+public/assets/action/wrestler/counter-gate/red.png
+public/assets/action/wrestler/counter-gate/blue.png
+```
+
+Current normalized geometry:
+
+- red: 203 x 190, pivot (79, 96)
+- blue: 203 x 190, pivot (79, 94)
+- body core: 123.076923 px for both.
+
+These paths are intentionally temporary and must not be treated as permanent Product art until User acceptance.
+
+## Normalization Review
+
+Accepted for this Visual Gate.
+
+Recorded candidate registration:
+
+- source_front_deg: 170.7
+- root_source_px: (750, 608)
+- body_core_source_px: (678, 170) - (798, 899)
+- rotation delta: +10.004 degrees
+- scale: 1.1712.
+
+The source is materially larger / somewhat more rotated than idle, but:
+- the established normalization method was reused
+- no arbitrary manual runtime offset was introduced
+- normalized body-core remains 2R
+- exporter clip checks pass
+- browser placement uses canonical center/facing and explicit pivot.
+
+This is sufficient for a provisional Visual Gate. It is not evidence that the art itself is visually accepted.
+
+## Red -> Blue Derivation
+
+Accepted:
+
+```
+normalized red
+-> local-Y reflection
+-> accepted mawashi-only recolor
+-> blue
+```
+
+The recolor rule continues to be owned only by:
+
+```
+tools/wrestler_art/runtime_wrestler_recipe.json
+```
+
+Reported real mask result:
+
+- mask: 2085 px
+- missed band: 14 px
+- fringe: 74 px.
+
+Tests verify:
+- alpha preserved
+- mask-outside pixels unchanged
+- one local-Y reflection only.
+
+## Presentation Architecture Review
+
+Accepted path:
+
+```
+BoutSimulation / Snapshot
+-> resolveWrestlerVisualState()
+-> pose === 'counter'
+-> selectWrestlerPoseArt()
+-> WrestlerView
+```
+
+`counterGateArt.ts` is presentation-only and Phaser-free.
+
+For non-Counter states it delegates to the existing Product selector:
+- Tsuppari -> permanent Product Tsuppari pose
+- otherwise -> accepted idle art.
+
+No duplicate gameplay state exists.
+
+## Counter Pose Lifetime
+
+Accepted as correctly following existing gameplay state only.
+
+The pose is displayed while the current action resolves to:
+
+```
+WrestlerVisualState.pose === 'counter'
+```
+
+No presentation timer extends it.
+
+A fresh Counter press advances one gameplay tick before the first inspected Snapshot, so the automated presentation test observes `COUNTER_WINDOW_TICKS - 1` subsequent held snapshots. This is consistent with the existing tick/Snapshot semantics and is not a Counter timing change.
+
+## Gameplay Preservation
+
+Confirmed no implementation diff under:
+
+- `src/game/sumo/`
+- `src/game/input/`.
+
+Therefore ACTION-08A does not change:
+
+- Counter window
+- Best / Success / Fail
+- Counter vs Push
+- Counter vs Tsuppari
+- CounterTransition side/rear motion
+- Kuzushi
+- ArrowDown binding
+- same-tick input priority
+- Push
+- Tsuppari
+- reach / force values.
+
+Do not reopen these during art iteration.
+
+## Accepted Baseline Preservation
+
+Confirmed by focused tests / exporter checks:
+
+- idle red / blue Product textures unchanged
+- all four permanent Tsuppari Product textures unchanged
+- permanent Tsuppari exporter remains clean
+- idle exporter remains clean.
+
+ACTION-07D remains the accepted Product-art baseline.
+
+## Verification Review
+
+Reported and accepted:
+
+- focused Counter art exporter: 15 PASS
+- wrestler-art suite: 166 PASS
+- presentation tests: PASS
+- pnpm test: 23 files / 358 PASS
+- pnpm build / typecheck: PASS
+- git diff --check: PASS
+- Counter exporter deterministic rerun: PASS
+- Counter exporter --check: PASS
+- idle exporter --check: PASS
+- permanent Tsuppari exporter --check: PASS
+- browser/runtime smoke: 20 / 20 PASS.
+
+This is sufficient for Technical PASS.
+
+## User Visual Gate
+
+REQUIRED.
+
+This is the only remaining acceptance gate.
+
+The User should judge:
+
+- does ArrowDown clearly read as 引き・捌き
+- idle -> Counter pose body/head alignment
+- apparent body size
+- arm placement
+- red version
+- derived blue version
+- static Counter-window pose duration
+- Counter Fail -> Kuzushi readability
+- Push Counter Success / Best -> existing side/rear transition readability.
+
+The supplied art was explicitly described by the User as provisional.
+
+Therefore:
+- Technical PASS does NOT permanently accept the image
+- do not move it to a permanent `counter/` Product directory yet
+- do not add it to the Accepted Product-art SPEC yet.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- ACTION-07D permanent idle/Tsuppari Product art baseline
+- Tsuppari reach 0.55 m
+- current Counter gameplay semantics
+- current CounterTransition behavior.
+
+## Next Task Constraint
+
+If the User says the Counter image is acceptable:
+- create a small Counter Product-art promotion Task
+- preserve the exact accepted gate pixels
+- move/rename into a permanent Product Counter contract
+- update WRESTLER_PRODUCT_ART_SPEC / ARCHITECTURE
+- remove `counter-gate` temporary naming.
+
+If the User does not like the image:
+- refresh only `candidate_red_counter.png` and rerun this Visual Gate
+- do not change gameplay.
