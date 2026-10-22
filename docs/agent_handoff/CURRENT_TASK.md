@@ -1,5 +1,5 @@
 Task-ID: ACTION-07D-TSUPPARI-PRODUCT-ART-PROMOTION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION / PRODUCT ART PROMOTION / VISUAL-GATE CLEANUP
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -581,3 +581,242 @@ Promote the User-accepted SEPARATE Tsuppari art into the permanent Product runti
 Remove temporary runtime comparison machinery.
 Formalize measurement reproducibility.
 Keep ACTION-07C2 gameplay exactly unchanged.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: TECHNICAL PASS / FINAL USER REGRESSION PLAY TEST REQUIRED
+Accepted Technical Baseline: 85bdc89205189e056af56506084aacaacdca6d5c
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-07D.
+
+Confirmed from Current Source / diff:
+
+- User-accepted SEPARATE Tsuppari art was promoted to one permanent Product contract
+- permanent runtime now uses exactly four Tsuppari textures
+- temporary 12-texture Visual-Gate runtime was removed
+- MIRROR-L / MIRROR-R runtime modes were removed
+- key 4 art-mode cycling was removed
+- TSU ART debug mode label was removed
+- permanent presentation selection depends only on wrestler color/id and Tsuppari hand
+- accepted idle Product art remains unchanged
+- src/game/sumo and src/game/input are unchanged from ACTION-07C2
+- ACTION-07C2 reach/gameplay semantics remain unchanged.
+
+## Permanent Product Runtime Contract
+
+Accepted technical contract:
+
+```
+public/assets/action/wrestler/tsuppari/
+  red_left.png
+  red_right.png
+  blue_left.png
+  blue_right.png
+```
+
+Permanent mapping:
+
+- red left = authored accepted red-left pose
+- red right = authored accepted refreshed red-right pose
+- blue left = reflected red-right + accepted mawashi recolor
+- blue right = reflected red-left + accepted mawashi recolor.
+
+Runtime metadata is owned by:
+
+- `src/game/presentation/productTsuppariArt.ts`
+
+Runtime selection is:
+
+```
+Snapshot
+-> WrestlerVisualState
+-> selectWrestlerArt(idle, visual)
+-> WrestlerView
+```
+
+No runtime art-mode state remains.
+
+## Accepted-Pixel Preservation
+
+The permanent Product four are technically proven to preserve the User-accepted ACTION-07C2 SEPARATE result.
+
+Accepted decoded RGBA hashes:
+
+- red_left.png:
+  `ab5043bf8aa8fe20a0b12c45095bba62214a73d4816762966a7e2730b7773f2f`
+- red_right.png:
+  `0859a8c4d3c629f5ea00fc27a9ba97b5e0af8848daba5de77eb846d56aee0de8`
+- blue_left.png:
+  `bed6fa024e51d9ca17a75fd243554b4fa7f052f204e4fa679ea00a34dd68bb53`
+- blue_right.png:
+  `c9369b4b1b5edcdd46008735032fe8e95e0894797993ec2089d66b8a924bb1ef`
+
+These are pinned in the permanent art tests as the accepted SEPARATE pixels.
+
+Git may report some permanent files as renames from equivalent MIRROR gate files because those files were byte-identical to their SEPARATE counterparts. This does not change the semantic Product mapping; the permanent exporter/test contract is now the fixed four-file mapping above.
+
+## Permanent Source-of-Truth Review
+
+Accepted:
+
+- authored source identity:
+  - `tsuppari_recipe.json` masters
+- normalization values / mask limits:
+  - `tsuppari_recipe.json`
+- shared red->blue recolor rule:
+  - `runtime_wrestler_recipe.json`
+- fixed hand/output mapping:
+  - `export_tsuppari.py::OUTPUTS`
+- deterministic write/check:
+  - `export_tsuppari.py`
+- normalization measurement reproduction:
+  - `measure_tsuppari_pose.py`
+- runtime metadata/selection:
+  - `productTsuppariArt.ts`
+- Product documentation:
+  - `WRESTLER_PRODUCT_ART_SPEC.md` §0
+  - `ARCHITECTURE.md`.
+
+No second current runtime mode/source-of-truth remains.
+
+## Measurement Reproducibility Review
+
+The ACTION-07C1/07C2 ambiguity is resolved sufficiently for Product use.
+
+Current implemented method is consistently documented and tested as:
+
+- 1/2 BOX source scale
+- hair threshold:
+  - max(R,G,B) < 80
+  - alpha > 200
+- 7 px opening:
+  - erosion
+  - then dilation
+- largest 4-connected hair component
+- mawashi components from the accepted hue-band rule
+- deterministic centroid / area calculations
+- similarity registration against accepted idle red
+- explicit tolerance:
+  - front 0.1 degree
+  - point coordinates 1 source px.
+
+The helper reproduces the accepted recorded normalization within tolerance.
+
+Known historical fact retained correctly:
+- red-left was originally recorded using an uncommitted earlier measurement implementation
+- the permanent helper differs by at most ~0.71 source px / ~0.03 degree
+- this is sub-runtime-pixel and does not justify changing User-accepted Product pixels.
+
+Therefore the accepted art was correctly preserved rather than re-normalized.
+
+## Visual-Gate Cleanup Review
+
+Confirmed removed from current runtime:
+
+- `tsuppari-gate/` 12 runtime textures
+- `TsuppariArtMode`
+- SEPARATE/MIRROR-L/MIRROR-R runtime mode table
+- key 4 art cycling
+- `TSU ART` debug display
+- gate mode argument from `WrestlerView.apply`.
+
+Current preload contains:
+- accepted idle two
+- permanent Product Tsuppari four.
+
+Historical experiment evidence remains in Git history/documentation only as appropriate.
+
+## Gameplay Preservation
+
+Confirmed no current diff under:
+
+- `src/game/sumo/`
+- `src/game/input/`.
+
+Therefore 07D did not change:
+
+- TSUPPARI_HAND_REACH = 0.55 m
+- Push/Tsuppari forces
+- action timing
+- cooldown
+- buildup
+- Counter rules
+- contest rules
+- ring-out.
+
+Do not reopen these in Product-art cleanup tasks.
+
+## Verification Review
+
+Reported and accepted:
+
+- focused permanent Tsuppari-art tool tests: 26 PASS
+- full wrestler-art suite: 151 PASS
+- presentation tests: PASS
+- pnpm test: 22 files / 352 tests PASS
+- pnpm build / tsc: PASS
+- git diff --check: PASS
+- permanent exporter deterministic rerun: PASS
+- permanent exporter --check: PASS
+- idle exporter --check: PASS
+- measurement helper --check: PASS
+- browser/runtime smoke: 33 / 33 PASS.
+
+This is sufficient for Technical PASS.
+
+## Product SPEC / Architecture Review
+
+Accepted:
+
+- WRESTLER_PRODUCT_ART_SPEC §0 now identifies SEPARATE as the Product Tsuppari strategy
+- two authored red Tsuppari masters are the Product sources
+- blue variants are derived offline from opposite-hand red masters
+- runtime mirror/recolor is not used
+- pose selection is presentation-only
+- gameplay hit detection remains Simulation center-distance based
+- MIRROR-L / MIRROR-R are documented as rejected Visual-Gate experiments rather than active Product modes.
+
+## Final User Regression Play Test
+
+REQUIRED.
+
+This is not a design-choice gate anymore; the visual choice and reach were already accepted in ACTION-07C2.
+
+The User only needs to confirm that promotion/cleanup did not change the accepted result.
+
+Verify:
+
+1. ArrowLeft shows the same accepted left pose
+2. ArrowRight shows the same accepted shorter right pose
+3. blue left/right look unchanged from accepted SEPARATE
+4. idle -> pose -> idle has no pivot/scale jump
+5. current 0.55 m reach feel is unchanged
+6. Push / Counter / Grip / Tsuppari behavior is unchanged
+7. key 4 no longer changes Tsuppari art.
+
+If this regression Play Test is OK:
+- ACTION-07D Product art promotion can be considered fully accepted.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- SEPARATE as the Product Tsuppari art strategy
+- accepted red-left/right source images
+- accepted blue derivation mapping
+- current Tsuppari reach = 0.55 m
+- current full-action held pose behavior
+- ACTION-07B gameplay semantics
+- accepted idle red-master baseline.
+
+## Next Task Constraint
+
+Do not start another Tsuppari art redesign before the final 07D regression Play Test result.
+
+After acceptance, the temporary Visual-Gate phase is closed and future tasks should treat the permanent four Product Tsuppari textures as the baseline.
