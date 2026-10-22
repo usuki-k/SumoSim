@@ -7,7 +7,8 @@ import {
   KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
   MAX_EXTERNAL_SPEED,
-  PUSH_ACTIVE_TICKS,
+  PUSH_CHARGE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_EXTERNAL_ACCELERATION,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
@@ -409,7 +410,7 @@ describe('Tsuppari (ACTION-07B)', () => {
     function counterScenario(attackHand: 'left' | 'right', counter: boolean) {
       const s = sim(-R, R)
       const tsuppariAt = 20
-      const counterAt = PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS // B idle again
+      const counterAt = PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS + PUSH_RECOVERY_TICKS // B idle again
       const hitTick = tsuppariAt + TSUPPARI_STARTUP_TICKS
       let before: BoutSnapshot = s.getSnapshot()
       let transitions = 0
@@ -621,15 +622,23 @@ describe('Tsuppari (ACTION-07B)', () => {
       expect(strike(B(at))).toBe('hit')
       // The hit tick is A's last startup tick (A's Push turns active only at its end).
       expect(A(before).action).toMatchObject({ kind: 'push', phase: 'startup', ticksRemaining: 1 })
-      expect(A(at).action).toMatchObject({ kind: 'push', phase: 'active', ticksRemaining: PUSH_ACTIVE_TICKS })
+      expect(A(at).action).toMatchObject({ kind: 'push', phase: 'active', ticksRemaining: PUSH_CHARGE_TICKS, impactTicksRemaining: null })
       expect(A(at).externalVelocity.x).toBeCloseTo(A(before).externalVelocity.x - J, 12)
       expect(B(at).externalVelocity).toEqual({ x: 0, y: 0 })
-      stepN(s, 120)
-      expect(B(s.getSnapshot()).position.x).toBe(R) // the Push whiffs: B never moved
+      // ACTION-10B: the knocked-back pusher's committed charge continues; its first later contact opens the
+      // impact window (it was not open during the startup hit, so that hit stayed uncoupled).
+      let opened = false
+      for (let t = 0; t < 120; t++) {
+        s.step(IDLE)
+        const action = A(s.getSnapshot()).action
+        if (action.kind === 'push' && action.impactTicksRemaining !== null) opened = true
+      }
+      expect(opened).toBe(true)
+      expect(B(s.getSnapshot()).position.x).toBeGreaterThan(R) // pushed by that later impact
     })
 
     it('TS33: a Tsuppari landing after the Push active phase is an ordinary hit on the pusher', () => {
-      const tsuppariAt = PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS - TSUPPARI_STARTUP_TICKS // hit on the 1st recovery tick
+      const tsuppariAt = PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS - TSUPPARI_STARTUP_TICKS // hit on the 1st recovery tick
       const { trace } = pushVsTsuppari(tsuppariAt)
       const hitTick = tsuppariAt + TSUPPARI_STARTUP_TICKS + 1
       const twin = pushVsTsuppari(-1).trace // no Tsuppari
@@ -669,7 +678,7 @@ describe('Tsuppari (ACTION-07B)', () => {
       expect(MAX_EXTERNAL_SPEED).toBe(3)
       expect(EXTERNAL_DECELERATION).toBe(8)
       expect(KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER).toBe(1.5)
-      expect([PUSH_STARTUP_TICKS, PUSH_ACTIVE_TICKS, PUSH_RECOVERY_TICKS]).toEqual([6, 8, 10])
+      expect([PUSH_STARTUP_TICKS, PUSH_IMPACT_TICKS, PUSH_RECOVERY_TICKS]).toEqual([6, 8, 10])
       expect(PUSH_EXTERNAL_ACCELERATION).toBe(26.25)
       expect(J).toBeLessThan(MAX_EXTERNAL_SPEED)
     })
@@ -760,7 +769,7 @@ describe('Tsuppari (ACTION-07B)', () => {
     it('TS42: Tsuppari edges during another action or a recovery are dropped (not queued)', () => {
       const push = sim(-2, 2)
       push.step(intents({ push: true }))
-      for (let t = 1; t < PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS - 1; t++) {
+      for (let t = 1; t < PUSH_STARTUP_TICKS + PUSH_CHARGE_TICKS + PUSH_RECOVERY_TICKS - 1; t++) {
         push.step(intents({ left: true }))
         expect(kind(A(push.getSnapshot()))).toBe('push')
       }

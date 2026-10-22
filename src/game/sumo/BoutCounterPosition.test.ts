@@ -9,6 +9,7 @@ import {
   CONTACT_SLOP,
   KUZUSHI_TICKS,
   MAX_EXTERNAL_SPEED,
+  PUSH_IMPACT_TICKS,
   PUSH_STARTUP_TICKS,
   counterRelocationTarget,
   counterTier,
@@ -91,10 +92,11 @@ function lockedDirection(s: BoutSnapshot): Vec2 {
   return action.direction
 }
 
-// Tier the attacker's current active Push would give a Counter resolving on the next tick.
+// Tier the attacker's current Push would give a Counter resolving on the next tick (ACTION-10B: from the impact
+// window; a window not yet open opens on that contact tick, i.e. elapsed 0).
 function tierOf(s: BoutSnapshot): string | null {
   const action = B(s).action
-  return action.kind === 'push' ? counterTier(action.ticksRemaining) : null
+  return action.kind === 'push' ? counterTier(action.impactTicksRemaining ?? PUSH_IMPACT_TICKS) : null
 }
 
 function pushPhase(s: BoutSnapshot): string | null {
@@ -338,9 +340,9 @@ describe('Counter position resolution (ACTION-04A2)', () => {
       x: (A(before).position.x - B(before).position.x) / dist(before),
       y: (A(before).position.y - B(before).position.y) / dist(before),
     }
-    // geometry has rotated away from the locked direction
+    // geometry has rotated away from the locked direction; the pusher's facing is frozen on it (ACTION-10B)
     expect(Math.abs(Math.atan2(normal.y, normal.x) - Math.atan2(d.y, d.x))).toBeGreaterThan(0.01)
-    expect(Math.abs(B(before).facing - Math.atan2(d.y, d.x))).toBeGreaterThan(0.01)
+    expect(B(before).facing).toBeCloseTo(Math.atan2(d.y, d.x), 12)
     const end = pusherEnd(after, d)
     const done = complete(sim)
     expectAt(B(done).position, end)

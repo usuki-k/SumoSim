@@ -5,7 +5,8 @@ import {
   COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
   KUZUSHI_TICKS,
-  PUSH_ACTIVE_TICKS,
+  PUSH_CHARGE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_STARTUP_TICKS,
   TSUPPARI_RECOVERY_TICKS,
   TSUPPARI_STARTUP_TICKS,
@@ -74,13 +75,13 @@ describe('wrestler visual state (VISUAL-01A)', () => {
   it('locomotion uses own footwork only (external push momentum is not walking)', () => {
     const sim = touching()
     sim.step(intents({}, { push: true }))
-    for (let k = 0; k < PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS; k++) sim.step(intents())
+    for (let k = 0; k < PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS; k++) sim.step(intents())
     const s = sim.getSnapshot()
     expect(Math.hypot(s.participants[0].externalVelocity.x, s.participants[0].externalVelocity.y)).toBeGreaterThan(0.3)
     expect(vis(s, 0).pose).toBe('idle') // being driven back, not walking
   })
 
-  it('push maps startup / active / recovery with progress from ticksRemaining', () => {
+  it('push maps startup / active (charge, then impact) / recovery with progress from the canonical Push state', () => {
     const sim = new BoutSimulation(setupAt(-2, 0, 2, 0))
     sim.step(intents({ push: true }))
     let v = vis(sim.getSnapshot(), 0)
@@ -91,8 +92,16 @@ describe('wrestler visual state (VISUAL-01A)', () => {
     v = vis(sim.getSnapshot(), 0)
     expect(v.pushPhase).toBe('active')
     expect(v.phaseProgress).toBe(0)
-    for (let k = 0; k < PUSH_ACTIVE_TICKS; k++) sim.step(intents())
+    sim.step(intents())
+    expect(vis(sim.getSnapshot(), 0).phaseProgress).toBeCloseTo(1 / PUSH_CHARGE_TICKS, 12) // no contact: charge
+    for (let k = 1; k < PUSH_CHARGE_TICKS; k++) sim.step(intents())
     expect(vis(sim.getSnapshot(), 0).pushPhase).toBe('recovery')
+    // in contact the active progress follows the impact window
+    const hit = touching()
+    hit.step(intents({ push: true }))
+    for (let k = 0; k < PUSH_STARTUP_TICKS; k++) hit.step(intents())
+    expect(vis(hit.getSnapshot(), 0)).toMatchObject({ pushPhase: 'active' })
+    expect(vis(hit.getSnapshot(), 0).phaseProgress).toBeCloseTo(1 / PUSH_IMPACT_TICKS, 12)
     for (let k = 0; k < 20; k++) sim.step(intents())
     expect(vis(sim.getSnapshot(), 0).pose).toBe('idle')
   })

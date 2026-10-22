@@ -9,7 +9,8 @@ import {
   KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
   MAX_EXTERNAL_SPEED,
-  PUSH_ACTIVE_TICKS,
+  PUSH_CHARGE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_EXTERNAL_ACCELERATION,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
@@ -133,7 +134,7 @@ describe('Kuzushi follow-up window (ACTION-09B)', () => {
       const snaps: BoutSnapshot[] = []
       s.step(intents({ push: true }))
       snaps.push(s.getSnapshot())
-      for (let t = 0; t < PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS; t++) {
+      for (let t = 0; t < PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS + PUSH_RECOVERY_TICKS; t++) {
         s.step(IDLE)
         snaps.push(s.getSnapshot())
       }
@@ -176,7 +177,7 @@ describe('Kuzushi follow-up window (ACTION-09B)', () => {
       failCounterB(s)
       s.step(intents({ push: true }))
       const phases = new Set<string>()
-      for (let t = 0; t < PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS - 1; t++) {
+      for (let t = 0; t < PUSH_STARTUP_TICKS + PUSH_CHARGE_TICKS + PUSH_RECOVERY_TICKS - 1; t++) {
         s.step(IDLE)
         const snap = s.getSnapshot()
         const action = A(snap).action
@@ -185,7 +186,7 @@ describe('Kuzushi follow-up window (ACTION-09B)', () => {
         expect(B(snap).externalVelocity).toEqual({ x: 0, y: 0 })
       }
       expect([...phases].sort()).toEqual(['active', 'recovery', 'startup'])
-      expect(posture(B(s.getSnapshot()))).toBe(KUZUSHI_TICKS - (PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS))
+      expect(posture(B(s.getSnapshot()))).toBe(KUZUSHI_TICKS - (PUSH_STARTUP_TICKS + PUSH_CHARGE_TICKS + PUSH_RECOVERY_TICKS))
     })
 
     it('P6: a Kuzushi participant can never be one of two cancelling Pushes (its Push press is ignored); equal Pushes still cancel', () => {

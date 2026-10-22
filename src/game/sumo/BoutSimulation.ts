@@ -38,9 +38,13 @@ export const BODY_RADIUS = 0.35 // m
 // Contact is detected within this distance of touching, so resting contact does not flicker.
 export const CONTACT_SLOP = 0.002 // m
 
-// Discrete Push (ACTION-03B). Provisional Prototype tuning, subject to User Play Test.
+// Push charge (ACTION-03B -> ACTION-10B). Provisional Prototype tuning, subject to User Play Test.
 export const PUSH_STARTUP_TICKS = 6 // ~100 ms: steering suppressed, braking, no force yet
-export const PUSH_ACTIVE_TICKS = 8 // ~133 ms: short locked drive; pushes only while in contact
+// Committed straight charge along the press-time direction (active), at most this long without contact.
+export const PUSH_CHARGE_TICKS = 24 // ~400 ms
+// The first body contact of the charge opens the impact window: Push force (only while in contact) and
+// Counter interaction exist only inside it; when it expires the Push goes straight to recovery.
+export const PUSH_IMPACT_TICKS = 8 // ~133 ms (the former PUSH_ACTIVE_TICKS force duration)
 export const PUSH_RECOVERY_TICKS = 10 // ~167 ms: steering suppressed, braking, no force
 // Pair acceleration along the contact normal per net active Push (+1 / -1). ACTION-07B: 20 -> 26.25, about
 // twice the old representative Push displacement (0.267 m -> 0.533 m) without touching the clamp / decay.
@@ -50,8 +54,8 @@ export const EXTERNAL_DECELERATION = 8 // m/s^2
 export const MAX_EXTERNAL_SPEED = 3 // m/s
 
 // Down Counter + Kuzushi (ACTION-04A1). Provisional Prototype tuning, subject to User Play Test.
-export const COUNTER_WINDOW_TICKS = 12 // ~200 ms: waits for an opponent active Push in contact
-// A Counter catching the first COUNTER_BEST_TICKS active Push ticks (elapsed 0..2) is Best.
+export const COUNTER_WINDOW_TICKS = 12 // ~200 ms: waits for an opponent Push impact in contact
+// A Counter catching the first COUNTER_BEST_TICKS impact-window ticks (elapsed 0..2) is Best.
 export const COUNTER_BEST_TICKS = 3
 // Kuzushi follow-up window (ACTION-09B): at most KUZUSHI_TICKS full ticks; the first successful follow-up
 // (Push force received, Tsuppari hit received, valid Grip) gets the Kuzushi benefit and consumes it.
@@ -105,7 +109,7 @@ type MutableVec2 = { x: number; y: number }
 
 type MutableAction =
   | { kind: 'idle' }
-  | { kind: 'push'; phase: PushPhase; ticksRemaining: number; direction: MutableVec2 }
+  | { kind: 'push'; phase: PushPhase; ticksRemaining: number; direction: MutableVec2; impactTicksRemaining: number | null }
   | { kind: 'counter'; ticksRemaining: number }
   | { kind: 'grip'; phase: GripPhase; ticksRemaining: number }
   | { kind: 'drive' }
@@ -161,7 +165,7 @@ type CounterTransitionState = { readonly kind: 'none' } | ActiveCounterTransitio
 const ZERO_MOVE: Vec2 = { x: 0, y: 0 }
 
 function nextPushPhase(phase: PushPhase): { phase: PushPhase; ticks: number } | null {
-  if (phase === 'startup') return { phase: 'active', ticks: PUSH_ACTIVE_TICKS }
+  if (phase === 'startup') return { phase: 'active', ticks: PUSH_CHARGE_TICKS }
   if (phase === 'active') return { phase: 'recovery', ticks: PUSH_RECOVERY_TICKS }
   return null
 }
@@ -262,11 +266,12 @@ function copyEngagement(engagement: BoutEngagement): BoutEngagement {
   return { kind: 'grappled', advantage }
 }
 
-// Tier of a Counter that catches an active Push, from the Push's active ticks remaining.
+// Tier of a Counter that catches a Push impact, from the Push's impact ticks remaining (ACTION-10B: timed from
+// the first body contact, not from the charge start, so a long run-up can still be caught Best).
 // ACTION-04A1: Best and Success share the same result; positional outcomes come later.
-export function counterTier(pushActiveTicksRemaining: number): Exclude<CounterTier, 'fail'> {
-  const activeElapsed = PUSH_ACTIVE_TICKS - pushActiveTicksRemaining
-  return activeElapsed < COUNTER_BEST_TICKS ? 'best' : 'success'
+export function counterTier(pushImpactTicksRemaining: number): Exclude<CounterTier, 'fail'> {
+  const impactElapsed = PUSH_IMPACT_TICKS - pushImpactTicksRemaining
+  return impactElapsed < COUNTER_BEST_TICKS ? 'best' : 'success'
 }
 
 // A Counter target: the defender's center plus its bearing `theta` around the attacker in the
@@ -371,8 +376,16 @@ function clampExternal(v: MutableVec2): void {
   }
 }
 
+// A Push that can exert force / be Countered: its impact window is open.
 function isPushActive(p: MutableParticipant): boolean {
-  return p.action.kind === 'push' && p.action.phase === 'active'
+  return p.action.kind === 'push' && p.action.phase === 'active' && (p.action.impactTicksRemaining ?? 0) > 0
+}
+
+// The first body contact of an active charge opens its impact window on that same tick.
+function openPushImpact(p: MutableParticipant): void {
+  if (p.action.kind === 'push' && p.action.phase === 'active' && p.action.impactTicksRemaining === null) {
+    p.action.impactTicksRemaining = PUSH_IMPACT_TICKS
+  }
 }
 
 function copyAction(action: MutableAction): ParticipantActionState {
@@ -396,6 +409,7 @@ function copyAction(action: MutableAction): ParticipantActionState {
     phase: action.phase,
     ticksRemaining: action.ticksRemaining,
     direction: { x: action.direction.x, y: action.direction.y },
+    impactTicksRemaining: action.impactTicksRemaining,
   }
 }
 
@@ -607,6 +621,7 @@ export class BoutSimulation {
             phase: 'startup',
             ticksRemaining: PUSH_STARTUP_TICKS,
             direction: { x: Math.cos(p.facing), y: Math.sin(p.facing) },
+            impactTicksRemaining: null,
           }
         } else if (intent?.tsuppariLeftPressed === true && p.tsuppariCooldown.left === 0) {
           startTsuppari(p, 'left')
@@ -633,6 +648,8 @@ export class BoutSimulation {
     if (grappled) {
       this.resolveGrappleBond()
     } else {
+      // Impact opens before the Counter / force resolution of this tick (first contact can be Best and push).
+      if (contact) for (const p of this.participants) openPushImpact(p)
       this.resolveCounter(contact)
       this.resolveGrip()
       if (this.engagement.kind === 'free') this.resolveForces(contact)
@@ -924,10 +941,10 @@ export class BoutSimulation {
       }
       // Push Counter needs actual body contact this tick.
       if (!contact) continue
-      if (attacker.action.kind !== 'push' || attacker.action.phase !== 'active') continue
+      if (attacker.action.kind !== 'push' || !isPushActive(attacker)) continue
       // Captured before enterKuzushi cancels the Push.
       const d: Vec2 = { x: attacker.action.direction.x, y: attacker.action.direction.y }
-      const tier = counterTier(attacker.action.ticksRemaining)
+      const tier = counterTier(attacker.action.impactTicksRemaining ?? PUSH_IMPACT_TICKS)
       const pusherStart: Vec2 = { x: attacker.position.x, y: attacker.position.y }
       const pusherEnd: Vec2 = {
         x: pusherStart.x + d.x * COUNTER_STAGGER_DISTANCE,
@@ -1097,6 +1114,14 @@ export class BoutSimulation {
       return
     }
     if (p.action.kind !== 'push') return
+    // Inside the impact window only the window counts (the unused charge never resumes); at 0 -> recovery.
+    if (p.action.phase === 'active' && p.action.impactTicksRemaining !== null) {
+      p.action.impactTicksRemaining -= 1
+      if (p.action.impactTicksRemaining > 0) return
+      p.action.phase = 'recovery'
+      p.action.ticksRemaining = PUSH_RECOVERY_TICKS
+      return
+    }
     p.action.ticksRemaining -= 1
     if (p.action.ticksRemaining > 0) return
     const next = nextPushPhase(p.action.phase)
@@ -1109,7 +1134,8 @@ export class BoutSimulation {
   }
 
   // FREE: each participant faces the other instantly; keeps the previous facing if positions coincide.
-  // A participant in Kuzushi keeps its facing fixed (side / back exposure stays readable).
+  // A participant in Kuzushi keeps its facing fixed (side / back exposure stays readable), and so does a
+  // pushing participant for its whole Push (ACTION-10B: the facing stays on the locked charge direction).
   // GRAPPLED: each turns toward the other at GRAPPLE_TURN_RATE (facing only; positions untouched), so
   // a side / rear grip leaves the victim TURNING until it actually faces its opponent.
   private updateFacing(): void {
@@ -1122,7 +1148,7 @@ export class BoutSimulation {
       b.facing = nextB
       return
     }
-    if (a.posture.kind !== 'kuzushi') a.facing = facingToward(a.position, b.position, a.facing)
-    if (b.posture.kind !== 'kuzushi') b.facing = facingToward(b.position, a.position, b.facing)
+    if (a.posture.kind !== 'kuzushi' && a.action.kind !== 'push') a.facing = facingToward(a.position, b.position, a.facing)
+    if (b.posture.kind !== 'kuzushi' && b.action.kind !== 'push') b.facing = facingToward(b.position, a.position, b.facing)
   }
 }

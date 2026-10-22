@@ -4,7 +4,8 @@ import {
   BoutSimulation,
   EXTERNAL_DECELERATION,
   MAX_EXTERNAL_SPEED,
-  PUSH_ACTIVE_TICKS,
+  PUSH_CHARGE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_EXTERNAL_ACCELERATION,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
@@ -13,7 +14,8 @@ import {
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from './BoutTypes.ts'
 
 const COMBINED = 2 * BODY_RADIUS
-const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS
+// A Push that never makes contact runs its whole charge (ACTION-10B); with contact it is shorter.
+const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_CHARGE_TICKS + PUSH_RECOVERY_TICKS
 
 function setupAt(ax: number, ay: number, bx: number, by: number): BoutSetup {
   return {
@@ -112,11 +114,11 @@ describe('discrete Push action (ACTION-03B)', () => {
     }
     const count = (ph: string) => applied.filter((x) => x === ph).length
     expect(count('startup')).toBe(PUSH_STARTUP_TICKS)
-    expect(count('active')).toBe(PUSH_ACTIVE_TICKS)
+    expect(count('active')).toBe(PUSH_CHARGE_TICKS) // no contact: the whole committed charge
     expect(count('recovery')).toBe(PUSH_RECOVERY_TICKS)
     expect(applied.slice(0, PUSH_TOTAL_TICKS)).toEqual([
       ...Array(PUSH_STARTUP_TICKS).fill('startup'),
-      ...Array(PUSH_ACTIVE_TICKS).fill('active'),
+      ...Array(PUSH_CHARGE_TICKS).fill('active'),
       ...Array(PUSH_RECOVERY_TICKS).fill('recovery'),
     ])
     expect(applied[PUSH_TOTAL_TICKS]).toBe('idle')
@@ -133,18 +135,20 @@ describe('discrete Push action (ACTION-03B)', () => {
     expect(phaseOf(sim.getSnapshot(), 0)).toBe('startup')
   })
 
-  it('T39: the Push direction does not retarget when the opponent moves', () => {
+  it('T39: the Push direction and the canonical facing do not retarget when the opponent moves', () => {
     const sim = new BoutSimulation(setupAt(-1, 0, 1, 0))
     sim.step(intents({ push: true }))
     const locked = A(sim.getSnapshot()).action
-    for (let k = 1; k < PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS; k++) {
-      sim.step(intents({}, { move: [0, 1] })) // B walks away sideways; A keeps auto-facing B
+    for (let k = 1; k < PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS; k++) {
+      sim.step(intents({}, { move: [0, 1] })) // B walks away sideways; A's facing stays frozen (ACTION-10B)
       const action = A(sim.getSnapshot()).action
       if (action.kind === 'push' && locked.kind === 'push') {
         expect(action.direction).toEqual(locked.direction)
       }
     }
-    expect(A(sim.getSnapshot()).facing).toBeGreaterThan(0.1) // facing did follow B
+    if (locked.kind === 'push') {
+      expect(A(sim.getSnapshot()).facing).toBeCloseTo(Math.atan2(locked.direction.y, locked.direction.x), 12) // no turn
+    }
   })
 
   it('T40: WASD does not steer during the Push and resumes afterwards', () => {
@@ -167,13 +171,13 @@ describe('discrete Push action (ACTION-03B)', () => {
     sim.step(intents({ push: true }))
     stepN(sim, PUSH_STARTUP_TICKS - 1)
     expect(A(sim.getSnapshot()).velocity).toEqual({ x: 0, y: 0 })
-    stepN(sim, PUSH_ACTIVE_TICKS)
+    stepN(sim, PUSH_IMPACT_TICKS)
     const v = A(sim.getSnapshot()).velocity
     expect(v.x).toBeGreaterThan(0)
     expect(v.y).toBeCloseTo(0, 12)
   })
 
-  it('T41: a non-contact Push is a short committed step with no external momentum', () => {
+  it('T41: a non-contact Push is a committed charge (ACTION-10B, ~0.94 m) with no external momentum', () => {
     const sim = new BoutSimulation(setupAt(-1, 0, 50, 0))
     sim.step(intents({ push: true }))
     for (let k = 1; k < PUSH_TOTAL_TICKS + 30; k++) {
@@ -181,8 +185,8 @@ describe('discrete Push action (ACTION-03B)', () => {
       expect(A(sim.getSnapshot()).externalVelocity).toEqual({ x: 0, y: 0 })
     }
     const travelled = A(sim.getSnapshot()).position.x + 1
-    expect(travelled).toBeGreaterThan(0.05)
-    expect(travelled).toBeLessThan(0.3) // a step, not a dash
+    expect(travelled).toBeGreaterThan(0.9) // the committed 24-tick charge + recovery coast
+    expect(travelled).toBeLessThan(0.97)
     expect(A(sim.getSnapshot()).velocity).toEqual({ x: 0, y: 0 })
   })
 
@@ -249,7 +253,7 @@ describe('discrete Push action (ACTION-03B)', () => {
   it('T44: external momentum decays monotonically to exact zero without reversal', () => {
     const sim = new BoutSimulation(setupAt(0, 0, COMBINED, 0))
     sim.step(intents({ push: true }))
-    stepN(sim, PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS)
+    stepN(sim, PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS)
     let prev = speed(B(sim.getSnapshot()).externalVelocity)
     expect(prev).toBeGreaterThan(0)
     expect(prev).toBeLessThanOrEqual(MAX_EXTERNAL_SPEED)
@@ -283,7 +287,7 @@ describe('discrete Push action (ACTION-03B)', () => {
   it('T45: external momentum is not erased by grounded footwork damping', () => {
     const sim = new BoutSimulation(setupAt(0, 0, COMBINED, 0))
     sim.step(intents({ push: true }))
-    stepN(sim, PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS - 1)
+    stepN(sim, PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS - 1)
     const e0 = B(sim.getSnapshot()).externalVelocity.x
     // B now steers perpendicular (lateral damping would kill this x motion fast if it were footwork)
     for (let k = 1; k <= 5; k++) {

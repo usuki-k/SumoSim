@@ -6,7 +6,8 @@ import {
   GRIP_REACH_TICKS,
   GRIP_RECOVERY_TICKS,
   KUZUSHI_TICKS,
-  PUSH_ACTIVE_TICKS,
+  PUSH_CHARGE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
   TSUPPARI_ACTIVE_TICKS,
@@ -71,10 +72,16 @@ function grappleRole(self: ParticipantState, engagement: BoutEngagement): Grappl
   return engagement.advantage.holderId === self.id ? 'morozashi-holder' : 'morozashi-disadvantaged'
 }
 
-const PUSH_PHASE_TICKS: Record<PushPhase, number> = {
+const PUSH_PHASE_TICKS: Record<Exclude<PushPhase, 'active'>, number> = {
   startup: PUSH_STARTUP_TICKS,
-  active: PUSH_ACTIVE_TICKS,
   recovery: PUSH_RECOVERY_TICKS,
+}
+
+// Push progress (ACTION-10B): active is the charge until the first contact, then the impact window.
+function pushProgress(action: Extract<ParticipantState['action'], { kind: 'push' }>): number {
+  if (action.phase !== 'active') return progress(action.ticksRemaining, PUSH_PHASE_TICKS[action.phase])
+  if (action.impactTicksRemaining === null) return progress(action.ticksRemaining, PUSH_CHARGE_TICKS)
+  return progress(action.impactTicksRemaining, PUSH_IMPACT_TICKS)
 }
 const GRIP_PHASE_TICKS: Record<GripPhase, number> = { reach: GRIP_REACH_TICKS, recovery: GRIP_RECOVERY_TICKS }
 const TSUPPARI_PHASE_TICKS: Record<TsuppariPhase, number> = {
@@ -120,7 +127,7 @@ export function resolveWrestlerVisualState(
       ...base,
       pose: 'push',
       pushPhase: action.phase,
-      phaseProgress: progress(action.ticksRemaining, PUSH_PHASE_TICKS[action.phase]),
+      phaseProgress: pushProgress(action),
     }
   }
   if (action.kind === 'tsuppari') {

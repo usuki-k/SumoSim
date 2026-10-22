@@ -6,7 +6,8 @@ import {
   COUNTER_WINDOW_TICKS,
   KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
-  PUSH_ACTIVE_TICKS,
+  PUSH_CHARGE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_EXTERNAL_ACCELERATION,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
@@ -17,7 +18,8 @@ import {
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from './BoutTypes.ts'
 
 const COMBINED = 2 * BODY_RADIUS
-const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS
+// Upper bound of one Push: a no-contact Push runs its whole charge (ACTION-10B); with contact it is shorter.
+const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_CHARGE_TICKS + PUSH_RECOVERY_TICKS
 
 function setupAt(ax: number, ay: number, bx: number, by: number): BoutSetup {
   return {
@@ -164,12 +166,12 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     expect(A(tooLate).posture.kind).toBe('kuzushi')
   })
 
-  it('T63: Best covers exactly the first COUNTER_BEST_TICKS active ticks', () => {
+  it('T63: Best covers exactly the first COUNTER_BEST_TICKS impact-window ticks', () => {
     expect(COUNTER_BEST_TICKS).toBe(3)
-    expect(counterTier(PUSH_ACTIVE_TICKS)).toBe('best') // elapsed 0
-    expect(counterTier(PUSH_ACTIVE_TICKS - 1)).toBe('best') // elapsed 1
-    expect(counterTier(PUSH_ACTIVE_TICKS - 2)).toBe('best') // elapsed 2
-    expect(counterTier(PUSH_ACTIVE_TICKS - 3)).toBe('success') // elapsed 3
+    expect(counterTier(PUSH_IMPACT_TICKS)).toBe('best') // elapsed 0
+    expect(counterTier(PUSH_IMPACT_TICKS - 1)).toBe('best') // elapsed 1
+    expect(counterTier(PUSH_IMPACT_TICKS - 2)).toBe('best') // elapsed 2
+    expect(counterTier(PUSH_IMPACT_TICKS - 3)).toBe('success') // elapsed 3
     expect(counterTier(1)).toBe('success') // last active tick
   })
 
@@ -177,11 +179,11 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     for (let c = 0; c <= PUSH_STARTUP_TICKS + 2; c++) {
       const { resolvedAt, attackerBefore } = pushVsCounter(c)
       expect(resolvedAt).toBe(Math.max(c, PUSH_STARTUP_TICKS))
-      expect(attackerBefore.kind === 'push' && counterTier(attackerBefore.ticksRemaining)).toBe('best')
+      expect(attackerBefore.kind === 'push' && counterTier(attackerBefore.impactTicksRemaining ?? PUSH_IMPACT_TICKS)).toBe('best')
     }
     const { resolvedAt, attackerBefore } = pushVsCounter(PUSH_STARTUP_TICKS + COUNTER_BEST_TICKS)
     expect(resolvedAt).toBe(PUSH_STARTUP_TICKS + COUNTER_BEST_TICKS)
-    expect(attackerBefore.kind === 'push' && counterTier(attackerBefore.ticksRemaining)).toBe('success')
+    expect(attackerBefore.kind === 'push' && counterTier(attackerBefore.impactTicksRemaining ?? PUSH_IMPACT_TICKS)).toBe('success')
   })
 
   it('T64: a later active tick resolves Success, cancels that tick of Push force and absorbs the pair momentum', () => {
@@ -217,13 +219,13 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     expect(posture(early.getSnapshot(), 1)).toBe('stable')
 
     // too late: Counter pressed on B's first Recovery tick
-    const late = pushVsCounter(PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS)
+    const late = pushVsCounter(PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS)
     expect(late.resolvedAt).toBeNull()
     expect(posture(late.sim.getSnapshot(), 1)).toBe('stable')
     // A failed (window expired); it has had time to recover since
     const lateA = touching()
-    for (let t = 0; t <= PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + COUNTER_WINDOW_TICKS - 1; t++) {
-      lateA.step(intents({ counter: t === PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS }, { push: t === 0 }))
+    for (let t = 0; t <= PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS + COUNTER_WINDOW_TICKS - 1; t++) {
+      lateA.step(intents({ counter: t === PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS }, { push: t === 0 }))
     }
     expect(posture(lateA.getSnapshot(), 0)).toBe('kuzushi')
   })

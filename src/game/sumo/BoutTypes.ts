@@ -69,10 +69,15 @@ export type ParticipantActionState =
   | {
       readonly kind: 'push'
       readonly phase: PushPhase
-      // Ticks left in the current phase, including the next tick (always >= 1).
+      // Ticks left in the current phase, including the next tick (always >= 1). In `active` this is the
+      // remaining committed charge budget; it stops counting once the impact window opens (unused charge
+      // never resumes).
       readonly ticksRemaining: number
-      // Unit drive direction locked when the Push began.
+      // Unit drive direction locked when the Push began (the canonical facing stays on it for the whole Push).
       readonly direction: Vec2
+      // ACTION-10B impact window: null until the first body contact of the active charge; then
+      // PUSH_IMPACT_TICKS counting down (Push force / Counter only while > 0); 0 once it expired into recovery.
+      readonly impactTicksRemaining: number | null
     }
   | {
       readonly kind: 'counter'

@@ -3,7 +3,7 @@ import {
   BODY_RADIUS,
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
-  PUSH_ACTIVE_TICKS,
+  PUSH_IMPACT_TICKS,
   PUSH_RECOVERY_TICKS,
   PUSH_STARTUP_TICKS,
   TSUPPARI_HAND_REACH,
@@ -11,7 +11,7 @@ import {
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
 import { DUMMY_PUSH_COOLDOWN_TICKS, DUMMY_TSUPPARI_RANGE, PushDummyController } from './pushDummyController.ts'
 
-const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_ACTIVE_TICKS + PUSH_RECOVERY_TICKS
+const PUSH_TOTAL_TICKS = PUSH_STARTUP_TICKS + PUSH_IMPACT_TICKS + PUSH_RECOVERY_TICKS
 const COMBINED = 2 * BODY_RADIUS
 
 function setup(ax: number, bx: number): BoutSetup {
