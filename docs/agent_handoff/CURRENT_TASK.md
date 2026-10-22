@@ -1,5 +1,5 @@
 Task-ID: ACTION-07C2-TSUPPARI-RIGHT-POSE-AND-REACH-TUNE
-Status: READY
+Status: REVIEWED
 Task-Type: ART REFRESH + SMALL GAMEPLAY TUNE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -481,3 +481,180 @@ Apply exactly two functional changes:
 2. increase Tsuppari reach from 0.525 m to 0.55 m.
 
 Keep everything else unchanged as much as possible.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-22
+Overall Result: PASS / USER PLAY TEST ACCEPTED
+Accepted Technical Baseline: df2575d8520f2bb05edfb1c4f2677b6af207c060
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-07C2.
+
+Confirmed from Current Source / diff:
+
+- the red-right Tsuppari candidate was replaced again
+- only red-right-derived Visual-Gate textures changed
+- red-left-derived textures remain unchanged
+- MIRROR-L remains unchanged
+- accepted idle red/blue sprites remain unchanged
+- Tsuppari gameplay source changed only at the reach constant / comment
+- input / scene gameplay logic is unchanged
+- reach tests were extended rather than weakened.
+
+## Accepted Art Refresh
+
+New red-right source identity:
+
+- decoded RGBA SHA-256:
+  d7d5632f8357bd1e4427d2bcdcee5a6e74307fcd9d0caca2d86d102ec8719011
+
+Accepted current Visual-Gate normalization result:
+
+- source_front_deg: 157.8
+- root_source_px: (818, 688)
+- body_core_source_px: (663, 309) - (920, 940)
+- runtime red-right: 193 x 163
+- red-right pivot: (79, 87)
+- reflected blue-left pivot: (79, 76)
+- body core: 123.076923 px.
+
+User Play Test reports the refreshed right-arm visual is acceptable.
+
+## Accepted Reach Tune
+
+User Play Test reports the reach tune is acceptable.
+
+Accepted current Prototype value:
+
+- TSUPPARI_HAND_REACH = 0.55 m
+
+Current equal-radius center threshold:
+
+- 0.55 + BODY_RADIUS(0.35) = 0.90 m
+
+Keep the existing center-distance rule:
+
+- hit iff centerDistance <= TSUPPARI_HAND_REACH + receiver.bodyRadius.
+
+Do not revert to 0.525 m in unrelated tasks.
+
+## Gameplay Preservation Review
+
+Confirmed unchanged:
+
+- PUSH_EXTERNAL_ACCELERATION
+- TSUPPARI_IMPULSE
+- TSUPPARI_COUPLED_SHARE
+- cooldown
+- startup / active / recovery
+- 5 ordinary hits -> 6th Kuzushi
+- Tsuppari Counter semantics
+- Push Counter semantics
+- Push/Tsuppari contest
+- Tsuppari/Tsuppari contest
+- clamp / decay
+- ring-out.
+
+No material gameplay deviation found.
+
+## Asset Delta Review
+
+Changed as expected:
+
+- separate_red_right.png
+- separate_blue_left.png
+- mirror_r_red_right.png
+- mirror_r_red_left.png
+- mirror_r_blue_right.png
+- mirror_r_blue_left.png
+
+Confirmed unchanged:
+
+- separate_red_left.png
+- separate_blue_right.png
+- mirror_l_red_left.png
+- mirror_l_red_right.png
+- mirror_l_blue_left.png
+- mirror_l_blue_right.png
+- accepted idle red.png
+- accepted idle blue.png.
+
+## Verification Review
+
+Reported and accepted:
+
+- focused wrestler-art: 19 PASS
+- full wrestler-art: 144 PASS
+- focused BoutTsuppari: 45 PASS
+- pnpm test: 22 files / 350 tests PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- deterministic gate exporter --check: PASS
+- browser/runtime smoke: 52 / 52 PASS.
+
+Reach-specific coverage includes:
+
+- 0.90 m boundary
+- old-to-new extension band
+- Counter within the extended reach
+- unchanged non-reach Tsuppari constants.
+
+## User Play Test Result
+
+ACCEPTED.
+
+The User reports the current Play Test is OK.
+
+Accepted current Prototype baseline:
+
+- SEPARATE visual strategy is the preferred/accepted visual result for Tsuppari
+- refreshed shorter red-right pose is accepted
+- derived blue-left from that right pose is accepted
+- TSUPPARI_HAND_REACH = 0.55 m is accepted for the current Prototype
+- current Push / Tsuppari force relationship remains accepted from the previous Play Test context.
+
+This acceptance is sufficient to proceed to permanent Product-art promotion.
+
+## Measurement Reproducibility — Required Follow-up
+
+Before or as part of permanent Product promotion, resolve the known measurement-method ambiguity:
+
+- repository prose currently says 7 px erosion
+- the calibrated procedure used by 07C1/07C2 is 7 px opening (erosion + dilation)
+- the measurement helper itself is not committed.
+
+The promotion Task should make the normalization measurement reproducible and align documentation with the actual method.
+
+Do not reopen the accepted visual result while fixing this tooling/documentation reproducibility issue.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- refreshed red-right pose
+- SEPARATE Tsuppari visual choice
+- Tsuppari reach 0.55 m
+- current left/right hand mapping
+- current gameplay timing / cooldown / buildup / Counter semantics
+- accepted idle red-master art baseline.
+
+## Next Task Constraint
+
+Recommended next Task:
+
+ACTION-07D-TSUPPARI-PRODUCT-ART-PROMOTION
+
+It should:
+
+- promote SEPARATE from temporary gate to permanent Tsuppari Product art baseline
+- retire/remove temporary MIRROR-L / MIRROR-R runtime gate machinery as appropriate
+- keep the accepted SEPARATE textures/hand mapping
+- update WRESTLER_PRODUCT_ART_SPEC and ARCHITECTURE
+- formalize the normalization measurement method/helper
+- keep ACTION-07B/07C2 gameplay unchanged
+- run final integrated browser/user check.
