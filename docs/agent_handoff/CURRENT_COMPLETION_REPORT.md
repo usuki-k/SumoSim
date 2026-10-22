@@ -1,231 +1,405 @@
-Task-ID: ACTION-09B-KUZUSHI-FOLLOWUP-WINDOW
-Result: PASS WITH KNOWN UNTESTED ITEMS
+Task-ID: ACTION-10A-PUSH-CHARGE-INVESTIGATION
+Result: PASS (Investigation complete) — **User Decision Required before ACTION-10B** (charge length: 3x travel vs. whiff self-ring-out; see §0)
 Branch: develop
-Source-Baseline: 45a3916a0480d870239024f1645ec3754cab5ca4
-Agent-Start-Head: 95586d9fde14f3b11bdbe74f134a660861ea2121
+Source-Baseline: 0897776142e854c0a91bc5a79ed6db25426a93ba
+Agent-Start-Head: 60f3d72c53bdd23519045895185985f0e4db686c
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
-# Result
+Production Changes: NONE（commitするのはこのReportだけ。測定はscratchpadの、commitしないSimulationのコピーで行った）
 
-PASS WITH KNOWN UNTESTED ITEMS（Technical PASS: 必須の境界ケースD / P / T / G / C / Vをすべて実行してPASS、`pnpm test` 400 PASS、Browser Smoke 51 / 51 PASS（GPU）。Game Feelは、User Play Testで判断する）。
+# 0. 結論（先に）
 
-Kuzushiを、**最大1.5秒の、最初に成功した1回のfollow-upで消費される**無防備な状態にした:
+## 推奨はOption B
 
-- Push、Tsuppariのfollow-upは1.5倍
-- 有効なGripは、従来どおりMorozashi
-- どれも、そのtickでKuzushiを消費する
+- ArrowUpで、押下時のfacingに向けて固定の方向へ走る（charge）
+- **最初の接触から8 tickの「impact window」** のあいだだけ、Push力をかける
+- windowが終わればrecoveryへ。外せば、charge tickの最後まで走り切ってrecoveryへ
+- 移動の長さとPush力の長さを分けるので、次のものは**現在と完全に同じ**になる:
+  - 接触からのshove: 0.5325 m、force 8 tick
+  - Counter（Bestを含む）
+  - Push vs Tsuppariの連結の長さ
+  - Push同士の打ち消し
+  - ACTION-09BのKuzushi follow-up
 
-次のものは変えていない:
+## ただし、要求の中に矛盾がある（User Decisionが必要）
 
-- Kuzushiの入口、CounterTransition、Push / Tsuppariの基本の値
-- Gripのrange / Morozashi、汗のpresentation、Product art
+- 押下時のPush方向は、FREEのfacing（＝相手を向く）から決まる
+- そのため、相手の中心は **0.70 m（半径の和）以上前方の、土俵の内側** にいる
+- 空振りで攻撃側が外へ出るには、**0.70 m + 相手から縁までの余裕** 以上の移動が要る
+- 「現在の約3倍」の移動は0.386 mなので、**どの配置でも空振りの自滅ring-outは起こらない**（測定で確認した）
 
-# Preflight
+| 方針 | `PUSH_CHARGE_TICKS` | 自由空間の合計移動 | 現在比 | 縁で空振りして外へ出るか |
+|---|---|---|---|---|
+| 3倍を優先 | 14 | 0.386 m | 3.05x | **出ない**（どの配置でも） |
+| 自滅ring-outを優先（推奨案） | **24** | 0.938 m | 7.41x | 出る。押下時の距離0.8 mで、相手が縁から0.1 m以内なら外へ（recovery中に越える） |
+| もっと長く | 28 | 1.138 m | 8.99x | 出る。相手が縁から0.2 mでも外へ（active中に越える） |
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
-- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `45a3916`（`origin/develop` のancestor）、Handoff-Mode GITHUB
-- `45a3916..origin/develop` で変わったのは `docs/agent_handoff/CURRENT_TASK.md` だけ → `merge --ff-only` → `95586d9`
+- 長さは、`PUSH_CHARGE_TICKS` という1つの値で決まる
+- それ以外の設計は、どの値でも同じ
+- Userに選んでほしいのは、**14（3倍）と24（自滅ring-outあり）のどちらにするか**
 
-# 定数（旧 → 新）
+# 1. Current Sourceの確認（推測ではなく、sourceと計測で確かめた）
 
-| 定数 | 旧 | 新 |
+- 定数:
+  - `PUSH_STARTUP_TICKS = 6`、`PUSH_ACTIVE_TICKS = 8`、`PUSH_RECOVERY_TICKS = 10`
+  - `FORWARD_ACCELERATION = 10`、`MAX_SPEED = 3`、`STOP_DECELERATION = 24`
+  - `PUSH_EXTERNAL_ACCELERATION = 26.25`、`EXTERNAL_DECELERATION = 8`
+  - `BODY_RADIUS = 0.35`、`CONTACT_SLOP = 0.002`
+- Pushの開始: FREE + idle + stable のときだけ受け付ける。`direction = (cos facing, sin facing)` を保存する
+- 移動: `effectiveMove` がactiveのときだけ、保存した `direction` で歩く（`applyGroundedVelocity`）。startup / recoveryは入力0で制動
+- 力: `resolveForces` → `resolvePush`。条件は「`isPushActive`（phase active）+ 実際のcontact」
+- 接触: `resolveContact` は円同士
+  - 内向きのself velocityを取り除き、接線方向の成分は残す
+  - 動いている側だけを押し戻す。外力は2人で共有する
+- ring-out: `resolveArenaRingOut`。中心が許される境界（円 + Tokudawaraの窓）を厳密に越えたらOUT。壁やclampは無い
+- facing: FREEの `updateFacing` は、Kuzushi以外の参加者を**毎tick、相手の方向へ瞬時に向ける**。Push中も同じ
+
+# 2. Current Baseline（自由空間、静止から、接触なし）
+
+| Metric | Current |
+|---|---:|
+| startup ticks | 6 |
+| active ticks | 8 |
+| recovery ticks | 10 |
+| 受付からidleまでのtick数 | 24 |
+| startup中の移動 | 0.000000 m |
+| active中の自走（active-only self travel） | **0.100000 m** |
+| recovery / 惰性での移動 | 0.026667 m |
+| 自由空間でのPushの合計移動 | **0.126667 m** |
+| idleの後の移動 | 0 |
+| peak self speed | 1.333333 m/s |
+| 接触からの、力のかかるtick数 | 8 |
+| 接触からのshove（静止した受け手） | attacker / receiver / pair とも 0.5325 m。receiverのpeak external 2.566667 m/s |
+
+予想（active約0.10 m、合計約0.13 m）と一致した。
+
+# 3. 候補の比較
+
+## 各案の中身
+
+- A: activeを14 tickにする（移動と力が同じphase）
+- B: active（=charge）を14 tickにし、最初の接触から8 tickのimpact windowのあいだだけ力をかける。windowが終わればrecovery。B24は、chargeを24 tickにしたもの
+- C: activeは8 tickのまま、Push専用の加速度を22.5 m/s²にする（`MAX_SPEED` 3は変えない）
+
+## 比較表
+
+| Metric | Current | Option A | Option B (14) | Option B (24) | Option C |
+|---|---:|---:|---:|---:|---:|
+| 自由空間の合計移動 | 0.1267 m | 0.3861 m | 0.3861 m | 0.9383 m | 0.3883 m |
+| 現在比 | 1.00x | 3.05x | 3.05x | 7.41x | 3.07x |
+| charge中の移動 | 0.100 | 0.2917 | 0.2917 | 0.775 | 0.225 |
+| chargeの長さ | 8 tick | 14 tick | 最大14 tick | 最大24 tick | 8 tick |
+| peak self speed | 1.333 | 2.333 | 2.333 | 3.0 | 3.0（8 tickで上限） |
+| 受付からidleまで（空振り） | 24 | 30 | 30 | 40 | 24 |
+| 接触で力がかかる長さ | 8 tick | 最大14（実測10） | 8 tick（window） | 8 tick | 8 tick |
+| 接触からの受け手の移動 | 0.5325 | **0.957（1.80x）** | 0.5325（同じ） | 0.5325（同じ） | 0.5325（同じ） |
+| 受け手のpeak external | 2.567 | 3.0（clamp） | 2.567 | 2.567 | 2.567 |
+| 横への回避の読みやすさ | 走りが短く、読む前に終わる | 0.8〜1.0 mで早い読みなら避けられる | Aと同じ | 1.0〜1.1 mは開始時の反応でも避けられる。charge 0.4 s | 0.8 mだと完璧な読みでも当たる。速すぎる |
+| 空振りの自滅ring-out | 出来ない | 出来ない（0.386 < 0.70） | 出来ない | **出来る** | 出来ない |
+| 設計の複雑さ | — | 最小（定数1つ） | 小（Push stateに1つのcounter、`counterTier` の入力） | Bと同じ | 小（Push専用の加速度定数） |
+
+## 不採用
+
+- **A**:
+  - shoveが1.8倍になる
+  - Push vs Tsuppariの連結が14 tickに広がる
+  - Counterで捕まえられる押下の範囲が広がる
+  - 走ってから当たるとBestになり得ない
+  - Pushの衝撃が変わってしまう
+- **C**:
+  - 133 msで3 m/sに達する
+  - 0.8 mでは、完璧な読みでも避けられない（HIT）
+  - 「読める突進」にならない
+  - 3倍でも自滅ring-outは出来ない
+
+# 4. Dodge matrix（通常のMoveだけ。攻撃側は (0,0) で+x、防御側は (s,0)、押下からの指定tickで+yへ動き続ける）
+
+形式: HIT / MISS・最初の接触tick・最小の中心距離・最接近時の防御側の横移動（m）。forceは、Push力が実際にかかったか。
+
+| s | 反応 | Current | Option A | Option B (14) | Option B (24) | Option C |
+|---|---|---|---|---|---|---|
+| 0.8 | 押下と同時 | MISS · – · 0.758 · 0.292 | MISS · – · 0.749 · 0.425 | MISS · – · 0.749 · 0.425 | MISS · – · 0.749 · 0.425 | **HIT** · 12 · 0.700 · 0.253 |
+| 0.8 | 最初のactive tick（6） | HIT · 14 · 0.700 · 0.125（forceなし: recoveryで接触） | HIT · 14 · 0.700 · 0.125 · force | HIT · 14 · force | HIT · 14 · force | HIT · 11 · force |
+| 0.8 | active + 3 | HIT · 13 · force | HIT · 13 · force | HIT · 13 · force | HIT · 13 · force | HIT · 11 · force |
+| 0.8 | active + 6 | HIT · 13 · force | HIT · 13 · force | HIT · 13 · force | HIT · 13 · force | HIT · 11 · force |
+| 0.9 | 押下と同時 | MISS · 0.852 | MISS · 0.832 · 0.475 | MISS · 0.832 | MISS · 0.832 | MISS · 0.705 |
+| 0.9 | 最初のactive | MISS（届かない） | HIT · 18 · 0.253 | HIT · 18 | HIT · 18 | HIT · 13 |
+| 0.9 | active + 3 | MISS | HIT · 17 | HIT · 17 | HIT · 17 | HIT · 13 |
+| 0.9 | active + 6 | MISS | HIT · 17 | HIT · 17 | HIT · 17 | HIT · 13 |
+| 1.0 | 押下と同時 | MISS | MISS · 0.912 | MISS | MISS · 0.912 · 0.575 | MISS |
+| 1.0 | 最初のactive | MISS | MISS · 0.752 · 0.378 | MISS · 0.752 | **MISS · 0.708 · 0.475** | HIT · 16（forceなし） |
+| 1.0 | active + 3 | MISS | HIT · 21（recoveryで接触、forceなし） | HIT · 21（forceなし） | HIT · 20 · force | HIT · 15（forceなし） |
+| 1.0 | active + 6 | MISS | HIT · 20（forceなし） | HIT · 20（forceなし） | HIT · 20 · force | HIT · 15（forceなし） |
+| 1.1 | 押下と同時 | MISS | MISS | MISS | MISS · 0.989 | MISS |
+| 1.1 | 最初のactive | MISS | MISS · 0.840 | MISS | MISS · 0.779 · 0.575 | MISS |
+| 1.1 | active + 3 | MISS | MISS · 0.788 | MISS | HIT · 24 · force | MISS |
+| 1.1 | active + 6 | MISS | MISS · 0.751 | MISS | HIT · 22 · force | MISS |
+
+- Currentは、そもそも0.9 m以上に届かない（反応しなくてもMISS）
+- B（14 / 24）とAは、早く読めば避けられ、遅い反応は当たる。Taskの意図どおり
+- B24は1.0〜1.1 mでも届き、そこでも最初のactive tickで反応すれば避けられる
+- 横移動は、通常のMoveの加速（10 m/s²）なので、必要な横移動（0.25〜0.6 m）には12〜18 tickかかる。chargeが長いほど読み合いが成り立つ
+- 回避専用の状態や、無敵は無い
+- 接触の判定は、既存の円の接触だけ
+
+# 5. Homingしないことの証明（Current、0.8 m、防御側は押下と同時に+yへ）
+
+| tick | phase | attackerの位置 (x, y) | 移動方向 | 保存した`direction` | canonical `facing` |
+|---|---|---|---|---|---|
+| 0 | startup | (0, 0) | – | 0° | 0.2° |
+| 6 | active | (0.0028, 0) | 0° | 0° | 5.6° |
+| 9 | active | (0.0278, 0) | 0° | 0° | 11.2° |
+| 12 | active | (0.0778, 0) | 0° | 0° | 19.3° |
+| 15 | recovery | (0.1244, 0) | 0° | 0° | 29.2° |
+| 21 | recovery | (0.1267, 0) | – | 0° | 45.1° |
+| 24 | idle | (0.1267, 0) | – | – | 50.8° |
+
+- **移動は、押下時の方向に固定されている**（y = 0のまま、移動方向0°）。homingも、目標への吸い付きも無い
+- 空振り / 通り過ぎ（B、0.8 m、押下と同時に避ける）:
+  - 接触なし、力なし
+  - 攻撃側は自由空間と同じ0.3861 m（B24では0.9383 m）を走り切ってrecoveryへ
+  - 相手がいなくなっても止まらない
+
+# 6. Facingの所見
+
+- **移動方向**: 保存した`direction`に固定（上の表）
+- **canonical facing**: FREEの `updateFacing` が、Push中も毎tick、相手の方向へ向き直る。避ける相手を追って、0° → 45°（Current）回った
+- **見た目への影響**:
+  - 体のspriteはfacingで回る
+  - 「体は相手を向いたまま、0°の線を横滑りする」ように見える
+  - 長いchargeほど目立つ（B24は0.4秒）
+  - 「真っ直ぐ突っ込む」という読みやすさを、明確に損なう
+- 次の3案を比べた（いずれも、facingの正本を二重にはしない）:
+
+| 案 | 中身 | 評価 |
 |---|---|---|
-| `KUZUSHI_TICKS` | 30（約0.5秒） | **90（1.5秒 @ 60 Hz）** |
-| Kuzushiのfollow-upの倍率 | `KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5`（Pushだけ） | **`KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER = 1.5`**（PushとTsuppari。**名前を変えた**。1.5を持つ定数は1つだけ） |
+| 1. Push中はcanonical facingを凍結する（**推奨**） | `updateFacing` で、Kuzushiと同じく、`action.kind === 'push'` の参加者を飛ばす。押下時のfacing = `direction` なので、chargeのあいだ体は走る向きのまま | Simulationが向きの唯一の持ち主のまま。Kuzushiという前例がある。presentationは無変更。scratchでは、startupからrecoveryまで0°のまま、idleで相手へ向き直った（例: 69.8°に一気に） |
+| 2. presentationが、Snapshotの `action.direction` から向きを作る | sourceは1つのまま（`direction` はすでにSnapshotにある） | canonical facingとspriteの向きが分かれる。facingを使う箇所（Tsuppariのart選択、Counterの35°、汗、debug marker）が、Push中だけ食い違う。採らない |
+| 3. 変えない | — | 横滑りに見え、突進が読めない。採らない |
 
-- 名前の変更に合わせて、`BoutCounter.test.ts` / `BoutTsuppari.test.ts` と `docs/ARCHITECTURE.md` を更新した
-- ARCHITECTUREには、旧名を履歴として残した
-- 変えていないもの:
-  - `PUSH_EXTERNAL_ACCELERATION`（26.25）、`TSUPPARI_IMPULSE`（2.13）、`MAX_EXTERNAL_SPEED`（3）
-  - Tsuppariのreach / timing / cooldown / buildup
-  - `COUNTER_WINDOW_TICKS`、`COUNTER_TRANSITION_TICKS`、Gripのrange
+- 案1の注意点: recoveryの終わりで、facingが相手へ一気に向き直る（Kuzushiの回復と同じ既存の挙動）
+- 気になれば、別のTaskで扱う（10Bの範囲外にしてよい）
+- facingは、押下時の方向、接触の同心fallback、表示に使われる
+- Push中のGripは、相手がidleでないと有効にならない
+- Counterの移動は `direction` を使う
+- したがって、凍結しても、ほかのgameplayの意味は変わらない
 
-# 消費を実装した場所（すべて `src/game/sumo/BoutSimulation.ts`）
+# 7. Edge matrix（自滅ring-out）
 
-- **`resolveForces`**（Push / Tsuppariの力を解決する1か所）:
-  1. 先頭で `wasKuzushi`（効果を加える前のKuzushi状態のset）を控える
-     - 参加者の順序に依存しない
-     - 別の「消費済み」flagは持たない（`posture` だけ）
-  2. `followUp(receiver)`: 受け手が `wasKuzushi` に含まれていれば、`followUpReceivers` に記録して1.5を返す。含まれていなければ1
-  3. Tsuppariの命中（受け手だけに入るpath）: `impulse = TSUPPARI_IMPULSE × followUp(receiver)`（clampは従来どおり）
-  4. Pushが接触してactiveのpath: `resolvePush(contact, strikeNet, followUp)`
-     - `strikeNet` は、命中ごとに `followUp` の倍率を掛けた符号付きの和
-     - 受け手がKuzushiの命中は、この経路では構造上起きない。Kuzushiの参加者はPushもTsuppariもできないため
-  5. **すべての力を加えた後に**、`followUpReceivers` の `posture` を `stable` にする（`action` はもともとidle。不変条件 kuzushi ⇒ idle は保たれる）
-  6. その**後で**、6回目の命中の受け手を `enterKuzushi`（新しい完全な90）
-- **`resolvePush`**:
-  - `net !== 0`（実際にPush力を受ける）ときだけ、受け手に `followUp` を適用して1.5倍にし、消費を記録する
-  - `net === 0`（打ち消し合い / Pushの無いtick）は、倍率1で消費しない
-- **Grip**: 既存の `target.posture.kind === 'kuzushi'` → `stable` + Morozashi のまま（変えていない）
-- Kuzushiの入口（`enterKuzushi`、Counter Fail、Push / Tsuppariの捕獲、6回目の命中）と、CounterTransitionの停止と再開は変えていない
+## 配置
 
-# 順序の意味
+- 攻撃側は、弦（y = y0）に沿って+xへ走る
+- 防御側は同じ線の上で、縁から `margin` m内側にいる。攻撃側の0.8 m前方
+- 防御側は押下と同時に、土俵の中心側（−y）へ避ける（防御側自身は外へ出ない）
+- 必要な移動 = 0.8 + margin
+- 判定は、既存の `resolveArenaRingOut` だけ
 
-- 消費されるのは、follow-upが実際に加わったtickのすべての力を加えた**後**
-  - Pushの最初のforce tickは1.5倍、次のactive tickは受け手がstableなので1.0倍
-- 消費しないもの:
-  - Pushのstartup / recovery、接触の無いactive、打ち消し合い
-  - whiff、range外 / 空振りのGrip
-  - 接触、移動、減衰、待機、Counterの入力
-- **Kuzushiを作る攻撃は、その新しいKuzushiの利点を受けない**
-  - stableな受け手への6回目の命中は1.0倍で、その後に新しい90
-- **すでにKuzushiの受け手への6回目の命中**:
-  1. 古いKuzushiで1.5倍
-  2. 古いKuzushiを消費する
-  3. 6回目の規則で、新しい完全な90のKuzushiを作る
-  4. 攻撃側のbuildupは0
-- CounterTransition中:
-  - pusherのKuzushiは90のまま止まる
-  - 入力lockで、follow-upも解決されない
-  - 完了時に新しい90から始まる
-  - その後の最初のPush / Tsuppari / Gripが、同じ規則で消費する
+| 候補 | y0 | margin | 円 | Tokudawara | 越えたtick / phase |
+|---|---|---|---|---|---|
+| Current（0.127 m） | 1.0 | 0.02 / 0.1 / 0.2 | IN / IN / IN | IN / IN / IN | – |
+| A / B（14、0.386 m） | 1.0 | 0.02 / 0.1 / 0.2 | IN / IN / IN | IN / IN / IN | – |
+| C（0.388 m） | 1.0 | 0.02 / 0.1 / 0.2 | IN / IN / IN（接触あり） | IN / IN / IN | – |
+| B18（0.638 m） | 1.0 | 0.02 / 0.1 / 0.2 | IN / IN / IN | IN / IN / IN | – |
+| B20（0.738 m） | 1.0 | 0.02 / 0.1 / 0.2 | IN / IN / IN | IN / IN / IN | – |
+| **B24（0.938 m）** | 1.0 | 0.02 / 0.1 / 0.2 | **OUT / OUT / IN** | **OUT / OUT / IN** | 31 / 33（recovery） |
+| B28（1.138 m） | 1.0 | 0.02 / 0.1 / 0.2 | OUT / OUT / OUT | OUT / OUT / OUT | 30 / 32（active）、34（recovery） |
 
-# Implementation Evidence
+- OUTはすべて「攻撃側の負け（ring-out）」として、既存の仕組みが正しく宣言した
+- 自滅専用の規則も、縁での自動の制動も要らない
+- Tokudawara:
+  - この弦（y0 = 1.0）は窓の外なので、円と同じ結果
+  - 窓の中では、許される半径が0.119 m広い分、同じmarginでも外へ出にくい（特別な懸念は無い）
+- 中央での空振り（Tokudawaraあり、攻撃側は−0.4 → 走り切る）:
+  - 誤ってring-outにならない（ongoingのまま）
+  - B24でも攻撃側は+0.54まで進んで止まる
+- 参考（試験の配置の誤りから分かったこと）:
+  - 半径方向（y0 = 0）の配置で防御側を縁に置き、横へ避けさせると、出るのは**避けた防御側**だった
+  - これも既存のring-outどおり（縁では、横に避けるのも危ない）
 
-| Design Requirement | Implemented As | Verified By |
+# 8. Interaction findings
+
+## Counter
+
+- 防御側がCounterを押したtick（0〜26）ごとの結果
+- 記号: B = Best、S = Success、f = Counter Fail、– = 捕えず
+
+| 候補 | s = 0.7（接触から） | s = 0.8 | s = 0.9 |
+|---|---|---|---|
+| Current | `BBBBBBBBBSSSSSfff…` | `ffSSSSSSSSSSSSfff…`（**Bestになり得ない**） | すべてf（届かない） |
+| A | `BBBBBBBBBSSSSSSSSSSSfff…`（捕えられる範囲が広い） | `ffSSSSSSSSSSSSSSSSSSfff`（Bestにならない） | `ffffffSSSSSSSSSSSSSSfff`（Bestにならない） |
+| B（14 / 24） | `BBBBBBBBBSSSSSfff…`（**Currentと同じ**） | `ffBBBBBBBBBBBBBBSSSSSffffff` | `ffffffBBBBBBBBBBBBBBSSSSSff` |
+| C | Currentと同じ | `SSSSSSSSSSSSSSfff…`（Bestにならない） | `ffSSSSSSSSSSSSfff…` |
+
+- A / Cは、tierがactiveの経過tick（`PUSH_ACTIVE_TICKS − 残り`）で決まる
+  - 走ってから当たると、すでに経過しているので、**Bestになり得ない**
+  - Aは、捕えられる範囲も広がる
+- B（試作）:
+  - 捕えられるのは、impact windowが開いているあいだだけ
+  - tierは「最初の接触からの経過tick」で決める（`counterTier(impact)`）
+  - 接触から始めたPushでは、Currentと完全に同じ
+  - 走ってから当たっても、最初の接触tickを捕えればBest
+  - Counterの結果と遷移の意味（Kuzushi、CounterTransitionの経路、`COUNTER_BEST_TICKS` = 3）は変えない
+  - 変わるのは、tierに渡す経過tickの起点だけ
+
+## Push vs Tsuppari
+
+- 防御側がTsuppariを撃ったtickごとの結果
+- 記号: C = Pushと連結（pair delta）、H = 普通の命中
+
+| 候補 | s = 0.7 | s = 0.8 |
 |---|---|---|
-| 90 tickの長さ | `KUZUSHI_TICKS = 90`（`enterKuzushi`、CounterTransitionの再開が使う） | D1 / D2 / D3 / C1、smoke K1（90→0をtickごとに観測）、既存のT68など（記号で参照するtestは90でPASS） |
-| 1回のfollow-upで消費 | `resolveForces` の `wasKuzushi` → `followUpReceivers` → stable。Gripは既存の消費 | P1 / T1 / G1 / C6a-c、順序非依存のtest（participant配列の入れ替え）、smoke K3 / K5 / K6 |
-| Pushは1.5倍の後に消費 | `resolvePush`: `net ≠ 0` の受け手だけ `followUp` | P1（26.25×1.5/60）、P2（次のtickは1.0倍）、P3〜P6、T71の更新、smoke K3 / K4 |
-| Tsuppariは1.5倍の後に消費 | 命中のimpulse × `followUp`（clampは既存） | T1（min(3.195, 3)）、T2、T3、smoke K5（|v| = 3.0、消費） |
-| GripはMorozashiの後に消費 | 既存のまま（数値の倍率は無い） | G1〜G4、C6a、smoke K6 |
-| 6回目の命中の順序 | 消費 → `enterKuzushi`（6回目）の順に固定 | T4（stable → 1.0倍で新しい90）、T5（Kuzushi → 1.5倍、古いものを消費、新しい90、buildup 0） |
-| CounterTransitionを保つ | 変えていない（停止と、完了時の新しい90） | C3 / C4 / C5（入力を連打しても90のまま）、既存のD2（transition）test、smoke K7〜K9 |
-| 汗の振る舞い | 変えていない（`kuzushiStrength = ticksRemaining / KUZUSHI_TICKS`） | V1〜V3（追加）、09Aの既存test、smoke（消費の次のframeで非表示） |
-| gameplay / presentationの責任 | 倍率・消費・長さはすべて `src/game/sumo/`。presentationは読むだけ | diff（presentationのsourceは無変更、testだけ）、`kuzushiVisualEffect` は時間の入力を持たない |
+| Current | C×8 | 1 tickだけC |
+| A | **C×14（連結が広がる）** | C×7 |
+| B | C×8（Currentと同じ） | C×8（windowの長さ） |
+| C | C×8 | C×3 |
 
-# 必須の境界ケースの結果
+## Push vs Push
 
-- 新しいfile `src/game/sumo/BoutKuzushiFollowup.test.ts`（22 tests）
-- `kuzushiVisualEffect.test.ts` に追加した3 tests
-- 結果: すべてPASS
+- すべての候補で、同時Pushは打ち消し合う（両者のexternalは0のまま）
+- 正面からの同時の突進（s = 1.0 / 1.2）は、A / B / Cでは出会って打ち消し合う
+  - Bの接触は18 tick（両者のwindowが同時に開いて、8 tickで同時にrecoveryへ）
+  - Currentは届かない（s ≥ 1.0）
 
-| ケース | 結果 |
+## Kuzushi（ACTION-09B）
+
+- Kuzushiの受け手への接触Push（接触から）
+- B（14 / 24）の結果は、Currentと完全に同じ:
+  - 最初のforce tick: Δv 0.65625 = 26.25 × 1.5 / 60
+  - 次のtick: Δv 0.304167 = 1.0倍 − 減衰
+  - 消費: そのtick
+  - 合計の移動: 0.629271 m
+- 理由:
+  - Bでは、forceは `resolvePush` の同じ経路を通る
+  - `wasKuzushi` による1.5倍の判定と消費は、何も変わらない
+
+## Grip / ring-out / 衝突のarchitecture
+
+- Gripは変えない（Push中の相手には有効でない）
+- 接触とring-outは、既存のpure Simulationだけで足りる
+- 次のものは要らない:
+  - Phaser Physics
+  - 壁
+  - 縁での自動の制動
+  - 突進専用の衝突
+
+# 9. 推奨するACTION-10Bの設計（Option B）
+
+## Push stateの形
+
+- `{ kind: 'push', phase, ticksRemaining, direction, impactTicksRemaining: number | null }`
+- 新しく足すfieldは1つだけ
+- `null` = まだ接触していない
+- 汎用のstate machineは足さない
+
+## timingの値（User Decision）
+
+| 項目 | 値 |
 |---|---|
-| D1 Counter Failで完全な90 | PASS |
-| D2 触らなければ90の完全tick | PASS（tickごとに90 − k） |
-| D3 期限の直後は、入力の前にstable（同じtickのCounterの押下が開始する） | PASS |
-| D4 `kuzushiStrength` = ticksRemaining / 90 | PASS（tickごと） |
-| P1 接触したactive Pushの最初のforce tickが1.5倍で、その後に消費 | PASS |
-| P2 次のactive tickは1.0倍（Δvが通常のrunと一致） | PASS |
-| P3 startupは消費しない | PASS |
-| P4 接触の無いactiveは消費しない | PASS |
-| P5 recoveryは消費しない | PASS（接触の無いPushのstartup / active / recoveryを全部通しても、Kuzushiのまま） |
-| P6 打ち消し合うPushは消費しない | PASS（下記の注を参照） |
-| T1 Kuzushiの受け手への命中は1.5倍で、消費 | PASS（3.195はclampで3.0、通常は2.13） |
-| T2 次の普通の命中は1.0倍 | PASS |
-| T3 whiffは消費しない | PASS |
-| T4 stableな受け手への6回目の命中は1.0倍で、新しい90 | PASS |
-| T5 Kuzushiの受け手への6回目の命中は1.5倍、古いものを消費、新しい90、buildup 0 | PASS |
-| T6 Counterで捕えられたTsuppariは不変（攻撃側はその場でKuzushi 90、impulse無し、transition無し） | PASS（既存のTS21〜24も） |
-| G1 range内の有効なGripで消費し、Morozashi holder | PASS |
-| G2 range外は消費しない | PASS |
-| G3 reachの期限切れ / 空振りは消費しない | PASS（recoveryまで） |
-| G4 KuzushiはGripのrangeを迂回しない | PASS |
-| C1 Counter Failは90 | PASS |
-| C2 Counterで捕えられたTsuppariの攻撃側は90 | PASS |
-| C3 Push Counterの捕獲でtransitionが始まる | PASS |
-| C4 transition中はtimerが止まる（90のまま） | PASS（入力を連打しても） |
-| C5 完了で新しい90 | PASS（次のtickは89） |
-| C6 transitionの後の最初のGrip / Push / Tsuppariで消費 | PASS（C6a Grip → Morozashi、C6b Push 1.5倍、C6c Tsuppari 1.5倍（clampで3.0）） |
-| V1 新しい90で汗は満 | PASS |
-| V2 半分の残りでalphaは約0.5 | PASS（残り45で0.5） |
-| V3 follow-upで消費したtickに汗が消える | PASS（PushとTsuppari） |
-| V4 transition中、汗は満のまま | PASS（09Aのtest D、smoke S2 / K8） |
-| V5 Counterの35°の動きは不変 | PASS（`productCounterArt` のtest、smoke） |
-| 参加者の順序に依存しない | PASS（PushとTsuppariのfollow-upで、participant配列を入れ替えても結果が同じ） |
+| startup | `PUSH_STARTUP_TICKS = 6`（変えない） |
+| charge（activeの最大の長さ） | 新しい `PUSH_CHARGE_TICKS`。**14**（3倍）または**24**（自滅ring-outあり）。推奨は、空振りの自滅を要件とするなら24 |
+| impact window | 既存の `PUSH_ACTIVE_TICKS = 8` を、そのまま「力の長さ」として使う（名前は `PUSH_IMPACT_TICKS` に変えてよい。値は1つにする） |
+| recovery | `PUSH_RECOVERY_TICKS = 10`（変えない） |
 
-P6の注:
+## 規則
 
-- Kuzushiの参加者はPushを開始できない（kuzushi ⇒ idle、押下は無視される）
-- そのため「Kuzushiの参加者が、打ち消し合うPushの片方になる」状態は、構造上起きない
-- testでは次の2つを確かめた:
-  - Kuzushi中のPushの押下がidleのまま
-  - stable同士の同時Pushが、引き続き打ち消し合う
-- 実装でも、`net === 0` のときは消費しない
+- **移動**:
+  - `effectiveMove` はactiveのあいだ（windowの中でも）保存した `direction` で歩く
+  - 既存の `FORWARD_ACCELERATION` / `MAX_SPEED` / `STOP_DECELERATION`
+  - Push専用の加速度は要らない
+- **力のwindow**:
+  - activeで最初に `resolveContact` が接触を返したtick（Counter / forceの解決の前）に、`impactTicksRemaining = 8` を開く
+  - `isPushActive` = active かつ window > 0
+  - 力は既存の `resolvePush`（接触しているtickだけ。Kuzushiのfollow-upはそのまま）
+  - windowの中で接触が切れても、windowは数え続ける（Currentのactive 8 tickと同じ）
+- **進め方**:
+  - windowが開いていれば、windowを数え、0でrecoveryへ
+  - 開いていなければ、chargeを数え、0でrecoveryへ（空振り）
+- **Counter**:
+  - 捕えるのは `isPushActive` + 接触のとき
+  - tierは `counterTier(impactTicksRemaining)`（最初の接触からの経過）
+  - 結果と遷移は変えない
+- **facing**: `updateFacing` で、Push中（startup〜recovery）の参加者を、Kuzushiと同じく飛ばす。canonical facingの持ち主はSimulationのまま
+- **接触**: 既存の円の接触のまま
+  - 横から擦れると、接線方向の成分は残り、方向は変えない
+  - homingは無い
+- **空振り**: chargeの最後まで走り切り、recoveryで制動して止まる
+- **ring-out**: 既存の `resolveArenaRingOut` のまま。壁やclampは無い
+- **予想される移動**:
+  - 14: 0.386 m（3.05x）
+  - 24: 0.938 m（7.41x）
+  - 接触からのshoveは、どちらも0.5325 m（Currentと同じ）
 
-# 既存のtestの更新（30 tickの前提や、仕様の変化による。弱めてはいない）
+## なぜ最小で安全か
 
-| test | 理由 / 変更 |
-|---|---|
-| `BoutCounter.test.ts` T71 | 仕様の変化: Kuzushiの防御側は最初のPush force tickで1.5倍、その後**stable**（消費）。旧名の定数も更新 |
-| `BoutCounter.test.ts` T62 | 「遅すぎた」側を40 tick後に読んでいた。新しい規則では、BのPushがAのKuzushiを消費する。意図（最後のwindow tickなら捕えられ、1 tick遅いとFail）を保つため、windowの直後（`COUNTER_WINDOW_TICKS` tick）で読むようにした |
-| `BoutTsuppari.test.ts` TS36 | 定数名の変更だけ（値1.5は同じ） |
-| `pressLatch.test.ts` T77 | 「window + Kuzushiが過ぎた」frame数が、30 tickを前提にした12×4 tickだった。`ceil((COUNTER_WINDOW_TICKS + KUZUSHI_TICKS) / 4) + 1` にした |
-| `pushDummyController.test.ts` T74 | ループの上限200 tickが、90 tickのKuzushiに足りなかった。400にした（判定は同じ） |
-| `wrestlerVisualState.test.ts` | 半分の位置が、数値で15だった。`KUZUSHI_TICKS / 2` にした |
-| `kuzushiVisualEffect.test.ts` | 数値の `1 / 30` を `1 / KUZUSHI_TICKS` にした |
+- 変えるのは、state 1つのcounter、`isPushActive` / `advanceAction` / `counterTier` の入力、`updateFacing` の1条件だけ
+- 移動の物理、接触、ring-out、Counter / Kuzushi / Tsuppariの規則は、そのまま
+- 接触から始まるPushは、Currentと一致する（試作で、shove、Counterの押下の表、連結の長さが同じだった）
 
-# Verification（Heavy）
+## 10Bで足すべきtest（参考）
 
-| 項目 | 結果 |
-|---|---|
-| focusedなKuzushi / Push / Tsuppari / Grip / CounterTransition / visual / Product Counterのtest | 9 files / 182 tests PASS |
-| `pnpm test` | 25 files / 400 tests PASS |
-| `pnpm build` / `tsc --noEmit` | PASS（以前からあるchunk size警告だけ） |
-| `git diff --check` | OK |
-| `export_counter.py` / `export_runtime_wrestlers.py` / `export_tsuppari.py` の `--check` | どれもexit 0 |
-| `git diff 45a3916 -- public tools` | 0行（Product artは不変） |
-| presentationのsource（`.ts` 本体） | 無変更（testだけを更新） |
+- chargeの長さと移動（14 / 24）
+- windowが最初の接触で開くこと
+- 接触から始めたPushがCurrentと同じであること（shove、Counterの表、Tsuppariの連結）
+- 空振りでrecoveryへ
+- facingの凍結
+- 縁での自滅ring-out（必要な移動の境界）
+- 順序非依存
 
-# Browser / Runtime Smoke
+# 10. 却下した案
 
-- `pnpm dev`（port 5199）+ Chrome（CDP、GPU）
-- 09Aのsmoke（Counter / Tsuppari / 35°の回転 / 汗）に、09Bの場面K1〜K9を加えた
-- ブラウザ内で `dummy.nextIntent` を一時的に包み、tickごとのSnapshotを記録した。CPUのPush / Tsuppari / Grip / Counterの注入も、そこで行った（testだけ。ソースは変えていない）
-- 結果: **51 / 51 PASS**
+- **A**（activeを延ばすだけ）:
+  - shoveが1.80x（0.957 m）、連結が14 tick
+  - Counterで捕えられる範囲が広がり、走ってからだとBestになり得ない
+  - 「Pushの衝撃をできるだけ保つ」に反する
+- **C**（加速度を上げる）:
+  - 8 tickで3 m/s
+  - 0.8 mで、完璧な読みでも避けられない
+  - 読める突進にならず、Push専用の加速度定数が増える
+  - 3倍では自滅も出来ない
+- **facing案2 / 3**: §6のとおり
+- **専用のtackle衝突 / Phaser Physics / 回避の状態 / homing**: どれも要らない（既存の円の接触とring-outで、求める振る舞いが出た）
 
-| 確認 | 結果 |
-|---|---|
-| K1 Counter FailのKuzushiは、90から0までtickごとに91 snapshot（約1.5秒。以前は30） | PASS |
-| K2 触らなければstableに戻り、汗も消える | PASS |
-| K3 接触したKuzushiの参加者への最初のPush force: Δv = 0.65625 m/s（= 26.25 × 1.5 / 60）。そのtickでstable。次のframeから汗は非表示 | PASS |
-| K4 次のPush tick: Δv = 0.30417（= 26.25 / 60 − 減衰8 / 60）、つまり1.0倍 | PASS |
-| K5 Kuzushiへの命中: \|v\| = 3.0 m/s（3.195がclampされる。通常は2.13）。消費され、汗は非表示 | PASS |
-| K6 KuzushiへのGrip: Morozashi。そのtickで消費 | PASS |
-| K7 Push Counterでtransitionが始まる（90 tick） | PASS |
-| K8 transitionのあいだ、pusherのKuzushiは90で止まる（汗は満） | PASS |
-| K9 transitionの後、触らなければ新しい90 tick | PASS |
-| 09Aの汗（S1〜S4）、Product Counter / Tsuppariのtexture、35°の回転、Push / Grip / 移動、R restart、console error / 失敗したrequestが無い | PASS |
+# 11. 検証
+
+- 方法:
+  - Node 24で、`src/game/sumo/*.ts` を直接import（type stripping）
+  - scratchpadへコピーしたものだけを書き換え、variantを作った: base / A / B / B18 / B20 / B24 / B28 / C / Bfreeze
+  - harnessも作った: `measure.mjs` / `measure2.mjs` / `measure3.mjs`
+  - すべて決定的
+  - baseのコピーで、Current Sourceの予想値（0.1 / 0.1267 / 1.333 / 24 tick）を再現した
+- 必須のmatrixと、確かめた範囲:
+  - 自由空間: すべての候補
+  - 接触のshove: Current / A / B / B24 / C、Kuzushiの受け手も
+  - dodge: 4つの距離 × 4つの反応 + 反応なし。Current / A / B / B24 / C
+  - homingの追跡
+  - 空振り / 通り過ぎ
+  - edge: 円 / Tokudawara × 3つのmargin × 候補7つ
+  - 中央での空振り
+  - Counter: 押下tick 0〜26 × 3つの距離
+  - Push vs Tsuppari: 撃つtick 0〜26 × 2つの距離
+  - Push vs Push: 3つの距離
+  - Kuzushiとの両立
+- `git status`: clean（Productionの差分は0。commitするのはこのReportだけ）
+- `git diff --check`: OK（このReportだけ）
+- User Play Test: 不要（Investigation Only）
 
 # Design Deviations
 
 Design Deviations: NONE
 
-（定数の名前を `KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER` に変えたのは、Taskが推奨した範囲。1.5を持つのはこの1つだけ）
-
 # Unexpected Scope
 
-NONE
-
-`src/game/input/` で変えたのは、Kuzushiの長さに依存していた2つのtestの数値の前提だけ。sourceは変えていない。
-
-# Known Untested Items
-
-- 実機でのUser Play Test（Game Feel）
-
-# User Play Test: REQUIRED
-
-確認の手順:
-
-1. `pnpm dev` → Enter → 離れてArrowDown（Counter Fail、1.5秒のKuzushi）
-2. Kuzushi中の相手（dummy `2` のPushをArrowDownで返す / Tsuppariを6回）に、Push / Tsuppari / Gripで追撃する
-
-判断してほしい点:
-
-- 1.5秒は、ゆっくりした追撃の窓として十分か
-- 1回の追撃で消費されるのは、公平で分かりやすいか
-- Pushの1.5倍 → 消費後は通常、が分かりやすいか
-- Tsuppariの1.5倍 → 消費後は通常、が分かりやすいか
-- Grip → Morozashi → Kuzushiが消える、が一貫しているか
-- 消費で汗が消えることが、「機会を使った」と伝わるか
-- CounterTransitionの後の1.5秒は、長すぎないか
-
-Technical PASSは、Game Feelの受理ではない。
+- **要求の中の矛盾（§0）**: 「約3倍の移動」と「縁で空振りすると自滅ring-outし得る」は、両立しない
+  - 押下時のfacingは、0.70 m以上前方の相手を向いている
+  - そのため、空振りで外へ出るには0.70 m + 相手の余裕 以上の移動が要る
+  - charge 24 tick（7.4x）なら両方の振る舞い（突進の読み合い + 自滅）が出る
+  - Userに決めてもらう必要がある
+- facingの所見（§6）は、10Bで直す候補として報告した（10Aでは直していない）
+- ACTION-09BのARCHITECTUREにある古いGripの記述は、Taskの指示どおり触れていない
 
 # Git Delivery
 
-- stageするのはTask-owned fileだけ。commit `feat(gameplay): extend and consume kuzushi followup window` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
+- stageするのは `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` だけ（Investigation-only Report Commit）。commit `docs(investigation): analyze push charge movement` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
 - `main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md` は変更しない
