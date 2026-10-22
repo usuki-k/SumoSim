@@ -3,7 +3,7 @@
 // per-limb transforms or body deformation). A procedural world shadow sits below both bodies.
 // During a Tsuppari action the sprite swaps to the held Product Tsuppari pose texture of that hand (ACTION-07D);
 // each texture keeps its own pivot / body-core scale, so the canonical center and facing are unchanged by the
-// swap.
+// swap. ACTION-08A Visual Gate: while the pose is Counter the provisional Counter candidate is shown the same way.
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -11,7 +11,8 @@ import {
   productWrestlerScale,
   type ProductWrestlerArt,
 } from '../presentation/productWrestlerArt.ts'
-import { allProductTsuppariArts, selectWrestlerArt } from '../presentation/productTsuppariArt.ts'
+import { allCounterGateArts, selectWrestlerPoseArt } from '../presentation/counterGateArt.ts'
+import { allProductTsuppariArts } from '../presentation/productTsuppariArt.ts'
 import type { WrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
 import type { ParticipantState } from '../sumo/BoutTypes.ts'
 
@@ -24,7 +25,7 @@ const SHADOW_ALPHA = 0.28
 const SHADOW_OFFSET = { x: 0.07, y: 0.12 }
 
 export function preloadProductWrestlers(scene: Phaser.Scene): void {
-  for (const art of [...Object.values(PRODUCT_WRESTLER_ART), ...allProductTsuppariArts()]) {
+  for (const art of [...Object.values(PRODUCT_WRESTLER_ART), ...allProductTsuppariArts(), ...allCounterGateArts()]) {
     scene.load.image(art.textureKey, `${import.meta.env.BASE_URL}${art.assetPath}`)
   }
 }
@@ -65,7 +66,7 @@ export class WrestlerView {
   // `positionPx` is the canonical center already converted to canvas pixels; facing is applied exactly.
   apply(state: WrestlerVisualState, participant: ParticipantState, positionPx: { x: number; y: number }): void {
     this.moving = state.pose === 'move'
-    this.show(selectWrestlerArt(this.idleArt, state))
+    this.show(selectWrestlerPoseArt(this.idleArt, state))
     this.body.setPosition(positionPx.x, positionPx.y).setRotation(participant.facing)
     this.shadow.setPosition(positionPx.x + SHADOW_OFFSET.x * this.R, positionPx.y + SHADOW_OFFSET.y * this.R)
     this.shadow.setRotation(participant.facing)

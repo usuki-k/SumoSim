@@ -1,0 +1,43 @@
+{
+  "recipe_schema": 1,
+  "name": "counter-visual-gate-08a",
+  "status": "Visual Gate candidate (ACTION-08A). Provisional Counter / hiki-sabaki pose for the User Visual Gate; not an accepted Product art contract.",
+  "note": "One authored red Counter pose is the only source. It is normalized like the accepted idle red (one whole-sprite rotation so FRONT = local +X, explicit root, body core = 2R, exact /4 downscale). Blue reuses the accepted red -> blue rule of runtime_wrestler_recipe.json (single owner): local-Y reflection ((x, y) -> (x, H - y)) + mawashi-only recolor. Counter has no hand semantics, so one red pose and its reflected blue are enough.",
+  "runtime_recipe": "runtime_wrestler_recipe.json",
+  "alpha_threshold": 8,
+  "measurement": {
+    "method": "Same landmark registration as the Product Tsuppari poses (measure_tsuppari_pose.measure_landmarks / normalization, run once for this candidate): hair blob and mawashi centroids at 1/2 BOX scale registered to the accepted idle red master; rotation delta = angle(H -> B) - idle angle(H -> B); scale s = mean(sqrt(hair area ratio), sqrt(mawashi area ratio)); idle root / body core carried by s * Rot(delta) about the H/B midpoint; source_front_deg = idle 160.7 + delta. Recorded values rounded: front 0.1 deg, points 1 px.",
+    "idle_reference": {
+      "hair_centroid": [428.7, 542.7],
+      "mawashi_centroid": [878.6, 565.5],
+      "hair_px": 42652,
+      "mawashi_px": 56028
+    }
+  },
+  "master": {
+    "key": "red",
+    "file": "candidate_red_counter.png",
+    "size": [1254, 1254],
+    "pixel_sha256": "eb0f2e6058fe35c239ed571e1e576fc30b4648988c347b89d4e227a3a8b3e040",
+    "reviewed_file_sha256": "842900c1a41b4b06ed16f2c0d167f7e132bc7fbf6956865a4699ddcc77d9d979",
+    "source_front_deg": 170.7,
+    "root_source_px": [750, 608],
+    "body_core_source_px": [[678, 170], [798, 899]],
+    "body_core_target_r": 2.0,
+    "measurement_evidence": {
+      "hair_centroid": [543.7, 494.4],
+      "mawashi_centroid": [992.6, 597.3],
+      "hair_px": 63152,
+      "mawashi_px": 70984,
+      "rotation_delta_deg": 10.004,
+      "scale": 1.1712,
+      "note": "The torso is drawn turned ~10 deg and ~17% larger than the idle master; the two area ratios disagree more than for the Tsuppari poses (hair sqrt ratio 1.217, mawashi 1.126), so s is their mean."
+    }
+  },
+  "mask_limits": {
+    "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). missed = band pixels outside the largest component.",
+    "min_mask_px": 1500,
+    "max_missed_px": 60,
+    "max_fringe_px": 120
+  }
+}
