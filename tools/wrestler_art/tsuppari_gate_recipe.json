@@ -39,21 +39,21 @@
       "hand": "right",
       "file": "candidate_red_tsuppari_right.png",
       "size": [1254, 1254],
-      "pixel_sha256": "3db3260bc3d90a88694bb65959c83919f148985847c4575c104394261e92cace",
-      "reviewed_file_sha256": "8f255caa95842483f1d8893e4a1616db55a6f299a950c89bf4106c19e1e25ea5",
+      "pixel_sha256": "d7d5632f8357bd1e4427d2bcdcee5a6e74307fcd9d0caca2d86d102ec8719011",
+      "reviewed_file_sha256": "8c2067a50b73708c1c2a3eb078ac3390f6aab35b838e73c09cba4da69198426a",
       "hand_evidence": "Faces image left like the idle master; the extended arm is the screen-upper one = the wrestler's RIGHT (+Y after normalization).",
       "source_front_deg": 157.8,
       "root_source_px": [818, 688],
-      "body_core_source_px": [[663, 310], [920, 940]],
+      "body_core_source_px": [[663, 309], [920, 940]],
       "body_core_target_r": 2.0,
       "measurement_evidence": {
-        "remeasured": "ACTION-07C1: User replacement (more forward strike). Same method; hair blob taken as the 7 px opening (erosion + dilation) of max(RGB) < 80, alpha > 200 at 1/2 BOX scale, with the idle reference re-measured the same way (hair (428.7, 542.7), 42652 px). Calibration on the replaced 07C pose: delta -0.617 / s 1.0093 / front 160.1 / root (768, 641) / core (637, 281)-(854, 880).",
-        "hair_centroid": [590.2, 628.8],
-        "mawashi_centroid": [1051.9, 628.9],
-        "hair_px": 48696,
-        "mawashi_px": 66208,
-        "rotation_delta_deg": -2.885,
-        "scale": 1.0778
+        "remeasured": "ACTION-07C2: User replacement (shorter right arm, body as in 07C1). Same 07C1-calibrated method: hair blob taken as the 7 px opening (erosion + dilation) of max(RGB) < 80, alpha > 200 at 1/2 BOX scale, with the idle reference re-measured the same way (hair (428.7, 542.7), 42652 px). Calibration: the replaced 07C1 pose re-measures to exactly its recorded values (delta -2.885 / s 1.0778 / front 157.8 / root (818, 688) / core (663, 310)-(920, 940)); the 07C pose to delta -0.617 / s 1.0093 / front 160.1 / root (768, 641) / core (637, 281)-(854, 880).",
+        "hair_centroid": [590.4, 628.5],
+        "mawashi_centroid": [1051.9, 628.8],
+        "hair_px": 48892,
+        "mawashi_px": 66024,
+        "rotation_delta_deg": -2.858,
+        "scale": 1.0781
       }
     }
   },
@@ -128,6 +128,6 @@
   "angles_deg": [0, 45, 90, 180, 270],
   "faceoff": [
     {"label": "contact 0.70 m", "distance_m": 0.7},
-    {"label": "tsuppari reach 0.875 m", "distance_m": 0.875}
+    {"label": "tsuppari reach 0.90 m", "distance_m": 0.9}
   ]
 }

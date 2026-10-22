@@ -331,7 +331,7 @@ action.
 
 Preview outputs: `pivot_guide_<pose>.png` (4 authored candidates, master scale), `mode_<mode>.png`,
 `idle_tsuppari_alignment.png` (each pose with the same-colour idle outline), `rotations_<mode>.png`
-(0 / 45 / 90 / 180 / 270), `faceoff_<mode>.png` (0.70 m contact and 0.875 m Tsuppari reach; one or both
+(0 / 45 / 90 / 180 / 270), `faceoff_<mode>.png` (0.70 m contact and 0.90 m Tsuppari reach; one or both
 striking), `mawashi_mask_diagnostics.png`, `blue_reference_vs_derived.png`, `tsuppari_gate.json` (texture
 table, mask reports, landmark alignment, mawashi HSV stats) and `build_tsuppari_gate_manifest.json`.
 

@@ -38,17 +38,17 @@ export const TSUPPARI_GATE_BODY_CORE_DIAMETER_PX = 123.076923
 // Size / pivot per exported file (verified against a fresh export by the wrestler-art Python tests).
 const GATE_TEXTURES: Readonly<Record<string, { width: number; height: number; pivot: { x: number; y: number } }>> = {
   separate_red_left: { width: 198, height: 177, pivot: { x: 83, y: 94 } },
-  separate_red_right: { width: 209, height: 167, pivot: { x: 79, y: 87 } },
-  separate_blue_left: { width: 209, height: 167, pivot: { x: 79, y: 80 } },
+  separate_red_right: { width: 193, height: 163, pivot: { x: 79, y: 87 } },
+  separate_blue_left: { width: 193, height: 163, pivot: { x: 79, y: 76 } },
   separate_blue_right: { width: 198, height: 177, pivot: { x: 83, y: 83 } },
   mirror_l_red_left: { width: 198, height: 177, pivot: { x: 83, y: 94 } },
   mirror_l_red_right: { width: 198, height: 177, pivot: { x: 83, y: 83 } },
   mirror_l_blue_left: { width: 198, height: 177, pivot: { x: 83, y: 94 } },
   mirror_l_blue_right: { width: 198, height: 177, pivot: { x: 83, y: 83 } },
-  mirror_r_red_left: { width: 209, height: 167, pivot: { x: 79, y: 80 } },
-  mirror_r_red_right: { width: 209, height: 167, pivot: { x: 79, y: 87 } },
-  mirror_r_blue_left: { width: 209, height: 167, pivot: { x: 79, y: 80 } },
-  mirror_r_blue_right: { width: 209, height: 167, pivot: { x: 79, y: 87 } },
+  mirror_r_red_left: { width: 193, height: 163, pivot: { x: 79, y: 76 } },
+  mirror_r_red_right: { width: 193, height: 163, pivot: { x: 79, y: 87 } },
+  mirror_r_blue_left: { width: 193, height: 163, pivot: { x: 79, y: 76 } },
+  mirror_r_blue_right: { width: 193, height: 163, pivot: { x: 79, y: 87 } },
 }
 
 export function tsuppariGateArt(mode: TsuppariArtMode, id: ProductWrestlerArtId, hand: TsuppariHand): ProductWrestlerArt {

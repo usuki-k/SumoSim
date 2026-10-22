@@ -73,8 +73,8 @@ export const TSUPPARI_ACTIVE_TICKS = 1 // the single hit tick
 export const TSUPPARI_RECOVERY_TICKS = 9 // ~150 ms (whole action 16 ticks; Push is 24)
 // Per hand, counted from the tick the Tsuppari is accepted (that hand is ready again 60 ticks later).
 export const TSUPPARI_HAND_COOLDOWN_TICKS = 60
-// Attacker center -> palm (m). Hit iff center distance <= this + receiver body radius (0.875 m now).
-export const TSUPPARI_HAND_REACH = 0.525
+// Attacker center -> palm (m). Hit iff center distance <= this + receiver body radius (0.90 m now).
+export const TSUPPARI_HAND_REACH = 0.55
 // External velocity given to the receiver only, once, on the hit tick (m/s). Idle receiver: ~0.266 m.
 export const TSUPPARI_IMPULSE = 2.13
 // Share of a Tsuppari impulse that goes into the pair while a Push is active in contact (equal-body split).

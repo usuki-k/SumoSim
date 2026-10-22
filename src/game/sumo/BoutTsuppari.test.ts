@@ -345,12 +345,29 @@ describe('Tsuppari (ACTION-07B)', () => {
       expect(B(after).externalVelocity).toEqual({ x: J, y: 0 })
     })
 
-    it('TS17: reach boundary: hit just inside, whiff just outside (center distance = 0.525 + receiver radius)', () => {
-      expect(REACH).toBeCloseTo(0.875, 12)
+    it('TS17: reach boundary: hit just inside, whiff just outside (center distance = 0.55 + receiver radius)', () => {
+      expect(TSUPPARI_HAND_REACH).toBe(0.55)
+      expect(REACH).toBeCloseTo(0.9, 12)
       const inside = sim(0, REACH - 1e-6)
       expect(strike(A(toHitTick(inside, { left: true }).after))).toBe('hit')
       const outside = sim(0, REACH + 1e-6)
       expect(strike(A(toHitTick(outside, { left: true }).after))).toBe('whiff')
+    })
+
+    it('TS17b: the extended band (old 0.875 m .. new 0.90 m) hits with either hand and gives the full impulse', () => {
+      for (const d of [0.876, 0.89, 0.899]) {
+        for (const h of ['left', 'right'] as const) {
+          const { after } = toHitTick(sim(0, d), { [h]: true })
+          expect(strike(A(after))).toBe('hit')
+          expect(B(after).externalVelocity).toEqual({ x: J, y: 0 })
+          expect(A(after).tsuppariBuildup).toBe(1)
+        }
+      }
+      for (const d of [0.901, 0.95]) {
+        const { after } = toHitTick(sim(0, d), { right: true })
+        expect(strike(A(after))).toBe('whiff')
+        expect(B(after).externalVelocity).toEqual({ x: 0, y: 0 })
+      }
     })
 
     it('TS18 / TS19: hits 1..5 are ordinary; the 6th adds Kuzushi on the receiver and resets the buildup', () => {
@@ -452,6 +469,19 @@ describe('Tsuppari (ACTION-07B)', () => {
       expect(A(after).posture.kind).toBe('kuzushi')
       expect(A(after).tsuppariBuildup).toBe(1)
       expect(B(after).externalVelocity).toEqual({ x: 0, y: 0 })
+    })
+
+    it('TS24b: a Counter catches a Tsuppari striking from the extended band (0.89 m, no body contact)', () => {
+      const s = sim(0, 0.89)
+      s.step(intents({ left: true }, { counter: true }))
+      stepN(s, TSUPPARI_STARTUP_TICKS)
+      const after = s.getSnapshot()
+      expect(gap(after)).toBeCloseTo(0.89, 12)
+      expect(A(after).posture).toEqual({ kind: 'kuzushi', ticksRemaining: KUZUSHI_TICKS })
+      expect(B(after).posture.kind).toBe('stable')
+      expect(B(after).externalVelocity).toEqual({ x: 0, y: 0 })
+      expect(A(after).tsuppariBuildup).toBe(0)
+      expect(after.counterTransition.kind).toBe('none')
     })
 
     it('TS25: a Counter window does not catch a whiffing Tsuppari; it runs out and fails as usual', () => {
@@ -642,6 +672,16 @@ describe('Tsuppari (ACTION-07B)', () => {
       expect([PUSH_STARTUP_TICKS, PUSH_ACTIVE_TICKS, PUSH_RECOVERY_TICKS]).toEqual([6, 8, 10])
       expect(PUSH_EXTERNAL_ACCELERATION).toBe(26.25)
       expect(J).toBeLessThan(MAX_EXTERNAL_SPEED)
+    })
+
+    it('TS36b: ACTION-07C2 moved only the reach; every other Tsuppari constant is unchanged', () => {
+      expect([TSUPPARI_STARTUP_TICKS, TSUPPARI_ACTIVE_TICKS, TSUPPARI_RECOVERY_TICKS]).toEqual([6, 1, 9])
+      expect(TSUPPARI_HAND_COOLDOWN_TICKS).toBe(60)
+      expect(TSUPPARI_IMPULSE).toBe(2.13)
+      expect(TSUPPARI_COUPLED_SHARE).toBe(0.5)
+      expect(TSUPPARI_KUZUSHI_BUILDUP).toBe(5)
+      expect(BODY_RADIUS).toBe(0.35)
+      expect(COUNTER_WINDOW_TICKS).toBe(12)
     })
   })
 
