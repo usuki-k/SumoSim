@@ -1,924 +1,30 @@
-Task-ID: ACTION-11B-GRIP-LUNGE-CONTEST-INVESTIGATION
-Status: REVIEWED
-Task-Type: INVESTIGATION ONLY / CORE GAMEPLAY / GRIP MOVEMENT + ACTION CONTEST
+Task-ID: ACTION-11C-GRIP-LUNGE-CONTEST-IMPLEMENTATION
+Status: READY
+Task-Type: CORE GAMEPLAY IMPLEMENTATION / GRIP MOVEMENT + ACTION CONTEST
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 89b2d631bdd74b65f93558678f24b1b599165f4a
-Review-Handoff: ACTION-11A technical review at 03d6045cf67ff94ec0ccb2a6f8682f5c38b58681; Grip attempt art remains provisional Visual Gate
+Source-Baseline: 710d86e58cb7c8d9b6695828a08175f931225043
+Review-Handoff: ACTION-11B investigation accepted; User selected D1=4 ticks, D2=neutral, D3=preserve recovery non-grabbable, D4=preserve startup non-grabbable
 Handoff-Mode: GITHUB
 
-# ACTION-11B — Grip Lunge + Four-Way Contest Investigation
+# ACTION-11C — Grip Lunge + Four-Way Contest Implementation
 
 ## Purpose
 
-Investigate the next Grip gameplay design before implementation.
+Implement the accepted ACTION-11B Grip redesign.
 
-User-approved direction:
-
-1. Shift / Grip should no longer look like a stationary range check.
-2. On Shift, the wrestler should show the existing Grip-attempt pose while making a **short committed forward lunge**.
-3. Grip success should come from that forward attempt reaching / contacting the opponent.
-4. Target lunge travel should be roughly comparable to the **old pre-ACTION-10B Push self-travel**, approximately 0.10–0.13 m.
-5. Push / Tsuppari / Grip / Counter should form a readable main four-way interaction cycle:
+User-approved decisions:
 
 ```
-Push > Tsuppari > Grip > Counter > Push
+GRIP_REACH_TICKS = 8
+GRIP_MIN_ATTEMPT_TICKS = 4
+Grip vs Counter -> neutral grapple
+Push/Tsuppari startup and recovery remain non-grabbable
 ```
 
-6. The two diagonal relationships should preserve the currently proposed/accepted direction:
+Grip becomes a short committed forward lunge using the current ACTION-11A attempt pose, with success driven by actual body contact rather than the old margin range.
 
-```
-Push > Grip
-Counter > Tsuppari
-```
-
-7. Same-action interactions should preserve their current identities unless evidence shows a conflict:
-   - Push vs Push: contest / net Push force cancellation
-   - Tsuppari vs Tsuppari: mutual hit when both hit
-   - Grip vs Grip: neutral grapple
-   - Counter vs Counter: neither attacks; both may eventually fail into Kuzushi.
-
-This Task is **Investigation Only / No Production Fixes**.
-
-Do not modify Production source/tests/specs.
-Do not implement the contest system yet.
-
-The output must recommend one concrete ACTION-11C implementation design.
-
----
-
-# Important Definition: "Simultaneous"
-
-Do NOT define contest by "both buttons were pressed on the same input tick".
-
-Different actions have different startup / reach / movement timing.
-
-For this investigation, define an interaction from the **logical tick on which their gameplay effects actually meet**.
-
-Examples:
-
-- Push: body contact while Push impact can open / is active
-- Tsuppari: Tsuppari hit tick while target is in reach
-- Grip: Grip lunge/reach tick that reaches the opponent under the proposed success boundary
-- Counter: Counter window active when a catchable opponent effect arrives.
-
-The final design must remain deterministic and fixed-step.
-
-No wall-clock / render-frame rule.
-
----
-
-# Current Source Baseline — Confirm First
-
-Inspect Current Source before experimenting.
-
-Expected current Grip baseline:
-
-```
-GRIP_REACH_TICKS = 6
-GRIP_RECOVERY_TICKS = 12
-GRIP_RANGE_MARGIN = 0.09 m
-BODY_RADIUS = 0.35 m
-```
-
-Current success distance:
-
-```
-2 * BODY_RADIUS + GRIP_RANGE_MARGIN
-= 0.79 m
-```
-
-Current behavior:
-
-- Grip starts only in FREE + idle + stable
-- Grip reach has no intentional self-movement
-- Grip success can occur on the same Simulation tick as the Shift press if already in range
-- that same-tick success can skip every rendered attempt-pose frame
-- target must currently be action idle for unilateral Grip success
-- both reaching / stable / in range -> neutral grapple
-- Kuzushi target -> Morozashi and Kuzushi consumed
-- whiff -> Grip recovery
-- Grip success -> grapple, both actions idle.
-
-Current FREE resolution order is approximately:
-
-```
-contact
--> Push impact opening
--> Counter
--> Grip
--> Push/Tsuppari forces
--> action timers
-```
-
-Confirm the exact Current Source truth.
-
----
-
-# User Problem to Solve
-
-ACTION-11A technically works, but Current Gameplay can immediately consume Grip reach on the press tick.
-
-Result:
-
-```
-Shift
--> same-tick grapple
--> no Grip attempt visual frame
-```
-
-The User considers this visually wrong.
-
-The intended new feel is:
-
-```
-Shift
--> Grip attempt pose is visibly entered
--> short forward lunge
--> opponent interaction
--> contest result
--> Grip success or failure
-```
-
-The investigation must solve this without making presentation own gameplay timing.
-
----
-
-# Grip Lunge Travel Target
-
-Target self-travel from a stationary wrestler in open space:
-
-```
-approximately 0.10–0.13 m
-```
-
-Reference from old Push:
-
-- old active-only Push self travel: approximately 0.100 m
-- old full Push movement including recovery coast: approximately 0.1267 m.
-
-Do not treat exactly 0.100 or 0.1267 as mandatory.
-
-The lunge should feel like:
-
-> one short committed step to get hands onto the opponent
-
-not:
-- current 24-tick Push charge
-- homing movement
-- teleport
-- large tackle.
-
----
-
-# Grip Lunge Candidate Investigation
-
-Compare at least these approaches.
-
-## Candidate A — Extend Grip reach and use existing grounded movement
-
-Use press-time facing direction and the existing movement model during Grip reach.
-
-Evaluate at least:
-
-```
-6 ticks
-8 ticks
-9 ticks
-10 ticks
-```
-
-Rough expectations only:
-
-- 6 ticks: ~0.058 m
-- 8 ticks: ~0.100 m
-- 9 ticks: ~0.125 m
-- 10 ticks: ~0.153 m
-
-Measure exact Current movement behavior.
-
-Assess:
-- target travel
-- total action duration
-- readability of ACTION-11A attempt pose
-- recovery timing
-- dodge / counterplay
-- whether changing reach duration materially affects Grip balance.
-
-## Candidate B — Keep current reach duration, add Grip-specific lunge tuning
-
-Keep `GRIP_REACH_TICKS = 6` but add a Grip-specific movement speed/acceleration rule sufficient to reach the target distance.
-
-Evaluate:
-- required tuning value
-- motion feel / peak speed
-- extra constants
-- whether it becomes too instantaneous
-- architecture cost.
-
-Prefer not to add a new movement formula unless there is a clear gameplay reason.
-
-## Candidate C — Separate Grip telegraph/startup from lunge/reach
-
-Small explicit phases, for example:
-
-```
-attempt startup
--> lunge/reach
--> recovery
-```
-
-Do not implement.
-
-Evaluate whether a separate short startup is necessary to guarantee the attempt pose is perceptible, especially from already-contacting starts.
-
-Avoid generic state-machine abstraction.
-
----
-
-# Direction / Facing
-
-Investigate the smallest natural rule.
-
-Preferred hypothesis:
-
-- Grip lunge direction is captured from canonical facing at Shift press
-- lunge does not home toward a sidestepping opponent
-- canonical facing stays on the committed lunge direction during the lunge/reach
-- after recovery/idle, normal facing resumes.
-
-Compare against continuing the current per-tick face-opponent behavior.
-
-Report whether facing-tracking would visually or mechanically create hidden homing.
-
-Do not add a second presentation-facing Source of Truth.
-
----
-
-# Grip Success Boundary
-
-The User said:
-
-> Shiftキーの前進で敵と接触したら掴みになる。
-
-Investigate changing Grip success from the current 0.79 m margin range to an **actual body-contact-driven success**.
-
-Compare:
-
-## Boundary A — Existing Grip range
-
-```
-distance <= combined radius + 0.09 m
-```
-
-## Boundary B — Existing circle contact
-
-Use the same contact result / geometry already owned by Simulation.
-
-Primary question:
-
-> Does actual contact better match the new lunge/attempt visual and reduce "grab from visible gap" behavior?
-
-Measure any consequences for:
-- neutral Grip
-- Kuzushi -> Morozashi
-- Grip vs Grip
-- ring-edge behavior
-- glancing contact.
-
-Do not create a bespoke Grip collider.
-
----
-
-# Minimum Visible Attempt / Immediate-Contact Problem
-
-This is a required investigation point.
-
-If Shift is pressed while the wrestlers are already touching, a pure "contact means success immediately" rule can still produce:
-
-```
-press tick
--> success
--> no visible attempt pose
-```
-
-The next implementation must avoid the original ACTION-11A problem.
-
-Compare at least:
-
-## Telegraph A — success allowed on the press tick
-
-Baseline/reference only.
-Expected to fail the visual goal.
-
-## Telegraph B — a newly-started Grip cannot succeed until at least the next logical tick
-
-No render timer.
-The press-tick Snapshot must remain Grip attempt.
-
-## Telegraph C — explicit short minimum attempt/startup commitment
-
-A small fixed Simulation duration before Grip can resolve success.
-
-Investigate a minimal range such as:
-
-```
-2–4 ticks
-```
-
-before success eligibility.
-
-Evaluate:
-- visual readability
-- input responsiveness
-- contest fairness
-- whether a new Grip startup phase is justified.
-
-Recommend exactly one rule for ACTION-11C.
-
-Do not choose based only on code simplicity; the attempt pose must be actually perceivable.
-
----
-
-# Four-Way Main Contest
-
-User-approved main cycle:
-
-```
-Push > Tsuppari > Grip > Counter > Push
-```
-
-Interpretation:
-
-## Push > Tsuppari
-
-Preserve current accepted semantics unless evidence requires change:
-
-- during Push impact/contact, Tsuppari may contribute its existing coupled effect
-- Push normally remains the stronger forward contest
-- do not automatically cancel Tsuppari merely to make the table visually symmetric.
-
-Report the exact current outcome.
-
-## Tsuppari > Grip
-
-NEW desired relationship.
-
-If a Grip attempt/lunge would succeed on the same logical interaction where an opponent Tsuppari hit reaches the gripper:
-
-- Tsuppari wins
-- Grip must fail
-- no grapple should be entered from that Grip.
-
-Investigate the smallest failure consequence:
-- recommended hypothesis: cancel Grip into existing Grip recovery
-- compare against immediate idle / Kuzushi only if needed.
-
-Do not add Kuzushi as a punishment unless explicitly justified and recommended for User decision.
-
-## Grip > Counter
-
-NEW desired relationship.
-
-If a valid Grip lunge/contact reaches an opponent whose Counter window is active:
-
-- Grip wins
-- Counter does not catch Grip
-- grapple is entered
-- Counter action is cancelled by grapple entry.
-
-Investigate whether the losing Counter should:
-- simply be cancelled into grapple (preferred hypothesis)
-- or receive any Counter-fail Kuzushi penalty.
-
-Do NOT assume a timeout-fail Kuzushi should occur when the Counter was actively beaten by Grip.
-Recommend the smallest coherent rule.
-
-## Counter > Push
-
-Preserve current accepted Push-Counter semantics:
-- only Push impact + contact is catchable
-- Best / Success timing from impact
-- pusher enters Kuzushi
-- CounterTransition remains unchanged.
-
----
-
-# Diagonal Contest Relationships
-
-These are also User-approved as the proposed direction.
-
-## Push > Grip
-
-A Grip lunge colliding with a Push should not grab through the Push.
-
-Investigate exact trigger:
-- Push no-contact charge before impact
-- same tick body contact opens Push impact
-- Grip success would also be possible.
-
-Preferred result on actual collision:
-- Push wins the contest
-- Grip fails
-- existing Push impact proceeds.
-
-Determine whether Grip should enter normal Grip recovery.
-
-Do not let resolver call order accidentally decide this.
-
-## Counter > Tsuppari
-
-Preserve current accepted behavior:
-- Counter window catches Tsuppari on its hit tick when in reach
-- Tsuppari attacker enters Kuzushi
-- no Tsuppari impulse/buildup change
-- no CounterTransition.
-
-Do not redesign.
-
----
-
-# Same-Action Relationships
-
-Preserve unless a measured conflict is found.
-
-## Push vs Push
-- both impact windows can open
-- net Push force can cancel
-- ordinary contact/self movement remains.
-
-## Tsuppari vs Tsuppari
-- both hits can resolve
-- both can be pushed apart
-- existing buildup/Kuzushi rules remain.
-
-## Grip vs Grip
-- if both valid attempts reach on the same interaction, enter neutral grapple
-- no arbitrary participant-order winner.
-
-## Counter vs Counter
-- no offensive interaction to catch
-- windows proceed independently
-- if untouched, both may expire into Kuzushi.
-
----
-
-# Required Full Pair Matrix
-
-The Completion Report must include the final recommended matrix for all unordered pairs:
-
-| Pair | Recommended Result | Trigger Tick | Loser/Follow-up State |
-|---|---|---|---|
-| Push / Push | | | |
-| Push / Tsuppari | | | |
-| Push / Grip | | | |
-| Push / Counter | | | |
-| Tsuppari / Tsuppari | | | |
-| Tsuppari / Grip | | | |
-| Tsuppari / Counter | | | |
-| Grip / Grip | | | |
-| Grip / Counter | | | |
-| Counter / Counter | | | |
-
-Also include:
-- Idle / Grip
-- Kuzushi / Grip
-
-for completeness of Grip success semantics.
-
-Do not use vague "A wins" only.
-Specify actual state/result:
-- force
-- impulse
-- Grip recovery
-- grapple neutral
-- Morozashi
-- Kuzushi
-- CounterTransition
-etc.
-
----
-
-# Contest Resolution Architecture
-
-Current resolver order must not be the accidental owner of the four-way rules.
-
-Investigate the smallest explicit Pure TypeScript design.
-
-Preferred direction:
-
-- derive tick-local interaction facts from canonical action/contact/hit state
-- resolve explicit pair contests before applying mutually incompatible results
-- keep existing specialized formulas (Push force, Tsuppari impulse, CounterTransition, Grip grapple) in their current owners where possible.
-
-Possible small shapes:
-
-- a pure `resolveFreeActionContest` / `freeActionContest` helper returning a small outcome
-- a small explicit pairwise function/table for only these four actions
-- explicit contest guards around existing resolvers.
-
-Do NOT propose:
-- generic Rule Engine
-- ECS
-- event bus
-- extensible combat framework.
-
-Compare at least:
-
-1. keep current resolver order + ad hoc exceptions
-2. one small explicit pair-contest helper.
-
-Recommend one.
-
-Primary requirement:
-
-> Changing function call order later must not silently change who wins Tsuppari vs Grip or Grip vs Counter.
-
----
-
-# Interaction Timing Cases
-
-For each new relationship, test/measure timing offsets, not just exact same press.
-
-At minimum:
-
-## Tsuppari vs Grip
-
-Test Grip press relative to Tsuppari press/hit such that:
-- Grip begins earlier
-- both gameplay effects meet on same tick
-- Tsuppari hit occurs just before Grip would succeed
-- Grip would succeed just before Tsuppari hit under naive resolver order.
-
-Determine one deterministic rule from the actual effect tick.
-
-## Grip vs Counter
-
-Test:
-- Counter already open before Grip press
-- Grip already lunging before Counter press
-- their relevant windows overlap only at contact.
-
-Grip should win when the valid Grip interaction occurs during the Counter window.
-
-## Push vs Grip
-
-Test:
-- Push starts earlier
-- Grip starts earlier
-- both contact on same tick
-- Grip reaches Push during Push startup vs Push impact-opening tick.
-
-The final rule must state whether a Push in startup is already "winning Push" or only an actual Push impact wins.
-
-Do not leave this implicit.
-
----
-
-# Same-Participant Input Priority
-
-Current same-participant input priority is:
-
-```
-Push > Tsuppari > Counter > Grip
-```
-
-This is separate from cross-participant contest.
-
-Do not change it in ACTION-11B.
-
-Investigate only cross-participant Action interaction.
-
-If the proposed four-way contest would require changing same-participant priority:
-- report it as a conflict
-- do not silently redesign input priority.
-
----
-
-# Kuzushi Interaction
-
-Preserve ACTION-09B:
-
-```
-valid Grip on Kuzushi
--> Morozashi
--> Kuzushi consumed
-```
-
-With Grip lunge, verify:
-- no Kuzushi consumption during approach
-- only actual successful Grip consumes it
-- Tsuppari/Push defeating the Grip attempt does not accidentally consume target Kuzushi
-- Grip success boundary change (range -> contact if recommended) still preserves Morozashi semantics.
-
-Do not change 90 ticks or 1.5x follow-up rules.
-
----
-
-# Grip Attempt Art
-
-ACTION-11A remains a provisional Visual Gate.
-
-Current attempt texture selection:
-
-```
-pose === 'grip'
-&& gripPhase === 'reach'
-```
-
-The investigation should assess how each proposed Grip timing/lunge design affects visible attempt duration.
-
-Do not:
-- modify the art
-- promote it to Product
-- add Grip success art
-- add hand-marker VFX.
-
-The User's current complaint is gameplay timing, not the attempt image itself.
-
----
-
-# Measurement Requirements
-
-## Current Grip baseline
-
-Report:
-
-- success distance
-- press-to-success ticks when already in current range
-- reach duration
-- recovery duration
-- self travel
-- attempt-visible Simulation snapshots for:
-  - already-in-range start
-  - just-out-of-range start
-  - whiff.
-
-## Lunge candidates
-
-For each viable candidate report:
-
-- reach/startup/lunge tick counts
-- open-space self travel
-- peak self speed
-- total Grip action duration on whiff
-- earliest success tick
-- minimum guaranteed attempt-state duration before success
-- distance from which stationary opponent can be reached
-- no-homing behavior.
-
-## Contact boundary
-
-Compare existing 0.79 m range vs actual circle contact with measured examples.
-
----
-
-# Verification / Investigation Scenarios
-
-Use deterministic Pure Simulation scratch experiments.
-
-At minimum cover:
-
-1. Grip vs idle
-2. Grip vs Kuzushi
-3. Grip vs moving idle target
-4. Grip vs Grip
-5. Grip vs Counter
-6. Grip vs Tsuppari
-7. Grip vs Push startup
-8. Grip vs Push impact
-9. Push vs Tsuppari existing behavior
-10. Counter vs Tsuppari existing behavior
-11. Push vs Counter existing behavior
-12. Push vs Push
-13. Tsuppari vs Tsuppari
-14. Counter vs Counter
-15. participant array order swapped for every symmetric/new pair where relevant.
-
-For the new contest pairs, run timing sweeps around the interaction tick.
-
----
-
-# Ring-Out / Collision
-
-Grip lunge should use ordinary Simulation movement/contact.
-
-Investigate whether the short lunge can itself:
-- cause ring-out
-- create unwanted contact correction
-- move an opponent before grapple entry.
-
-Do not add:
-- Grip-specific collider
-- wall/clamp
-- teleport.
-
-If current `enterGrapple` bond correction causes a visible positional snap after a lunge, measure it and report it.
-
-Do not fix in Investigation.
-
----
-
-# Recommended ACTION-11C Output
-
-The Completion Report must recommend exactly one implementation design including:
-
-## Grip timing
-- exact startup / reach / lunge / recovery ticks
-- earliest success tick
-- guaranteed attempt visibility rule.
-
-## Grip movement
-- direction ownership
-- facing ownership
-- movement rule
-- expected travel.
-
-## Success boundary
-- actual contact vs existing margin range.
-
-## Contest matrix
-- all 10 action pairs
-- Idle/Kuzushi Grip outcomes.
-
-## Failure consequences
-Explicitly define what happens to losing Grip in:
-- Grip loses to Tsuppari
-- Grip loses to Push.
-
-Explicitly define what happens to losing Counter in:
-- Counter loses to Grip.
-
-## Resolver architecture
-- exact recommended helper / call-order concept
-- how it avoids participant/resolver-order dependence.
-
-## Preservation
-State exactly how existing:
-- Push
-- Tsuppari
-- Counter
-- Kuzushi
-- Grip/Drive/Grapple
-are preserved outside the newly approved interactions.
-
----
-
-# Scope
-
-## In Scope
-
-- Grip lunge measurement/design
-- attempt visibility timing
-- success boundary investigation
-- full four-action pair matrix
-- Tsuppari > Grip
-- Grip > Counter
-- Push > Grip
-- existing diagonal/same-action preservation
-- explicit contest-resolution architecture
-- timing sweeps
-- ACTION-11C recommendation.
-
-## Scope Out
-
-Do NOT:
-
-- modify BoutSimulation.ts
-- modify BoutTypes.ts
-- modify production tests
-- change Grip attempt art
-- implement Grip success art
-- implement hand VFX
-- change Push tuning
-- change Tsuppari tuning
-- change Counter tuning
-- change Kuzushi tuning
-- change Grapple/Drive
-- change same-participant input priority
-- update WRESTLER_PRODUCT_ART_SPEC
-- fix unrelated stale docs
-- modify PROJECT_HANDOFF.md.
-
-Scratch files outside committed source are allowed for deterministic measurement.
-
----
-
-# Stop Conditions
-
-STOP and report if:
-
-- the approved main cycle cannot be made deterministic without a broad combat framework
-- Grip > Counter materially conflicts with accepted CounterTransition architecture
-- Tsuppari > Grip cannot be resolved without changing Tsuppari's accepted hit semantics
-- short Grip lunge requires changing global movement tuning
-- guaranteeing a visible attempt pose requires presentation-owned time
-- actual contact success cannot preserve Grip/Morozashi semantics
-- same-participant input priority would have to change
-- Current Source materially conflicts with User-approved direction.
-
-Do not silently broaden scope.
-
----
-
-# Verification Level
-
-Heavy Investigation / No Production Fixes.
-
-Required:
-
-- Current Source inspection
-- deterministic baseline measurements
-- all lunge candidates
-- current range vs contact comparison
-- full 10-pair matrix
-- timing sweeps for Push/Grip, Tsuppari/Grip, Grip/Counter
-- participant-order checks
-- Kuzushi/Morozashi preservation
-- ring-out/contact/bond-snap observations
-- no Production changes
-- `git diff --check`.
-
-No User Play Test is required for ACTION-11B because it is Investigation Only.
-
----
-
-# Completion Report
-
-Include:
-
-- Result
-- Current Source findings
-- current Grip baseline table
-- lunge candidate table
-- attempt-visibility comparison
-- range vs contact comparison
-- full pair matrix
-- timing sweep results
-- participant-order findings
-- resolver architecture comparison
-- exact recommended ACTION-11C design
-- rejected alternatives
-- Production Changes: NONE
-- Design Deviations
-- Unexpected Scope
-- User Decisions Required, if any
-- Git delivery.
-
-Expected:
-
-```
-Production Changes: NONE
-```
-
----
-
-# Git Delivery
-
-Follow `AGENTS.md`.
-
-Investigation Only.
-
-Allowed committed repository change:
-
-```
-docs/agent_handoff/CURRENT_COMPLETION_REPORT.md
-```
-
-only.
-
-Do not modify Production source/tests/docs/specs.
-
-Normal Investigation delivery:
-
-- stage Completion Report only
-- one report commit
-- fetch / fast-forward safety
-- push `origin/develop`
-- verify remote SHA
-- clean working tree.
-
-Suggested commit:
-
-`docs(investigation): analyze grip lunge contest rules`
-
-Do not modify:
-
-- `main`
-- `PROJECT_HANDOFF.md`
-- `CURRENT_TASK.md`.
-
-# Final Instruction
-
-Investigate, do not implement.
-
-Find the smallest deterministic Pure TypeScript design that:
-
-- makes Shift visibly enter the Grip-attempt pose
-- moves the wrestler forward roughly 0.10–0.13 m
-- resolves Grip success from the committed attempt reaching the opponent
-- guarantees the attempt is perceptible even from immediate-contact starts
-- implements the User-approved interaction direction:
+Also implement the explicit cross-action relationships:
 
 ```
 Push > Tsuppari > Grip > Counter > Push
@@ -931,313 +37,1044 @@ Push > Grip
 Counter > Tsuppari
 ```
 
-while preserving current same-action identities and avoiding resolver-order-dependent outcomes.
-
+Do not redesign Push / Tsuppari / Counter / Kuzushi beyond the approved Grip interactions.
 
 ---
 
-# ChatGPT Review Handoff
+# Accepted Grip Timing
 
-Review-Date: 2026-10-23
-Overall Result: PASS — INVESTIGATION COMPLETE / USER DECISIONS REQUIRED BEFORE ACTION-11C
-Accepted Investigation Baseline: e5a29fd3c1bc688f045ced1afc5ab188dac01e8b
-
-## Production Change Review
-
-Confirmed:
-
-- ACTION-11B made no Production source/test/spec changes
-- only CURRENT_COMPLETION_REPORT.md changed
-- Investigation Only scope was respected.
-
-Production Changes: NONE
-
-## Accepted Grip Lunge Recommendation
-
-The investigation supports the following as the preferred ACTION-11C baseline:
-
-- GRIP_REACH_TICKS: 6 -> 8
-- GRIP_RECOVERY_TICKS: 12 unchanged
-- use existing grounded movement; no Grip-specific acceleration
-- capture lunge direction from canonical facing at Shift press
-- freeze canonical facing only during Grip reach
-- recovery returns to ordinary facing behavior
-- open-space reach travel approximately 0.100 m
-- total movement including braking approximately 0.1267 m
-- peak self speed approximately 1.333 m/s.
-
-This matches the User target of roughly old pre-ACTION-10B Push movement.
-
-Rejected:
-- 6 ticks: too short
-- 9/10 ticks: too long / increases reach too much
-- Grip-specific acceleration: unnecessary extra tuning and more instantaneous
-- separate startup phase: unnecessary if minimum attempt eligibility is used.
-
-## Attempt Visibility Recommendation
-
-Preferred:
+Use:
 
 ```
+GRIP_REACH_TICKS = 8
 GRIP_MIN_ATTEMPT_TICKS = 4
+GRIP_RECOVERY_TICKS = 12
 ```
 
-Success is not eligible until reach elapsed >= 4 ticks.
+Meaning:
 
-This guarantees approximately 67 ms / four Simulation snapshots of Grip attempt before success from an already-contacting start.
+- Shift starts Grip reach immediately
+- reach is the Grip lunge phase
+- Grip cannot succeed until reach elapsed >= 4 ticks
+- earliest possible success tick = tick 4
+- this guarantees at least 4 Simulation Snapshots of the Grip attempt state before success from an already-contacting start
+- no new Grip startup phase is added
+- whiff enters existing 12-tick recovery.
 
-This solves the ACTION-11A same-tick-success visual problem without a presentation timer or a new Grip phase.
+Do not add presentation-owned timing.
 
-## Success Boundary Recommendation
+---
 
-Preferred:
+# Grip Movement
 
-- Grip success uses actual existing Simulation body contact
-- do not use GRIP_RANGE_MARGIN for success
-- no dedicated Grip collider.
+When Grip starts:
 
-Benefits measured:
+- capture `direction = (cos(facing), sin(facing))`
+- store it in Grip action state
+- use the existing grounded movement model during Grip reach
+- WASD is ignored during Grip reach
+- recovery uses zero movement intent / normal braking
+- no homing
+- no target id
+- no teleport.
 
-- success occurs at actual body contact
-- no visible-gap grab
-- grapple bond positional snap becomes effectively zero
-- stationary-target practical reach remains approximately 0.801 m due to the short lunge, close to the old 0.79 m balance.
-
-Kuzushi does not bypass contact.
-
-## Main Four-Way Contest
-
-Accepted investigation direction:
-
-```
-Push > Tsuppari > Grip > Counter > Push
-```
-
-Diagonal relationships:
+Expected open-space movement from investigation:
 
 ```
-Push > Grip
-Counter > Tsuppari
+reach travel ~= 0.100 m
+total movement including braking ~= 0.1267 m
+peak self speed ~= 1.333 m/s
 ```
 
-Same-action identities remain:
+Do not hardcode displacement.
 
-- Push / Push: contested Push, net force cancellation while both impacts are active
-- Tsuppari / Tsuppari: mutual hit behavior
-- Grip / Grip: neutral grapple
-- Counter / Counter: no direct catch; independent timeout -> Kuzushi.
+Do not add Grip-specific acceleration.
 
-## Recommended Pair Outcomes
+Use existing:
 
-### Push / Grip
+- FORWARD_ACCELERATION
+- MAX_SPEED
+- STOP_DECELERATION
+- LATERAL_DECELERATION
+- REVERSE_BRAKING.
 
-Recommended:
+---
 
-- Push wins only as an actual Push impact contest
-- if impact/contact occurs while opponent is Grip reach:
-  - Grip is cancelled into existing Grip recovery 12
-  - Push impact/force resolves normally
-- Push startup / pre-impact charge / recovery are not impact-winning ticks.
+# Grip Facing
 
-However Current target-action rules still make Push action states non-grabbable while they are non-idle; see the clarification section below.
+During Grip reach:
 
-### Tsuppari / Grip
+- canonical facing remains locked to the press-time Grip direction
+- do not face-track a sidestepping opponent.
 
-Recommended:
+During Grip recovery:
+- resume ordinary FREE facing behavior.
 
-- a Tsuppari hit tick that reaches a participant in Grip reach cancels that Grip into recovery 12
+Reason:
+- recovery is also used after grapple release
+- freezing recovery facing would change existing release behavior.
+
+Do not create presentation-only facing.
+
+---
+
+# Grip Action State
+
+Extend canonical Grip action minimally.
+
+Preferred shape:
+
+```ts
+{
+  kind: 'grip'
+  phase: 'reach' | 'recovery'
+  ticksRemaining: number
+  direction: Vec2
+}
+```
+
+If direction is irrelevant in recovery, it may still remain in the state for shape simplicity.
+
+Snapshot must deep-copy the direction.
+
+Do not add:
+- target id
+- hit flag
+- eligible flag
+- separate startup timer.
+
+Eligibility must be derived from ticksRemaining:
+
+```
+elapsed = GRIP_REACH_TICKS - ticksRemaining
+eligible = phase === 'reach' && elapsed >= GRIP_MIN_ATTEMPT_TICKS
+```
+
+---
+
+# Grip Success Boundary
+
+Remove the old margin-based success boundary from Grip resolution.
+
+Grip success now requires:
+
+```
+actual existing Simulation body contact
+```
+
+Use the same contact result / circle geometry already owned by BoutSimulation.
+
+Do not create:
+- Grip collider
+- hand collider
+- sprite-based hitbox
+- range-only grab.
+
+`GRIP_RANGE_MARGIN` must no longer decide Grip success.
+
+If the constant becomes fully unused:
+- remove it cleanly
+- update tests/docs accordingly.
+
+If it is still referenced by historical tests/docs only:
+- remove/update those stale assumptions rather than keeping a dead gameplay constant.
+
+Do not change BODY_RADIUS / CONTACT_SLOP.
+
+---
+
+# Minimum Attempt Visibility
+
+A newly started Grip may be in contact immediately, but cannot succeed until:
+
+```
+elapsed >= 4
+```
+
+So:
+
+```
+Shift at contact
+-> Grip reach / attempt pose
+-> 4 ticks of visible attempt state
+-> then Grip may resolve success
+```
+
+Do not special-case rendering.
+
+ACTION-11A selector remains:
+
+```
+pose === 'grip'
+&& gripPhase === 'reach'
+```
+
+No changes to the attempt art are required.
+
+Exception:
+- if Grip is defeated by a Push impact or Tsuppari hit before tick 4, it may enter recovery immediately.
+- this is intentional; the attempt loses before it can succeed.
+
+---
+
+# Small Explicit Contest Resolver
+
+Do not rely on current function-call order to determine Grip interactions.
+
+Add one small symmetric Pure TypeScript helper for Grip-related FREE contests.
+
+Preferred conceptual name:
+
+```
+resolveFreeGripContest
+```
+
+or equivalent.
+
+It must operate from one tick-local canonical state and determine:
+
+- Grip cancellation(s)
+- whether a Grip-created grapple should occur
+- neutral vs Morozashi advantage.
+
+Do not implement a generic combat rule engine.
+
+The helper must be:
+- deterministic
+- participant-order independent
+- Phaser-free.
+
+---
+
+# Recommended FREE Tick Order
+
+Use the investigation-approved conceptual order:
+
+```
+integrate movement
+-> resolveContact
+-> openPushImpact
+-> evaluate Grip contest from one state
+-> apply Grip cancellations to recovery
+-> resolveCounter
+-> if Grip contest says grapple:
+     consume target Kuzushi if applicable
+     enterGrapple
+-> if engagement still FREE:
+     resolveForces
+-> advanceAction
+-> updateFacing
+-> ring-out
+```
+
+Exact code structure may differ, but these semantics must hold.
+
+Important:
+- Tsuppari hit predicates used by the contest helper must be evaluated consistently with the same logical tick
+- Push impact must be open before Push-vs-Grip is decided
+- Grip-vs-Counter grapple must be determined before Counter timeout/advanceAction
+- force formulas remain in current owners.
+
+---
+
+# Cross-Action Rules
+
+## 1. Push > Tsuppari
+
+Preserve current accepted behavior exactly.
+
+When Tsuppari hit overlaps Push impact/contact:
+- current coupled contribution remains
+- Push normally wins the forward contest
+- Tsuppari buildup still changes as today.
+
+Do not simplify to "Tsuppari cancelled".
+
+---
+
+## 2. Tsuppari > Grip
+
+NEW accepted rule.
+
+If a participant is in Grip reach and the opponent's Tsuppari hit tick reaches them:
+
+- Tsuppari wins
+- Grip is cancelled
+- Grip enters `recovery` with full `GRIP_RECOVERY_TICKS`
+- no grapple
 - Tsuppari hit resolves normally
-- no additional Kuzushi penalty is added merely for losing the Grip contest.
+- impulse unchanged
+- buildup unchanged
+- 6th-hit Kuzushi unchanged
+- no extra Kuzushi just for losing Grip.
 
-### Grip / Counter
+This applies even before Grip reaches its 4-tick eligibility.
 
-Recommended:
+The Grip attempt may therefore be interrupted early by a real Tsuppari hit.
 
-- eligible Grip + actual contact while target Counter window is active -> neutral grapple
-- Counter is cancelled by enterGrapple
-- Counter loser does NOT receive Kuzushi
-- no CounterTransition.
+---
 
-If Counter had already timed out into Kuzushi before Grip success, existing Kuzushi Grip -> Morozashi still applies.
+## 3. Grip > Counter
 
-### Counter / Push
+NEW accepted rule.
 
-Preserve current accepted Push-Counter behavior unchanged.
+If:
 
-### Counter / Tsuppari
+- Grip is in reach
+- Grip is eligible (elapsed >= 4)
+- actual contact exists
+- target action is active Counter
 
-Preserve current accepted Counter-catches-Tsuppari behavior unchanged.
+then:
+
+```
+Grip wins
+-> neutral grapple
+-> Counter action cancelled by enterGrapple
+-> Counter loser gets NO Kuzushi
+-> no CounterTransition
+```
+
+If Counter timed out into Kuzushi before Grip succeeds:
+- existing Kuzushi Grip -> Morozashi applies.
+
+Do not grant Morozashi merely because the target was still Counter.
+
+---
+
+## 4. Counter > Push
+
+Preserve current accepted Push Counter exactly.
+
+No changes to:
+- impact-only catch
+- Best / Success
+- CounterTransition
+- Kuzushi
+- overshoot fallback
+- 35-degree visual.
+
+---
+
+# Diagonal Rules
+
+## Push > Grip
+
+A Push defeats Grip only when the Push has an actual active impact window and actual contact.
+
+If:
+
+```
+Push impact active
++ actual contact
++ opponent is Grip reach
+```
+
+then:
+
+- Grip is cancelled into full Grip recovery
+- Push impact continues normally
+- Push force continues normally
+- no added Kuzushi to Grip just for losing.
+
+Important distinction:
+
+- Push startup is NOT a contest win
+- Push pre-impact charge is NOT a contest win
+- Push recovery is NOT a contest win.
+
+However, per User-approved D4, Push remains a non-grabbable target while its action is non-idle.
+
+So a Grip cannot successfully grab:
+- Push startup
+- Push charge before impact
+- Push impact
+- Push recovery.
+
+Only the impact/contact tick actively cancels the Grip.
+
+This distinction must be explicit in code/tests.
+
+---
+
+## Counter > Tsuppari
+
+Preserve current accepted behavior exactly.
+
+No changes.
+
+---
+
+# Target Eligibility
+
+For unilateral Grip success, valid target actions are:
+
+- idle
+- counter
+- grip reach.
+
+Invalid target actions remain:
+
+- push startup / charge / impact / recovery
+- tsuppari startup / active / recovery
+- grip recovery
+- drive.
+
+This preserves the User-selected D3/D4 minimal-scope behavior.
+
+Do not broaden recovery punishment in this Task.
+
+---
+
+# Grip vs Grip
+
+Avoid the timing hole found in ACTION-11B.
+
+If:
+
+- actual contact exists
+- at least one participant has an eligible Grip reach
+- the other participant is also in Grip reach
+
+then:
+
+```
+neutral grapple
+```
+
+The other Grip does not need to be eligible yet.
+
+This must be symmetric and participant-order independent.
+
+No arbitrary winner.
+
+---
+
+# Idle / Grip
+
+Eligible Grip + actual contact against idle target:
+
+```
+neutral grapple
+```
+
+---
+
+# Kuzushi / Grip
+
+Eligible Grip + actual contact against Kuzushi target:
+
+```
+Morozashi to gripper
+-> target Kuzushi consumed
+-> enter grapple
+```
+
+Do not consume Kuzushi:
+- during lunge
+- on contact alone before Grip success
+- when Grip is defeated by Push/Tsuppari.
+
+Preserve ACTION-09B.
+
+---
+
+# Counter / Counter
+
+Preserve current behavior.
+
+No direct contest.
+Each window proceeds independently.
+Untouched timeout -> each participant enters Kuzushi.
+
+---
+
+# Tsuppari / Tsuppari
+
+Preserve current behavior.
+
+Both hits can resolve.
+
+---
+
+# Push / Push
+
+Preserve current behavior.
+
+Both impact windows can open and net Push force cancels.
+
+---
+
+# Same-Participant Input Priority
+
+Do not change:
+
+```
+Push > Tsuppari > Counter > Grip
+```
+
+This Task is cross-participant contest only.
+
+---
+
+# ACTION-11A Attempt Art
+
+Preserve the current provisional Grip attempt Visual Gate.
+
+Do not change:
+
+- source image
+- runtime textures
+- red/blue derivation
+- pivot
+- scale
+- selector.
+
+Because Grip reach becomes 8 ticks and minimum success is 4 ticks:
+- the attempt pose should now be visible in ordinary successful Grips.
+
+Do not promote it to Product art in this Task.
+
+---
+
+# Grip Success Visual
+
+Still Deferred.
+
+After successful grapple:
+- keep the current existing grapple visual fallback
+- do not add Grip success sprite
+- do not add head offset
+- do not add hand-marker VFX.
+
+Those are separate follow-up visual tasks.
+
+---
+
+# Exact Full Pair Matrix
+
+Implement and test this matrix.
+
+| Pair | Result |
+|---|---|
+| Push / Push | existing contest; net force cancellation while both impacts active |
+| Push / Tsuppari | existing coupled semantics |
+| Push / Grip | Push impact/contact cancels Grip -> Grip recovery |
+| Push / Counter | existing Counter wins Push |
+| Tsuppari / Tsuppari | existing mutual-hit behavior |
+| Tsuppari / Grip | Tsuppari hit cancels Grip -> Grip recovery; hit resolves normally |
+| Tsuppari / Counter | existing Counter catches Tsuppari |
+| Grip / Grip | eligible+reach/contact -> neutral grapple |
+| Grip / Counter | eligible Grip/contact -> neutral grapple; Counter cancelled, no Kuzushi |
+| Counter / Counter | independent windows; untouched timeout -> Kuzushi |
+
+Also verify:
+- Idle / Grip -> neutral grapple
+- Kuzushi / Grip -> Morozashi + Kuzushi consumed.
+
+---
+
+# Required Boundary Cases
+
+All required; do not sample.
+
+## Grip Timing / Movement
+
+G1. `GRIP_REACH_TICKS = 8`.
+
+G2. `GRIP_MIN_ATTEMPT_TICKS = 4`.
+
+G3. `GRIP_RECOVERY_TICKS = 12`.
+
+G4. stationary open-space Grip reach travel ~= 0.100 m.
+
+G5. full movement with braking ~= 0.1267 m.
+
+G6. peak self speed ~= 1.333 m/s.
+
+G7. press-time direction is locked.
+
+G8. reach facing stays locked.
+
+G9. recovery resumes ordinary facing.
+
+G10. whiff enters recovery after full reach.
+
+## Attempt Visibility
+
+V1. already-contacting start cannot grapple on press tick.
+
+V2. cannot grapple before elapsed 4.
+
+V3. can grapple on elapsed 4 if all other conditions hold.
+
+V4. successful Grip has at least 4 reach snapshots before grapple.
+
+V5. if defeated by Push/Tsuppari before eligibility, Grip can cancel earlier.
+
+V6. ACTION-11A attempt texture remains selected throughout reach until cancellation/success.
+
+## Contact Success
+
+C1. Grip success requires actual contact.
+
+C2. old 0.79m margin alone no longer succeeds.
+
+C3. no bond snap for ordinary contact success beyond floating-point tolerance.
+
+C4. practical stationary-target reach remains around 0.80m via lunge.
+
+C5. glancing contact can succeed if eligibility/target rules hold.
+
+## Tsuppari > Grip
+
+TG1. Tsuppari hit during Grip reach cancels Grip.
+
+TG2. Grip enters full recovery.
+
+TG3. no grapple.
+
+TG4. Tsuppari impulse unchanged.
+
+TG5. Tsuppari buildup unchanged.
+
+TG6. 6th-hit Kuzushi still works.
+
+TG7. participant order independent.
+
+## Push > Grip
+
+PG1. Push startup does not actively cancel Grip.
+
+PG2. pre-impact Push charge does not actively cancel Grip.
+
+PG3. actual Push impact/contact cancels Grip.
+
+PG4. Grip enters full recovery.
+
+PG5. Push force resolves normally.
+
+PG6. Push recovery does not actively cancel Grip.
+
+PG7. Push remains non-grabbable during all Push phases.
+
+PG8. participant order independent.
+
+## Grip > Counter
+
+GC1. eligible Grip/contact during Counter window enters neutral grapple.
+
+GC2. Counter gets no Kuzushi.
+
+GC3. no CounterTransition.
+
+GC4. Counter action is cancelled by grapple entry.
+
+GC5. if Counter has already timed out into Kuzushi, Grip gives Morozashi instead.
+
+GC6. participant order independent.
 
 ## Grip vs Grip
 
-The investigation found a timing gap if Grip can only take idle targets or if both grips must already be eligible.
+GG1. both eligible + contact -> neutral grapple.
 
-Preferred explicit rule:
+GG2. one eligible + other still reach + contact -> neutral grapple.
 
-- if at least one Grip is eligible
-- both are in actual contact
-- the other participant is in Grip reach
-- enter neutral grapple.
+GG3. neither eligible -> no grapple yet.
 
-This removes participant-order/timing holes and keeps Grip/Grip symmetric.
+GG4. participant order independent.
 
-## Kuzushi Preservation
+## Idle / Kuzushi
 
-Preserve ACTION-09B:
+IK1. eligible Grip + idle + contact -> neutral.
 
-- lunge/approach does not consume Kuzushi
-- contact alone does not consume Kuzushi
-- successful eligible Grip consumes Kuzushi and gives Morozashi
-- defeated/whiffed Grip does not consume target Kuzushi.
+IK2. eligible Grip + Kuzushi + contact -> Morozashi.
 
-## Resolver Architecture
+IK3. Kuzushi consumed only on successful grapple tick.
 
-Accepted recommendation:
+IK4. defeated/whiff Grip does not consume target Kuzushi.
 
-Use one small symmetric pure pair contest helper rather than depending on resolver call order.
+## Existing Pair Regression
 
-Preferred conceptual order:
+R1. Push / Push unchanged.
+
+R2. Push / Tsuppari unchanged.
+
+R3. Push / Counter unchanged.
+
+R4. Tsuppari / Tsuppari unchanged.
+
+R5. Tsuppari / Counter unchanged.
+
+R6. Counter / Counter unchanged.
+
+R7. same-participant input priority unchanged.
+
+## Grapple / Drive Regression
+
+D1. enterGrapple momentum averaging unchanged.
+
+D2. grapple bond unchanged.
+
+D3. release unchanged.
+
+D4. Grappled Orientation unchanged.
+
+D5. Drive unchanged.
+
+## Presentation Regression
+
+P1. Grip attempt art still reach-only.
+
+P2. Grip recovery uses idle art.
+
+P3. successful grapple uses current fallback.
+
+P4. Push / Tsuppari / Counter / Kuzushi visuals unchanged.
+
+P5. Product asset hashes unchanged.
+
+---
+
+# Timing Sweeps
+
+Required for new contest relationships.
+
+Run deterministic offset sweeps comparable to ACTION-11B.
+
+At minimum:
+
+## Grip / Counter
+- gap 0.70 / 0.75 / 0.80
+- Counter press offsets covering before / overlapping / after Grip success.
+
+## Grip / Tsuppari
+- gap 0.70 / 0.75 / 0.80 / 0.85
+- Tsuppari press offsets covering hit before / during / after Grip reach.
+
+## Grip / Push
+- gap 0.70 / 0.75 / 0.80 / 1.2 / 1.6
+- Push press offsets covering startup / pre-impact / impact / recovery.
+
+## Grip / Grip
+- gap 0.70 / 0.75 / 0.80 / 0.90
+- relative Grip press offsets covering one-eligible / both-eligible / neither-eligible cases.
+
+For every symmetric/new pair:
+- swap role A/B
+- swap participant array order
+- verify semantically identical outcomes.
+
+---
+
+# Resolver Order Independence
+
+Required.
+
+Tests must prove the winner is encoded in the contest helper semantics, not accidental downstream function order.
+
+At minimum:
+- Tsuppari / Grip
+- Grip / Counter
+- Push / Grip
+- Grip / Grip.
+
+Do not merely snapshot one participant ordering.
+
+---
+
+# Ring-Out / Movement Safety
+
+Verify:
+
+- short Grip lunge by itself does not introduce false ring-out in ordinary legal setups
+- no Grip-specific wall/clamp
+- no special ring-out reason
+- contact correction does not push the opponent before grapple success
+- grapple contact success has negligible/no bond snap.
+
+Tokudawara regression as relevant.
+
+---
+
+# Architecture
+
+Keep:
 
 ```
-resolveContact
--> openPushImpact
--> resolveFreeGripContest(...)
--> apply Grip cancellations
--> resolveCounter
--> if contest says grapple: consume target Kuzushi if applicable + enterGrapple
--> if still FREE: resolveForces
--> action timers
--> facing
+Pure TypeScript Simulation
+-> Snapshot
+-> WrestlerVisualState
+-> Phaser presentation
 ```
 
-The helper should decide only Grip-related cross-action conflicts.
+Gameplay contest logic stays under `src/game/sumo/`.
 
-Do NOT introduce:
-- generic rule engine
+Do not put contest decisions in:
+- WrestlerView
+- BoutScene
+- input layer.
+
+Small explicit helper preferred.
+
+Do not introduce:
+- generic Rule Engine
 - ECS
-- event bus
-- combat framework.
+- DI
+- event bus.
 
-Participant-order sweeps reported zero mismatches across all tested new pairs.
+---
 
-## Full Pair Matrix Review
+# Documentation
 
-The Completion Report contains the required 10 unordered action pairs plus Idle/Grip and Kuzushi/Grip, with concrete result states rather than vague "wins".
+Update `docs/ARCHITECTURE.md` to Current Source truth.
 
-The matrix is sufficient as the design source for ACTION-11C after User decisions below.
+Document at minimum:
 
-## Clarification Before ACTION-11C
+- Grip reach 8
+- minimum success eligibility at 4 elapsed ticks
+- short locked-direction lunge
+- facing lock during reach only
+- contact-driven success
+- no margin-based Grip success
+- explicit Grip contest relationships
+- failure -> Grip recovery
+- Grip > Counter -> neutral/no Kuzushi
+- Grip vs Grip symmetry
+- target eligibility during Push/Tsuppari startup/recovery
+- ACTION-11A attempt art remains provisional presentation.
 
-The Report's recommended prototype preserves a Current Source property:
+Do not promote Grip attempt art in WRESTLER_PRODUCT_ART_SPEC.
 
-- unilateral Grip currently succeeds only against an action-idle target.
+---
 
-As a result, Push/Tsuppari startup and recovery remain non-grabbable even though the explicit "contest win" only occurs at:
-- Push impact/contact
-- Tsuppari hit.
+# Scope
 
-This means there are two concepts:
+## In Scope
 
-1. **contest win**
-   - Push impact beats Grip
-   - Tsuppari hit beats Grip
+- Grip 8-tick lunge
+- Grip direction state
+- minimum attempt 4
+- contact-driven success
+- explicit Grip contest helper
+- Tsuppari > Grip
+- Push > Grip
+- Grip > Counter
+- Grip vs Grip timing-gap fix
+- tests / docs / browser smoke
+- User Play Test.
 
-2. **target eligibility**
-   - a participant already in Push/Tsuppari action is not a valid Grip target during startup/recovery either.
+## Scope Out
 
-This is broader than a strict interpretation of "same effect tick collides".
+Do NOT:
 
-For minimal ACTION-11C scope, preserving current non-idle target eligibility is reasonable and is the Report recommendation.
+- change Push tuning
+- change Tsuppari tuning
+- change Counter timing/tuning
+- change Kuzushi tuning
+- change Grapple/Drive mechanics
+- change same-participant input priority
+- implement Grip success art
+- implement hand VFX
+- promote Grip attempt art
+- change Push/Tsuppari recovery grabbability
+- change Push/Tsuppari startup grabbability
+- add recovery punish beyond current behavior
+- modify PROJECT_HANDOFF.md.
 
-If the User wants true timing-based RPS where Grip can beat a Push/Tsuppari during startup before their effect happens, that is a different semantic choice and should be decided explicitly before implementation.
+---
 
-Do not let this remain accidental.
+# Stop Conditions
 
-## User Decisions Required
+STOP if:
 
-Before ACTION-11C, confirm the following.
+- explicit Grip contest cannot be implemented without broad combat framework
+- participant order changes any required result
+- contact-driven Grip success requires changing body radius/contact rules
+- preserving Push/Tsuppari/Counter accepted semantics requires retuning them
+- minimum 4-tick visibility requires presentation-owned timing
+- Grip lunge requires global movement tuning changes
+- current Grip attempt art integration must be redesigned
+- material conflict with Current Source / accepted ACTION-11B design appears.
 
-### D1 — Minimum visible attempt
+---
 
-Recommended:
+# Verification
+
+Verification Level:
+Heavy
+
+Required:
+
+- focused Grip lunge tests
+- focused contest helper tests
+- all G/V/C/TG/PG/GC/GG/IK/R/D/P cases
+- timing sweeps
+- participant-order / role-order checks
+- existing Push/Tsuppari/Counter/Kuzushi regression
+- Grip/Grapple/Drive regression
+- ring-out/contact regression
+- ACTION-11A presentation regression
+- `pnpm test`
+- `pnpm build`
+- `git diff --check`
+- browser/runtime smoke
+- prove Product art assets unchanged.
+
+Do not report Overall PASS if any required case is not run.
+
+---
+
+# Browser / Runtime Smoke
+
+Required.
+
+At minimum observe:
+
+1. Enter starts Bout
+2. Shift visibly shows Grip attempt pose
+3. Grip moves forward a short step
+4. already-touching Shift still shows attempt before success
+5. after ~4 ticks, contact can become grapple
+6. Grip whiff completes lunge then recovery
+7. Grip direction/facing do not home
+8. Tsuppari hit cancels Grip attempt
+9. Push impact cancels Grip attempt
+10. Grip catches active Counter into neutral grapple
+11. Counter loser does not become Kuzushi
+12. Grip on Kuzushi becomes Morozashi
+13. simultaneous Grip attempts become neutral grapple
+14. Push / Tsuppari / Counter visuals remain correct
+15. R restart works
+16. no console/runtime errors.
+
+Capture representative screenshots/logs for:
+- early Grip attempt before success
+- Grip success after minimum attempt
+- Tsuppari beats Grip
+- Push beats Grip
+- Grip beats Counter
+- Grip vs Grip neutral.
+
+---
+
+# User Play Test
+
+REQUIRED.
+
+Primary questions:
+
+1. Does Shift now visibly feel like a short grab-in step?
+2. Is ~0.10 m lunge distance right?
+3. Are 4 minimum attempt ticks enough to read the attempt pose?
+4. Does contact-based Grip feel more natural than old 0.79 m range?
+5. Does Tsuppari > Grip feel intuitive?
+6. Does Push > Grip feel intuitive?
+7. Does Grip > Counter feel intuitive?
+8. Does Grip vs Grip resolve naturally?
+9. Does the four-way cycle feel understandable:
+   `Push > Tsuppari > Grip > Counter > Push`?
+10. Does preserving Push/Tsuppari startup/recovery as non-grabbable feel acceptable?
+11. Do Counter / Tsuppari / Push / Kuzushi still feel readable?
+
+Technical PASS does not constitute Game Feel acceptance.
+
+---
+
+# Implementation Evidence Required
+
+Completion Report must include:
+
+| Design Requirement | Implemented As | Verified By |
+|---|---|---|
+
+At minimum:
+
+- Grip 8-tick lunge
+- minimum attempt 4
+- contact success
+- facing/direction lock
+- contest helper
+- Tsuppari > Grip
+- Push > Grip
+- Grip > Counter
+- Grip vs Grip
+- Kuzushi/Morozashi
+- resolver-order independence
+- existing systems preserved.
+
+---
+
+# Completion Report
+
+Include:
+
+- Result
+- exact constants
+- final Grip action shape
+- exact FREE tick resolution order
+- measured lunge travel / peak speed
+- attempt-visible snapshots
+- full pair matrix results
+- timing sweep results
+- participant-order results
+- contact/bond-snap measurements
+- regression results
+- browser smoke
+- Design Deviations
+- Unexpected Scope
+- User Play Test: REQUIRED
+- Git delivery.
+
+If none:
 
 ```
-GRIP_MIN_ATTEMPT_TICKS = 4
+Design Deviations: NONE
 ```
 
-Alternative:
-- 3 ticks (~50 ms).
+---
 
-Recommendation: **4**.
+# Git Delivery
 
-### D2 — Grip beats Counter result
+Follow `AGENTS.md`.
 
-Recommended:
+Normal successful Task:
+
+- stage Task-owned files only
+- one implementation commit
+- fetch / fast-forward safety
+- push `origin/develop`
+- verify remote SHA
+- clean working tree.
+
+Suggested commit:
+
+`feat(gameplay): add grip lunge contest rules`
+
+Do not modify:
+
+- `main`
+- `PROJECT_HANDOFF.md`
+- `CURRENT_TASK.md`.
+
+# Final Instruction
+
+Implement ACTION-11B's accepted design with:
 
 ```
-Grip success vs active Counter
--> neutral grapple
--> Counter cancelled
--> no Kuzushi
+Grip reach = 8 ticks
+minimum attempt = 4 ticks
+contact-driven success
+short locked-direction lunge
 ```
 
-Alternative:
-- Morozashi.
+and explicit deterministic Grip contest semantics:
 
-Recommendation: **neutral**.
+```
+Tsuppari > Grip
+Push impact > Grip
+Grip > Counter
+Grip / Grip -> neutral
+```
 
-### D3 — Recovery target eligibility
-
-Recommended for ACTION-11C:
-
-- Push recovery remains non-grabbable
-- Tsuppari recovery remains non-grabbable.
-
-Defer "punish recovery by Grip" to a later balance task.
-
-Recommendation: **preserve current behavior**.
-
-### D4 — Startup target eligibility clarification
-
-Recommended for minimum-scope ACTION-11C:
-
-- Push startup / pre-impact charge remains non-grabbable
-- Tsuppari startup remains non-grabbable
-- only actual Push impact / Tsuppari hit actively cancels a Grip reach.
-
-This preserves the existing "target must be idle" concept for Push/Tsuppari while adding the explicit contest result at their effect ticks.
-
-Alternative:
-- allow Grip to beat them during startup before their offensive effect occurs, producing a more strictly timing-based RPS.
-
-Recommendation for the first implementation: **preserve current non-grabbable startup behavior**, then User Play Test the four-way feel before reopening timing advantage.
-
-## Verification Review
-
-Investigation coverage accepted:
-
-- baseline Grip measurements
-- lunge candidates A6/A8/A9/A10 and Grip-specific acceleration variants
-- minimum-attempt variants
-- existing range vs actual contact
-- facing/no-homing
-- full action pair matrix
-- timing sweeps for Grip/Counter, Grip/Tsuppari, Grip/Push, Grip/Grip
-- role and participant-array order permutations
-- Grip/Kuzushi
-- ring-out/contact/bond correction
-- existing non-Grip pair equivalence against Production
-- no Production changes.
-
-Heavy Investigation requirement is satisfied.
-
-## Next Task Constraint
-
-Do not create ACTION-11C until User decisions D1-D4 are known.
-
-After those decisions, ACTION-11C should implement only the accepted Grip lunge/contest semantics and should not include:
-- Grip success art
-- Grip hand VFX
-- Product promotion of ACTION-11A art
-- unrelated recovery punish redesign
-- changes to Push/Tsuppari/Counter tuning values.
+while preserving all accepted Push / Tsuppari / Counter / Kuzushi / Grapple / Drive behavior outside these approved interactions.
