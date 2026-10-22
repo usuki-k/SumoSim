@@ -73,7 +73,7 @@ describe('Kuzushi sweat Visual Gate (ACTION-09A): pure parameters', () => {
   it('alpha = clamp(kuzushiStrength, 0, 1): fresh 1, half 0.5, near recovery -> 0', () => {
     expect(kuzushiSweatVisual('red', kuzushi(1))).toMatchObject({ visible: true, alpha: 1 })
     expect(kuzushiSweatVisual('red', kuzushi(0.5)).alpha).toBeCloseTo(0.5, 12)
-    expect(kuzushiSweatVisual('red', kuzushi(1 / KUZUSHI_TICKS)).alpha).toBeCloseTo(1 / 30, 12)
+    expect(kuzushiSweatVisual('red', kuzushi(1 / KUZUSHI_TICKS)).alpha).toBeCloseTo(1 / KUZUSHI_TICKS, 12)
     expect(kuzushiSweatVisual('red', kuzushi(0))).toMatchObject({ visible: false, alpha: 0 })
     expect(kuzushiSweatVisual('red', kuzushi(1.4)).alpha).toBe(1)
     expect(kuzushiSweatVisual('red', kuzushi(-0.2)).alpha).toBe(0)
@@ -225,5 +225,49 @@ describe('Kuzushi sweat Visual Gate (ACTION-09A): every Kuzushi entry', () => {
     expect(snap.engagement).toEqual({ kind: 'grappled', advantage: { kind: 'morozashi', holderId: 'a' } })
     expect(sweatB(snap)).toMatchObject({ visible: false, alpha: 0 })
     expect(sweatA(snap).visible).toBe(false)
+  })
+})
+
+describe('Kuzushi sweat with the 90-tick follow-up window (ACTION-09B regression)', () => {
+  const failCounterA = () => {
+    const s = sim(-R, R)
+    for (let t = 0; t < COUNTER_WINDOW_TICKS; t++) s.step(intents({ counter: t === 0 }))
+    return s
+  }
+
+  it('V1 / D4: a fresh 90-tick Kuzushi is full; kuzushiStrength = ticksRemaining / 90', () => {
+    const s = failCounterA()
+    expect(kuzushiTicks(A(s.getSnapshot()))).toBe(KUZUSHI_TICKS)
+    expect(KUZUSHI_TICKS).toBe(90)
+    expect(sweatA(s.getSnapshot())).toMatchObject({ visible: true, alpha: 1 })
+    for (let k = 1; k <= KUZUSHI_TICKS; k++) {
+      s.step(intents())
+      expect(vis(s.getSnapshot(), 0).kuzushiStrength).toBeCloseTo((KUZUSHI_TICKS - k) / KUZUSHI_TICKS, 12)
+    }
+  })
+
+  it('V2: about half remaining -> alpha ~0.5', () => {
+    const s = failCounterA()
+    for (let k = 0; k < KUZUSHI_TICKS / 2; k++) s.step(intents())
+    expect(kuzushiTicks(A(s.getSnapshot()))).toBe(45)
+    expect(sweatA(s.getSnapshot()).alpha).toBeCloseTo(0.5, 12)
+  })
+
+  it('V3: the sweat disappears on the tick a follow-up consumes the Kuzushi (Push and Tsuppari)', () => {
+    const pushed = failCounterA()
+    pushed.step(intents({}, { push: true }))
+    for (let t = 0; t < PUSH_STARTUP_TICKS - 1; t++) pushed.step(intents())
+    expect(sweatA(pushed.getSnapshot()).visible).toBe(true)
+    pushed.step(intents())
+    expect(A(pushed.getSnapshot()).posture.kind).toBe('stable')
+    expect(sweatA(pushed.getSnapshot())).toMatchObject({ visible: false, alpha: 0 })
+
+    const struck = failCounterA()
+    struck.step(intents({}, { left: true }))
+    for (let t = 0; t < TSUPPARI_STARTUP_TICKS - 1; t++) struck.step(intents())
+    expect(sweatA(struck.getSnapshot()).visible).toBe(true)
+    struck.step(intents())
+    expect(A(struck.getSnapshot()).posture.kind).toBe('stable')
+    expect(sweatA(struck.getSnapshot())).toMatchObject({ visible: false, alpha: 0 })
   })
 })

@@ -4,6 +4,7 @@ import {
   BoutSimulation,
   COUNTER_TRANSITION_TICKS,
   COUNTER_WINDOW_TICKS,
+  KUZUSHI_TICKS,
   PUSH_ACTIVE_TICKS,
   PUSH_STARTUP_TICKS,
   TSUPPARI_RECOVERY_TICKS,
@@ -142,7 +143,7 @@ describe('wrestler visual state (VISUAL-01A)', () => {
     const first = vis(sim.getSnapshot(), 0)
     expect(first.pose).toBe('kuzushi')
     expect(first.kuzushiStrength).toBe(1)
-    for (let k = 0; k < 15; k++) sim.step(intents({ move: [1, 0] }))
+    for (let k = 0; k < KUZUSHI_TICKS / 2; k++) sim.step(intents({ move: [1, 0] }))
     expect(vis(sim.getSnapshot(), 0).kuzushiStrength).toBeCloseTo(0.5, 12)
   })
 

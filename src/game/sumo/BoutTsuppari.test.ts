@@ -4,7 +4,7 @@ import {
   BoutSimulation,
   COUNTER_WINDOW_TICKS,
   EXTERNAL_DECELERATION,
-  KUZUSHI_PUSH_SUSCEPTIBILITY,
+  KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
   MAX_EXTERNAL_SPEED,
   PUSH_ACTIVE_TICKS,
@@ -668,7 +668,7 @@ describe('Tsuppari (ACTION-07B)', () => {
     it('TS36: global clamp / decay / susceptibility and Push timing are unchanged; only the Push acceleration moved', () => {
       expect(MAX_EXTERNAL_SPEED).toBe(3)
       expect(EXTERNAL_DECELERATION).toBe(8)
-      expect(KUZUSHI_PUSH_SUSCEPTIBILITY).toBe(1.5)
+      expect(KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER).toBe(1.5)
       expect([PUSH_STARTUP_TICKS, PUSH_ACTIVE_TICKS, PUSH_RECOVERY_TICKS]).toEqual([6, 8, 10])
       expect(PUSH_EXTERNAL_ACCELERATION).toBe(26.25)
       expect(J).toBeLessThan(MAX_EXTERNAL_SPEED)

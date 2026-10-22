@@ -212,7 +212,7 @@ describe('PushDummyController (ACTION-03B2)', () => {
     let sawKuzushi = false
     let firstStableIdle = -1
     let nextEdge = -1
-    for (let t = 0; t < 200 && nextEdge < 0; t++) {
+    for (let t = 0; t < 400 && nextEdge < 0; t++) {
       const before = sim.getSnapshot()
       const intent = dummy.nextIntent(before)
       if (b(before).posture.kind === 'kuzushi') {

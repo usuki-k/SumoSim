@@ -4,7 +4,7 @@ import {
   BoutSimulation,
   COUNTER_BEST_TICKS,
   COUNTER_WINDOW_TICKS,
-  KUZUSHI_PUSH_SUSCEPTIBILITY,
+  KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER,
   KUZUSHI_TICKS,
   PUSH_ACTIVE_TICKS,
   PUSH_EXTERNAL_ACCELERATION,
@@ -150,9 +150,11 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
 
   it('T62: the last window tick can still resolve; one tick later it cannot', () => {
     // Counter on tick 0 covers ticks 0..WINDOW-1. B's Push pressed on tick p is active from p+STARTUP.
+    // Read right after the window (ACTION-09B: a later Push force on the failed Counter user would consume its
+    // Kuzushi as a follow-up).
     const run = (pushTick: number) => {
       const sim = touching()
-      for (let t = 0; t < 40; t++) sim.step(intents({ counter: t === 0 }, { push: t === pushTick }))
+      for (let t = 0; t < COUNTER_WINDOW_TICKS; t++) sim.step(intents({ counter: t === 0 }, { push: t === pushTick }))
       return sim.getSnapshot()
     }
     const lastTick = run(COUNTER_WINDOW_TICKS - 1 - PUSH_STARTUP_TICKS)
@@ -323,7 +325,7 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     expect(A(s).facing).not.toBe(frozen)
   })
 
-  it('T71: a Kuzushi defender receives exactly KUZUSHI_PUSH_SUSCEPTIBILITY times the Push', () => {
+  it('T71: a Kuzushi defender receives exactly KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER times the Push (and it is consumed)', () => {
     // A fails a Counter (Kuzushi from tick WINDOW on); B's Push pressed then is active while A is in Kuzushi.
     const run = (aCounters: boolean) => {
       const sim = touching()
@@ -335,10 +337,10 @@ describe('Down Counter + Kuzushi (ACTION-04A1)', () => {
     const stable = run(false)
     const kuzushi = run(true)
     expect(A(stable).posture.kind).toBe('stable')
-    expect(A(kuzushi).posture.kind).toBe('kuzushi')
+    expect(A(kuzushi).posture.kind).toBe('stable') // ACTION-09B: the first Push force consumes the Kuzushi
     expect(A(stable).externalVelocity.x).toBeCloseTo(-PUSH_EXTERNAL_ACCELERATION * TICK_SECONDS, 12)
     expect(A(kuzushi).externalVelocity.x).toBeCloseTo(
-      -PUSH_EXTERNAL_ACCELERATION * KUZUSHI_PUSH_SUSCEPTIBILITY * TICK_SECONDS,
+      -PUSH_EXTERNAL_ACCELERATION * KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER * TICK_SECONDS,
       12,
     )
     expect(B(kuzushi).externalVelocity).toEqual(A(kuzushi).externalVelocity)

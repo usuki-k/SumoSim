@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BoutSimulation } from '../sumo/BoutSimulation.ts'
+import { BoutSimulation, COUNTER_WINDOW_TICKS, KUZUSHI_TICKS } from '../sumo/BoutSimulation.ts'
 import type { ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
 import { PressLatch } from './pressLatch.ts'
 
@@ -89,7 +89,7 @@ describe('ArrowDown Counter latch integration', () => {
     expect(held).toEqual(['counter'])
     const again = runFrames([
       { ticks: 8, pressDown: true },
-      ...Array.from({ length: 12 }, () => ({ ticks: 4 })), // window + Kuzushi have passed
+      ...Array.from({ length: Math.ceil((COUNTER_WINDOW_TICKS + KUZUSHI_TICKS) / 4) + 1 }, () => ({ ticks: 4 })), // window + Kuzushi have passed
       { ticks: 1, pressDown: true },
     ])
     expect(again).toEqual(['counter', 'counter'])

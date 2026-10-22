@@ -53,9 +53,11 @@ export const MAX_EXTERNAL_SPEED = 3 // m/s
 export const COUNTER_WINDOW_TICKS = 12 // ~200 ms: waits for an opponent active Push in contact
 // A Counter catching the first COUNTER_BEST_TICKS active Push ticks (elapsed 0..2) is Best.
 export const COUNTER_BEST_TICKS = 3
-export const KUZUSHI_TICKS = 30 // ~500 ms of full Kuzushi ticks (countered attacker and failed Counter)
-// Received Push acceleration multiplier while the driven-back participant is in Kuzushi.
-export const KUZUSHI_PUSH_SUSCEPTIBILITY = 1.5
+// Kuzushi follow-up window (ACTION-09B): at most KUZUSHI_TICKS full ticks; the first successful follow-up
+// (Push force received, Tsuppari hit received, valid Grip) gets the Kuzushi benefit and consumes it.
+export const KUZUSHI_TICKS = 90 // 1.5 s of full Kuzushi ticks (countered attacker and failed Counter)
+// Push acceleration / Tsuppari impulse multiplier for the follow-up that consumes the receiver's Kuzushi.
+export const KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER = 1.5
 // Counter position resolution (ACTION-04A2). Provisional Prototype tuning.
 // Attacker-only forward carry along its locked Push direction when a caught Push has no valid side /
 // rear target (the no-relocation fallback; a valid target starts the Counter transition instead).
@@ -981,11 +983,24 @@ export class BoutSimulation {
   //  2. Forces. A Push active in contact couples the pair: resolvePush adds the hits' coupled share into
   //     the shared pair delta. Otherwise each hit gives only its receiver TSUPPARI_IMPULSE along
   //     attacker -> receiver (no netting, so equal strikes push both apart; the attacker never moves).
-  //  3. Kuzushi from Kuzushi hits, only after every hit and force of the tick is settled.
+  //  3. Kuzushi follow-up (ACTION-09B): a receiver already in Kuzushi before this tick's forces gets
+  //     KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER on the Push force / Tsuppari impulse it actually receives, and that
+  //     Kuzushi is consumed once every force of the tick is applied (whiffs, startup, recovery, cancelled
+  //     Pushes and plain contact consume nothing).
+  //  4. Kuzushi from Kuzushi hits, only after every hit, force and consumption of the tick is settled (the
+  //     hit that creates a Kuzushi never gets that new Kuzushi's bonus).
   private resolveForces(contact: ContactResult | null): void {
     const [a, b] = this.participants
     const hits: MutableParticipant[] = []
     const kuzushiReceivers: MutableParticipant[] = []
+    // Captured before any effect, so the outcome does not depend on participant order.
+    const wasKuzushi = new Set(this.participants.filter((p) => p.posture.kind === 'kuzushi'))
+    const followUpReceivers = new Set<MutableParticipant>()
+    const followUp = (receiver: MutableParticipant): number => {
+      if (!wasKuzushi.has(receiver)) return 1
+      followUpReceivers.add(receiver)
+      return KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER
+    }
     for (const [attacker, receiver] of [
       [a, b],
       [b, a],
@@ -1006,8 +1021,8 @@ export class BoutSimulation {
     }
 
     if (contact && (isPushActive(a) || isPushActive(b))) {
-      const strikeNet = (hits.includes(a) ? 1 : 0) - (hits.includes(b) ? 1 : 0)
-      this.resolvePush(contact, strikeNet)
+      const strikeNet = (hits.includes(a) ? followUp(b) : 0) - (hits.includes(b) ? followUp(a) : 0)
+      this.resolvePush(contact, strikeNet, followUp)
     } else if (hits.length > 0) {
       // Axis A -> B; same-center fallback: A's facing (as in resolveContact).
       const dx = b.position.x - a.position.x
@@ -1018,25 +1033,28 @@ export class BoutSimulation {
       for (const attacker of hits) {
         const receiver = attacker === a ? b : a
         const sign = attacker === a ? 1 : -1
-        receiver.externalVelocity.x += sign * nx * TSUPPARI_IMPULSE
-        receiver.externalVelocity.y += sign * ny * TSUPPARI_IMPULSE
+        const impulse = TSUPPARI_IMPULSE * followUp(receiver)
+        receiver.externalVelocity.x += sign * nx * impulse
+        receiver.externalVelocity.y += sign * ny * impulse
         clampExternal(receiver.externalVelocity)
       }
     }
+    for (const p of followUpReceivers) p.posture = { kind: 'stable' } // the opening is used (action is idle)
     for (const p of kuzushiReceivers) enterKuzushi(p)
   }
 
   // Active Pushes in contact: +1 for A along A->B, -1 for B. The same external velocity delta goes
   // to both participants so the pair moves together; equal Pushes cancel. A driven-back participant
-  // in Kuzushi receives KUZUSHI_PUSH_SUSCEPTIBILITY times the acceleration. `strikeNet` (+1: A's Tsuppari
-  // hit B, -1: B's hit A) adds the coupled share TSUPPARI_COUPLED_SHARE * TSUPPARI_IMPULSE to the same
-  // pair delta (no susceptibility); without a Tsuppari hit the Push-only delta is computed exactly as before.
-  private resolvePush(contact: ContactResult, strikeNet: number): void {
+  // in Kuzushi receives KUZUSHI_FOLLOWUP_FORCE_MULTIPLIER times the acceleration (a follow-up: `followUp`
+  // records the consumption). `strikeNet` (+1: A's Tsuppari hit B, -1: B's hit A, each already scaled by its
+  // own follow-up factor) adds the coupled share TSUPPARI_COUPLED_SHARE * TSUPPARI_IMPULSE to the same pair
+  // delta; without a Tsuppari hit the Push-only delta is computed exactly as before.
+  private resolvePush(contact: ContactResult, strikeNet: number, followUp: (receiver: MutableParticipant) => number): void {
     const [a, b] = this.participants
     const net = (isPushActive(a) ? 1 : 0) - (isPushActive(b) ? 1 : 0)
     if (net === 0 && strikeNet === 0) return
-    const receiver = net > 0 ? b : a
-    const susceptibility = receiver.posture.kind === 'kuzushi' ? KUZUSHI_PUSH_SUSCEPTIBILITY : 1
+    // Only a Push force actually received (net != 0) is a follow-up; cancelled Pushes consume nothing.
+    const susceptibility = net === 0 ? 1 : followUp(net > 0 ? b : a)
     let dv = net * PUSH_EXTERNAL_ACCELERATION * susceptibility * TICK_SECONDS
     if (strikeNet !== 0) dv += strikeNet * TSUPPARI_IMPULSE * TSUPPARI_COUPLED_SHARE
     for (const p of this.participants) {
