@@ -1,452 +1,529 @@
-Task-ID: ACTION-11N-GRIP-SUCCESS-LOWER-MARKER-REFLECTION-TUNE
-Status: REVIEWED
-Task-Type: PRESENTATION VISUAL TUNE
+Task-ID: ACTION-12A-GRAPPLE-WASD-ROTATION-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / DESIGN
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: c3d11081693f80bfc77a1cebece5c55cd32c9ba7
-Review-Handoff: ACTION-11M technical PASS but User Visual Gate REJECTED. User accepts the authored forearm/fist art and upper markers. The remaining issue is the lower two markers' orientation/chirality. User explicitly wants Claude Code to use image reflection if needed so the lower markers resemble the latest reference: symbolically reaching from the opponent shoulder/back area toward the opponent mawashi. Self-character anatomical shoulder position is irrelevant.
+Source-Baseline: 1fdf5b903bacf56e7a8e2f031a7f04190d0aae13
+Review-Handoff: ACTION-11N is the accepted current Grip visual baseline (technical PASS; User Play Test provisionally accepted). Do not modify Grip visuals in this Task. Current GRAPPLED controls: ArrowUp held = Drive when READY; WASD move intent is suppressed to ZERO_MOVE while grappled; non-front Grip uses existing Grappled Orientation auto-TURNING until READY.
 Handoff-Mode: GITHUB
 
-# ACTION-11N — Grip Success Lower Marker Reflection Tune
+# ACTION-12A — Grapple WASD Rotation Investigation / Design
 
 ## Purpose
 
-Tune ONLY the two lower/foot-side authored Grip-success markers by reflecting the existing authored forearm/fist art as needed.
+Investigate and design a small deterministic gameplay rule for WASD input while GRAPPLED.
 
-The target is the User's latest visual reference:
-- upper markers remain as they are;
-- lower markers should have the same kind of visual flow as the upper markers;
-- each lower arm should read symbolically as curving from the opponent shoulder/back region toward the opponent mawashi;
-- fist/hand shape is accepted and must not be redesigned;
-- self-character shoulder/anatomical continuity is not important.
+User goal:
 
-This is presentation-only.
+> Grip状態からWASDキー操作で回転したい。
+> WASDでは押したりはせず、回転だけするイメージ。
+> 現状のGrip中の操作はArrowUpによる寄り（Drive）のみ。
 
-## Accepted Baselines — Preserve
+This Task is Investigation / Design only.
 
-Do not change:
-- ACTION-11C Grip gameplay;
-- ACTION-11F pair compression:
-  - GRIP_SUCCESS_FORWARD_OFFSET_R = +0.14
-  - GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20;
-- ACTION-11H tone correction;
-- ACTION-11J pair READY visibility:
-  - either TURNING -> all markers hidden
-  - both READY -> markers visible;
-- ACTION-11L authored forearm/fist source artwork;
-- upper/head-side marker geometry and appearance;
-- four-marker total count;
-- canonical 0.70 m grapple bond;
-- Grip attempt/success wrestler body assets.
+NO Production implementation.
 
-No changes under:
-- src/game/sumo/
-- src/game/input/
+Do not modify gameplay source, presentation source, assets, or accepted docs/spec.
 
-## Current ACTION-11M State
-
-Upper markers are accepted for this Task and must remain byte/value-equivalent in placement and texture choice.
-
-Current lower hand/grip contacts are acceptable:
-- keep the fist on the mawashi unless a tiny pixel-level placement correction is unavoidable.
-
-The ACTION-11M failure is primarily image orientation/chirality:
-- the lower arm still does not visually match the desired reference;
-- changing elbow coordinates alone was insufficient.
-
-## Reflection Is Explicitly Allowed
-
-Claude Code may reflect the existing authored forearm/fist image.
-
-User does NOT need to provide a new image for this Task.
-
-The goal is to reuse the existing accepted marker art.
-
-Preferred minimal implementation:
-- preserve the hand anchor on the mawashi;
-- reflect only the lower marker image around the hand-anchor transform;
-- keep upper markers unchanged.
-
-## Candidate Reflection Comparison
-
-Before choosing the final lower-marker orientation, create a local scratch comparison for the lower marker using the same hand contact / intended elbow direction.
-
-Compare at minimum:
-1. current orientation;
-2. horizontal reflection (flip X);
-3. vertical reflection (flip Y / existing opposite-side orientation);
-4. both axes / 180-degree equivalent only if needed to disambiguate.
-
-The comparison is implementation scratch only and must not become four runtime modes.
-
-Choose ONE deterministic lower-marker transform that best matches the User reference.
-
-Primary selection criterion:
-> Does the visible arm curl from the opponent shoulder/back area into the mawashi, rather than looking like it originates from self or bends away from the pair?
-
-If horizontal reflection clearly fixes the visual, prefer the smallest solution and stop exploring.
-
-## Runtime vs Offline Reflection
-
-Prefer the smallest deterministic solution.
-
-Option A — runtime presentation flip:
-- allowed for this Visual Gate;
-- only lower markers may use it;
-- the hand anchor must remain fixed on the mawashi;
-- flip must be deterministic and state-independent;
-- no per-frame mode switching.
-
-Option B — offline derived variant:
-- also allowed if it makes anchor math / testing cleaner;
-- derive only from the existing accepted authored runtime marker;
-- do not require a second user source;
-- record the derived anchor transform.
-
-Do not build a new art pipeline unless necessary.
-
-If runtime flip around the hand anchor is clean, it is preferred for this placement-only Task.
-
-## Anchor Rule
-
-The fist/hand anchor is authoritative.
-
-Reflection must not cause the fist to drift off the mawashi.
-
-For each lower marker:
-- hand contact remains the current target-local mawashi point;
-- reflection occurs around the texture/origin transform;
-- elbow/forearm silhouette may move to the opposite visual side as a result;
-- scale remains unchanged unless a small visual correction is necessary.
-
-## Desired Lower Marker Direction
-
-The lower marker should visually resemble the lower arms in the latest User reference:
-
-- elbow/forearm body appears nearer the opponent shoulder/back side;
-- fist ends on the opponent mawashi;
-- forearm curves inward across the opponent body;
-- it should NOT hang down from the self-character side;
-- it should NOT visually point away from the pair.
-
-Keep a roughly 30–45 degree diagonal relationship to the mawashi as a visual target.
-
-If exact numeric angle must change slightly to match the reference, keep it within 30–45 degrees and report the final value.
-
-## Upper Markers
-
-Upper/head-side markers are frozen for this Task.
-
-Must remain unchanged:
-- hand point;
-- elbow point;
-- texture choice/orientation;
-- scale;
-- rotation;
-- depth.
-
-Add tests that pin their ACTION-11M values exactly.
-
-## Lower Geometry
-
-Prefer preserving current lower fist contacts.
-
-Allowed:
-- reflection flag / reflected texture selection;
-- small lower-only elbow adjustment;
-- small lower-only rotation adjustment;
-- small lower-only scale adjustment if absolutely necessary.
-
-Not allowed:
-- moving upper markers;
-- changing authored pixels;
-- changing body compression;
-- changing gameplay.
-
-## Marker Art
-
-Do not:
-- redraw fist;
-- change fist shape;
-- recolor;
-- tone-match;
-- AI-regenerate;
-- modify source PNG;
-- alter existing authored gate runtime PNG pixels unless adding a deterministic reflected derived variant is chosen.
-
-If using runtime flip, public assets remain unchanged.
-
-## Visibility
-
-Preserve:
-- READY neutral -> 4 markers
-- READY Drive -> 4 markers
-- READY Morozashi -> 4 markers
-- either TURNING -> 0 markers
-- release/recovery/other actions -> 0 markers.
-
-## Required Tests
-
-1. upper markers remain exactly ACTION-11M values;
-2. lower markers use the selected reflection/orientation only;
-3. lower hand contacts remain on the mawashi;
-4. reflection leaves hand-anchor world position invariant;
-5. lower marker visual axis remains 30–45 degrees to the mawashi;
-6. lower markers are deterministic for red/blue;
-7. READY pair -> 4 markers;
-8. TURNING -> 0;
-9. release/recovery/other actions -> 0;
-10. ACTION-11F constants unchanged;
-11. ACTION-11H runtime/body tone unchanged;
-12. Snapshot and canonical 0.70 m bond unchanged;
-13. no src/game/sumo or src/game/input diff.
-
-If runtime flip is used:
-- tests must prove only the lower marker images are flipped;
-- upper images remain unflipped;
-- flip state does not leak across texture swaps/frames.
-
-If offline reflection is used:
-- deterministic derived output + anchor test is required.
-
-## Browser / Runtime Smoke
-
-Capture:
-1. neutral immediately after success
-2. neutral settled
-3. Drive
-4. Morozashi
-5. release
-6. turning immediately after success
-7. turning mid
-8. turning settled
-
-Also create:
-- close-up of neutral settled;
-- before/after ACTION-11M -> ACTION-11N;
-- scratch orientation comparison if useful.
-
-Visual expectations:
-- upper markers unchanged;
-- lower markers now match the latest User reference direction;
-- lower forearms visually curl from opponent shoulder/back toward mawashi;
-- fists remain on mawashi;
-- no lower arm appears to originate from self;
-- no markers during TURNING;
-- release clears markers.
-
-## User Visual Gate
-
-Required.
-
-Primary question:
-> Do the reflected lower markers now match the intended reference, with the arm visually reaching from the opponent shoulder/back into the mawashi while the upper markers remain unchanged?
-
-Judge:
-- lower orientation/chirality;
-- fist contact point;
-- 30–45 degree diagonal;
-- symmetry/readability of four markers;
-- Drive/Morozashi;
-- TURNING hide.
-
-## Stop Conditions
-
-STOP if:
-- reflection cannot achieve the desired lower-arm direction without editing the authored image;
-- upper markers must change;
-- gameplay/bond/facing changes are required;
-- dynamic z-order is required;
-- unrelated accepted visuals regress.
-
-If reflection alone is insufficient, report the closest candidate and the exact remaining visual mismatch. Do not ask for a new User asset unless this Task proves reflection insufficient.
-
-## Verification
-
-Verification Level: Standard Presentation Visual Tune
-
-Required:
-- focused marker reflection/layout tests
-- Grip success presentation regression
-- Grip/Grapple/Drive/Orientation regression
-- Push/Tsuppari/Counter/Kuzushi presentation regression
-- pnpm test
-- pnpm build
-- git diff --check
-- browser/runtime smoke
-- prove ACTION-11F/11H unchanged
-- prove src/game/sumo / src/game/input unchanged.
-
-## Completion Report
-
-Include:
-- Result
-- reflection candidates compared
-- selected reflection method
-- whether runtime flip or offline variant was used
-- old lower orientation -> new lower orientation
-- upper unchanged evidence
-- lower hand contact location
-- final lower angle
-- changed files
-- preservation evidence
-- verification results
-- close-up before/after
-- 8-frame montage
-- Design Deviations
-- Unexpected Scope
-- User Visual Gate: REQUIRED
-- Git delivery.
-
-If none:
-Design Deviations: NONE
-
-## Git Delivery
-
-Follow AGENTS.md.
-
-Normal successful Task:
-- stage Task-owned files only
-- one implementation commit
-- fetch / fast-forward safety
-- push origin/develop
-- verify remote SHA
-- clean working tree.
-
-Suggested commit:
-feat(presentation): reflect lower grip hand markers
-
-Do not modify:
-- main
-- PROJECT_HANDOFF.md
-- CURRENT_TASK.md.
-
-# Final Instruction
-
-Keep upper authored Grip markers unchanged.
-
-For the lower two markers, use deterministic image reflection as needed so the visible forearm/fist silhouette matches the User's latest reference: opponent shoulder/back -> mawashi.
-
-Keep the fist anchored on the mawashi, preserve the four-marker READY rule, and do not change gameplay or wrestler body art.
-
+Only CURRENT_COMPLETION_REPORT.md may be written/committed under the AGENTS.md Investigation-only Report Commit Exception.
 
 ---
 
-# ChatGPT Review Handoff
+# Required Reading / Current Source
 
-Review-Date: 2026-10-24
-Overall Result: ACCEPTED — TECHNICAL PASS / USER PLAY TEST ACCEPTED PROVISIONALLY
-Accepted Baseline: 1384036d768b88a8f97bd5515cef73fc0544a571
+Inspect at minimum:
 
-## Technical Review
+- AGENTS.md
+- docs/ARCHITECTURE.md
+- src/game/sumo/BoutTypes.ts
+- src/game/sumo/BoutSimulation.ts
+- src/game/sumo/grappleOrientation.ts
+- src/game/input/movementVector.ts
+- src/game/scenes/BoutScene.ts
+- relevant existing tests for Grapple / Drive / Orientation / Ring-out / movement.
 
-Confirmed from Current Source / diff:
+Do not rely on previous handoff summaries instead of Current Source.
 
-- Grip hand VFX remains presentation-only;
-- four authored markers remain visible only for READY grapple states;
-- either wrestler TURNING -> all markers hidden;
-- release / recovery / non-Grip actions -> zero markers;
-- authored runtime marker pixels remain unchanged;
-- no src/game/sumo or src/game/input changes;
-- canonical grapple bond remains 0.70 m;
-- ACTION-11F pair compression remains unchanged;
-- ACTION-11H tone correction remains unchanged.
+---
 
-Current final marker layout:
+# Current Baseline to Confirm
 
-Red:
-- headSide:
-  - hand (-0.40, +0.80)
-  - elbow (+0.25, +1.15)
-  - authored
-  - ~0.74 R
-  - 61.70°
-- footSide:
-  - hand (-0.55, -0.45)
-  - elbow (-0.05, -0.95)
-  - mirrored
-  - ~0.71 R
-  - 45.00°
+Confirm from Current Source:
 
-Blue is the lateral reflection of Red:
-- headSide uses mirrored
-- footSide uses authored.
+1. ParticipantIntent.move is a world-frame normalized direction produced from WASD.
+2. FREE movement uses move as grounded movement.
+3. GRAPPLED currently suppresses ordinary WASD movement to ZERO_MOVE.
+4. ArrowUp held maps to driveHeld.
+5. Drive is allowed only when the participant is READY via canActInGrapple.
+6. Release uses Grip edge and READY gating.
+7. Grappled Orientation auto-turns participants toward each other with GRAPPLE_TURN_RATE.
+8. Grapple readiness is derived, not stored.
+9. canonical grapple bond is 0.70 m / sum of body radii.
+10. Drive currently translates the bonded pair without rotating the pair axis.
+11. Ring-out is resolved from canonical participant positions.
+12. fixed-step Simulation owns gameplay movement/facing.
 
-## Design Deviation Review
+Report any material mismatch and STOP the design if Current Source contradicts these assumptions.
 
-The final ACTION-11N state differs from the original Task constraints:
+---
 
-- upper/head-side markers were originally required to stay fixed;
-- original visual target requested roughly 30–45°;
-- final head-side angle is 61.70°.
+# Investigation Question
 
-This deviation is ACCEPTED because, during the same Task, the User:
-- PlayTested the first implementation,
-- supplied a new reference image,
-- explicitly selected the P1 layout for all four markers.
+Design how the existing WASD world-frame move vector should become **rotation-only grapple footwork** while GRAPPLED + READY.
 
-The later direct User instruction supersedes the earlier Task constraint.
+The design must satisfy:
 
-No gameplay semantics changed.
+- WASD must NOT directly push/translate the pair midpoint.
+- WASD must NOT add external impulse.
+- pair bond distance stays exactly canonical.
+- both wrestler positions may orbit around their shared midpoint.
+- both canonical facings should remain coherent with the rotated pair.
+- fixed-step / frame-rate independence.
+- deterministic / participant-order independent.
+- ArrowUp Drive remains available.
+- Drive + WASD rotation should be considered for simultaneous use.
+- existing TURNING / READY semantics must remain understandable.
+- existing ring-out rules should not be bypassed accidentally.
+- no new generic physics framework.
 
-## Verification Review
+---
 
-Accepted:
+# Candidate Input Semantics to Compare
 
-- focused marker tests: 18 / 18 PASS
-- pnpm test: 30 files / 523 PASS
-- pnpm build: PASS
-- git diff --check: PASS
-- browser/runtime smoke: 27 / 27 PASS
-- TURNING visibility regression: PASS
-- release / other-action hiding: PASS
-- ACTION-11F / 11H preservation: PASS
-- gameplay / canonical bond preservation: PASS.
+Compare at least these three approaches.
 
-Known verification caveat:
+## Option A — Tangential Projection / Grapple Footwork
 
-- `export_grip_forearm_hand_gate.py --check` was not run because the local ignored source image present at review time had a different decoded hash from the accepted ACTION-11L source.
-- ACTION-11N does not modify the authored marker runtime assets or exporter/tooling.
-- committed authored runtime PNG hashes remained unchanged.
+Interpret each participant's existing world-frame move vector as desired footwork, but only keep its tangential component around the pair midpoint.
 
-This does not block acceptance of this placement-only Task.
+Conceptually:
 
-## User Play Test
+- midpoint = (A.position + B.position) / 2
+- radial unit for participant p = normalize(p.position - midpoint)
+- tangent = perpendicular(radial)
+- participant angular contribution = dot(moveIntent, tangent)
+- combine both participants symmetrically into one signed pair rotation intent.
 
-User result:
+Investigate a combination rule such as:
 
-> 少し見た目に違和感はありますが一旦良いです。
+```
+angularIntent = clamp(contributionA + contributionB, -1, +1)
+```
 
-Treat this as provisional visual acceptance.
+Properties to evaluate:
+- one participant can rotate at full configured speed;
+- both participants requesting the same rotational sense do not double the speed;
+- opposite rotational requests can cancel;
+- radial WASD component causes no push;
+- all W/A/S/D remain meaningful depending on current pair orientation;
+- world-frame input remains consistent with existing movementVector.
 
-The current four-marker Grip-success VFX is now the baseline unless a later Task explicitly reopens it.
+This is the current preferred candidate, but the Investigation must verify it against Current Source.
 
-## Accepted Grip Success Visual Baseline
+## Option B — Desired World Bearing / Orbit Target
 
-Preserve unless explicitly changed:
+Treat move vector as the world direction where the participant wants to move around the opponent/pair, and rotate the pair toward that target bearing.
 
-- ACTION-11F pair compression
-- ACTION-11H body tone correction
-- authored forearm/fist runtime markers
-- four markers total
-- current ACTION-11N marker placement/orientation
-- pair READY-only visibility
-- TURNING hides all markers
-- release removes all markers.
+Evaluate:
+- responsiveness;
+- 180-degree target ambiguity;
+- continuous hold behavior;
+- simultaneous participant intents;
+- whether it creates surprising long rotations when pressing toward the opposite side.
 
-## Deferred
+## Option C — Fixed Clockwise / Counterclockwise Buttons
 
-Potential future polish only if explicitly requested:
+For example A/D determine signed rotation while W/S are ignored or duplicated.
 
-- refine hand/forearm visual awkwardness;
-- improve grip-specific hand shape;
-- tune upper marker angle/position;
-- replace temporary Grip visual-gate assets with final Product art.
+Evaluate:
+- simplicity;
+- loss of normal WASD semantics;
+- whether it conflicts with the User's request to use WASD generally;
+- keyboard/touch future implications.
 
-Do not reopen these automatically.
+Recommend exactly one for implementation, with reasons.
 
-## Next Task Constraint
+---
 
-Future Action work should treat ACTION-11N as the accepted current Grip visual baseline.
+# Pair Geometry to Investigate
 
-Do not modify Grip success VFX incidentally while working on unrelated Push / Tsuppari / Counter / Management tasks.
+For the recommended design, define the exact canonical geometry update.
+
+Preferred invariant to evaluate:
+
+```
+midpoint before == midpoint after rotation
+distance(A,B) before == distance(A,B) after == canonical grapple bond
+```
+
+Rigid pair orbit candidate:
+
+```
+A.position = midpoint + rotate(A.position - midpoint, deltaAngle)
+B.position = midpoint + rotate(B.position - midpoint, deltaAngle)
+
+A.facing += deltaAngle
+B.facing += deltaAngle
+```
+
+Then normalize facing using existing angle conventions.
+
+Investigate whether rotating BOTH canonical facings by the same delta is required to preserve READY and avoid repeatedly triggering Grappled Orientation.
+
+Do not propose a presentation-only rotation. This is Gameplay / Simulation state.
+
+---
+
+# TURNING / READY Interaction
+
+Investigate and recommend exact gating.
+
+Preferred baseline to evaluate:
+
+```
+if either participant is not READY at tick start:
+    manual grapple rotation disabled
+```
+
+Reason:
+- existing side/rear Grip should first complete Grappled Orientation;
+- manual input should not fight the automatic correction.
+
+Then:
+
+```
+both READY
+-> WASD manual rotation allowed
+```
+
+Determine whether readiness should use the same tick-start readiness snapshot already used by Release / Drive.
+
+Prefer reusing canActInGrapple rather than inventing new readiness state.
+
+---
+
+# Drive + Rotation Interaction
+
+Investigate simultaneous:
+
+```
+WASD + ArrowUp
+```
+
+User intent under consideration:
+
+- WASD = rotate only
+- ArrowUp = Drive translation
+- both held = rotate while driving.
+
+Determine the safest step ordering.
+
+Compare at least:
+
+### Ordering 1
+manual pair rotation
+-> update Grappled Drive using the newly rotated pair axis
+-> translate
+
+### Ordering 2
+Drive uses tick-start pair axis
+-> translate
+-> manual pair rotation
+
+Evaluate:
+- responsiveness;
+- determinism;
+- preservation of existing Drive behavior when WASD is zero;
+- unnecessary one-tick lag;
+- effect on externalVelocity.
+
+Recommend one exact order.
+
+Do not change Drive tuning values in this Investigation.
+
+---
+
+# Velocity Ownership
+
+Investigate what should happen to:
+
+- selfVelocity
+- shared externalVelocity
+- Snapshot velocity
+
+during manual pair rotation.
+
+Strong candidate:
+- manual rotation changes canonical positions/facings only;
+- does not add linear velocity or impulse;
+- does not rotate existing world-frame externalVelocity for free;
+- existing grapple selfVelocity braking remains;
+- Drive/external momentum remains world-frame canonical state.
+
+Verify whether this creates any material artifact with current integration/bond order.
+
+If an alternative is required, explain precisely why.
+
+---
+
+# Ring-Out Behavior
+
+Investigate the consequence of orbiting canonical participant positions near the dohyo edge.
+
+Preferred gameplay interpretation to evaluate:
+
+- no special immunity;
+- if rotation moves a wrestler center beyond the existing ring-out boundary, existing ring-out logic resolves it normally;
+- no new special "rotation ring-out" rule.
+
+Report:
+- whether existing ring-out timing/order already supports this;
+- any simultaneous ring-out/rematch implications;
+- whether rotating around the midpoint can produce a legitimate self-ring-out / opponent-ring-out tradeoff.
+
+Do not implement.
+
+---
+
+# Manual Rotation Rate
+
+Do not finalize balance without User Play Test.
+
+Investigate a provisional starting constant:
+
+```
+GRAPPLE_MANUAL_ROTATION_RATE
+```
+
+Candidate starting point:
+
+```
+π / 2 rad/s = 90 degrees/s
+```
+
+Compare against:
+- existing automatic GRAPPLE_TURN_RATE = π rad/s = 180 degrees/s;
+- wrestler orbit radius ≈ 0.35 m at the 0.70 m bond;
+- corresponding tangential foot speed at 90°/s ≈ 0.55 m/s.
+
+Recommend a provisional starting value only.
+
+Mark it User Play Test tuning, not Accepted balance.
+
+---
+
+# Participant-Order Independence
+
+For the recommended input-combination rule, prove by reasoning and/or scratch tests that:
+
+- swapping participant array order does not change signed physical result;
+- one participant's input rotates the pair consistently regardless of whether that participant is A or B;
+- equal opposite rotational intent cancels;
+- cooperative same-sense intent does not exceed max configured rotation rate.
+
+If Option A is recommended, explicitly verify tangent sign conventions.
+
+---
+
+# Input / Intent Ownership
+
+Determine whether implementation should:
+
+A. reuse existing ParticipantIntent.move while grappled; or
+B. add a new semantic grappleRotation field.
+
+Preferred direction to evaluate:
+- reuse move, because it is already the source-independent world-frame WASD vector and the same physical footwork input can have state-dependent Simulation semantics.
+
+But assess:
+- type/comment clarity;
+- dummy controller behavior;
+- future touch/gamepad mapping;
+- risk of duplicated input state.
+
+Recommend one.
+
+Do not add raw key logic to Simulation.
+
+---
+
+# Dummy / CPU Harness
+
+Inspect pushDummyController behavior while GRAPPLED.
+
+Report whether the current dummy emits move = 0 while driving.
+
+Ensure the proposed design would not accidentally make the dummy rotate unless its intent explicitly requests rotation.
+
+No CPU AI design in this Task.
+
+---
+
+# Exact Proposed Step Order
+
+Completion Report must propose the exact Simulation step order for a future Implementation Task.
+
+Show where manual rotation belongs relative to:
+
+- tick-start readiness
+- release
+- Drive action decision
+- effective move / selfVelocity braking
+- grappledExternalVelocity
+- integration
+- grapple bond
+- facing update
+- ring-out.
+
+The proposed order must preserve current behavior exactly when grapple WASD = zero.
+
+---
+
+# Required Boundary Cases
+
+Design / verification plan must cover at least:
+
+1. READY neutral grapple, one participant presses one cardinal direction.
+2. same with diagonal input.
+3. radial input relative to pair axis under recommended semantics.
+4. tangential input relative to pair axis.
+5. both participants request same rotation sense.
+6. both request opposite rotation sense.
+7. one participant TURNING -> manual rotation disabled.
+8. both READY after TURNING -> rotation begins next eligible tick.
+9. WASD + Drive simultaneously.
+10. release + WASD same tick.
+11. near-ring rotation causing one wrestler ring-out.
+12. near-ring rotation causing simultaneous ring-out if geometrically possible.
+13. Morozashi holder/disadvantaged: same rotation authority unless explicitly justified otherwise.
+14. zero WASD -> current Drive/orientation behavior byte/semantically unchanged.
+15. frame-rate independence via fixed-step.
+16. participant order swapped.
+
+Do not sample away any listed boundary case in the future implementation plan.
+
+---
+
+# Architecture Constraints
+
+Maintain:
+
+Pure TypeScript Simulation
+-> canonical positions/facing/state
+-> Phaser rendering.
+
+Do not:
+- put grapple rotation formula in BoutScene;
+- create Scene-owned gameplay angle;
+- add a second pair-position Source of Truth;
+- introduce physics engine;
+- introduce generic constraint system / ECS / event bus;
+- modify accepted Grip VFX in this Task.
+
+---
+
+# Scope
+
+## In Scope
+
+- Current Source inspection
+- input semantics comparison
+- pair-rotation geometry
+- state ownership
+- Drive interaction
+- TURNING/readiness interaction
+- velocity semantics
+- ring-out interaction
+- provisional rotation-rate recommendation
+- exact future implementation plan
+- exact future test matrix
+- identify any User decisions still required.
+
+## Scope Out
+
+NO Production implementation.
+
+Do not change:
+- src/game/**
+- public/**
+- tools/**
+- accepted architecture docs/spec
+- Grip visual assets/VFX
+- tuning values in source.
+
+Do not implement manual rotation.
+
+---
+
+# Stop Conditions
+
+STOP / Result BLOCKED if:
+
+- Current Source materially conflicts with the assumptions above;
+- preserving ACTION-05B1 Grappled Orientation and adding manual rotation are structurally incompatible without a larger state redesign;
+- existing ParticipantIntent.move cannot support the recommended semantics without a material input architecture change;
+- Drive + rotation requires changing accepted Drive semantics in a way that needs User decision;
+- ring-out semantics present a material design ambiguity requiring User decision before implementation.
+
+If blocked, report the smallest concrete decision needed.
+
+---
+
+# Verification
+
+Investigation-only.
+
+Required:
+- source inspection;
+- read relevant existing tests;
+- run focused existing tests if useful to confirm current semantics;
+- scratch calculations / temporary local scripts allowed but must not be committed;
+- no Production source changes;
+- no docs changes except CURRENT_COMPLETION_REPORT.md.
+
+A Report-only commit/push is allowed under AGENTS.md §13 if Preflight is clean and only CURRENT_COMPLETION_REPORT.md changes.
+
+User Play Test:
+- Not Applicable to this Investigation.
+- Future Implementation must require User Play Test for rotation feel/rate/control.
+
+---
+
+# Completion Report Required
+
+Include:
+
+- Result: PASS / BLOCKED
+- Current Source findings
+- confirmed current step/order ownership
+- Option A/B/C comparison
+- recommended input semantics
+- exact signed rotation formula
+- participant-order proof
+- exact pair position/facing update
+- readiness/TURNING rule
+- Drive + rotation order
+- velocity semantics
+- ring-out semantics
+- recommended provisional GRAPPLE_MANUAL_ROTATION_RATE
+- whether ParticipantIntent.move is reused or new field is needed
+- dummy/controller impact
+- exact future changed-file candidates
+- exact future implementation sequence
+- full boundary-case verification matrix
+- User decisions required, if any
+- Design Deviations: N/A (Investigation)
+- Unexpected Scope
+- Git delivery.
+
+Do not write implementation code.
+
+# Final Instruction
+
+Investigate and design WASD-only grapple rotation.
+
+WASD must rotate the grapple pair without directly pushing/translating the pair midpoint.
+
+Preserve ArrowUp Drive, existing Grappled Orientation, canonical 0.70 m bond, fixed-step determinism, ring-out ownership, and Simulation as the gameplay Source of Truth.
+
+Return a concrete implementation-ready design, but make no Production changes.
