@@ -1,141 +1,273 @@
-Task-ID: ACTION-11F-GRIP-SUCCESS-PAIR-COMPRESSION-TUNE
+Task-ID: ACTION-11G-GRIP-SUCCESS-ARM-HAND-VFX
 Status: READY
-Task-Type: PRESENTATION VISUAL TUNE
+Task-Type: PRESENTATION VISUAL EFFECT GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 97ef733bbad7cebdcdbc3d64621ff5909574354d
-Review-Handoff: ACTION-11E technical PASS at 97ef733bbad7cebdcdbc3d64621ff5909574354d; User Visual Gate rejected lateral-only 0.30R because the pair looked less tightly engaged than before
+Source-Baseline: a88234c335218cc5dc409e80ced3c8fd506675b6
+Review-Handoff: ACTION-11F technical PASS; User Visual Gate accepted the +0.14R forward / -0.20R lateral Grip-success pair compression as visually good
 Handoff-Mode: GITHUB
 
-# ACTION-11F — Grip Success Pair Compression Tune
+# ACTION-11G — Grip Success Arm / Hand VFX Gate
 
 ## Purpose
 
-Improve the Grip-success pair silhouette after the ACTION-11E User Visual Gate.
+Add presentation-only arm / hand VFX while Grip success is active so the already-accepted compressed pair reads more clearly as two wrestlers actively holding / wrapping each other.
 
-User feedback:
+User goal:
 
-> ACTION-11Eの左右ずらしだけでは少し変に見える。  
-> 組む前の方が密着感があり、組んでいるように見える。  
-> 互いをずらしつつ、2人の画像がめり込むくらい密着させたい。  
-> 画像が重なってもよく、重なった部分はどちらか片方が見えていればよい。
+> ACTION-11Fの密着・めり込みは良い感じ。  
+> ここに腕・手のVFXを足せば、実相撲の四つ身のように「組み合っている」見た目へ近づくと思う。
 
-The fix must remain **presentation-only**.
+This Task must preserve the accepted ACTION-11F pair compression.
 
-Do not change canonical Simulation positions, grapple bond distance, collision, facing or gameplay.
+The VFX is provisional and User Visual Gate owned.
 
----
-
-# Current Baseline
-
-ACTION-11E currently uses:
-
-```
-GRIP_SUCCESS_LATERAL_OFFSET_R = -0.30
-```
-
-while visual pose is:
-
-```
-grapple
-or
-drive
-```
-
-This shifts each wrestler to its own LEFT.
-
-Technical behavior is accepted, but User rejected the visual result because:
-- heads are offset
-- but the pair looks too separated / less tightly engaged.
-
-The current canonical gameplay bond remains:
-
-```
-0.70 m
-```
-
-Do not change it.
+Do not change gameplay.
 
 ---
 
-# New Visual Direction
+# Accepted Current Visual Baseline
 
-Replace the current lateral-only offset with a 2-component presentation offset:
+ACTION-11F is now the current Grip-success visual baseline.
 
-1. smaller lateral shift
-2. inward / forward compression toward the opponent.
-
-Use the wrestler's own local frame:
-
-- local +X = FRONT / canonical facing
-- local +Y = wrestler RIGHT
-- local -Y = wrestler LEFT.
-
-Initial Visual Gate values:
+Preserve exactly:
 
 ```
 GRIP_SUCCESS_FORWARD_OFFSET_R = +0.14
 GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
 ```
 
-Meaning:
+Current scope:
 
-- each wrestler is drawn 0.14 R forward, toward the opponent
-- each wrestler is drawn 0.20 R to its own left.
+```
+state.pose === 'grapple'
+|| state.pose === 'drive'
+```
 
-For a face-to-face settled grapple:
-- the forward terms move both sprites inward toward each other
-- their rendered bodies may overlap
-- overlap is intentional
-- canonical Simulation centers remain unchanged.
+Current behavior:
 
-These are provisional visual tuning values, not gameplay values.
+- success sprite is shown
+- body + shadow receive the ACTION-11F display offset
+- canonical Simulation centers remain unchanged
+- canonical grapple bond remains 0.70 m
+- current facing is unchanged
+- overlap between wrestler sprites is intentional
+- existing render order is stable
+- release removes success display offset immediately.
 
-Do not change them automatically after implementation unless a clear technical defect exists.
-
-User Play Test owns visual acceptance.
+Do not retune the two ACTION-11F offset constants in ACTION-11G unless a technical rendering defect makes the VFX impossible.
+If tuning would be required for visual preference only, STOP and report instead.
 
 ---
 
-# Presentation Offset Formula
+# Gameplay Baseline — Preserve Exactly
 
-Prefer one small pure presentation helper.
+ACTION-11C gameplay is accepted.
 
-Conceptually:
+Do not change:
+
+- Grip reach = 8 ticks
+- Grip minimum attempt = 4 ticks
+- Grip recovery = 12 ticks
+- Grip lunge
+- contact-driven Grip success
+- Tsuppari > Grip
+- Push impact > Grip
+- Grip > Counter
+- Grip vs Grip neutral
+- Kuzushi -> Morozashi
+- grapple bond
+- Grappled Orientation
+- Drive
+- release
+- ring-out
+- same-participant input priority.
+
+No Production changes are allowed under:
 
 ```
-forwardPx = GRIP_SUCCESS_FORWARD_OFFSET_R * R
-lateralPx = GRIP_SUCCESS_LATERAL_OFFSET_R * R
-
-worldOffset =
-  facingForward * forwardPx
-  +
-  facingRight * lateralPx
+src/game/sumo/
+src/game/input/
 ```
-
-For facing angle `f`:
-
-```
-forward = (cos(f), sin(f))
-right   = (-sin(f), cos(f))
-```
-
-Therefore:
-
-```
-x = forwardPx * cos(f) - lateralPx * sin(f)
-y = forwardPx * sin(f) + lateralPx * cos(f)
-```
-
-Equivalent correct math is acceptable.
-
-Use the same local-axis convention already used by ACTION-11E / Kuzushi presentation.
 
 ---
 
-# Exact Application Scope
+# Visual Target
 
-Apply the new combined offset only while the Grip-success pose is shown:
+Use the real-sumo reference already supplied by the User as the intended visual language:
+
+- chests / shoulders are tightly engaged
+- arms visibly wrap around the opponent
+- at least one visible hand appears to reach the opponent's side / waist / mawashi area
+- it should read as "holding / gripping" rather than two bodies merely overlapping.
+
+The VFX does NOT need anatomical realism at full illustration quality.
+
+At gameplay scale, prioritize:
+
+1. readable arm silhouette
+2. readable hand / grip point
+3. natural attachment to the wrestler body
+4. stable appearance during Drive and turning.
+
+Do not add text / UI icons / hand symbols floating above the wrestler.
+
+The VFX should look like body/limb presentation, not HUD.
+
+---
+
+# Preferred VFX Strategy
+
+Use small procedural Presentation-only arm/hand overlays.
+
+Do NOT create a new authored wrestler sprite or a new large art pipeline.
+
+Preferred implementation:
+
+- one reusable procedural forearm/hand visual generated in Phaser
+- reused for both wrestlers
+- positioned / rotated from pure local geometry
+- mirrored naturally by local-frame math rather than runtime sprite mirroring.
+
+A simple stylized arm is acceptable:
+
+- skin-colored rounded forearm/capsule
+- dark outline matching the wrestler art approximately
+- small rounded hand / palm at the end.
+
+No fingers are required for this Visual Gate.
+
+Do not use external image assets unless procedural drawing proves technically unsuitable; if external art becomes necessary, STOP and report before adding it.
+
+---
+
+# Two-Layer Arm Model
+
+Preferred minimal visual model per wrestler:
+
+1. FAR arm
+   - drawn behind both wrestler bodies
+   - gives the impression of an arm wrapping behind / around the opponent
+
+2. NEAR arm
+   - drawn above both wrestler bodies
+   - gives a visible forearm + hand crossing onto the opponent's torso / waist.
+
+This provides depth without changing gameplay or the body sprite.
+
+Recommended depths, relative to current body depth 2:
+
+```
+far arm  < body
+body     = existing depth
+near arm > body
+```
+
+Use small explicit constants such as:
+- far arm depth around 1.9
+- near arm depth around 2.1–2.2
+
+Exact values may follow existing Scene depth conventions.
+
+Do NOT add a generic z-order framework.
+
+---
+
+# Initial Geometry
+
+Treat these as provisional starting values, in wrestler-local R units.
+
+Local convention:
+
+- +X = FRONT
+- +Y = wrestler RIGHT
+- -Y = wrestler LEFT.
+
+Preferred initial geometry:
+
+## Near arm
+
+```
+shoulder/start:
+  forward = +0.20 R
+  lateral = -0.42 R
+
+hand/end:
+  forward = +0.92 R
+  lateral = -0.28 R
+
+arm width:
+  ~0.22 R
+
+hand radius / half-size:
+  ~0.16 R
+```
+
+## Far arm
+
+```
+shoulder/start:
+  forward = +0.18 R
+  lateral = +0.42 R
+
+hand/end:
+  forward = +0.82 R
+  lateral = +0.25 R
+
+arm width:
+  ~0.20 R
+
+hand radius / half-size:
+  ~0.15 R
+```
+
+These values are not gameplay values.
+
+Agent may make small local visual adjustments if the initial geometry clearly floats off the body or misses the opponent because of the normalized success sprite.
+
+If adjusted:
+- keep the change minimal
+- report the final R-relative values
+- do not change ACTION-11F pair compression constants.
+
+---
+
+# Pure Presentation Geometry
+
+Prefer a Phaser-free helper, for example:
+
+```
+src/game/presentation/gripSuccessLimbVfx.ts
+```
+
+It should own:
+
+- whether VFX is visible
+- local start/end points
+- width / hand size
+- layer role (far / near)
+- conversion to world/canvas positions from:
+  - displayed wrestler center
+  - canonical facing
+  - body radius R.
+
+The helper must NOT:
+
+- read Scene time
+- use render delta
+- mutate Snapshot
+- decide gameplay
+- import Phaser.
+
+The VFX must use the already ACTION-11F-adjusted displayed center as its anchor.
+
+Do not recompute or duplicate the Grip-success pair compression formula.
+
+---
+
+# Visibility Scope
+
+Show the arm/hand VFX only while the Grip-success pose is active:
 
 ```
 state.pose === 'grapple'
@@ -144,14 +276,15 @@ state.pose === 'grapple'
 
 Required:
 
-- neutral grapple -> combined offset
-- Morozashi holder -> combined offset
-- Morozashi disadvantaged -> combined offset
-- Drive -> combined offset.
+- neutral grapple -> visible
+- Drive -> visible
+- Morozashi holder -> visible
+- Morozashi disadvantaged -> visible
+- Grappled Orientation turning -> visible and follows facing.
 
-Offset must be zero for:
+Must be hidden for:
 
-- Grip attempt / reach
+- Grip attempt
 - Grip recovery
 - idle
 - move
@@ -159,275 +292,196 @@ Offset must be zero for:
 - Tsuppari
 - Counter
 - Kuzushi
-- after release.
+- after release
+- pre-bout.
 
-Do not change texture selection.
-
----
-
-# Overlap Is Allowed
-
-The User explicitly accepts visual overlap.
-
-Required visual intent:
-
-- shoulders / chest / arms may overlap substantially
-- bodies may visually interpenetrate
-- the pair should read as tightly engaged rather than carefully separated
-- overlap is presentation only.
-
-Do NOT:
-- push canonical centers apart
-- change collision
-- change grapple bond
-- change bodyRadius
-- change sprite scale.
-
-If one sprite visually covers part of the other, that is acceptable.
+No independent timer.
 
 ---
 
-# Draw Order
+# Neutral / Morozashi
 
-Do not add new draw-order logic unless necessary.
+For ACTION-11G, use the same arm/hand VFX geometry for:
 
-First use the existing stable scene/body ordering.
+- neutral
+- Morozashi holder
+- Morozashi disadvantaged.
 
-Browser smoke must check:
+Do not encode Morozashi advantage into the hand VFX yet.
 
-- no frame-to-frame flicker where overlap occurs
-- no unstable alternating top sprite.
+No special color / glow / icon for holder.
 
-If existing order is stable:
-- leave it unchanged.
-
-If actual runtime inspection proves overlap order visibly flickers:
-- STOP and report before adding a broader depth/z-order system.
-
-Do not add generic layer management.
+That remains Deferred.
 
 ---
 
-# Body and Shadow
+# Turning / Orientation
 
-As in ACTION-11E:
+VFX must follow each wrestler's current canonical facing.
 
-- body receives the combined display offset
-- procedural shadow receives the same combined display offset
-- shadow's existing relative shadow offset remains unchanged.
+During TURNING:
 
-Do not offset:
-- gameplay position
-- debug/canonical collision geometry
-- Simulation Snapshot
-- Kuzushi sweat.
+- shoulder anchor stays attached to that wrestler's displayed success body
+- forearm rotates smoothly with facing
+- hand does not stay fixed in world space
+- no unexplained teleport
+- no independent interpolation.
 
-The success pose and Kuzushi do not coexist, so sweat remains unchanged.
+Do not add turning-specific animation.
 
----
+If one arm passes visually through the wrong layer during turning, keep the fixed far/near layer model for this Gate unless it causes a severe visual break.
 
-# Grip Success Art
-
-Preserve ACTION-11D success assets exactly.
-
-Do not modify:
-
-```
-public/assets/action/wrestler/grip-success-gate/red.png
-public/assets/action/wrestler/grip-success-gate/blue.png
-```
-
-Do not change:
-- source image
-- exporter
-- recipe
-- pixel hashes
-- pivot
-- scale
-- red/blue derivation.
-
-This Task changes transforms only.
+Do not change Grappled Orientation gameplay.
 
 ---
 
-# Grip Attempt Art
+# Drive
 
-Preserve ACTION-11A exactly.
+During Drive:
 
-Attempt pose must remain at canonical display position:
+- success body remains ACTION-11F-compressed
+- arms/hands remain visible
+- VFX follows current canonical facing
+- no flicker / hide/show caused by `pose: drive`.
 
-```
-Grip reach
--> attempt texture
--> display offset = 0
-```
+Do not animate hand pumping or limb motion yet.
 
-The success compression must begin only after grapple is established.
-
----
-
-# Gameplay Baseline — Do Not Reopen
-
-ACTION-11C was accepted by User Play Test.
-
-Do not change:
-
-```
-GRIP_REACH_TICKS = 8
-GRIP_MIN_ATTEMPT_TICKS = 4
-GRIP_RECOVERY_TICKS = 12
-```
-
-Preserve:
-
-- Grip lunge
-- actual-contact Grip success
-- Tsuppari > Grip
-- Push impact > Grip
-- Grip > Counter
-- Grip vs Grip neutral
-- Kuzushi -> Morozashi
-- 0.70 m canonical grapple bond
-- Grappled Orientation
-- Drive
-- release.
-
-No `src/game/sumo/` or `src/game/input/` Production change is allowed.
-
----
-
-# Grappled Orientation / Turning
-
-ACTION-11E did not visually inspect turning.
-
-ACTION-11F must inspect it because the new forward component depends on each wrestler's current facing.
-
-Required smoke scenarios:
-
-1. normal front-facing neutral grapple
-2. grapple where one participant begins TURNING after a side/rear situation if practical with current fixtures
-3. settled READY grapple after turning.
-
-Judge only presentation correctness:
-
-- offset follows each participant's current canonical facing
-- no sudden sideways teleport unrelated to facing change
-- pair does not visually explode apart during turning
-- gameplay positions remain canonical.
-
-Do not add a turning-specific special-case unless a clear visual break is observed.
-
-If turning is materially broken:
-- STOP and report
-- do not redesign Grappled Orientation inside this Task.
+Static attached limbs are sufficient for this Gate.
 
 ---
 
 # Release
 
-When grapple ends:
+At release:
 
 ```
 grapple / drive
 -> FREE
 ```
 
-the combined success offset becomes zero immediately.
+VFX must disappear on the first free frame, exactly with the success-art / pair-compression removal.
 
-This means each displayed sprite returns to its canonical display center on the same frame that success art is removed.
+Do not fade.
 
-This is allowed for this Visual Gate.
-
-Do not add easing/interpolation yet.
-
-User Play Test will judge whether the snap is noticeable.
+Do not show arms during Grip recovery.
 
 ---
 
-# Preferred Pure API
+# Rendering / Style
 
-Update the existing helper rather than adding another overlapping Source of Truth.
+Use a small procedural texture or equivalent simple Graphics-based representation.
 
-Current helper:
+Preferred visual style:
 
-```
-gripSuccessDisplayOffsetPx(...)
-```
+- skin fill close to current wrestler skin
+- dark outline close to current sprite outline
+- opaque or nearly opaque
+- no glow
+- no particles
+- no UI icon style.
 
-Preferred:
-- keep the same helper
-- extend it from lateral-only to forward+lateral.
+If using generated textures:
+- generate once per relevant R / scene
+- reuse images
+- do not recreate texture every frame.
 
-Add one new constant:
+If using Graphics:
+- keep object count small and explicit
+- do not create/destroy every frame.
 
-```
-GRIP_SUCCESS_FORWARD_OFFSET_R = 0.14
-```
+Do not introduce a particle system.
 
-Change:
+---
 
-```
-GRIP_SUCCESS_LATERAL_OFFSET_R
--0.30 -> -0.20
-```
+# Draw Order Stability
 
-Do not create separate helpers for x/y or red/blue.
+The current ACTION-11F body overlap uses stable existing body ordering.
+
+For limb overlays:
+
+- FAR arms must stay behind the bodies
+- NEAR arms must stay above the bodies
+- ordering must remain stable frame-to-frame
+- no z-fighting/flicker.
+
+If two near arms overlap, existing stable creation order is acceptable.
+
+Do not build dynamic depth sorting unless a clear technical defect proves necessary.
+
+---
+
+# WrestlerView Integration
+
+WrestlerView may own the Phaser images/graphics for the limb VFX.
+
+Expected responsibilities:
+
+- create/preload/generate VFX resources
+- update visibility
+- set arm/hand position/rotation/size from pure helper geometry
+- follow ACTION-11F displayed body center
+- use canonical facing.
+
+Do not alter:
+
+- success texture selection
+- body pivot
+- body scale
+- ACTION-11F pair compression
+- shadow logic except necessary reuse of displayed body center
+- Kuzushi sweat.
 
 ---
 
 # Required Tests
 
-At minimum verify:
-
 ## Pure Geometry
 
-P1. success pose gets forward +0.14 R.
+G1. non-success pose -> VFX hidden.
 
-P2. success pose gets lateral -0.20 R.
+G2. grapple -> visible.
 
-P3. offset magnitude/components rotate correctly with arbitrary facing.
+G3. drive -> visible.
 
-P4. forward component is along canonical facing.
+G4. local start/end transform correctly for facing 0.
 
-P5. lateral component is perpendicular to facing and to wrestler LEFT.
+G5. transform correctly for facing π/2, π, -π/2.
 
-P6. non-success poses return exactly zero.
+G6. arm length / width / hand size use R-relative values.
 
-P7. two face-to-face wrestlers receive opposite world-space forward offsets.
+G7. near and far arms remain on opposite lateral sides.
 
-P8. two face-to-face wrestlers receive opposite world-space lateral offsets.
-
-P9. pair display midpoint remains unchanged for exact opposite facings.
+G8. geometry is deterministic.
 
 ## State Scope
 
-S1. grapple -> combined offset.
+S1. neutral grapple -> both wrestlers get VFX.
 
-S2. drive -> combined offset.
+S2. Morozashi holder -> VFX.
 
-S3. neutral -> combined offset.
+S3. Morozashi disadvantaged -> VFX.
 
-S4. Morozashi holder -> combined offset.
+S4. Drive -> VFX.
 
-S5. Morozashi disadvantaged -> combined offset.
+S5. Grip attempt -> hidden.
 
-S6. attempt -> zero.
+S6. release recovery -> hidden.
 
-S7. release recovery -> zero.
+S7. Push / Tsuppari / Counter / Kuzushi / idle -> hidden.
 
-S8. idle/Push/Tsuppari/Counter/Kuzushi -> zero.
+## Ownership / Regression
 
-## Ownership
+O1. Snapshot unchanged.
 
-O1. Snapshot is unchanged by helper/selector.
+O2. canonical grapple bond remains 0.70 m.
 
-O2. canonical participant positions remain 0.70 m apart in grapple.
+O3. ACTION-11F pair compression constants remain +0.14 / -0.20.
 
-O3. WrestlerView applies offset only to body/shadow display position.
+O4. Grip success / attempt textures unchanged.
 
-O4. no src/game/sumo gameplay semantic change.
+O5. no src/game/sumo or src/game/input Production diff.
 
-O5. no asset/tooling change.
+O6. no public wrestler asset / wrestler-art tool changes.
 
 ---
 
@@ -435,34 +489,40 @@ O5. no asset/tooling change.
 
 Required.
 
-At minimum verify:
+At minimum inspect:
 
 1. Enter starts Bout
-2. Grip attempt remains unshifted
-3. neutral Grip success switches to success pose + combined offset
-4. pair appears more compressed than ACTION-11E
-5. visible sprite overlap is allowed and stable
-6. heads remain laterally offset rather than returning nose-to-nose
-7. shoulders/chests visibly interpenetrate enough to read as tight grapple
-8. body/scale/pivot unchanged
-9. shadow remains under its displayed body
-10. Simulation/debug canonical centers remain at 0.70 m
-11. Drive preserves combined offset
-12. Morozashi preserves combined offset
-13. release removes combined offset immediately
-14. later Grip attempt still uses zero offset
-15. Push/Tsuppari/Counter/Kuzushi remain zero-offset
-16. Grappled Orientation turning is visually inspected
-17. no new console/runtime errors.
+2. Grip attempt has no arm/hand VFX
+3. neutral success shows arms/hands
+4. shoulders / arms appear attached, not floating
+5. at least one visible hand reaches opponent torso / waist area
+6. pair still uses accepted ACTION-11F compression
+7. visible overlap remains stable
+8. far arm remains behind bodies
+9. near arm remains above bodies
+10. Drive keeps VFX stable
+11. Morozashi keeps VFX stable
+12. TURNING start
+13. TURNING mid
+14. TURNING settled
+15. release removes VFX immediately
+16. later Grip attempt has no stale VFX
+17. Push / Tsuppari / Counter / Kuzushi unchanged
+18. R restart
+19. no new console/runtime errors.
 
-Capture screenshots/crops for:
+Capture screenshots / crops:
 
 - neutral immediately after success
 - neutral settled
 - Drive
 - Morozashi
-- release
-- turning, if reproducible.
+- turning immediately after success
+- turning mid
+- turning settled
+- immediately after release.
+
+Also create one montage / sheet if convenient for User Visual Gate.
 
 ---
 
@@ -472,27 +532,27 @@ REQUIRED.
 
 Primary question:
 
-> Does reducing the lateral shift and moving both success sprites inward make the wrestlers look tightly interlocked rather than separated?
+> Do the procedural arms/hands make the accepted ACTION-11F compressed pair read clearly as two wrestlers actively holding / grappling each other?
 
 Judge:
 
-- bodies look intentionally overlapped / compressed
-- heads remain offset toward shoulders
-- amount of overlap feels natural
-- `-0.20 R lateral` is enough but not too much
-- `+0.14 R inward` creates enough density
-- Drive remains readable
-- Morozashi remains acceptable
-- release snap is acceptable
-- turning does not look broken.
+- arms visibly wrap toward the opponent
+- at least one hand reads as grabbing / holding near torso or mawashi
+- limbs do not float
+- arm thickness matches the character reasonably
+- VFX does not look like a UI icon
+- overlap is acceptable
+- neutral / Drive / Morozashi remain coherent
+- turning does not break badly
+- release removal is clean.
 
-If overlap is still insufficient:
-- next tune should change only `GRIP_SUCCESS_FORWARD_OFFSET_R` first.
+If hands/arms are too subtle:
+- tune only the limb geometry/size first.
 
-If lateral separation is still wrong:
-- tune `GRIP_SUCCESS_LATERAL_OFFSET_R` separately.
+If limbs look visually disconnected from the wrestler:
+- tune local anchor/end points first.
 
-Do not immediately add rotation/new source art.
+Do not immediately replace body sprites or change gameplay.
 
 ---
 
@@ -500,29 +560,28 @@ Do not immediately add rotation/new source art.
 
 ## In Scope
 
-- replace ACTION-11E lateral-only transform with forward+lateral transform
-- tune provisional constants to +0.14 R / -0.20 R
-- pure helper/tests
-- WrestlerView body/shadow presentation
-- browser visual verification
-- turning visual inspection.
+- procedural Grip-success arm/hand VFX
+- pure local geometry
+- far/near layer model
+- WrestlerView presentation integration
+- focused presentation tests
+- browser visual smoke
+- User Visual Gate.
 
 ## Scope Out
 
 Do NOT:
 
+- change ACTION-11F pair compression
 - change gameplay
-- change canonical position/bond
-- change facing
-- change Grip success/attempt assets
-- change exporter/recipe
-- add hand VFX
-- add rotation
-- add scale animation
-- add easing
-- add new pair state
-- add draw-order framework
-- promote Product art
+- change Simulation position/facing/bond
+- change Grip success/attempt images
+- modify art exporters/recipes
+- add Morozashi-specific hand pose
+- add attack animations
+- add audio/camera shake
+- add particles
+- add generic limb/animation framework
 - modify PROJECT_HANDOFF.md.
 
 ---
@@ -531,11 +590,12 @@ Do NOT:
 
 STOP if:
 
-- combined presentation offset requires Simulation changes
-- current 0.70 m bond must be changed to make the visuals function
-- the pair needs success-image regeneration to avoid a technical artifact
-- overlap causes unstable render-order flicker that would require a broader z-order design
-- turning becomes materially broken and needs new Gameplay/facing semantics
+- convincing arm/hand VFX requires gameplay geometry changes
+- ACTION-11F offsets must be changed materially to attach the arms
+- a new authored full wrestler sprite is required
+- external image assets are required instead of the planned procedural VFX
+- turning requires new gameplay/facing semantics
+- rendering needs a broad dynamic z-order system
 - unrelated accepted visuals regress.
 
 ---
@@ -543,21 +603,21 @@ STOP if:
 # Verification
 
 Verification Level:
-Standard Presentation Visual Tune
+Standard Presentation Visual Gate
 
 Required:
 
-- focused pure offset tests
+- focused pure limb geometry tests
 - focused Grip success presentation tests
-- attempt regression
-- Grip/Grapple/Drive gameplay regressions
-- existing Counter/Tsuppari/Kuzushi/Push presentation regressions
+- Grip attempt regression
+- Grip/Grapple/Drive/Orientation gameplay regression
+- Counter/Tsuppari/Kuzushi/Push presentation regression
 - `pnpm test`
 - `pnpm build`
 - `git diff --check`
 - browser/runtime smoke
 - prove src/game/sumo and src/game/input unchanged
-- prove public/assets and tools/wrestler_art unchanged.
+- prove public/assets/action/wrestler and tools/wrestler_art unchanged.
 
 ---
 
@@ -566,16 +626,16 @@ Required:
 Include:
 
 - Result
-- old values -> new values
-- exact final transform formula
+- final VFX geometry values
+- final layer/depth values
+- render method
 - changed files
-- proof Simulation/canonical bond unchanged
-- pure test results
-- full test/build/check
+- proof ACTION-11F values unchanged
+- proof gameplay/canonical bond unchanged
+- focused/full verification
 - browser smoke
-- neutral/Drive/Morozashi/release screenshots
-- turning result
-- overlap/draw-order observation
+- neutral/Drive/Morozashi/turning/release screenshots
+- draw-order observation
 - Design Deviations
 - Unexpected Scope
 - User Visual Gate: REQUIRED
@@ -604,7 +664,7 @@ Normal successful Task:
 
 Suggested commit:
 
-`feat(presentation): compress grip success pair`
+`feat(presentation): add grip success arm hand vfx`
 
 Do not modify:
 
@@ -614,15 +674,14 @@ Do not modify:
 
 # Final Instruction
 
-Replace ACTION-11E's lateral-only 0.30 R display shift with:
+Keep ACTION-11F pair compression exactly as accepted.
+
+Add only Presentation-only Grip-success arm/hand VFX while:
 
 ```
-forward = +0.14 R
-lateral = -0.20 R
+pose === 'grapple' || pose === 'drive'
 ```
 
-while Grip success / Drive art is shown.
+Use a small procedural far-arm / near-arm model anchored to each wrestler's ACTION-11F displayed body position and canonical facing.
 
-Allow the two rendered wrestler sprites to overlap substantially.
-
-Keep Simulation positions, 0.70 m bond, facing, gameplay, assets and Grip attempt completely unchanged.
+Do not change gameplay, canonical positions, bond distance, facing, wrestler assets or art tooling.
