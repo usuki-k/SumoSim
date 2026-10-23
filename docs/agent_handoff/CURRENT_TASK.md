@@ -1,26 +1,27 @@
-Task-ID: ACTION-11L-GRIP-SUCCESS-AUTHORED-FOREARM-HAND-SYMBOL-GATE
+Task-ID: ACTION-11L-GRIP-SUCCESS-AUTHORED-FOREARM-HAND-GATE
 Status: READY
 Task-Type: PRESENTATION AUTHORED VFX VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
 Source-Baseline: 809d530321e4042c607f3784a39e2d10a22de9a5
-Review-Handoff: ACTION-11K technical PASS; User Visual Gate not yet accepted. User now wants to test one authored forearm+fist image only, using 2 markers per wrestler (4 total per settled pair) and rotating them approximately 30–45 degrees relative to the mawashi.
+Review-Handoff: ACTION-11K technical PASS; User Visual Gate not yet accepted. The detached symbolic direction is close, but User wants both hands for each wrestler (4 markers total) and each forearm/hand symbol angled about 30–45 degrees across the mawashi. User supplied one authored muscular forearm+fist PNG and wants to trial only that first image.
 Handoff-Mode: GITHUB
 
-# ACTION-11L — Authored Forearm+Hand Symbol Visual Gate
+# ACTION-11L — Grip Success Authored Forearm / Hand Visual Gate
 
 ## Purpose
 
-Replace the current procedural Grip-success symbolic marker with the User-provided authored forearm+fist image, and test whether it reads better as an anime-style grip symbol.
+Replace the procedural ACTION-11K forearm/hand drawing with the single User-authored forearm+fist image supplied for this Task.
+
+The goal is to test whether the authored illustration integrates better with the wrestler art while preserving the accepted symbolic-VFX approach.
 
 User direction:
 
-- use only the latest first image supplied by the User
-- each wrestler should show BOTH hands
-- therefore 2 forearm+hand markers per wrestler / 4 total per settled pair
-- each marker should cross the waist / mawashi at roughly 30–45 degrees
-- detached symbolic representation remains correct
-- the marker does not need to connect anatomically to the body.
+- use only the first supplied forearm+fist image for this Gate;
+- show both hands for each wrestler;
+- therefore show four forearm+hand markers total for a settled grapple pair;
+- each marker should cross the mawashi / waist at approximately 30–45 degrees;
+- the markers remain symbolic overlays and do NOT need to connect anatomically to the wrestler body.
 
 This is Presentation-only.
 
@@ -30,10 +31,10 @@ Do not change gameplay.
 
 # Required User Source Asset
 
-The User-provided authored image must be available locally as:
+Place the first User-supplied image at exactly:
 
 ```
-tools/wrestler_art/input.local/grip_forearm_hand_symbol.png
+tools/wrestler_art/input.local/candidate_grip_forearm_hand_symbol.png
 ```
 
 Expected identity:
@@ -48,26 +49,37 @@ PNG file SHA-256:
 5f59a0c97e642cbdef3d5ae087ac5abc56e12ebbaff2279d9ca5848373b6543b
 ```
 
-The file is transparent around the drawn arm.
+The source has transparent background information and must remain under `input.local/`.
 
-The decoded RGBA hash is authoritative.
+Do NOT commit the authored source.
 
-The source remains under `input.local/` and must NOT be committed.
+The decoded RGBA hash is the authoritative identity.
 
 ## Stop condition
 
-If the file is missing:
-- STOP before Production changes
-- report that `grip_forearm_hand_symbol.png` is required.
+If this exact file is missing or the decoded hash differs:
 
-If size or decoded RGBA hash differs:
-- STOP and report observed values.
+- STOP before Production changes;
+- report the observed size/hash;
+- do not substitute the other fist images;
+- do not regenerate the asset;
+- do not use ACTION-11K's procedural symbol as the authored source.
 
-Do not substitute:
-- the second fist image
-- the third flat-color fist image
-- the current procedural marker
-- any AI-regenerated alternative.
+---
+
+# Why This Asset Is Being Tested
+
+The first supplied image is preferred for this Gate because:
+
+- it includes elbow/forearm/hand as one readable illustrated shape;
+- it has thick dark contouring;
+- it includes cel-like highlights/shadows;
+- it is closer to the current wrestler illustration than the simpler alternative fists;
+- at gameplay scale it can function as a symbolic Grip marker even if the fist is anatomically simplified.
+
+This Gate tests placement/style only.
+
+Do not redesign the source image.
 
 ---
 
@@ -75,7 +87,14 @@ Do not substitute:
 
 ## ACTION-11C Gameplay
 
-No changes.
+Preserve all Grip gameplay.
+
+No changes under:
+
+```
+src/game/sumo/
+src/game/input/
+```
 
 ## ACTION-11F Pair Compression
 
@@ -88,7 +107,9 @@ GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
 
 ## ACTION-11H Tone Match
 
-Keep the current accepted Grip-success body tone correction exactly.
+Keep the accepted Grip-success body tone correction exactly.
+
+Do not re-export or retune the wrestler body art.
 
 ## ACTION-11J Pair READY Visibility
 
@@ -96,389 +117,390 @@ Preserve:
 
 ```
 if either wrestler is TURNING:
-  all Grip markers hidden
+    hide all Grip hand/forearm VFX
 
-if both are READY:
-  Grip markers visible
+if both wrestlers are READY:
+    show Grip hand/forearm VFX
 ```
 
-Do not add TURNING-specific arm art.
+No TURNING-specific authored-arm pose in this Task.
 
 ---
 
-# Replace ACTION-11K Procedural Marker
+# Replace ACTION-11K Procedural Symbol Drawing
 
-ACTION-11K's procedural elbow+hand symbol is a useful placement baseline but is not the final visual.
+ACTION-11K's procedural symbolic drawing is technically valid but not the final desired output.
 
-For ACTION-11L:
+ACTION-11L should replace the rendered procedural marker with the authored PNG.
 
-- do not render the procedural forearm+hand texture
-- use the authored PNG instead
-- remove/disable obsolete procedural texture generation cleanly
-- keep pair READY visibility and target-local placement concepts where useful.
+The final READY pair should render:
 
-Do not leave both authored and procedural markers active simultaneously.
+```
+2 authored markers on wrestler A's waist
+2 authored markers on wrestler B's waist
+= 4 markers total
+```
+
+These markers visually represent the opponent's two hands gripping that wrestler.
+
+Do NOT draw both the old procedural marker and the authored marker.
+
+Prefer removing/deactivating obsolete procedural texture-generation code rather than maintaining two rendering paths.
+
+The pure visibility/placement helper may be reused or replaced narrowly.
 
 ---
 
 # Runtime Asset Pipeline
 
-Do not load the 1536x1024 source directly at gameplay scale.
+Do not load directly from `tools/`.
 
-Create a deterministic small runtime asset.
+Create a deterministic temporary Visual Gate runtime asset.
 
-Preferred runtime path:
-
-```
-public/assets/action/wrestler/grip-symbol-gate/forearm_hand.png
-```
-
-Preferred exporter:
+Preferred output:
 
 ```
-tools/wrestler_art/export_grip_symbol_gate.py
+public/assets/action/wrestler/grip-symbol-authored-gate/forearm_hand.png
 ```
 
-Preferred recipe:
+Preferred tooling:
 
 ```
-tools/wrestler_art/grip_symbol_gate_recipe.json
+tools/wrestler_art/grip_forearm_hand_gate_recipe.json
+tools/wrestler_art/export_grip_forearm_hand_gate.py
+tools/wrestler_art/tests/test_export_grip_forearm_hand_gate.py
 ```
 
-Preferred focused test:
+Equivalent narrow names are acceptable.
 
-```
-tools/wrestler_art/tests/test_export_grip_symbol_gate.py
-```
+This remains provisional Visual Gate art.
 
-Equivalent narrowly scoped names are acceptable.
+Do not promote it to permanent Product Grip art/spec yet.
 
 ---
 
-# Runtime Export Rules
+# Offline Asset Preparation
 
-Use the exact User source.
+The source is much larger than required at runtime.
 
-Allowed offline operations:
+Preferred deterministic pipeline:
 
-1. verify source identity
-2. trim transparent padding to the non-transparent alpha bounds, with a small deterministic padding margin
-3. downscale deterministically for runtime
-4. preserve alpha
-5. preserve source RGB inside retained pixels.
+1. validate exact source identity;
+2. use alpha > 8 to find the non-transparent content bounds;
+3. crop to content with a small deterministic transparent padding;
+4. record explicit source-space anchor points for:
+   - elbow center;
+   - hand / fist center;
+5. downscale deterministically to a reasonable runtime texture size;
+6. preserve alpha;
+7. preserve source RGB values;
+8. write one runtime PNG.
 
 Do NOT:
-- repaint
 - recolor
-- relight
-- change hue
-- AI-edit
-- add new outlines
-- change hand anatomy.
+- tone-match
+- redraw
+- sharpen
+- blur
+- AI-edit.
 
-The purpose is to test the authored image as-is.
+The authored appearance should remain intact for this Gate.
 
-## Preferred runtime size
+## Anchor measurement
 
-Aim for an authored symbol that renders around:
+The exporter/recipe must record explicit elbow and hand anchor points.
 
-```
-0.70–0.95 R
-```
+These may be manually measured once from the supplied source.
 
-from elbow-side end to fist-side end at gameplay scale.
-
-The exact PNG pixel dimensions may be chosen from the trimmed aspect ratio.
-
-Do not excessively sharpen or blur.
-
----
-
-# Source Orientation
-
-Inspect the source and establish a deterministic local axis:
+Completion Report must provide:
 
 ```
-elbow / upper-arm side -> hand / fist side
+elbow_source_px = (...)
+hand_source_px = (...)
+runtime elbow anchor = (...)
+runtime hand anchor = (...)
 ```
 
-Record which side of the PNG is treated as the hand direction.
-
-Do not runtime-mirror unless needed for complementary left/right grip markers.
-
-Runtime rotation is allowed.
-
-Runtime scale is allowed.
-
-If reflection is used for one side:
-- use a deterministic sprite flip / negative scale or offline mirrored runtime variant
-- report which approach is used.
-
-Prefer the smallest implementation.
-
----
-
-# Marker Count
-
-Required settled pair:
-
-```
-2 markers per wrestler
-= 4 markers total
-```
-
-Each wrestler should visually appear to grip with both hands.
-
-Do NOT render only two total markers.
+If the elbow/hand landmarks cannot be determined safely from the image:
+- STOP;
+- do not guess wildly.
 
 ---
 
 # Marker Ownership
 
-Use target-local placement.
+Continue the ACTION-11K target-local concept.
 
-Each WrestlerView may render the markers that represent the opponent gripping this wrestler.
+Each WrestlerView draws the two grip markers that appear on THAT wrestler's own waist:
 
-Equivalent pair-level composition is acceptable if simpler.
+```
+target wrestler A:
+  marker LEFT
+  marker RIGHT
 
-The key visual result is:
+target wrestler B:
+  marker LEFT
+  marker RIGHT
+```
 
-- two markers overlap each wrestler's waist / mawashi
-- four total in a settled face-to-face pair.
+These represent the opponent's two hands.
+
+This avoids needing to connect the visual markers back to the gripping wrestler.
 
 ---
 
-# Placement
+# Four-Marker Layout
 
-Each wrestler receives two authored markers on complementary sides of its waist / mawashi.
+Each target wrestler receives two markers.
 
-Use the displayed Grip-success center including ACTION-11F offset.
+Use the target wrestler's displayed Grip-success center and canonical facing.
 
-Target-local frame:
+Target-local convention:
 
 - +X = target FRONT
-- -X = target BACK / mawashi-knot direction
+- -X = target BACK / mawashi-knot side
 - +Y = target RIGHT
 - -Y = target LEFT.
 
-Preferred starting anchors:
+## Right-side marker
 
-## Target-right marker
-
-Hand/fist contact around:
+Preferred starting contact:
 
 ```
-forward: -0.35 R to -0.55 R
-lateral: +0.50 R to +0.75 R
+hand:
+  forward = -0.45 R
+  lateral = +0.62 R
 ```
 
-## Target-left marker
-
-Hand/fist contact around:
+Preferred elbow:
 
 ```
-forward: -0.35 R to -0.55 R
-lateral: -0.50 R to -0.75 R
+elbow:
+  forward = -0.15 R
+  lateral = +1.02 R
 ```
 
-The fist/hand portion should visibly overlap:
-- mawashi edge
-- adjacent waist.
+Vector elbow -> hand:
 
-Do not place both markers at identical coordinates.
+```
+delta forward = -0.30 R
+delta lateral = -0.40 R
+```
+
+This crosses the waist at approximately:
+
+```
+atan(0.30 / 0.40) ~= 36.9 degrees
+```
+
+relative to the mawashi/lateral direction.
+
+## Left-side marker
+
+Mirror the target-local layout:
+
+```
+hand:
+  forward = -0.45 R
+  lateral = -0.62 R
+
+elbow:
+  forward = -0.15 R
+  lateral = -1.02 R
+```
+
+Again approximately 36.9 degrees relative to the waist band.
+
+These values are the initial Visual Gate layout.
+
+Small local tuning is allowed if the authored hand does not visually land on the mawashi because of its silhouette.
+
+Required final visible angle:
+
+```
+30–45 degrees relative to the target's mawashi / local lateral axis
+```
+
+Do not accept a final angle outside that range without STOP/report.
 
 ---
 
-# Angle
+# Marker Scale
 
-User requirement:
+The authored source contains more arm length than the procedural ACTION-11K symbol.
+
+Scale it as a symbolic mark, not as a life-size anatomical arm.
+
+Preferred displayed elbow-to-hand anchor distance:
 
 ```
-30–45 degrees relative to the mawashi / waist band
+~0.65–0.75 R
 ```
 
 Initial target:
 
 ```
-37.5 degrees
+0.70 R
 ```
 
-for both sides, mirrored/complementary as needed.
+Do not let the arm span across the whole wrestler body.
 
-The two markers on one wrestler should form a readable paired grip rather than parallel horizontal bars.
+The hand should remain the dominant readable end of the symbol.
 
-Preferred concept:
-
-- one leans approximately +37.5°
-- the other approximately -37.5°
-relative to the local waist / mawashi tangent.
-
-Exact sign depends on source orientation and target side.
-
-Agent may tune within:
-
-```
-30° <= |angle| <= 45°
-```
-
-if the initial 37.5° causes the fist to miss the mawashi.
-
-Report final angles explicitly.
+Completion Report must state the final displayed elbow-to-hand distance in R.
 
 ---
 
-# Symbol Scale
+# Rotation / Pivot
 
-Initial visual target:
+Use the recorded elbow and hand anchors.
 
-- forearm+fist length around 0.75–0.90 R
-- marker width scaled proportionally from the source.
+At runtime:
 
-The authored image should not dominate the wrestler body.
+- place the hand contact on the desired target-local mawashi point;
+- rotate the texture so elbow -> hand follows the desired 30–45 degree grip direction;
+- scale from the recorded elbow-hand source distance.
 
-The fist should remain readable at gameplay scale.
+Preferred transform ownership is a Phaser-free pure placement helper.
 
-Use one scale for all four markers unless a clear source-side issue requires otherwise.
+Do not rotate around arbitrary texture center if that causes the hand contact to drift.
+
+The hand contact point is the important anchor.
 
 ---
 
-# Depth
+# Mirroring
 
-Markers should overlay the mawashi/body.
+For this first Gate, use the SAME authored source for all four markers if it reads acceptably at gameplay scale.
 
-Preferred fixed depth:
+Do not create or require a second authored hand.
+
+If left/right placement looks obviously wrong because the fist chirality is visible:
+
+- it is acceptable to derive one mirrored runtime variant offline from the same authored source;
+- report it as a deterministic derived variant;
+- do not ask for a second source image.
+
+Do not runtime-mirror frame-by-frame.
+
+Preferred if needed:
+
+```
+forearm_hand.png
+forearm_hand_mirrored.png
+```
+
+from the same one authored source.
+
+---
+
+# Visual Style / Depth
+
+Use the authored image unchanged in color.
+
+Depth:
 
 ```
 body = 2.0
-authored Grip marker = 2.3
+authored Grip marker ~= 2.3
 Kuzushi sweat = 2.5
 ```
 
-No dynamic z sorting.
+The marker should visibly overlay the mawashi/waist.
 
-All four markers can use the same fixed depth.
+No glow.
+No UI frame.
+No particles.
+No extra outline generated in Phaser.
 
-Stable creation order is acceptable for marker-marker overlap.
+The PNG itself owns the visual style.
 
 ---
 
-# Visibility
+# READY / TURNING Visibility
 
-Show all four authored markers only when:
+Preserve pair-level rule.
 
-- both wrestlers are Grip-success pose
-- neither wrestler is TURNING.
+READY:
+- four markers total visible.
 
-Hide all four when:
+TURNING:
+- zero markers visible.
 
-- either wrestler TURNING
-- Grip attempt
-- recovery
-- release
-- Push
-- Tsuppari
-- Counter
-- Kuzushi
-- idle / move / pre-bout.
+When TURNING becomes READY:
+- all four appear on the same presentation frame.
 
-No timer.
-No fade.
+Release:
+- all disappear immediately.
+
+No fade/timer.
 
 ---
 
 # Neutral / Drive / Morozashi
 
-Same four markers for:
+Use the same four-marker layout for:
 
 - neutral
 - Drive
-- Morozashi holder
-- Morozashi disadvantaged.
+- Morozashi.
 
-Do not encode advantage.
-
----
-
-# Presentation Helper
-
-Prefer a small Phaser-free helper, e.g.:
-
-```
-src/game/presentation/gripSuccessAuthoredSymbolVfx.ts
-```
-
-It should own:
-
-- pair visibility
-- two target-local marker definitions
-- anchor positions
-- angle
-- scale / size.
-
-WrestlerView may own the Phaser Image objects.
-
-Do not create a generic VFX framework.
+No advantage-specific marker layout yet.
 
 ---
 
-# WrestlerView
+# Remove Procedural Drawing Ownership
 
-Per wrestler:
+The final ACTION-11L runtime must not continue generating the ACTION-11K procedural forearm/mitten texture.
 
-- create 2 authored Grip marker Images
-- reuse them
-- no create/destroy per frame
-- position from displayed Grip-success center
-- rotate from target facing + marker local angle
-- hide/show using pair READY rule.
+Allowed to retain:
+- pure pair READY visibility helper;
+- useful target-local transform logic.
 
-Do not alter:
-- wrestler body texture
-- body pivot
-- body scale
-- ACTION-11F body offset
-- shadow
-- Kuzushi sweat.
+Remove or replace:
+- procedural `Graphics.generateTexture` Grip symbol drawing;
+- ACTION-11K skin/shade/highlight marker color constants if no longer used;
+- tests specific only to the procedural shape.
+
+Do not perform unrelated refactoring.
 
 ---
 
 # Required Tests
 
-## Source / Runtime Asset
+## Asset
 
-A1. exact source identity.
+A1. exact authored source identity.
 
-A2. runtime asset deterministic.
+A2. deterministic crop/downscale.
 
-A3. source alpha preserved through trim/downscale.
+A3. alpha preserved through export.
 
-A4. no color/tone mutation beyond resampling.
+A4. runtime output matches fresh export.
 
-## Marker Count
+A5. explicit elbow/hand anchors remain inside runtime texture.
 
-M1. exactly 2 marker images per WrestlerView.
+A6. no RGB recolor/tone transform is applied.
 
-M2. settled pair therefore has 4 markers total.
+## Four-marker geometry
 
-## Geometry
+G1. exactly two marker placements per target wrestler.
 
-G1. target-left and target-right anchors differ.
+G2. settled pair therefore has exactly four total.
 
-G2. both hand/fist contacts fall in waist / mawashi region.
+G3. LEFT / RIGHT hand contacts are on opposite mawashi sides.
 
-G3. each marker absolute local angle is between 30° and 45°.
+G4. final marker axis is 30–45 degrees relative to target local lateral axis.
 
-G4. marker pair uses complementary signs / directions.
+G5. displayed elbow-to-hand length is within 0.65–0.75 R.
 
-G5. facing 0 / π/2 / π / -π/2 transforms correctly.
+G6. transforms correctly for facing 0 / π/2 / π / -π/2.
 
-G6. scale is R-relative.
-
-G7. four markers are deterministic.
+G7. positions are deterministic and non-coincident.
 
 ## Visibility
 
-V1. READY neutral -> four total visible.
+V1. READY neutral -> four visible.
 
 V2. READY Drive -> four visible.
 
@@ -486,59 +508,71 @@ V3. READY Morozashi -> four visible.
 
 V4. either TURNING -> zero visible.
 
-V5. attempt -> zero.
+V5. Grip attempt -> zero.
 
 V6. release/recovery -> zero.
 
-V7. other actions -> zero.
+V7. Push/Tsuppari/Counter/Kuzushi/idle -> zero.
 
 ## Preservation
 
 P1. ACTION-11F constants unchanged.
 
-P2. ACTION-11H tone runtime unchanged.
+P2. ACTION-11H body runtime textures/recipe unchanged.
 
-P3. canonical bond 0.70 m unchanged.
+P3. canonical 0.70 m bond unchanged.
 
 P4. Snapshot unchanged.
 
-P5. no src/game/sumo or src/game/input diff.
+P5. no src/game/sumo / src/game/input diff.
+
+P6. no wrestler body asset changes outside the new authored Grip-symbol gate directory.
 
 ---
 
 # Browser / Runtime Smoke
 
-Capture standard 8-frame montage:
+Required.
+
+Capture standard montage:
 
 1. neutral immediately after success
 2. neutral settled
 3. Drive
 4. Morozashi
 5. release
-6. TURNING immediately after success
-7. TURNING mid
-8. TURNING settled.
+6. turning immediately after success
+7. turning mid
+8. turning settled.
 
 Expected:
 
-1–4 / 8:
-- four authored markers total
-- two on each wrestler
-- fists overlap the mawashi/waist
-- each marker visibly angled 30–45°
-- authored art integrates better than the procedural symbol.
+## READY frames 1–4 / 8
 
-6–7:
+- four authored markers total;
+- two on each wrestler's mawashi;
+- markers cross waist at roughly 30–45 degrees;
+- hand/fist contacts overlap the mawashi;
+- markers do not span unrealistically across the whole body;
+- no procedural ACTION-11K marker remains.
+
+## TURNING 6–7
+
 - zero markers.
 
-5:
+## Release 5
+
 - zero markers.
 
 Also verify:
-- R restart
-- no failed asset request
-- no console error
-- Push/Tsuppari/Counter/Kuzushi unaffected.
+- R restart;
+- no new runtime errors;
+- Push/Tsuppari/Counter/Kuzushi unchanged.
+
+Create:
+- 8-frame pair sheet;
+- one close-up of neutral settled;
+- if possible before/after against ACTION-11K.
 
 ---
 
@@ -546,24 +580,19 @@ Also verify:
 
 REQUIRED.
 
-Primary question:
+Primary questions:
 
-> Does the User-authored forearm+fist image, used four times with 30–45° mawashi-crossing angles, read clearly as both wrestlers gripping with both hands?
+1. Does the authored arm art fit the wrestler illustration better than the procedural symbol?
+2. Do four markers clearly communicate both wrestlers using both hands?
+3. Are markers angled naturally across the mawashi at 30–45 degrees?
+4. Is the marker size short/symbolic enough?
+5. Does the fist read as gripping rather than punching?
+6. Is TURNING hide still acceptable?
+7. Does Drive/Morozashi remain coherent?
 
-Judge:
-
-- authored art matches wrestler style
-- fist reads as grip rather than punch
-- four markers are not too busy
-- marker length/scale is appropriate
-- hand contacts the mawashi
-- 30–45° angle looks natural
-- neutral / Drive / Morozashi are coherent
-- TURNING hide remains acceptable.
-
-If the only remaining issue is that the fist looks too much like a punch:
-- do not redesign placement first
-- recommend a new User-authored "gripping hand" version using the same size/orientation contract.
+If the only remaining problem is that the fist reads too much like a punch:
+- next step may regenerate only the small authored hand asset into a mawashi-gripping hand;
+- do not regenerate wrestler bodies.
 
 ---
 
@@ -571,28 +600,28 @@ If the only remaining issue is that the fist looks too much like a punch:
 
 ## In Scope
 
-- exact first User-authored forearm+fist source
-- deterministic small runtime export
-- 2 markers per wrestler / 4 total
-- 30–45° target angle
-- target-waist placement
+- one supplied authored forearm+fist source
+- deterministic temporary runtime VFX asset
+- four-marker layout
+- 30–45 degree waist angle
+- scale/rotation/anchor placement
+- optional offline mirror derived from same source
 - pair READY visibility
-- focused tests
-- browser visual gate.
+- tests/smoke/screenshots.
 
 ## Scope Out
 
 Do NOT:
 
-- use User image 2 or 3
-- AI regenerate art
+- use the second/third supplied fist images
+- AI regenerate anything
 - change gameplay
 - change Grappled Orientation
 - change ACTION-11F compression
-- change ACTION-11H tone
-- change Grip body art
+- change ACTION-11H body tone
+- change Grip attempt/success wrestler images
 - add dynamic z sorting
-- add audio/camera/particles
+- add particles/audio/camera
 - modify PROJECT_HANDOFF.md.
 
 ---
@@ -601,11 +630,11 @@ Do NOT:
 
 STOP if:
 
-- exact source missing/hash mismatched
-- authored symbol cannot be trimmed/downscaled without destroying transparency
-- four-marker placement requires gameplay/canonical geometry changes
+- required source image is missing/hash mismatched
+- elbow/hand anchors cannot be measured safely
+- 4-marker placement needs gameplay/bond changes
+- authored asset cannot be made readable without editing its pixels/art
 - dynamic z sorting is required
-- source art is technically unsuitable for transparent overlay
 - unrelated accepted visuals regress.
 
 ---
@@ -617,15 +646,16 @@ Standard Presentation Art Visual Gate
 
 Required:
 
-- focused authored-symbol exporter tests
-- focused marker geometry/visibility tests
+- focused authored-asset exporter tests
+- focused four-marker geometry tests
+- pair READY visibility tests
 - Grip success presentation regression
 - Grip/Grapple/Drive/Orientation regression
 - Push/Tsuppari/Counter/Kuzushi presentation regression
 - `pnpm test`
 - `pnpm build`
 - `git diff --check`
-- deterministic asset export / --check
+- deterministic exporter + --check
 - browser/runtime smoke
 - prove ACTION-11F/11H unchanged
 - prove src/game/sumo / src/game/input unchanged.
@@ -638,23 +668,22 @@ Include:
 
 - Result
 - exact source identity
-- runtime asset path/size/hash
-- trim/downscale method
-- source orientation
-- marker count
-- final target-local anchors
-- final angles
-- final scale
-- depth
+- source alpha/crop diagnostics
+- elbow/hand source anchors
+- runtime asset size/hash
+- whether one or two derived runtime variants are used
+- final marker count
+- final target-local LEFT/RIGHT contacts
+- final angles relative to mawashi
+- final displayed elbow-to-hand length R
 - changed files
 - proof ACTION-11F/11H unchanged
-- proof gameplay/canonical bond unchanged
+- proof gameplay/bond unchanged
 - focused/full verification
-- 8-frame montage
-- User Visual Gate: REQUIRED
-- whether fist-vs-grip shape remains a concern
+- 8-frame montage + neutral close-up
 - Design Deviations
 - Unexpected Scope
+- User Visual Gate: REQUIRED
 - Git delivery.
 
 If none:
@@ -680,7 +709,7 @@ Normal successful Task:
 
 Suggested commit:
 
-`art(presentation): test authored grip forearm symbol`
+`art(presentation): trial authored grip hand markers`
 
 Do not modify:
 
@@ -690,13 +719,12 @@ Do not modify:
 
 # Final Instruction
 
-Use ONLY the exact User-provided first forearm+fist image.
+Use only the first User-supplied authored forearm+fist image.
 
-Export it as one small transparent runtime symbol and reuse it four times in settled Grip:
+Place two authored forearm/hand markers on each wrestler's waist/mawashi, four total per settled pair.
 
-- two markers on each wrestler
-- fists on the waist / mawashi
-- each marker angled approximately 30–45 degrees relative to the mawashi
-- no anatomical body connection required.
+Each marker must cross the mawashi at approximately 30–45 degrees, with the hand visibly contacting the mawashi.
 
-Preserve pair READY visibility: if either wrestler is TURNING, hide all four markers.
+Keep the markers detached/symbolic; do not connect them to the wrestler body.
+
+Preserve the pair READY visibility rule: if either wrestler is TURNING, hide all four markers.
