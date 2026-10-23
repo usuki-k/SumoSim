@@ -14,10 +14,11 @@
 // rigid way at the canonical facing (no extra turn); a release returns to the idle sprite.
 // ACTION-11E / 11F Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
 // presentation-only forward + lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
-// ACTION-11K / 11L Visual Gate (replaces the ACTION-11G / 11J connected arms): with that success pose, two
-// User-authored forearm + fist markers (gripSuccessSymbolVfx) are laid over this wrestler's own waist / mawashi - the
-// opponent's two hands - from the displayed body center and the canonical facing, above both bodies. Shown only while
-// both wrestlers are READY (hidden for both while either is TURNING) and hidden on every other pose (no timer, no fade).
+// ACTION-11K / 11L / 11M Visual Gate (replaces the ACTION-11G / 11J connected arms): with that success pose, two
+// User-authored forearm + fist markers (gripSuccessSymbolVfx, the set of this wrestler's art) are laid over this
+// wrestler's own waist / mawashi - the opponent's two hands - from the displayed body center and the canonical facing,
+// above both bodies. Shown only while both wrestlers are READY (hidden for both while either is TURNING) and hidden on
+// every other pose (no timer, no fade).
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -137,11 +138,11 @@ export class WrestlerView {
         .setVisible(false),
     )
     // origin = the texture's hand anchor, so the fist stays on its mawashi point under any rotation / scale
-    this.gripMarkers = GRIP_SUCCESS_MARKERS.map((marker) => {
-      const art = GRIP_MARKER_ART[marker.art]
+    this.gripMarkers = GRIP_SUCCESS_MARKERS[art.id].map((marker) => {
+      const markerArt = GRIP_MARKER_ART[marker.art]
       return scene.add
-        .image(0, 0, art.textureKey)
-        .setOrigin(art.hand.x / art.width, art.hand.y / art.height)
+        .image(0, 0, markerArt.textureKey)
+        .setOrigin(markerArt.hand.x / markerArt.width, markerArt.hand.y / markerArt.height)
         .setDepth(GRIP_SYMBOL_DEPTH)
         .setVisible(false)
     })
@@ -169,7 +170,7 @@ export class WrestlerView {
     // The opponent's two grip markers on this wrestler's waist: from the displayed (offset) body center and facing.
     const symbolVisible = gripSuccessPairSymbolVisible(state, opponentState)
     const center = { x: positionPx.x + display.x, y: positionPx.y + display.y }
-    GRIP_SUCCESS_MARKERS.forEach((marker, i) => {
+    GRIP_SUCCESS_MARKERS[this.idleArt.id].forEach((marker, i) => {
       this.gripMarkers[i].setVisible(symbolVisible)
       if (!symbolVisible) return
       const placed = gripMarkerPlacement(marker, center, participant.facing, this.R)

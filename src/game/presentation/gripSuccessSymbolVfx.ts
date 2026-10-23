@@ -5,14 +5,22 @@
 // two markers that land on ITS OWN waist (the opponent's two hands), so a READY pair shows exactly four. Placement is
 // target-local in units of the body radius R (+forward = FRONT, -forward = BACK / mawashi knot, +lateral = wrestler
 // RIGHT) from the target's displayed body center (canonical + Grip success display offset) and its canonical facing:
-// the fist (hand anchor) sits on the mawashi and the forearm crosses the waist band at about 37 degrees. The RIGHT
-// marker uses the authored image, the LEFT one its offline top-bottom mirror, so both upper-arm stubs curl toward the
-// front of the target. The geometry assumes an aligned pair: shown only while both wrestlers are in the success pose and
-// neither is TURNING (ACTION-11J rule). No timer, no fade, no animation.
+// the fist (hand anchor) sits on the mawashi and the forearm crosses the waist band at about 37 degrees, its upper-arm
+// stub curling toward the front of the target (the pair contact). ACTION-11M: the two markers of a wrestler differ by
+// the side of its success art. On the head side (the visually upper marker of a settled pair) the elbow sits outside
+// the waist (ACTION-11L layout). On the foot side (the visually lower marker) the elbow is moved inward over the
+// target's back, so the forearm reads as reaching from the target's shoulder / back down to its mawashi rather than
+// hanging off the wrestler; anatomical attachment is not intended. The blue success art is the red one reflected
+// across the local X axis, so its head / foot sides (and marker set) are the red ones mirrored laterally. The geometry
+// assumes an aligned pair: shown only while both wrestlers are in the success pose and neither is TURNING (ACTION-11J
+// rule). No timer, no fade, no animation.
 import { isGripSuccessPose } from './gripSuccessGateArt.ts'
+import type { ProductWrestlerArtId } from './productWrestlerArt.ts'
 import type { WrestlerVisualState } from './wrestlerVisualState.ts'
 
 export type GripMarkerSide = 'left' | 'right'
+// Which side of the wrestler's success art the marker sits on (head side = visually upper in a settled pair).
+export type GripMarkerRole = 'headSide' | 'footSide'
 export type GripMarkerArtId = 'authored' | 'mirrored'
 
 // One runtime texture with its hand (fist center) and elbow anchors in texture px
@@ -53,19 +61,28 @@ export function allGripMarkerArts(): GripMarkerArt[] {
 }
 
 export interface GripSuccessMarker {
+  readonly role: GripMarkerRole
   readonly side: GripMarkerSide
   readonly art: GripMarkerArtId
   readonly handForwardR: number // fist center, on the mawashi
   readonly handLateralR: number
-  readonly elbowForwardR: number // forearm end, outside the waist
+  readonly elbowForwardR: number // forearm end
   readonly elbowLateralR: number
 }
 
-// Elbow -> hand = (-0.42, -/+0.56): 0.70 R long, 36.87 degrees off the target's local lateral (waist band) axis.
-export const GRIP_SUCCESS_MARKERS: readonly GripSuccessMarker[] = [
-  { side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 1.18 },
-  { side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -1.18 },
-]
+// Per target art: [head side (ACTION-11L, elbow outside the waist), foot side (ACTION-11M, elbow over the back)].
+// Every elbow -> hand is (-0.42, +/-0.56): 0.70 R long, 36.87 degrees off the target's local lateral (waist band) axis.
+// The red head side is its RIGHT (+lateral), the foot side its LEFT; blue (reflected) is the opposite.
+export const GRIP_SUCCESS_MARKERS: Readonly<Record<ProductWrestlerArtId, readonly GripSuccessMarker[]>> = {
+  red: [
+    { role: 'headSide', side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 1.18 },
+    { role: 'footSide', side: 'left', art: 'authored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -0.06 },
+  ],
+  blue: [
+    { role: 'headSide', side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -1.18 },
+    { role: 'footSide', side: 'right', art: 'mirrored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 0.06 },
+  ],
+}
 
 export function gripMarkerLengthR(marker: GripSuccessMarker): number {
   return Math.hypot(marker.handForwardR - marker.elbowForwardR, marker.handLateralR - marker.elbowLateralR)

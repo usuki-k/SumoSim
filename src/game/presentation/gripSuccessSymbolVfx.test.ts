@@ -63,8 +63,11 @@ const visualOf = (s: BoutSnapshot, who: 0 | 1 = 0) =>
 const visibleOf = (s: BoutSnapshot, who: 0 | 1) =>
   gripSuccessPairSymbolVisible(visualOf(s, who), visualOf(s, (1 - who) as 0 | 1))
 // markers shown for the whole pair: each view draws its own two when the pair rule holds
+// participant a is drawn with the blue art and b with the red art (as in BoutScene, wrestler-a -> blue)
+const ART_OF = ['blue', 'red'] as const
 const shownCount = (s: BoutSnapshot) =>
-  ([0, 1] as const).reduce<number>((n, who) => n + (visibleOf(s, who) ? GRIP_SUCCESS_MARKERS.length : 0), 0)
+  ([0, 1] as const).reduce<number>((n, who) => n + (visibleOf(s, who) ? GRIP_SUCCESS_MARKERS[ART_OF[who]].length : 0), 0)
+const ALL_MARKERS = [...GRIP_SUCCESS_MARKERS.red, ...GRIP_SUCCESS_MARKERS.blue]
 
 function neutralGrapple(): BoutSimulation {
   const sim = newSim(COMBINED)
@@ -102,10 +105,12 @@ const at = (center: { x: number; y: number }, f: number, fw: number, lat: number
   x: center.x + fw * R_PX * Math.cos(f) - lat * R_PX * Math.sin(f),
   y: center.y + fw * R_PX * Math.sin(f) + lat * R_PX * Math.cos(f),
 })
-const right = GRIP_SUCCESS_MARKERS.find((m) => m.side === 'right')!
-const left = GRIP_SUCCESS_MARKERS.find((m) => m.side === 'left')!
+// ACTION-11L layout (one per side) - the head-side markers keep exactly these values
+const L11_RIGHT = { side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 1.18 }
+const L11_LEFT = { side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -1.18 }
+const roleOf = (art: 'red' | 'blue', role: 'headSide' | 'footSide') => GRIP_SUCCESS_MARKERS[art].find((m) => m.role === role)!
 
-describe('Grip success authored hand markers (ACTION-11L)', () => {
+describe('Grip success authored hand markers (ACTION-11L, lower markers ACTION-11M)', () => {
   it('runtime art: the authored texture + its offline mirror, anchors inside, distinct from every other texture', () => {
     expect(allGripMarkerArts().map((a) => a.assetPath)).toEqual([
       'assets/action/wrestler/grip-symbol-authored-gate/forearm_hand.png',
@@ -137,33 +142,71 @@ describe('Grip success authored hand markers (ACTION-11L)', () => {
     expect(viewSource).toMatch(/\.\.\.allGripMarkerArts\(\)/) // preloaded with the wrestler art
   })
 
-  it('G1 / G2: two markers per target wrestler (RIGHT authored, LEFT mirrored) -> four per READY pair', () => {
-    expect(GRIP_SUCCESS_MARKERS.map((m) => `${m.side}:${m.art}`)).toEqual(['right:authored', 'left:mirrored'])
-    expect(viewSource).toMatch(/this\.gripMarkers = GRIP_SUCCESS_MARKERS\.map/)
+  it('G1 / G2: two markers per target wrestler (head side + foot side) -> four per READY pair', () => {
+    expect(GRIP_SUCCESS_MARKERS.red.map((m) => `${m.role}:${m.side}:${m.art}`)).toEqual([
+      'headSide:right:authored',
+      'footSide:left:authored',
+    ])
+    expect(GRIP_SUCCESS_MARKERS.blue.map((m) => `${m.role}:${m.side}:${m.art}`)).toEqual([
+      'headSide:left:mirrored',
+      'footSide:right:mirrored',
+    ])
+    expect(viewSource).toMatch(/this\.gripMarkers = GRIP_SUCCESS_MARKERS\[art\.id\]\.map/)
+    expect(viewSource).toMatch(/GRIP_SUCCESS_MARKERS\[this\.idleArt\.id\]\.forEach/)
     expect(shownCount(neutralGrapple().getSnapshot())).toBe(4)
     // the ACTION-11K procedural drawing is gone
     expect(viewSource).not.toMatch(/ensureGripSymbolTexture|GRIP_SYMBOL_SKIN|GRIP_SYMBOL_SHADE|grip-symbol-\$\{/)
     expect(symbolSource).not.toMatch(/GRIP_SUCCESS_SYMBOL\b/)
   })
 
-  it('G3: LEFT / RIGHT fists on opposite sides of the mawashi (back half of the waist, inside the body)', () => {
-    for (const m of [right, left]) {
-      expect(m.handForwardR).toBeLessThan(-0.3)
-      expect(Math.hypot(m.handForwardR, m.handLateralR)).toBeLessThan(0.9)
-      expect(Math.abs(m.handLateralR)).toBeGreaterThanOrEqual(0.55)
+  it('11M-1: the head-side (upper) markers keep the ACTION-11L geometry exactly', () => {
+    const { role: _r, ...redHead } = roleOf('red', 'headSide')
+    const { role: _b, ...blueHead } = roleOf('blue', 'headSide')
+    expect(redHead).toEqual(L11_RIGHT)
+    expect(blueHead).toEqual(L11_LEFT)
+  })
+
+  it('11M-2 / 11M-4: the foot-side (lower) marker is distinct: elbow moved inward over the target back, not outside', () => {
+    for (const art of ['red', 'blue'] as const) {
+      const head = roleOf(art, 'headSide')
+      const foot = roleOf(art, 'footSide')
+      expect(foot).not.toEqual(head)
+      expect(Math.sign(foot.handLateralR)).toBe(-Math.sign(head.handLateralR)) // the other side of the waist
+      // ACTION-11L placed the elbow outside the waist (1.18 R); the foot-side elbow now sits on the target's back,
+      // nearer its spine than its fist, and far from the gripping opponent (in front: displayed center at ~1.72 R)
+      expect(Math.hypot(head.elbowForwardR, head.elbowLateralR)).toBeGreaterThan(1)
+      expect(Math.hypot(foot.elbowForwardR, foot.elbowLateralR)).toBeLessThan(0.3)
+      expect(Math.abs(foot.elbowLateralR)).toBeLessThan(Math.abs(foot.handLateralR))
+      expect(foot.elbowForwardR).toBeGreaterThan(foot.handForwardR) // reaching back / down to the mawashi
+      expect(Math.hypot(foot.elbowForwardR - 1.72, foot.elbowLateralR)).toBeGreaterThan(1.5)
     }
-    expect(right.handLateralR).toBeGreaterThan(0)
-    expect(left.handLateralR).toBeLessThan(0)
-    expect([left.handForwardR, left.handLateralR, left.elbowForwardR, left.elbowLateralR]).toEqual([
-      right.handForwardR,
-      -right.handLateralR,
-      right.elbowForwardR,
-      -right.elbowLateralR,
-    ])
+    // red foot side = LEFT, blue (reflected art) foot side = RIGHT: the two sets are lateral mirrors
+    for (const role of ['headSide', 'footSide'] as const) {
+      const r = roleOf('red', role)
+      const b = roleOf('blue', role)
+      expect([b.handForwardR, b.handLateralR, b.elbowForwardR, b.elbowLateralR]).toEqual([
+        r.handForwardR,
+        -r.handLateralR,
+        r.elbowForwardR,
+        -r.elbowLateralR,
+      ])
+    }
+  })
+
+  it('G3 / 11M-3: fists on opposite sides of the mawashi (back half of the waist, inside the body), unchanged', () => {
+    for (const m of ALL_MARKERS) {
+      expect(m.handForwardR).toBe(-0.45)
+      expect(Math.abs(m.handLateralR)).toBe(0.62)
+      expect(Math.hypot(m.handForwardR, m.handLateralR)).toBeLessThan(0.9)
+    }
+    for (const art of ['red', 'blue'] as const) {
+      const [a, b] = GRIP_SUCCESS_MARKERS[art]
+      expect(Math.sign(a.handLateralR)).toBe(-Math.sign(b.handLateralR))
+    }
   })
 
   it('G4 / G5: each forearm crosses the waist band at 30-45 degrees and is 0.65-0.75 R long', () => {
-    for (const m of GRIP_SUCCESS_MARKERS) {
+    for (const m of ALL_MARKERS) {
       expect(gripMarkerWaistAngleDeg(m)).toBeGreaterThanOrEqual(30)
       expect(gripMarkerWaistAngleDeg(m)).toBeLessThanOrEqual(45)
       expect(gripMarkerWaistAngleDeg(m)).toBeCloseTo((Math.atan2(0.42, 0.56) * 180) / Math.PI, 9) // 36.87
@@ -177,7 +220,7 @@ describe('Grip success authored hand markers (ACTION-11L)', () => {
   })
 
   it('G6: rigid transform for facing 0, pi/2, pi, -pi/2; the texture hand anchor lands on the fist point', () => {
-    for (const m of GRIP_SUCCESS_MARKERS) {
+    for (const m of ALL_MARKERS) {
       const art = GRIP_MARKER_ART[m.art]
       const p0 = gripMarkerPlacement(m, CENTER, 0, R_PX)
       expect(p0.hand.x).toBeCloseTo(CENTER.x + m.handForwardR * R_PX, 9)
@@ -207,7 +250,7 @@ describe('Grip success authored hand markers (ACTION-11L)', () => {
     const hands = s.participants.flatMap((p, i) => {
       const display = gripSuccessDisplayOffsetPx(visualOf(s, i as 0 | 1), p.facing, R_PX)
       const center = { x: 300 + (p.position.x * R_PX) / BODY_RADIUS + display.x, y: 200 + (p.position.y * R_PX) / BODY_RADIUS + display.y }
-      return GRIP_SUCCESS_MARKERS.map((m) => {
+      return GRIP_SUCCESS_MARKERS[ART_OF[i]].map((m) => {
         expect(gripMarkerPlacement(m, center, p.facing, R_PX)).toEqual(gripMarkerPlacement(m, center, p.facing, R_PX))
         return gripMarkerPlacement(m, center, p.facing, R_PX).hand
       })
@@ -225,8 +268,9 @@ describe('Grip success authored hand markers (ACTION-11L)', () => {
     const facing = s.participants[0].facing
     const canonical = { x: 100, y: 100 }
     const display = gripSuccessDisplayOffsetPx(visualOf(s, 0), facing, R_PX)
-    const p = gripMarkerPlacement(right, { x: canonical.x + display.x, y: canonical.y + display.y }, facing, R_PX)
-    const expected = at(canonical, facing, right.handForwardR + GRIP_SUCCESS_FORWARD_OFFSET_R, right.handLateralR + GRIP_SUCCESS_LATERAL_OFFSET_R)
+    const m = roleOf('blue', 'footSide')
+    const p = gripMarkerPlacement(m, { x: canonical.x + display.x, y: canonical.y + display.y }, facing, R_PX)
+    const expected = at(canonical, facing, m.handForwardR + GRIP_SUCCESS_FORWARD_OFFSET_R, m.handLateralR + GRIP_SUCCESS_LATERAL_OFFSET_R)
     expect(p.hand.x).toBeCloseTo(expected.x, 9)
     expect(p.hand.y).toBeCloseTo(expected.y, 9)
   })
@@ -306,7 +350,7 @@ describe('Grip success authored hand markers (ACTION-11L)', () => {
     const before = JSON.stringify(sim.getSnapshot())
     for (const who of [0, 1] as const) {
       visibleOf(sim.getSnapshot(), who)
-      for (const m of GRIP_SUCCESS_MARKERS) gripMarkerPlacement(m, CENTER, sim.getSnapshot().participants[who].facing, R_PX)
+      for (const m of GRIP_SUCCESS_MARKERS[ART_OF[who]]) gripMarkerPlacement(m, CENTER, sim.getSnapshot().participants[who].facing, R_PX)
     }
     const s = sim.getSnapshot()
     expect(JSON.stringify(s)).toBe(before)
@@ -325,7 +369,7 @@ describe('Grip success authored hand markers (ACTION-11L)', () => {
     expect(viewSource).toMatch(/const symbolVisible = gripSuccessPairSymbolVisible\(state, opponentState\)/)
     expect(viewSource).toMatch(/const center = \{ x: positionPx\.x \+ display\.x, y: positionPx\.y \+ display\.y \}/)
     expect(viewSource).toMatch(/gripMarkerPlacement\(marker, center, participant\.facing, this\.R\)/)
-    expect(viewSource).toMatch(/\.setOrigin\(art\.hand\.x \/ art\.width, art\.hand\.y \/ art\.height\)/)
+    expect(viewSource).toMatch(/\.setOrigin\(markerArt\.hand\.x \/ markerArt\.width, markerArt\.hand\.y \/ markerArt\.height\)/)
     expect(sceneSource).toMatch(/view\.wrestler\.apply\(visual, participant, pos, opponentVisual\)/)
   })
 })
