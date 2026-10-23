@@ -1,34 +1,152 @@
-Task-ID: ACTION-12B-GRAPPLE-WASD-ROTATION-IMPLEMENTATION
-Status: REVIEWED
-Task-Type: IMPLEMENTATION
+Task-ID: ACTION-13A-GRAPPLE-THROW-INVESTIGATION
+Status: READY
+Task-Type: INVESTIGATION / DESIGN
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: bdc016064be076a592dca3428ebb33d87dc1e742
-Review-Handoff: ACTION-12A investigation reviewed PASS / implementation-ready. Implement exactly the accepted Option A tangential-projection grapple footwork design. ACTION-11N remains the accepted current Grip visual baseline and must not be changed.
+Source-Baseline: fe27c90e63fe384edfe556669f3eb92d32019b83
+Review-Handoff: ACTION-12B is accepted: GRAPPLED + both READY uses WASD tangential footwork at 90 deg/s, ArrowUp remains Drive, TURNING blocks manual rotation, canonical bond is 0.70 m, existing ring-out remains authoritative. ACTION-11N remains the accepted Grip visual baseline. Do not modify either in this Investigation.
 Handoff-Mode: GITHUB
 
-# ACTION-12B — Grapple WASD Rotation Implementation
+# ACTION-13A — Grapple Throw Investigation / Design
 
 ## Purpose
 
-Implement the accepted ACTION-12A design:
+Investigate and design the first Grip Throw gameplay for SumoSim.
 
-- while GRAPPLED and BOTH participants are READY, WASD rotates the bonded pair around its shared midpoint;
-- WASD must not directly push or translate the pair midpoint;
-- only the tangential component of each participant's existing world-frame `ParticipantIntent.move` contributes;
-- ArrowUp Drive remains available and can be used simultaneously;
-- TURNING disables manual rotation;
-- existing ring-out rules remain authoritative.
+This Task is Investigation / Design only.
 
-This is a Core Gameplay / Movement/Input implementation.
+NO Production implementation.
 
-User Play Test is required after Technical PASS.
+The design must be implementation-ready for a later Throw Core Gameplay task, while keeping the first prototype small enough to verify through User Play Test.
+
+Only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` may be changed/committed under the AGENTS.md Investigation-only Report Commit Exception.
+
+---
+
+# Authoritative User Requirements
+
+Treat the following as current requirements unless Current Source reveals a material conflict.
+
+## Controls
+
+While GRAPPLED:
+
+- ArrowLeft = throw to the wrestler's OWN left.
+- ArrowRight = throw to the wrestler's OWN right.
+- This should feel consistent with the existing world-space understanding created by WASD grapple rotation.
+
+The exact world vector must be derived from that participant's canonical facing / grapple geometry, not from screen-side assumptions.
+
+## Neutral Grip
+
+Throw is allowed from a neutral Grip.
+
+Morozashi is NOT required to access Throw.
+
+## Morozashi
+
+Morozashi should improve Throw in two ways:
+
+1. increase the probability that the Throw becomes an immediate KO / fall finish;
+2. if the Throw is NOT an immediate KO, increase the amount the opponent is thrown/displaced sideways.
+
+Exact values are not yet decided.
+
+Do not invent permanent balance numbers.
+
+## KO / Non-KO
+
+A Throw has two broad outcomes:
+
+### Immediate KO
+- the thrown opponent falls;
+- the bout is decided even if the opponent remains inside the dohyo;
+- the final KO decision is probabilistic.
+
+### Non-KO
+- the opponent is thrown / displaced to the requested left or right;
+- this displacement may itself create an ordinary ring-out through the existing ring-out rules.
+
+## Throw KO Probability
+
+The Throw KO probability should be calculated before the bout, not continuously recalculated during the bout.
+
+The UI does NOT need to display a live throw success percentage during the bout.
+
+Future Management / wrestler parameters may determine the probability, but those parameter formulas do not exist yet and MUST NOT be invented in this Task.
+
+The Investigation must define the boundary by which the Bout receives already-computed Throw capability.
+
+## Deterministic Randomness
+
+The User is open to either:
+
+- a random determination when Throw occurs; or
+- pre-generating approximately the first 20 Throw results and consuming / looping them.
+
+However, the implementation must preserve deterministic / testable gameplay.
+
+Do NOT recommend direct `Math.random()` inside core gameplay.
+
+Investigate a deterministic approach that avoids participant-order / resolver-order dependence and avoids an obviously short repeating pattern if possible.
+
+## Knockdown / Fall
+
+A Throw KO adds a new non-ring-out finish: the opponent is considered fallen / defeated.
+
+The Gameplay result and later visual fall animation should remain architecturally separated.
+
+## Simultaneous Throw Inputs
+
+Resolve both participants from one tick-local state, not by resolver call order.
+
+### Throws toward opposite WORLD directions
+Current intended behavior:
+- they contest / stalemate ("Draw");
+- neither should arbitrarily win because its resolver ran first.
+
+Interpret "Draw" as an action-level Throw stalemate unless a Current Source conflict makes a Bout-level rematch necessary.
+
+If this interpretation is materially ambiguous, report it explicitly.
+
+### Throws toward the same WORLD direction
+Future rule:
+- the wrestler with the stronger Throw parameter wins.
+
+Current prototype has no Throw parameter.
+
+The User considers "both wrestlers move in that same direction" more natural than an arbitrary winner if their Throw strength is equal / absent.
+
+Investigate and recommend a minimal prototype rule that can later accept Throw strength without redesign.
+
+## Drive
+
+Throw is NOT allowed while the participant is currently contributing Drive.
+
+A Throw edge during an ineligible Drive state must not queue for later.
+
+## TURNING
+
+User preference:
+- Throw should ideally be possible while TURNING.
+
+But:
+- if supporting TURNING Throw materially complicates the first prototype, it may be restricted to READY initially.
+
+Investigate both.
+Recommend whether v1 should:
+A. allow Throw while TURNING, or
+B. require READY.
+
+Do not silently choose; justify the recommendation against current ACTION-05B1 / ACTION-12B ownership.
 
 ---
 
 # Required Reading
 
-Read current versions before editing:
+Inspect Current Source, not only previous Handoffs.
+
+At minimum:
 
 - AGENTS.md
 - docs/ARCHITECTURE.md
@@ -38,493 +156,738 @@ Read current versions before editing:
 - src/game/sumo/BoutSimulation.ts
 - src/game/sumo/grappleOrientation.ts
 - src/game/sumo/ringOut.ts
+- src/game/input/pressLatch.ts
 - src/game/input/movementVector.ts
 - src/game/input/pushDummyController.ts
 - src/game/scenes/BoutScene.ts
-- relevant Grip / Orientation / Drive / RingOut / input tests.
+- Bout Grip / Orientation / Drive / RingOut / ACTION-12B rotation tests
+- result / HUD formatting code that currently assumes ring-out as the only finish reason.
 
-Current Source is authoritative.
-
-If Current Source materially conflicts with the reviewed ACTION-12A design, STOP before implementation.
+Confirm the actual current file names and ownership.
 
 ---
 
-# Accepted Design — Do Not Redesign
+# Current Baseline to Confirm
 
-Use Option A from ACTION-12A.
+Report whether all of these are true:
 
-## Input semantics
+1. ArrowLeft / ArrowRight currently feed Tsuppari press latches.
+2. Tsuppari only starts in FREE state.
+3. GRAPPLED currently ignores those Tsuppari action edges.
+4. ArrowUp held is Drive while GRAPPLED.
+5. Drive action state is timerless and re-decided every tick.
+6. Grip release uses Shift / gripPressed and READY gating.
+7. GRAPPLED manual WASD rotation uses both-READY gating.
+8. canonical participant positions/facings live only in BoutSimulation.
+9. canonical grapple bond is 0.70 m.
+10. neutral / Morozashi are stored only in pair-level engagement.
+11. BoutOutcome currently has ring-out as its only win reason.
+12. Ring-out resolves after all positional changes using previous/final canonical positions.
+13. there is currently no production RNG / bout seed / Throw parameter model.
+14. result presentation currently formats only the existing outcome reasons.
 
-Reuse existing `ParticipantIntent.move`.
+If materially false, STOP the design and report the mismatch.
 
-Do NOT add a new raw key or a separate `grappleRotation` input field.
+---
 
-FREE:
-- move keeps existing grounded movement semantics.
+# Investigation Part 1 — Throw Direction Semantics
 
-GRAPPLED + both READY:
-- move is interpreted only as desired grapple footwork direction;
-- only tangential projection contributes to pair rotation;
-- radial component does nothing;
-- no direct push / pull / pair translation is produced by WASD.
+Define exactly how own-left / own-right maps to a world direction.
 
-GRAPPLED + either TURNING:
-- manual WASD rotation is disabled for both participants.
-
-## Coordinate/sign convention
-
-Use current Simulation coordinates:
-
+Current coordinate convention:
 - +x right
 - +y down
-- positive angle = atan2 increase = clockwise on screen.
+- facing = atan2 direction toward opponent while READY.
 
-For pair midpoint `m` and participant `p`:
+Investigate the exact local lateral vectors.
 
+For facing unit:
 ```
-r = p.position - m
-rHat = normalize(r)
-tHat = (-rHat.y, rHat.x)
-c_p = dot(sanitizeMove(intent_p.move), tHat)
+f = (cos(facing), sin(facing))
 ```
 
-Then:
-
+A likely candidate in y-down coordinates is:
 ```
-angularIntent = clamp(c_A + c_B, -1, +1)
-delta = angularIntent * GRAPPLE_MANUAL_ROTATION_RATE * TICK_SECONDS
-```
-
-Important:
-- sum is symmetric / participant-order independent;
-- cooperative same-sense input clamps at magnitude 1;
-- opposite-sense input cancels;
-- radial input contributes zero.
-
-Do not introduce arbitrary per-player weights.
-
----
-
-# Manual Rotation Rate
-
-Add provisional gameplay tuning constant:
-
-```
-GRAPPLE_MANUAL_ROTATION_RATE = Math.PI / 2
+ownLeft  = ( f.y, -f.x)
+ownRight = (-f.y,  f.x)
 ```
 
-Meaning:
-- 90 deg/s
-- 1.5 deg/tick at 60 Hz.
+Verify against Current Source conventions and ACTION-12B world-direction semantics.
 
-This is provisional and User Play Test owned.
+The Completion Report must include concrete fixtures:
+- facing right
+- facing down
+- facing left
+- facing up
 
-Do not reuse `GRAPPLE_TURN_RATE`; keep automatic orientation and manual pair rotation as separate tuning values.
+and show the world vector for Left / Right.
 
-Preferred ownership:
-- near existing grapple/Drive constants in `BoutSimulation.ts`, unless Current Source clearly indicates a smaller dedicated pure module is better.
-
-Do not create a generic tuning framework.
+Do not leave sign conventions implicit.
 
 ---
 
-# Pair Rigid Rotation
+# Investigation Part 2 — Input / Intent Ownership
 
-When manual rotation is allowed and `delta !== 0`:
+ArrowLeft / ArrowRight already have Tsuppari semantics while FREE.
 
-1. compute current midpoint:
-   `m = (A.position + B.position) / 2`
+Compare at least:
 
-2. rotate each position around `m` by the same `delta`
+## Option I — add Throw semantic edges
+Add future semantic fields such as:
+- `throwLeftPressed`
+- `throwRightPressed`
 
-3. rotate each canonical facing by the same `delta`
+The same raw ArrowLeft/Right press may feed both Tsuppari and Throw semantic edges, while Simulation consumes only the state-appropriate action.
 
-4. normalize facings using the existing `normalizeAngle`.
+Evaluate:
+- clarity;
+- edge duplication;
+- queue/drop behavior;
+- same raw key mapping to state-specific gameplay;
+- touch/gamepad future mapping.
 
-Use the standard 2D rotation:
+## Option II — reuse Tsuppari edge fields while GRAPPLED
+Interpret `tsuppariLeftPressed/rightPressed` as Throw while grappled.
 
+Evaluate:
+- semantic naming mismatch;
+- test readability;
+- future rebinding;
+- whether it couples two unrelated actions unnecessarily.
+
+## Option III — generic left/right action edge
+Rename / redesign toward a contextual action field.
+
+Evaluate scope impact and whether this is premature abstraction.
+
+Recommend exactly one.
+
+Preference: keep raw keys out of Simulation and keep semantic intent explicit, but do not introduce a generic action framework.
+
+---
+
+# Investigation Part 3 — Throw Eligibility / Action Timing
+
+Define exact eligibility.
+
+At minimum compare:
+
+- GRAPPLED neutral
+- GRAPPLED Morozashi holder
+- GRAPPLED Morozashi disadvantaged
+- participant action idle
+- participant action drive
+- participant TURNING / READY
+- opponent Drive state
+- simultaneous Throw edges
+- release edge on the same tick
+- WASD rotation on the same tick
+- ArrowUp Drive hold + Throw edge same tick.
+
+Required User rule:
+- a participant currently contributing Drive cannot Throw.
+
+Investigate whether Throw should require both participants not driving, or only the thrower not driving.
+
+Recommend the exact same-tick priority among:
+- Release
+- Throw
+- Drive
+- WASD grapple rotation.
+
+Do not allow queueing.
+
+---
+
+# Investigation Part 4 — TURNING Throw
+
+This is a required design comparison.
+
+## Candidate A — READY-only Throw
+
+Advantages to evaluate:
+- reuses canActInGrapple;
+- own-left/right is unambiguous relative to an opponent-facing canonical orientation;
+- preserves ACTION-05B1 progression;
+- smaller implementation.
+
+Cost:
+- cannot immediately throw from side/rear Grip until auto TURNING finishes.
+
+## Candidate B — TURNING Throw allowed
+
+Investigate:
+- what own-left/right means when canonical facing is still not toward opponent;
+- whether throw direction uses current facing or pair axis;
+- whether Throw cancels automatic TURNING;
+- whether Morozashi from Counter Best becomes too immediately powerful;
+- whether result is deterministic without a new orientation state.
+
+Recommend A or B for Prototype v1.
+
+If B requires a larger state/transition model, recommend A now and explicitly defer B.
+
+---
+
+# Investigation Part 5 — Throw Resolution Geometry
+
+This is central.
+
+For a NON-KO Throw, the User wants the opponent displaced sideways.
+
+Compare at least these canonical geometry models.
+
+## Geometry A — direct target lateral translation
+Move only the target by a fixed left/right vector, then allow existing bond correction.
+
+Evaluate:
+- hidden movement of attacker caused by bond correction;
+- midpoint shift;
+- whether the final direction still reads as a Throw;
+- ring-out behavior.
+
+## Geometry B — target orbits around thrower
+Keep thrower fixed and move the target around the thrower at the canonical bond radius by a Throw arc / lateral displacement.
+
+Evaluate:
+- preserves bond exactly;
+- clear "throw opponent to my left/right" meaning;
+- pair midpoint changes;
+- facing updates needed;
+- Grip can remain engaged naturally.
+
+## Geometry C — pair-level lateral transition
+Move both wrestlers in a controlled pair transition with target moving farther than thrower.
+
+Evaluate:
+- readability;
+- whether it feels like a Throw versus ordinary pair translation;
+- similarity to same-direction simultaneous Throw.
+
+Recommend one minimal geometry for:
+1. one successful non-KO Throw;
+2. equal-strength same-world-direction simultaneous Throw if "both move" is selected.
+
+Do not create a physics engine.
+
+---
+
+# Investigation Part 6 — Instantaneous vs Transitioned Throw
+
+Compare:
+
+## Instant resolution
+- resolve KO or displacement in one Simulation tick;
+- simple;
+- but canonical position may visibly snap.
+
+## Short Simulation-owned Throw transition
+Analogous in spirit to CounterTransition:
+- fixed deterministic duration;
+- canonical positions/facing follow a small explicit path;
+- input locked during transition;
+- ring-out remains Simulation-owned;
+- later presentation can animate from canonical state.
+
+Evaluate:
+- implementation size;
+- Game Feel/readability;
+- whether a transition is necessary for User Play Test;
+- whether it creates unnecessary complexity before Throw feel is known.
+
+Recommend the smallest approach that still allows meaningful gameplay/visual verification.
+
+Do not design full skeletal animation here.
+
+---
+
+# Investigation Part 7 — Engagement After Non-KO Throw
+
+Compare:
+
+A. Grip remains GRAPPLED after a non-KO Throw.
+B. Throw breaks the Grip and returns to FREE.
+C. Result depends on advantage / outcome.
+
+Current preferred hypothesis to evaluate:
+- non-KO Throw keeps the Grip;
+- new canonical positions/facing define the next decision state;
+- player can continue WASD rotation / Drive / later Throw.
+
+Assess:
+- whether the chosen geometry can preserve bond/readiness;
+- whether immediate repeat Throw spam becomes a problem;
+- whether a short Throw action/recovery is required.
+
+Recommend exactly one for Prototype v1.
+
+---
+
+# Investigation Part 8 — Throw Action State / Cooldown
+
+The User has not specified timing.
+
+Investigate whether a discrete `throw` ParticipantActionState is necessary.
+
+Compare:
+
+## No Throw action state
+Edge resolves immediately.
+Potential issue:
+- no presentation-readable action phase;
+- repeated key presses may resolve too quickly;
+- difficult to animate later.
+
+## Small Throw action
+Possible phases:
+- startup / resolve / recovery
+or a simpler fixed transition/recovery.
+
+Do not invent final timing without reason.
+
+Recommend:
+- whether a Throw state is needed;
+- minimal state shape;
+- what locks input;
+- when KO/displacement resolves;
+- whether non-KO Grip remains active after recovery.
+
+Any numeric timing must be explicitly provisional / User Play Test.
+
+---
+
+# Investigation Part 9 — Pre-Bout Throw Capability Boundary
+
+Do not invent wrestler stats.
+
+Design a minimal interface by which the bout receives already-computed Throw capability.
+
+Compare at least:
+
+## Profile A
 ```
-x' = x*cos(delta) - y*sin(delta)
-y' = x*sin(delta) + y*cos(delta)
+ThrowProfile {
+  neutralKoChance
+  morozashiKoChance
+  neutralDisplacement
+  morozashiDisplacement
+}
 ```
 
-Apply to each participant's vector relative to the midpoint.
+Advantages:
+- all effective Throw values are computed before bout;
+- BoutSimulation does not know Management parameters.
 
-Required invariants:
-
-- midpoint before == midpoint after, modulo floating-point roundoff;
-- pair distance before == pair distance after;
-- READY facing error remains unchanged by the manual rotation;
-- no second pair-angle Source of Truth;
-- no Scene-owned gameplay rotation.
-
-If `delta === 0`, skip the rotation block entirely.
-
-This is important because `normalizeAngle` maps exactly -PI to +PI; zero-input behavior should preserve current values as closely/bitwise as possible.
-
----
-
-# Readiness / TURNING Gate
-
-Reuse the existing tick-start readiness already computed for Release / Drive:
-
+## Profile B
 ```
-ready(p) = canActInGrapple(p, opponent, startEngagement)
+ThrowProfile {
+  baseKoChance
+  baseDisplacement
+}
+```
+and BoutSimulation applies fixed Morozashi multipliers.
+
+Evaluate:
+- "pre-bout calculation" requirement;
+- future Management ownership;
+- avoiding permanent balance formulas in core.
+
+Also investigate how future `throwPower` for simultaneous same-direction contests should enter without forcing it into v1 prematurely.
+
+Recommend the minimal BoutSetup / participant boundary.
+
+No Management system implementation.
+
+---
+
+# Investigation Part 10 — Prototype Values
+
+Implementation will require actual prototype values even though permanent balance is undecided.
+
+Recommend provisional values/ranges for:
+- neutral KO probability
+- Morozashi KO probability or boost
+- neutral non-KO displacement / arc
+- Morozashi non-KO displacement / arc
+- optional Throw recovery/transition duration.
+
+Base recommendations on:
+- BODY_RADIUS = 0.35 m
+- grapple bond = 0.70 m
+- current ring radius / Tokudawara geometry
+- current Drive speed
+- ACTION-12B manual rotation speed.
+
+Do NOT present these as final accepted parameters.
+
+Flag each for User Play Test.
+
+---
+
+# Investigation Part 11 — Deterministic KO Resolution
+
+Compare deterministic approaches.
+
+At minimum:
+
+## RNG A — core-seeded PRNG state
+Bout receives a numeric seed; core owns a small deterministic PRNG state.
+
+Evaluate:
+- replay determinism;
+- simultaneous Throw order;
+- snapshot/save implications;
+- testability.
+
+## RNG B — per-participant deterministic stream
+Each participant has a pre-bout seed / stream and Throw attempt index.
+
+Evaluate:
+- participant-order independence;
+- simultaneous Throw;
+- future save/replay;
+- whether extra state is needed.
+
+## RNG C — pre-generated roll/result schedule
+BoutSetup receives a sequence of future rolls/results.
+
+Evaluate:
+- simplest testing;
+- where generation belongs;
+- finite sequence exhaustion;
+- whether looping ~20 values creates an obvious repeating pattern.
+
+Recommend exactly one.
+
+Requirements:
+- no direct Math.random in Simulation;
+- same setup/seed + same semantic input sequence => same Throw outcomes;
+- simultaneous resolution must not change because participant array order changed;
+- unused/ineligible Throw edges must not consume a KO roll;
+- stalemated simultaneous Throw should have explicitly defined roll-consumption behavior.
+
+Define whether KO probability comparison is:
+```
+roll < chance
+```
+or another exact boundary, including chance 0 and 1.
+
+---
+
+# Investigation Part 12 — Simultaneous Throw Contest
+
+Resolve both participants from one immutable tick-local Throw request state.
+
+First convert each local Left/Right request into a WORLD throw direction.
+
+Then classify.
+
+## Case S1 — opposite WORLD directions
+User requirement:
+- Throw contest stalemates / Draw.
+
+Design:
+- movement?
+- action/recovery?
+- KO rolls consumed or not?
+- engagement stays?
+- any cooldown?
+
+Current preference to evaluate:
+- no KO roll;
+- no displacement;
+- Grip continues;
+- if a Throw action/recovery exists, both may still pay the commitment.
+
+## Case S2 — same WORLD direction
+Future:
+- higher Throw strength wins.
+
+Prototype:
+- no meaningful Throw stat yet.
+
+Compare:
+A. action-level stalemate
+B. both wrestlers move in that world direction while Grip persists
+C. deterministic arbitrary winner (not preferred)
+
+User considers B more natural.
+
+Recommend one prototype rule and define exact geometry.
+
+## Case S3 — one participant requests Throw
+Resolve the normal Throw.
+
+## Case S4 — both inputs from same participant in one tick
+If both Left and Right edges are somehow present:
+- define deterministic priority or drop both.
+
+Do not leave this to object/property order.
+
+---
+
+# Investigation Part 13 — KO Outcome / Fall Result
+
+Current `BoutFinishReason` only includes `ring-out`.
+
+Design the minimal new outcome semantics.
+
+Candidate:
+```
+reason: 'throw'
+```
+or
+```
+reason: 'fall'
 ```
 
-Manual rotation is allowed only if:
+Recommend which semantic best represents:
+- Throw caused a fall / KO;
+- later other techniques may also cause a fall.
 
-```
-grappled && ready(A) && ready(B)
-```
+Avoid encoding presentation text into Simulation.
 
-Do not recompute readiness after rotation for the gate.
+Determine:
+- whether KO Throw immediately ends the engagement/bout;
+- what final canonical position/facing/action is frozen;
+- what data later Presentation needs to know throw direction / loser fall direction.
 
-Do not add stored READY/TURNING state.
-
-Do not change:
-- automatic Grappled Orientation
-- `GRAPPLE_TURN_RATE`
-- `GRAPPLE_FACING_TOLERANCE`
-- Release readiness behavior.
+If a one-shot Throw result/event must be retained for presentation, propose the smallest explicit state/result boundary.
+Do not introduce a global event bus.
 
 ---
 
-# Exact Step Ordering
+# Investigation Part 14 — KO vs Ring-Out Priority
 
-Preserve current step semantics except for the new manual-rotation block.
+Define exact semantics when a Throw attempt can both:
+- pass its KO roll; and
+- move the opponent across the ring boundary.
 
-Required order:
+Possible approaches:
+1. KO Throw resolves first => reason Throw/Fall.
+2. perform non-KO displacement only when KO roll fails; therefore KO and displacement never coexist.
+3. always apply displacement and then choose outcome priority.
 
-1. Tsuppari cooldown
-2. CounterTransition early path
-3. previous positions for ring-out
-4. posture timer
-5. tick-start readiness
-6. grapple release
-7. determine `grappled`
-8. grappled Drive action decision
-9. **NEW: manual grapple rotation**
-10. existing participant action/effective-move processing
-11. existing grapple selfVelocity braking (ZERO_MOVE)
-12. `updateGrappledExternal()`
-    - it must now naturally read the ROTATED pair axis
-13. integrate velocities
-14. contact
-15. grapple bond
-16. action timers
-17. facing update
-18. ring-out.
+Current simplest candidate to evaluate:
+- roll first;
+- KO => finish immediately without non-KO displacement;
+- KO fail => perform displacement, then existing ring-out may decide.
 
-If the Current Source groups steps 10/11 differently, preserve semantics, but manual rotation must occur:
-- after Release and Drive readiness/action decision;
-- before `updateGrappledExternal()`;
-- before integration.
+Recommend explicitly.
 
-Update misleading comments such as "tick-start pair axis" only where necessary.
+Also cover simultaneous Throw contest + ring edge cases.
 
 ---
 
-# Drive + Rotation
+# Investigation Part 15 — Throw Direction and Existing WASD Rotation
 
-WASD + ArrowUp must work together.
-
-Accepted behavior:
-
-- manual rotation happens first;
-- Drive uses the pair axis after that rotation on the same tick;
-- Drive constants remain unchanged:
-  - GRAPPLE_DRIVE_SPEED
-  - GRAPPLE_DRIVE_ACCELERATION
-  - MOROZASHI_DRIVE_FACTOR.
-
-Do not rotate existing `externalVelocity` as a free side effect of manual rotation.
-
-Existing world-frame momentum stays world-frame.
-
-Do not change Drive strength/net calculation.
-
----
-
-# Velocity Semantics
-
-Manual rotation:
-
-- changes canonical positions + facings only;
-- adds no `selfVelocity`;
-- adds no `externalVelocity`;
-- adds no impulse;
-- does not rotate existing external momentum;
-- does not redefine Snapshot velocity.
-
-GRAPPLED selfVelocity braking remains current behavior:
-- ordinary linear WASD movement remains suppressed;
-- pair orbit is handled by the new explicit rigid-rotation block.
-
-Do not make the orbit velocity part of Snapshot velocity in this Task.
-
----
-
-# Ring-Out
-
-Do not add special immunity or a new ring-out rule.
-
-Existing `resolveRingOutFrom(previousA, previousB)` remains authoritative.
-
-Therefore:
-- rotation may move one participant out of the dohyo;
-- that participant can lose normally;
-- degenerate simultaneous exits use existing rematch semantics;
-- Tokudawara continues to work through current ring-out code.
-
-Do not add edge slowdown in this Task.
-
-This behavior is intentional and must be User Play Tested.
-
----
-
-# Morozashi
-
-Manual rotation authority is equal for:
-- neutral grapple
-- Morozashi holder
-- Morozashi disadvantaged.
-
-Do NOT apply `MOROZASHI_DRIVE_FACTOR` to manual rotation.
-
-Any advantage-specific rotation authority is Deferred.
-
----
-
-# ParticipantIntent / Input Ownership
-
-Reuse `ParticipantIntent.move`.
-
-Update the relevant comment/type documentation so it is clear:
-
-- FREE: world-frame locomotion vector
-- GRAPPLED + both READY: world-frame grapple footwork vector whose tangential component rotates the pair.
-
-Do not add raw keyboard semantics to Simulation.
-
-BoutScene already supplies the move vector every tick.
-
-Only update BoutScene help/debug text if needed for clarity, e.g.:
-- "WASD move/rotate"
-
-Do not put gameplay formulas in BoutScene.
-
----
-
-# Dummy / Harness
-
-Current PushDummyController emits move = 0 while GRAPPLED.
-
-Preserve this.
-
-Do not make dummy rotate automatically.
-
-No CPU AI design in this Task.
-
-Add/retain regression proof that a grappled dummy with zero move contributes zero manual rotation.
-
----
-
-# Preferred Pure Helpers
-
-Keep design small and explicit.
-
-A pure helper is recommended for signed pair rotation intent / geometry, e.g. one or more of:
-
-- `grappleManualRotationIntent(...)`
-- `rotateGrappledPair(...)`
-
-Do not introduce:
-- ECS
-- physics/constraint framework
-- global event bus
-- generic pair-motion abstraction.
-
-If helper ownership fits `grappleOrientation.ts` cleanly, that is acceptable.
-If keeping tuning and pair mutation local to `BoutSimulation.ts` is simpler, that is also acceptable.
-
-Report final ownership.
-
----
-
-# Required Boundary Cases — ALL MUST BE VERIFIED
-
-Do not sample these.
-
-## B1 — one cardinal input
-READY neutral, horizontal pair, Player on left:
-- Player W -> positive rotation;
-- Player moves upward, opponent downward;
-- midpoint unchanged;
-- bond unchanged.
-
-## B2 — diagonal
-W + D:
-- radial component ignored;
-- angular magnitude = ~0.7071 of max in the horizontal fixture.
-
-## B3 — radial input
-Player D toward opponent:
-- zero manual rotation;
-- no push;
-- no pair midpoint movement from WASD.
-
-Player A away from opponent:
-- same: zero manual rotation;
-- no pull.
-
-## B4 — tangential directions / pair orientations
-Verify correct sign for:
-- pair axes at 0°, 45°, 90°, 135° or equivalent coverage;
-- cardinal WASD directions.
-
-## B5 — same-sense two-participant input
-Both request the same physical rotation sense:
-- sum clamps to ±1;
-- speed does not double.
-
-## B6 — opposite-sense input
-Equal opposite rotation:
-- cancel to 0.
-
-## B7 — TURNING gate
-If either participant is TURNING:
-- both participants' manual rotation input is ignored;
-- existing automatic Grappled Orientation progresses unchanged.
-
-## B8 — first READY tick
-After TURNING completes:
-- manual rotation starts only on the first tick that begins with both READY.
-
-## B9 — WASD + Drive
-- rotation and Drive occur on same tick;
-- Drive uses rotated axis;
-- Drive values otherwise unchanged.
-
-## B10 — Release + WASD
-- Release wins;
-- no grapple rotation on release tick;
-- existing release recovery semantics unchanged.
-
-## B11 — edge / one-side ring-out
-Construct a near-edge grapple where manual rotation moves exactly one participant outside:
-- existing ring-out declares that participant loser.
-
-## B12 — simultaneous ring-out boundary case
-If geometrically constructible in current arena:
-- verify existing simultaneous/rematch behavior.
-If truly impossible under a valid bonded pair fixture, prove why with an explicit boundary case and mark it NOT APPLICABLE, not silently omitted.
-
-## B13 — Morozashi
-- holder and disadvantaged contribute with identical manual rotation authority;
-- Drive factor remains Drive-only.
-
-## B14 — zero WASD regression
-- existing Drive / Orientation / Grip / RingOut behavior remains semantically unchanged;
-- delta=0 path does not normalize/change facing unnecessarily.
-
-## B15 — fixed-step determinism
-- no render delta;
-- replay / repeated simulation produces identical result.
-
-## B16 — participant-order swap
-- swapping physical participant order does not change the corresponding physical outcome.
-
-## B17 — long-duration invariants
-Sustained manual rotation:
-- midpoint drift is negligible/within explicit floating tolerance;
-- bond remains 0.70 m;
-- facing error remains READY;
-- no NaN / instability.
-
-## B18 — natural stop behavior
-Hold a world direction:
-- as that direction becomes radial, tangential contribution trends to 0;
-- no oscillation/overshoot caused by a hidden target state.
-
-## B19 — dummy
-Grappled dummy with move=0:
-- contributes zero manual rotation.
-
----
-
-# Existing Tests / Regression
-
-Inspect and update existing tests whose old expectation was "WASD suppressed while READY grappled".
-
-Expected candidates include Grip / Orientation / Drive tests identified by ACTION-12A.
-
-Do not delete coverage just to make tests pass.
-
-Where old tests intentionally assert no grapple movement:
-- preserve that assertion using radial move, zero move, or TURNING state as appropriate;
-- add explicit new rotation cases separately.
-
-Preserve all unrelated existing tests.
-
----
-
-# Verification Level
-
-Heavy.
+Ensure the design remains coherent after ACTION-12B pair rotation.
 
 Required:
+- own-left/right is computed from current canonical orientation on the Throw tick;
+- rotating the pair with WASD changes the future world direction of a Throw naturally;
+- no cached throw direction survives from before rotation unless a Throw action intentionally locks it.
 
-- focused pure rotation-intent tests;
-- focused pair rigid-rotation tests;
-- all B1–B19 boundary cases;
-- Grip regression;
-- Grappled Orientation regression;
-- Drive regression;
-- RingOut / Tokudawara regression;
-- movement/input regression;
-- participant-order/determinism tests;
-- `pnpm test`
-- `pnpm build`
-- `git diff --check`
-- browser/runtime smoke.
+If Throw and WASD rotation occur on the same tick, define exact priority:
+- does Throw direction use tick-start facing?
+- or facing after that tick's manual rotation?
 
-Browser smoke must include at minimum:
-
-1. normal front Grip -> WASD orbit
-2. radial WASD -> no push / no rotation
-3. diagonal WASD
-4. WASD + Drive
-5. side/rear Grip TURNING -> WASD ignored
-6. READY after TURNING -> WASD works
-7. release + WASD
-8. near-edge rotation ring-out
-9. Morozashi rotation
-10. restart
-11. no new console/runtime errors.
-
-If any required boundary cannot be run:
-- report PARTIAL / NOT RUN;
-- do not mark Overall PASS if a mandatory case is missing.
+Recommend one exact order.
 
 ---
 
-# User Play Test
+# Investigation Part 16 — Drive Interaction
 
-REQUIRED after Technical PASS.
+User requirement:
+- Drive participant cannot Throw.
 
-User should judge:
+Define exact same-tick behavior for:
+- ArrowUp already held from previous tick + new Throw edge;
+- ArrowUp and Throw edge begin on same tick;
+- opponent is Driving but thrower is not;
+- both are Driving + Throw edges;
+- Throw state / recovery and later Drive.
 
-- 90°/s speed
-- world-direction WASD semantics
-- diagonal feel
-- radial input doing nothing
-- WASD + Drive feel
-- edge risk/reward
-- Morozashi equal rotation authority
-- whether rotation feels like footwork rather than sliding/pushing.
+Recommend whether:
+- Throw edge loses to Drive if driveHeld is true; or
+- Throw edge has priority and prevents Drive from starting that tick.
 
-Technical PASS != Gameplay Accepted.
+User wording strongly implies "Drive中に投げられない", but same-tick start priority is not yet explicit.
+Recommend the least surprising rule.
+
+---
+
+# Investigation Part 17 — Release Interaction
+
+Define same-tick priority:
+- Shift Release + Throw edge.
+
+Existing Grip release currently precedes Drive and WASD rotation.
+
+Preferred candidate:
+- Release wins;
+- Throw edge dropped;
+- no roll consumed.
+
+Verify against current step ownership.
+
+---
+
+# Investigation Part 18 — Ring-Out / Tokudawara
+
+Non-KO Throw displacement/transition must use canonical positions and existing ring-out ownership.
+
+No Throw-specific ring boundary.
+
+Investigate:
+- one throw directly creates ring-out;
+- throw movement crosses a Tokudawara window;
+- if transition is multi-tick, ring-out checked every transition tick;
+- if instant, existing previous/final interpolation semantics apply.
+
+No wall/clamp/bounce.
+
+---
+
+# Investigation Part 19 — Presentation Boundary
+
+Do not create final Throw art in this Task.
+
+Determine what a later Visual Task needs from Simulation:
+- participant action = throw?
+- direction = left/right?
+- throwerId / targetId?
+- KO vs non-KO?
+- transition progress?
+- final outcome reason?
+
+Keep gameplay canonical.
+Do not make Phaser Scene infer gameplay outcome from pixels/animation.
+
+Recommend the smallest Snapshot-facing data.
+
+---
+
+# Required Design Alternatives Summary
+
+Completion Report must explicitly compare and choose:
+
+1. input fields:
+   - dedicated Throw edges vs reuse Tsuppari vs generic contextual edge
+2. TURNING:
+   - allowed vs READY-only v1
+3. non-KO geometry:
+   - target translate vs target orbit vs pair transition
+4. throw timing:
+   - instant vs Simulation transition
+5. engagement after non-KO:
+   - retain Grip vs release
+6. deterministic probability:
+   - seeded core PRNG vs per-participant stream vs pre-generated schedule
+7. simultaneous same-world-direction prototype:
+   - stalemate vs both move
+8. KO outcome semantic:
+   - throw-specific vs generic fall reason
+9. same-tick Throw vs Drive priority
+10. Throw vs WASD rotation order.
+
+Recommend exactly one coherent v1 design.
+
+---
+
+# Required Boundary Cases for Future Implementation Plan
+
+Do not sample these away.
+
+1. neutral READY + Left Throw.
+2. neutral READY + Right Throw.
+3. pair rotated 90° via WASD, then Left/Right maps to rotated world directions.
+4. Morozashi holder Throw.
+5. Morozashi disadvantaged Throw.
+6. neutral KO roll succeeds.
+7. neutral KO roll fails -> non-KO movement.
+8. Morozashi KO probability enhancement.
+9. Morozashi non-KO displacement enhancement.
+10. chance 0.
+11. chance 1.
+12. deterministic repeated replay.
+13. participant-order swap with identical semantic inputs.
+14. unused/ineligible Throw edge consumes no roll.
+15. Drive + Throw same tick.
+16. participant already Driving + Throw edge.
+17. opponent Driving while thrower is eligible.
+18. Release + Throw same tick.
+19. Throw + WASD same tick.
+20. TURNING Throw behavior according to recommended v1 rule.
+21. both Throw opposite WORLD directions.
+22. both Throw same WORLD direction.
+23. both Left+Right edges on one participant.
+24. same-direction prototype equal-strength behavior.
+25. future unequal Throw-strength boundary represented in API/design even if not implemented.
+26. non-KO Throw near edge -> ordinary ring-out.
+27. Tokudawara crossing.
+28. KO Throw near edge -> chosen KO/ring-out priority.
+29. Grip state after non-KO Throw.
+30. immediate repeat Throw / recovery/cooldown behavior.
+31. four cardinal facing directions -> own-left/right mapping.
+32. diagonal/arbitrary facing -> own-left/right mapping.
+33. Morozashi holder/disadvantaged participant array order swapped.
+34. result presentation can distinguish Throw/Fall finish from ring-out.
+35. existing ACTION-12B WASD rotation unchanged when no Throw edge.
+36. existing Drive unchanged when no Throw edge.
+37. existing Tsuppari ArrowLeft/Right behavior unchanged while FREE.
+38. existing ring-out-only fixtures unchanged.
+
+Future Implementation must explicitly account for every case.
+
+---
+
+# Suggested Task Split After Investigation
+
+The Investigation must recommend final split, but evaluate this default:
+
+## ACTION-13B — Throw Core Gameplay
+Include:
+- semantic Throw input
+- eligibility / contest
+- deterministic KO resolution
+- KO outcome
+- non-KO canonical movement
+- ring-out interaction
+- tests / browser smoke.
+
+## ACTION-13C — Throw / Fall Presentation
+Include:
+- Throw pose/transition visual
+- fall/KO presentation
+- impact/camera feel if requested
+- User Visual Gate.
+
+If the Investigation concludes a Simulation-owned multi-tick Throw transition is necessary for Core correctness/readability, include that transition in ACTION-13B but leave authored art/animation to 13C.
+
+Do not split KO probability into a disconnected later Task if doing so would prevent ACTION-13B from testing the central Throw gameplay hypothesis.
+
+---
+
+# Architecture Constraints
+
+Maintain:
+
+Pure TypeScript Game / Simulation
+-> canonical State / Results
+-> Phaser Rendering / Input / Animation.
+
+Do not:
+- put Throw success probability in BoutScene;
+- call Math.random from Scene or Simulation;
+- make pixels decide Throw result;
+- store duplicate grapple state on participants;
+- add global event bus;
+- add ECS / physics engine / generic rule engine;
+- implement Management stats;
+- implement Save;
+- redesign ACTION-12B WASD rotation;
+- modify ACTION-11N Grip VFX.
 
 ---
 
@@ -532,365 +895,122 @@ Technical PASS != Gameplay Accepted.
 
 ## In Scope
 
-- Pure TypeScript grapple manual rotation
-- reuse ParticipantIntent.move
-- pair rigid position/facing rotation
-- Drive ordering integration
-- comments/type docs
-- focused/full tests
-- minimal BoutScene help text update if useful
-- docs/ARCHITECTURE.md update to Current accepted implementation semantics
-- CURRENT_COMPLETION_REPORT.md.
+- Current Source inspection
+- Throw input ownership
+- own-left/right mapping
+- Throw eligibility
+- TURNING comparison
+- Drive/Release/WASD same-tick priority
+- non-KO geometry
+- Grip retention/release
+- Throw action/transition need
+- pre-bout Throw capability boundary
+- deterministic probability strategy
+- simultaneous Throw resolution
+- KO/fall BoutOutcome design
+- ring-out/Tokudawara interaction
+- presentation-facing state boundary
+- prototype tuning recommendations
+- future Implementation file/test plan.
 
 ## Scope Out
 
-Do NOT:
+NO Production implementation.
 
-- change Grip VFX / ACTION-11N visuals
-- change Drive tuning
-- change automatic GRAPPLE_TURN_RATE
-- change grapple bond
-- add rotation advantage for Morozashi
-- add edge slowdown
-- add CPU rotation AI
-- add touch/gamepad implementation
-- add throws/lifts
-- change Push/Tsuppari/Counter balance
-- introduce physics engine / generic constraint system
-- modify PROJECT_HANDOFF.md.
+Do not change:
+- src/**
+- public/**
+- tools/**
+- accepted architecture docs/spec
+- Grip visuals
+- current gameplay values.
+
+Do not implement Throw.
 
 ---
 
 # Stop Conditions
 
-STOP before broadening scope if:
+Result BLOCKED / STOP if:
 
-- implementation requires a new stored pair-angle Source of Truth;
-- existing Drive semantics cannot be preserved with rotation-before-Drive;
-- preserving readiness requires changing ACTION-05B1 semantics;
-- ring-out needs a new special-case rule;
-- participant-order independence cannot be achieved with the accepted formula;
-- required all-case verification exposes a material design contradiction;
-- unrelated accepted Gameplay or Grip visuals regress.
+- Current Source materially contradicts the baseline assumptions;
+- adding Throw requires redesigning existing engagement ownership before any small prototype can work;
+- deterministic KO resolution cannot be made participant-order independent without a broader RNG/save architecture decision;
+- TURNING support materially changes ACTION-05B1 and no clean READY-only v1 exists;
+- same-direction simultaneous Throw cannot be represented without inventing a full Throw stat system;
+- user decision is required on a semantic issue that materially changes the Core implementation.
 
-If a Material Design Deviation becomes necessary:
-- do not silently accept it;
-- STOP and report the planned vs required change.
+If BLOCKED, identify the smallest exact User decision needed.
 
 ---
 
-# Implementation Evidence Required
+# Verification
 
-Completion Report must include concise evidence for:
+Investigation-only.
 
-1. Design Requirement: tangential projection only
-   - file/module/function
-   - implemented formula
-   - verified by B1–B6/B18
+Required:
+- Current Source inspection;
+- relevant existing tests inspection;
+- run focused current tests if useful;
+- scratch pure calculations/scripts allowed but not committed;
+- no Production source/docs changes.
 
-2. Design Requirement: rigid midpoint rotation / bond preservation
-   - function
-   - position/facing update
-   - verified by invariants/B17
+Allowed repository change:
+- CURRENT_COMPLETION_REPORT.md only.
 
-3. Design Requirement: both-READY gate
-   - integration point
-   - verified by B7/B8
+Use AGENTS.md Investigation-only Report Commit Exception.
 
-4. Design Requirement: rotation before Drive
-   - step order
-   - verified by B9
-
-5. Design Requirement: no velocity/impulse ownership change
-   - preserved fields
-   - verification
-
-6. Design Requirement: existing ring-out
-   - no new rule
-   - B11/B12
-
-7. Design Requirement: participant-order independence
-   - formula and test B16.
-
-Design Deviations:
-- NONE if implementation matches;
-- otherwise Planned / Implemented / Reason / Semantics changed? and STOP if material.
-
-Unexpected Scope:
-- explicitly list if any.
+User Play Test:
+- Not Applicable to this Investigation.
+- Future Throw Core implementation requires User Play Test.
 
 ---
 
 # Completion Report
 
-Include:
+Must include:
 
-- Result
-- Implementation Commit
-- Current Source files changed
-- final helper/function ownership
-- final `GRAPPLE_MANUAL_ROTATION_RATE`
-- exact formula
-- exact step order
-- B1–B19 matrix with PASS / FAIL / NOT RUN
-- focused test results
-- full test/build/check
-- browser smoke results
-- ring-out observations
-- Drive + rotation observation
-- zero-input regression evidence
-- Implementation Evidence
-- Design Deviations
+- Result: PASS / BLOCKED
+- Current Source findings
+- confirmed ArrowLeft/Right current ownership
+- own-left/right world-vector formula with cardinal examples
+- Input Option I/II/III comparison + recommendation
+- exact Throw eligibility
+- TURNING A/B comparison + recommendation
+- exact same-tick action priority
+- non-KO Geometry A/B/C comparison + recommendation
+- instant vs transition comparison
+- engagement-after-non-KO recommendation
+- Throw action state/recovery recommendation
+- pre-bout ThrowProfile boundary
+- provisional prototype values/ranges
+- deterministic RNG A/B/C comparison + recommendation
+- exact roll consumption rules
+- simultaneous Throw S1–S4 rules
+- future Throw strength extension point
+- KO/fall BoutOutcome shape
+- KO vs ring-out priority
+- ring-out/Tokudawara semantics
+- Presentation/Snapshot data needed later
+- exact future step order
+- exact future changed-file candidates
+- all 38 future boundary cases mapped to verification
+- recommended ACTION-13B / 13C split
+- User decisions still required, if any
+- Design Deviations: N/A
 - Unexpected Scope
-- User Play Test: REQUIRED
 - Git delivery.
-
----
-
-# Git Delivery
-
-Follow AGENTS.md.
-
-Normal successful Task:
-- stage Task-owned files only
-- one implementation commit
-- fetch
-- fast-forward safety
-- push origin/develop
-- verify remote SHA
-- clean working tree.
-
-Suggested commit:
-
-`feat(gameplay): add grapple wasd rotation`
-
-Do not modify:
-- main
-- PROJECT_HANDOFF.md
-- CURRENT_TASK.md.
 
 # Final Instruction
 
-Implement the reviewed ACTION-12A Option A design exactly.
+Design the first Grip Throw implementation without writing Production code.
 
-While GRAPPLED and both READY, reuse ParticipantIntent.move as world-frame grapple footwork: only each participant's tangential component contributes to one symmetric signed pair rotation.
+ArrowLeft / ArrowRight mean the thrower's own left / right. Neutral Grip can Throw. Morozashi raises KO chance and non-KO displacement. A Throw either wins immediately by a deterministic probabilistic fall/KO, or moves the opponent sideways and may then ring out through existing rules.
 
-Rigidly rotate both canonical positions and facings around the pair midpoint at provisional 90°/s maximum.
+Resolve simultaneous Throws symmetrically from one tick-local state. Opposite world directions stalemate. Same world direction must have a clean prototype tie rule that can later be replaced by Throw-strength comparison.
 
-Do not translate the pair midpoint from WASD, do not add impulse, preserve 0.70 m bond, preserve existing Drive/Orientation/ring-out ownership, and require Heavy verification plus User Play Test.
+Throw cannot be used while Driving. Investigate whether TURNING can safely support Throw; if not, recommend READY-only for v1.
 
+Define a deterministic pre-bout Throw capability / KO-roll boundary that does not invent Management stats and does not use Math.random in gameplay.
 
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-24
-Overall Result: ACCEPTED — TECHNICAL PASS / USER PLAY TEST PASS
-Accepted Baseline: c1a81dd58c27783f63044c59d70fed6cd9cb80bb
-
-## Reported Implementation vs Design
-
-Accepted as aligned with ACTION-12A / ACTION-12B.
-
-Confirmed from Current Source / diff:
-
-- existing ParticipantIntent.move is reused;
-- no new grapple rotation input field was added;
-- manual rotation is Simulation-owned in Pure TypeScript;
-- GRAPPLE_MANUAL_ROTATION_RATE = Math.PI / 2;
-- manual rotation is gated by tick-start readiness for BOTH participants;
-- TURNING blocks manual rotation for both;
-- release remains before manual rotation;
-- Drive action decision remains before manual rotation;
-- manual rotation happens before updateGrappledExternal;
-- Drive therefore uses the rotated pair axis;
-- ordinary linear WASD movement remains suppressed while GRAPPLED;
-- no selfVelocity / externalVelocity / impulse is created by manual rotation;
-- existing external momentum is not rotated for free;
-- existing ring-out remains authoritative;
-- ACTION-11N Grip visual baseline was not changed.
-
-## Accepted Input Semantics
-
-While FREE:
-
-- WASD remains ordinary world-frame movement.
-
-While GRAPPLED and both participants begin the tick READY:
-
-- WASD means world-frame grapple footwork;
-- only the participant's tangential component around the pair midpoint contributes;
-- radial component is discarded;
-- therefore WASD does not directly push or pull the pair.
-
-Accepted signed pair intent:
-
-```
-rA = (A.position - B.position) / 2
-tA = (-rA.y, rA.x) / |rA|
-
-cA = dot(moveA, tA)
-cB = -dot(moveB, tA)
-
-angularIntent = clamp(cA + cB, -1, +1)
-delta = angularIntent * GRAPPLE_MANUAL_ROTATION_RATE * TICK_SECONDS
-```
-
-The exact antisymmetric B formulation is accepted as numerically stronger than independently recomputing both radii while being mathematically equivalent to the reviewed design.
-
-## Accepted Pair Update
-
-When angularIntent != 0:
-
-- both canonical positions rotate rigidly around the shared midpoint by delta;
-- both canonical facings rotate by the same delta;
-- facings use existing normalizeAngle.
-
-Preserved invariants:
-
-- midpoint unchanged by WASD rotation itself;
-- pair distance / grapple bond unchanged;
-- facing error / READY relation unchanged by the rigid rotation;
-- no new pair-angle state.
-
-## Accepted Manual Rotation Rate
-
-Current baseline:
-
-```
-GRAPPLE_MANUAL_ROTATION_RATE = Math.PI / 2
-```
-
-= 90 deg/s maximum.
-
-User Play Test result: OK.
-
-Treat this value as the current accepted prototype baseline.
-
-Do not retune it in unrelated tasks.
-
-## Drive Interaction
-
-Accepted:
-
-```
-tick-start readiness
--> release
--> Drive action decision
--> manual WASD rotation
--> grapple self braking
--> updateGrappledExternal on rotated pair axis
--> integration
--> bond
--> facing
--> ring-out
-```
-
-Therefore:
-
-- WASD + ArrowUp may rotate and Drive on the same tick;
-- Drive constants and Morozashi Drive factor are unchanged.
-
-## TURNING / Grappled Orientation
-
-Accepted:
-
-- existing ACTION-05B1 automatic Grappled Orientation remains authoritative;
-- if either participant is TURNING at tick start, manual rotation is disabled for both;
-- manual rotation begins on the first tick that starts with both READY;
-- no stored readiness or new TURNING state was added.
-
-## Ring-Out
-
-Accepted:
-
-- no rotation-specific immunity;
-- no special edge slowdown;
-- existing canonical ring-out decides outcomes after final tick positions;
-- manual rotation near the edge may ring out the opponent or the rotating wrestler;
-- existing simultaneous/rematch ownership remains unchanged.
-
-This risk/reward is accepted by User Play Test for the current prototype.
-
-## Morozashi
-
-Accepted current rule:
-
-- Morozashi holder and disadvantaged wrestler have equal manual rotation authority;
-- MOROZASHI_DRIVE_FACTOR remains Drive-only.
-
-Do not add rotation advantage unless explicitly requested in a future balance task.
-
-## Velocity Ownership
-
-Accepted:
-
-- manual rotation writes position + facing only;
-- no orbit velocity is stored;
-- selfVelocity / externalVelocity ownership remains unchanged;
-- Snapshot velocity semantics remain self + external.
-
-Do not silently reinterpret Snapshot velocity later.
-
-## Verification Review
-
-Heavy verification accepted:
-
-- B1–B19 all covered;
-- B12 correctly classified N/A for pure rigid rotation with explicit proof/boundary case;
-- focused Grip/Orientation/Drive/RingOut/input regression: PASS;
-- pnpm test: 31 files / 542 PASS;
-- pnpm build: PASS;
-- git diff --check: PASS;
-- browser/runtime smoke: 11 / 11 PASS;
-- participant-order swap: PASS;
-- fixed-step determinism: PASS;
-- long-duration midpoint/bond/readiness invariants: PASS;
-- zero-input / radial-input regression: PASS;
-- dummy no-rotation: PASS.
-
-No mandatory verification remains unrun.
-
-## User Play Test
-
-User result: OK.
-
-Therefore the following are now accepted as current prototype baseline:
-
-- world-direction WASD grapple footwork;
-- tangential projection semantics;
-- radial input does nothing;
-- 90 deg/s manual rotation rate;
-- WASD + Drive simultaneous use;
-- equal Morozashi rotation authority;
-- existing edge ring-out risk/reward.
-
-## Do Not Reopen
-
-Unless explicitly requested:
-
-- ACTION-11N Grip success visual baseline;
-- ACTION-12B tangential-projection semantics;
-- GRAPPLE_MANUAL_ROTATION_RATE = PI / 2;
-- both-READY gate;
-- rotation-before-Drive ordering;
-- canonical 0.70 m grapple bond;
-- automatic GRAPPLE_TURN_RATE;
-- existing ring-out ownership.
-
-## Deferred
-
-Only future explicit tasks may consider:
-
-- Morozashi-specific rotation strength;
-- edge-specific rotation slowdown;
-- CPU grapple rotation AI;
-- touch/gamepad mapping;
-- throws / lifts;
-- further Grip visual polish.
-
-## Next Task Constraint
-
-Future Grip / Drive work must preserve ACTION-12B's canonical position/facing ownership and must not add a second pair rotation Source of Truth.
-
-Any future change to manual rotation semantics or rate is a gameplay-feel change and requires User Play Test.
+Return one coherent implementation-ready v1 design and recommended task split.
