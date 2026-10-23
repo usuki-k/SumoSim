@@ -1,5 +1,5 @@
 Task-ID: ACTION-11L-GRIP-SUCCESS-AUTHORED-FOREARM-HAND-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION AUTHORED VFX VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -728,3 +728,196 @@ Each marker must cross the mawashi at approximately 30–45 degrees, with the ha
 Keep the markers detached/symbolic; do not connect them to the wrestler body.
 
 Preserve the pair READY visibility rule: if either wrestler is TURNING, hide all four markers.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: 2b38f0d293dc2f4ff9660dbf7f799d86cd1a80e9
+
+## Source Identity
+
+Confirmed from Completion Report / Current Source:
+
+- exact source path:
+  `tools/wrestler_art/input.local/candidate_grip_forearm_hand_symbol.png`
+- size: 1536 x 1024 RGBA
+- decoded RGBA SHA-256:
+  `2f00cba4d6256028fdbd3c545eb5c7923d030d89881a5f3680efe00c67b0dba1`
+- PNG file SHA-256:
+  `5f59a0c97e642cbdef3d5ae087ac5abc56e12ebbaff2279d9ca5848373b6543b`
+
+This matches the original ACTION-11L Task identity.
+
+The earlier local alternate hash was not used in the successful implementation.
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-11L.
+
+Confirmed:
+
+- only the first User-authored forearm+fist source is used
+- deterministic temporary runtime export exists
+- authored + offline mirrored variants are generated from the one source
+- no recolor / tone match / redraw / AI edit is applied to the marker art
+- each WrestlerView renders two markers on its own waist
+- settled pair therefore shows four markers total
+- fists are hand-anchored to the target mawashi / waist
+- marker axis crosses the target local lateral / mawashi axis at ~36.87 degrees
+- displayed elbow-to-hand distance = 0.70 R
+- marker depth = 2.3
+- TURNING hides all markers for both wrestlers
+- release / recovery / other actions hide all markers
+- no procedural ACTION-11K marker remains rendered
+- no src/game/sumo / src/game/input changes
+- ACTION-11F compression unchanged
+- ACTION-11H body tone correction unchanged
+- canonical grapple bond remains 0.70 m.
+
+## Runtime Asset Pipeline
+
+Accepted provisional gate assets:
+
+```
+public/assets/action/wrestler/grip-symbol-authored-gate/forearm_hand.png
+public/assets/action/wrestler/grip-symbol-authored-gate/forearm_hand_mirrored.png
+```
+
+Runtime size:
+
+```
+94 x 59
+```
+
+Pixel hashes:
+
+- authored:
+  `c1c171a21aa9d9050d89456aac7d4910d088b9ae5a0c666c695d01340dbd5ebb`
+- mirrored:
+  `8fb61adf1e1a573c4bab91f442351d3a845c0cac419e32dfce60e5036cd961ea`
+
+Source anchors:
+
+```
+hand_source_px  = (290, 752)
+elbow_source_px = (1207, 567)
+```
+
+Runtime authored anchors:
+
+```
+hand  = (15.875, 42.125)
+elbow = (73.1875, 30.5625)
+```
+
+The mirrored variant is derived offline only.
+
+## Final Layout
+
+Per target wrestler:
+
+RIGHT:
+
+```
+hand  = (-0.45 R, +0.62 R)
+elbow = (-0.03 R, +1.18 R)
+```
+
+LEFT:
+
+```
+hand  = (-0.45 R, -0.62 R)
+elbow = (-0.03 R, -1.18 R)
+```
+
+Therefore:
+
+- two markers per wrestler
+- four markers per READY pair
+- marker length = 0.70 R
+- mawashi crossing angle = 36.87 degrees
+- hand anchor stays on the intended waist point during rotation/scale.
+
+## Design Deviation Review
+
+Accepted.
+
+The Task's initial elbow coordinate produced only 0.50 R elbow->hand distance, conflicting with the same Task's required 0.65–0.75 R range.
+
+Implementation preserved:
+- hand point
+- 36.87 degree angle
+
+and extended elbow outward to reach 0.70 R.
+
+This is a coherent local correction and does not change semantics.
+
+Offline mirrored left-side variant was explicitly allowed by the Task.
+
+## Verification Review
+
+Accepted:
+
+- authored exporter focused tests: 13 / 13
+- wrestler-art suite: 222 / 222
+- deterministic export / --check: PASS
+- existing art exporters --check: PASS
+- TS marker tests: 15 / 15
+- pnpm test: 30 files / 520 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- Browser / Runtime Smoke: 27 / 27 PASS
+- ACTION-11F / 11H regressions preserved
+- gameplay / canonical bond unchanged.
+
+This is sufficient for Technical PASS.
+
+## Visual Review From Submitted Screenshots
+
+Observed:
+
+Positive:
+- four authored markers are clearly present in READY grapple states
+- authored arm art integrates more naturally with the wrestler illustration than the procedural ACTION-11K symbol
+- both wrestlers now visibly appear to use both hands
+- the 30–45 degree goal is achieved numerically and visually
+- TURNING frames correctly suppress all markers
+- release clears markers cleanly
+- Drive / Morozashi keep the same marker treatment.
+
+Remaining visual questions:
+- the upper markers can read as forearms resting on the upper body rather than clearly gripping the mawashi
+- the lower markers sometimes extend slightly beyond the body silhouette
+- because the source hand is a closed fist, the marker can still read somewhat like a punch/fist rather than an explicit mawashi-gripping hand.
+
+These are User Visual Gate questions, not technical failures.
+
+## User Visual Gate
+
+REQUIRED.
+
+Primary questions:
+
+1. Does the authored forearm/fist art fit the wrestler style better than the procedural symbol?
+2. Do four markers make it clear that both wrestlers are using both hands?
+3. Is the ~36.9 degree placement visually right?
+4. Is 0.70 R short enough as a symbolic overlay?
+5. Does the fist read as gripping the mawashi, or still too much like punching?
+6. Are the upper/lower placements acceptable?
+7. Is hiding all markers during TURNING still acceptable?
+
+## Next Task Constraint
+
+Do not create a new Grip-hand Task until User Visual Gate feedback is known.
+
+If the only remaining problem is the hand shape:
+- keep the accepted four-marker layout / angle / READY rule
+- replace only the small authored marker art with a hand specifically drawn as gripping the mawashi
+- do not regenerate wrestler bodies or reopen gameplay.
+
+If placement itself is rejected:
+- tune only marker position / scale / angle before replacing art.
