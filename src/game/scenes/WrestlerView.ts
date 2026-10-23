@@ -14,9 +14,10 @@
 // rigid way at the canonical facing (no extra turn); a release returns to the idle sprite.
 // ACTION-11E / 11F Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
 // presentation-only forward + lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
-// ACTION-11G Visual Gate: with that success pose, two procedural forearms + hands per wrestler (gripSuccessLimbVfx)
-// are placed from the displayed body center and the canonical facing: the FAR arm below both bodies, the NEAR arm
-// above them. Hidden on every other pose (no timer, no fade).
+// ACTION-11G / 11I Visual Gate: with that success pose, two procedural wrapping arms per wrestler
+// (gripSuccessLimbVfx) are placed from the displayed body center and the canonical facing: each upper arm (FAR)
+// below both bodies, each forearm + hand (NEAR) above them. Shown only while both wrestlers are READY (ACTION-11J:
+// hidden for both while either is TURNING) and hidden on every other pose (no timer, no fade).
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -34,7 +35,7 @@ import {
 import {
   GRIP_SUCCESS_LIMBS,
   gripSuccessLimbPlacement,
-  gripSuccessLimbsVisible,
+  gripSuccessPairLimbsVisible,
   type GripSuccessLimb,
   type GripSuccessLimbLayer,
 } from '../presentation/gripSuccessLimbVfx.ts'
@@ -46,7 +47,7 @@ import type { ParticipantState } from '../sumo/BoutTypes.ts'
 export const WRESTLER_SHADOW_DEPTH = 1
 export const WRESTLER_BODY_DEPTH = 2
 export const WRESTLER_EFFECT_DEPTH = 2.5 // above both bodies, below the debug overlays (3) and the HUD / texts (4)
-// Grip success limbs: FAR arms between the shadows (1) and the bodies (2), NEAR arms above both bodies.
+// Grip success limbs: FAR upper arms between the shadows (1) and the bodies (2), NEAR forearms above both bodies.
 export const GRIP_LIMB_DEPTH: Readonly<Record<GripSuccessLimbLayer, number>> = { far: 1.9, near: 2.2 }
 
 // Near-circular soft shadow in units of the body radius R, offset in world space (down-right).
@@ -112,19 +113,20 @@ function ensureSweatTexture(scene: Phaser.Scene, R: number): string {
   return key
 }
 
-// One forearm (shoulder cap -> hand) drawn horizontally, once per limb and R; returns the key and the shoulder origin.
+// One arm segment (start cap -> end cap or hand) drawn horizontally, once per segment and R; returns the key and the
+// start origin.
 function ensureLimbTexture(scene: Phaser.Scene, R: number, limb: GripSuccessLimb): { key: string; origin: { x: number; y: number } } {
   const k = LIMB_TEXTURE_SCALE
   const length = Math.hypot(limb.endForwardR - limb.startForwardR, limb.endLateralR - limb.startLateralR) * R * k
   const half = (limb.widthR * R * k) / 2
-  const hand = limb.handRadiusR * R * k
+  const hand = Math.max(limb.handRadiusR * R * k, half) // no hand: a plain round cap of the arm width
   const o = Math.max(2, LIMB_OUTLINE_R * R * k)
   const reach = Math.max(half, hand) + o + 2
   const sx = half + o + 2
   const w = Math.ceil(sx + length + hand + o + 2)
   const h = Math.ceil(2 * reach)
   const cy = h / 2
-  const key = `grip-limb-${limb.layer}-${Math.round(R)}`
+  const key = `grip-limb-${limb.arm}-${limb.segment}-${Math.round(R)}`
   if (!scene.textures.exists(key)) {
     const g = scene.make.graphics({ x: 0, y: 0 }, false)
     const draw = (grow: number, color: number) => {
@@ -181,7 +183,13 @@ export class WrestlerView {
   }
 
   // `positionPx` is the canonical center already converted to canvas pixels; facing is applied exactly.
-  apply(state: WrestlerVisualState, participant: ParticipantState, positionPx: { x: number; y: number }): void {
+  // `opponentState` is only used for the pair-level Grip limb visibility.
+  apply(
+    state: WrestlerVisualState,
+    participant: ParticipantState,
+    positionPx: { x: number; y: number },
+    opponentState: WrestlerVisualState,
+  ): void {
     this.moving = state.pose === 'move'
     this.show(selectWrestlerArt(this.idleArt, state))
     const display = gripSuccessDisplayOffsetPx(state, participant.facing, this.R)
@@ -193,9 +201,8 @@ export class WrestlerView {
       positionPx.y + display.y + SHADOW_OFFSET.y * this.R,
     )
     this.shadow.setRotation(participant.facing)
-    // Overlay only: placed from the canonical center / facing (not the Counter body turn); drops stay upright.
     // Limbs hang off the displayed (offset) body center, turned by the canonical facing.
-    const limbsVisible = gripSuccessLimbsVisible(state)
+    const limbsVisible = gripSuccessPairLimbsVisible(state, opponentState)
     GRIP_SUCCESS_LIMBS.forEach((limb, i) => {
       if (!limbsVisible) {
         this.limbs[i].setVisible(false)
@@ -205,6 +212,7 @@ export class WrestlerView {
       const placed = gripSuccessLimbPlacement(limb, center, participant.facing, this.R)
       this.limbs[i].setVisible(true).setPosition(placed.start.x, placed.start.y).setRotation(placed.angle)
     })
+    // Overlay only: placed from the canonical center / facing (not the Counter body turn); drops stay upright.
     const sweat = kuzushiSweatVisual(this.idleArt.id, state)
     sweat.drops.forEach((drop, i) => {
       const offset = kuzushiSweatOffsetPx(drop, participant.facing, this.R)

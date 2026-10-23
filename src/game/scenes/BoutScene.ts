@@ -5,7 +5,7 @@ import { PushDummyController, type DummyMode } from '../input/pushDummyControlle
 import { BoutSimulation, SIMULATION_HZ, TSUPPARI_KUZUSHI_BUILDUP } from '../sumo/BoutSimulation.ts'
 import { FixedStepAccumulator } from '../sumo/FixedStepAccumulator.ts'
 import { canActInGrapple, grappleFacingError } from '../sumo/grappleOrientation.ts'
-import { resolveWrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
+import { resolveWrestlerVisualState, type WrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
 import { ENGLISH_BOUT_HUD_COPY } from '../presentation/boutHudCopy.ts'
 import { PROTOTYPE_HUD_FIXTURE, assertHudContextMatches, formatOutcome } from '../presentation/boutHudPresentation.ts'
 import { PRODUCT_ART_CENTER, productPixelsPerMeter } from '../presentation/productArena.ts'
@@ -421,6 +421,18 @@ export class BoutScene extends Phaser.Scene {
       this.grappleLine.lineStyle(advantage.kind === 'morozashi' ? 8 : 4, holderColor, 1)
       this.grappleLine.lineBetween(p0.x, p0.y, p1.x, p1.y)
     }
+    // Both visual states first: the Grip limb VFX visibility is pair-level (ACTION-11J).
+    const visuals = new Map<ParticipantId, WrestlerVisualState>()
+    for (const participant of snapshot.participants) {
+      const view = this.views.get(participant.id)
+      const opponent = snapshot.participants.find((q) => q.id !== participant.id)
+      if (view && opponent) {
+        visuals.set(
+          participant.id,
+          resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving),
+        )
+      }
+    }
     for (const participant of snapshot.participants) {
       const view = this.views.get(participant.id)
       if (!view) continue
@@ -433,10 +445,9 @@ export class BoutScene extends Phaser.Scene {
       )
       view.label.setPosition(pos.x, pos.y - bodyPixels - 30)
       const opponent = snapshot.participants.find((q) => q.id !== participant.id)
-      if (opponent) {
-        const visual = resolveWrestlerVisualState(participant, opponent, snapshot.engagement, snapshot.outcome, view.wrestler.moving)
-        view.wrestler.apply(visual, participant, pos)
-      }
+      const visual = visuals.get(participant.id)
+      const opponentVisual = opponent ? visuals.get(opponent.id) : undefined
+      if (visual && opponentVisual) view.wrestler.apply(visual, participant, pos, opponentVisual)
       const label =
         counterTransitionLabel(snapshot.counterTransition, participant.id) || phaseLabel(participant.action, participant.posture)
       view.phaseText.setText(label !== '' || !opponent ? label : grappleLabel(participant, opponent, snapshot.engagement))

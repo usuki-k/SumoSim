@@ -1,28 +1,42 @@
-// Grip success arm / hand VFX Visual Gate (ACTION-11G). Provisional, presentation-only; not an accepted Product art
-// contract. Pure TypeScript; must not import Phaser. While the Grip success pose is shown each wrestler gets two
-// procedural forearms with a rounded hand: a FAR arm drawn behind both bodies (wrapping behind the opponent) and a
-// NEAR arm drawn above both bodies (crossing onto the opponent's side). Geometry is wrestler-local in units of the
-// body radius R (+forward = FRONT, +lateral = wrestler RIGHT), anchored to the displayed body center (the canonical
-// center + the Grip success display offset) and turned by the canonical facing only. Both wrestlers use the same
-// local geometry, so a face-to-face pair is point-symmetric like the display offset. No timer, no animation.
+// Grip success arm / hand VFX Visual Gate (ACTION-11G, placement retuned in ACTION-11I). Provisional,
+// presentation-only; not an accepted Product art contract. Pure TypeScript; must not import Phaser. While the Grip
+// success pose is shown each wrestler gets two procedural arms that wrap around the opponent: a HIGH arm toward the
+// opponent's upper torso / shoulder and a LOW arm around its flank to the waist / mawashi. Each arm is two straight
+// segments meeting at an elbow placed on the opponent's outline: the upper arm (shoulder -> elbow) is drawn behind
+// both bodies, so its root is hidden under the wrestler's own body; the forearm (elbow -> hand) is drawn above both
+// bodies, so the hand lands on the opponent. Geometry is wrestler-local in units of the body radius R (+forward =
+// FRONT, +lateral = wrestler RIGHT), anchored to the displayed body center (the canonical center + the Grip success
+// display offset) and turned by the canonical facing only. Both wrestlers use the same local geometry, so a
+// face-to-face pair is point-symmetric like the display offset. No timer, no animation.
+// ACTION-11J: the geometry assumes an aligned face-to-face pair, so the limbs are shown only while BOTH wrestlers
+// are in the success pose and neither is TURNING (Grappled Orientation); otherwise both wrestlers hide them.
 import { isGripSuccessPose } from './gripSuccessGateArt.ts'
 import type { WrestlerVisualState } from './wrestlerVisualState.ts'
 
 export type GripSuccessLimbLayer = 'far' | 'near'
+export type GripSuccessArm = 'high' | 'low'
+export type GripSuccessArmSegment = 'upper' | 'forearm'
 
+// One straight arm segment: the upper arm (shoulder -> elbow, no hand) or the forearm (elbow -> hand).
 export interface GripSuccessLimb {
+  readonly arm: GripSuccessArm
+  readonly segment: GripSuccessArmSegment
   readonly layer: GripSuccessLimbLayer
-  readonly startForwardR: number // shoulder end
+  readonly startForwardR: number
   readonly startLateralR: number
-  readonly endForwardR: number // hand center
+  readonly endForwardR: number
   readonly endLateralR: number
-  readonly widthR: number // forearm thickness
-  readonly handRadiusR: number
+  readonly widthR: number // arm thickness
+  readonly handRadiusR: number // 0 = no hand (the end is a plain round cap of the arm width)
 }
 
+// LOW arm on the wrestler RIGHT (long, reaches the opponent's back near the mawashi); HIGH arm on the LEFT (short
+// visible forearm on the opponent's shoulder). Each forearm starts exactly at its upper arm's elbow.
 export const GRIP_SUCCESS_LIMBS: readonly GripSuccessLimb[] = [
-  { layer: 'far', startForwardR: 0.18, startLateralR: 0.42, endForwardR: 0.82, endLateralR: 0.25, widthR: 0.2, handRadiusR: 0.15 },
-  { layer: 'near', startForwardR: 0.22, startLateralR: -0.65, endForwardR: 1.12, endLateralR: -0.58, widthR: 0.22, handRadiusR: 0.16 },
+  { arm: 'low', segment: 'upper', layer: 'far', startForwardR: 0.35, startLateralR: 0.8, endForwardR: 1.55, endLateralR: 1.5, widthR: 0.26, handRadiusR: 0 },
+  { arm: 'low', segment: 'forearm', layer: 'near', startForwardR: 1.55, startLateralR: 1.5, endForwardR: 2.2, endLateralR: 1.15, widthR: 0.26, handRadiusR: 0.19 },
+  { arm: 'high', segment: 'upper', layer: 'far', startForwardR: 0.35, startLateralR: -0.8, endForwardR: 1.25, endLateralR: -0.75, widthR: 0.24, handRadiusR: 0 },
+  { arm: 'high', segment: 'forearm', layer: 'near', startForwardR: 1.25, startLateralR: -0.75, endForwardR: 1.6, endLateralR: -0.45, widthR: 0.24, handRadiusR: 0.17 },
 ]
 
 export interface GripSuccessLimbPlacement {
@@ -37,6 +51,11 @@ export interface GripSuccessLimbPlacement {
 
 export function gripSuccessLimbsVisible(state: WrestlerVisualState): boolean {
   return isGripSuccessPose(state)
+}
+
+// Pair-level visibility (same answer for both wrestlers): success pose on both sides and neither TURNING.
+export function gripSuccessPairLimbsVisible(self: WrestlerVisualState, opponent: WrestlerVisualState): boolean {
+  return gripSuccessLimbsVisible(self) && gripSuccessLimbsVisible(opponent) && !self.turning && !opponent.turning
 }
 
 function localToCanvas(
