@@ -1,147 +1,217 @@
-Task-ID: ACTION-11M-GRIP-SUCCESS-LOWER-MARKER-POSITION-TUNE
-Status: REVIEWED
+Task-ID: ACTION-11N-GRIP-SUCCESS-LOWER-MARKER-REFLECTION-TUNE
+Status: READY
 Task-Type: PRESENTATION VISUAL TUNE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 903fe8a372fdc37979a1e29b73a638e59592ccdf
-Review-Handoff: ACTION-11L technical PASS. User accepts the authored forearm/fist art itself and does not want hand-shape changes. Current issue is position only: the lower two markers look as if they originate from the self character. User wants them to read symbolically as extending from the opponent character's shoulder/back area toward the opponent mawashi, like the upper markers. Handoff-Mode: GITHUB
+Source-Baseline: c3d11081693f80bfc77a1cebece5c55cd32c9ba7
+Review-Handoff: ACTION-11M technical PASS but User Visual Gate REJECTED. User accepts the authored forearm/fist art and upper markers. The remaining issue is the lower two markers' orientation/chirality. User explicitly wants Claude Code to use image reflection if needed so the lower markers resemble the latest reference: symbolically reaching from the opponent shoulder/back area toward the opponent mawashi. Self-character anatomical shoulder position is irrelevant.
+Handoff-Mode: GITHUB
 
-# ACTION-11M — Grip Success Lower Marker Position Tune
+# ACTION-11N — Grip Success Lower Marker Reflection Tune
 
 ## Purpose
 
-Tune only the two LOWER authored Grip-success forearm/hand markers.
+Tune ONLY the two lower/foot-side authored Grip-success markers by reflecting the existing authored forearm/fist art as needed.
 
-User visual feedback:
-
-- fist/forearm art is acceptable; do not replace or redraw it;
-- upper two markers are acceptable and should remain unchanged;
-- lower two markers currently look too tied to the self character's shoulder/body;
-- anatomical attachment to self is NOT important;
-- treat the marker symbolically;
-- the lower marker should visually read as:
-  opponent shoulder / upper-back area
-  -> diagonally down toward
-  opponent mawashi / waist grip point;
-- preserve an approximately 30–45 degree visual relationship to the mawashi.
+The target is the User's latest visual reference:
+- upper markers remain as they are;
+- lower markers should have the same kind of visual flow as the upper markers;
+- each lower arm should read symbolically as curving from the opponent shoulder/back region toward the opponent mawashi;
+- fist/hand shape is accepted and must not be redesigned;
+- self-character shoulder/anatomical continuity is not important.
 
 This is presentation-only.
 
 ## Accepted Baselines — Preserve
 
 Do not change:
-
 - ACTION-11C Grip gameplay;
 - ACTION-11F pair compression:
   - GRIP_SUCCESS_FORWARD_OFFSET_R = +0.14
-  - GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
-- ACTION-11H Grip-success tone match;
+  - GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20;
+- ACTION-11H tone correction;
 - ACTION-11J pair READY visibility:
-  - either wrestler TURNING -> all Grip markers hidden
+  - either TURNING -> all markers hidden
   - both READY -> markers visible;
-- ACTION-11L authored forearm/fist source/runtime art;
-- marker count = four total per settled pair;
-- canonical grapple bond = 0.70 m;
-- Grip attempt/success wrestler body assets;
-- fist/forearm image shape itself.
+- ACTION-11L authored forearm/fist source artwork;
+- upper/head-side marker geometry and appearance;
+- four-marker total count;
+- canonical 0.70 m grapple bond;
+- Grip attempt/success wrestler body assets.
 
-No Production changes under:
+No changes under:
 - src/game/sumo/
 - src/game/input/
 
-## Current ACTION-11L Layout
+## Current ACTION-11M State
 
-Per target wrestler, ACTION-11L renders two markers:
+Upper markers are accepted for this Task and must remain byte/value-equivalent in placement and texture choice.
 
-RIGHT:
-- hand = (-0.45 R, +0.62 R)
-- elbow = (-0.03 R, +1.18 R)
+Current lower hand/grip contacts are acceptable:
+- keep the fist on the mawashi unless a tiny pixel-level placement correction is unavoidable.
 
-LEFT:
-- hand = (-0.45 R, -0.62 R)
-- elbow = (-0.03 R, -1.18 R)
+The ACTION-11M failure is primarily image orientation/chirality:
+- the lower arm still does not visually match the desired reference;
+- changing elbow coordinates alone was insufficient.
 
-Each is 0.70 R and ~36.87 degrees relative to the target local lateral/mawashi axis.
+## Reflection Is Explicitly Allowed
 
-Do not assume both need identical geometry after this Task.
+Claude Code may reflect the existing authored forearm/fist image.
 
-## Required Change
+User does NOT need to provide a new image for this Task.
 
-Only the lower/visually-bottom marker pair should be tuned.
+The goal is to reuse the existing accepted marker art.
 
-The tuned lower marker must read symbolically as if it comes from the OPPONENT shoulder/back region and reaches the opponent mawashi.
+Preferred minimal implementation:
+- preserve the hand anchor on the mawashi;
+- reflect only the lower marker image around the hand-anchor transform;
+- keep upper markers unchanged.
 
-Important:
+## Candidate Reflection Comparison
 
-- do NOT try to connect the marker to the self character;
-- self shoulder/body geometry should not constrain placement;
-- grip-point/hand should stay on or immediately over the opponent mawashi;
-- move mainly the elbow / forearm-side placement and rotation to create the visual line:
-  opponent shoulder/back -> opponent mawashi;
-- the visible forearm may overlap body art;
-- anatomical continuity is not required.
+Before choosing the final lower-marker orientation, create a local scratch comparison for the lower marker using the same hand contact / intended elbow direction.
 
-Upper marker geometry must remain unchanged.
+Compare at minimum:
+1. current orientation;
+2. horizontal reflection (flip X);
+3. vertical reflection (flip Y / existing opposite-side orientation);
+4. both axes / 180-degree equivalent only if needed to disambiguate.
 
-## Recommended Layout Strategy
+The comparison is implementation scratch only and must not become four runtime modes.
 
-Keep the hand contact near the existing mawashi point unless visual evidence shows a small move is required.
+Choose ONE deterministic lower-marker transform that best matches the User reference.
 
-For the lower marker, explore only target-local presentation geometry.
+Primary selection criterion:
+> Does the visible arm curl from the opponent shoulder/back area into the mawashi, rather than looking like it originates from self or bends away from the pair?
 
-Preferred target:
-- hand remains near back-half waist / mawashi;
-- elbow is moved inward/upward toward the target's shoulder/back silhouette;
-- marker crosses the mawashi at a visually clear 30–45 degree diagonal;
-- marker should not appear to hang vertically downward from the wrestler;
-- marker should not look like it originates from the self character.
+If horizontal reflection clearly fixes the visual, prefer the smallest solution and stop exploring.
 
-If necessary, define separate upper/lower marker geometry explicitly rather than mirroring one geometry mechanically.
+## Runtime vs Offline Reflection
 
-A small asymmetry is acceptable if it produces the intended symbolic read.
+Prefer the smallest deterministic solution.
 
-## Art / Asset Constraints
+Option A — runtime presentation flip:
+- allowed for this Visual Gate;
+- only lower markers may use it;
+- the hand anchor must remain fixed on the mawashi;
+- flip must be deterministic and state-independent;
+- no per-frame mode switching.
 
-Do not modify:
-- candidate_grip_forearm_hand_symbol.png
-- exporter crop/downscale
-- authored/mirrored runtime PNG pixels
-- anchors unless a true technical anchor error is discovered.
+Option B — offline derived variant:
+- also allowed if it makes anchor math / testing cleaner;
+- derive only from the existing accepted authored runtime marker;
+- do not require a second user source;
+- record the derived anchor transform.
 
-Do not AI-regenerate art.
+Do not build a new art pipeline unless necessary.
 
-This Task is placement-only.
+If runtime flip around the hand anchor is clean, it is preferred for this placement-only Task.
+
+## Anchor Rule
+
+The fist/hand anchor is authoritative.
+
+Reflection must not cause the fist to drift off the mawashi.
+
+For each lower marker:
+- hand contact remains the current target-local mawashi point;
+- reflection occurs around the texture/origin transform;
+- elbow/forearm silhouette may move to the opposite visual side as a result;
+- scale remains unchanged unless a small visual correction is necessary.
+
+## Desired Lower Marker Direction
+
+The lower marker should visually resemble the lower arms in the latest User reference:
+
+- elbow/forearm body appears nearer the opponent shoulder/back side;
+- fist ends on the opponent mawashi;
+- forearm curves inward across the opponent body;
+- it should NOT hang down from the self-character side;
+- it should NOT visually point away from the pair.
+
+Keep a roughly 30–45 degree diagonal relationship to the mawashi as a visual target.
+
+If exact numeric angle must change slightly to match the reference, keep it within 30–45 degrees and report the final value.
+
+## Upper Markers
+
+Upper/head-side markers are frozen for this Task.
+
+Must remain unchanged:
+- hand point;
+- elbow point;
+- texture choice/orientation;
+- scale;
+- rotation;
+- depth.
+
+Add tests that pin their ACTION-11M values exactly.
+
+## Lower Geometry
+
+Prefer preserving current lower fist contacts.
+
+Allowed:
+- reflection flag / reflected texture selection;
+- small lower-only elbow adjustment;
+- small lower-only rotation adjustment;
+- small lower-only scale adjustment if absolutely necessary.
+
+Not allowed:
+- moving upper markers;
+- changing authored pixels;
+- changing body compression;
+- changing gameplay.
+
+## Marker Art
+
+Do not:
+- redraw fist;
+- change fist shape;
+- recolor;
+- tone-match;
+- AI-regenerate;
+- modify source PNG;
+- alter existing authored gate runtime PNG pixels unless adding a deterministic reflected derived variant is chosen.
+
+If using runtime flip, public assets remain unchanged.
 
 ## Visibility
 
 Preserve:
-- READY neutral -> four markers
-- READY Drive -> four markers
-- READY Morozashi -> four markers
-- either TURNING -> zero markers
-- release/recovery/other actions -> zero markers.
+- READY neutral -> 4 markers
+- READY Drive -> 4 markers
+- READY Morozashi -> 4 markers
+- either TURNING -> 0 markers
+- release/recovery/other actions -> 0 markers.
 
 ## Required Tests
 
-Focused presentation tests must prove:
+1. upper markers remain exactly ACTION-11M values;
+2. lower markers use the selected reflection/orientation only;
+3. lower hand contacts remain on the mawashi;
+4. reflection leaves hand-anchor world position invariant;
+5. lower marker visual axis remains 30–45 degrees to the mawashi;
+6. lower markers are deterministic for red/blue;
+7. READY pair -> 4 markers;
+8. TURNING -> 0;
+9. release/recovery/other actions -> 0;
+10. ACTION-11F constants unchanged;
+11. ACTION-11H runtime/body tone unchanged;
+12. Snapshot and canonical 0.70 m bond unchanged;
+13. no src/game/sumo or src/game/input diff.
 
-1. upper marker geometry is byte/value-identical to ACTION-11L expected values;
-2. lower marker has distinct tuned geometry;
-3. lower hand remains on/near the target mawashi;
-4. lower elbow/forearm direction is toward target shoulder/back rather than self;
-5. final lower visual angle remains 30–45 degrees relative to the target mawashi/lateral axis;
-6. four markers total in READY pair;
-7. TURNING -> zero;
-8. release/recovery/other actions -> zero;
-9. ACTION-11F constants unchanged;
-10. ACTION-11H runtime/body tone assets unchanged;
-11. Snapshot and canonical 0.70 m bond unchanged;
-12. no src/game/sumo or src/game/input diff.
+If runtime flip is used:
+- tests must prove only the lower marker images are flipped;
+- upper images remain unflipped;
+- flip state does not leak across texture swaps/frames.
+
+If offline reflection is used:
+- deterministic derived output + anchor test is required.
 
 ## Browser / Runtime Smoke
 
-Capture at minimum:
-
+Capture:
 1. neutral immediately after success
 2. neutral settled
 3. Drive
@@ -151,51 +221,52 @@ Capture at minimum:
 7. turning mid
 8. turning settled
 
-Also create a close-up / before-after that clearly shows the LOWER marker change.
+Also create:
+- close-up of neutral settled;
+- before/after ACTION-11M -> ACTION-11N;
+- scratch orientation comparison if useful.
 
 Visual expectations:
-
-- upper markers look unchanged from ACTION-11L;
-- lower markers now visually run from opponent shoulder/back area toward opponent mawashi;
-- hand/grip end still lands on mawashi;
-- lower markers no longer appear to be positioned from the self character;
-- no marker during TURNING;
-- no stale marker after release.
+- upper markers unchanged;
+- lower markers now match the latest User reference direction;
+- lower forearms visually curl from opponent shoulder/back toward mawashi;
+- fists remain on mawashi;
+- no lower arm appears to originate from self;
+- no markers during TURNING;
+- release clears markers.
 
 ## User Visual Gate
 
 Required.
 
 Primary question:
-
-> Do the lower two authored markers now read symbolically as extending from the opponent shoulder/back toward the opponent mawashi, matching the visual direction of the upper markers?
+> Do the reflected lower markers now match the intended reference, with the arm visually reaching from the opponent shoulder/back into the mawashi while the upper markers remain unchanged?
 
 Judge:
-- upper markers unchanged;
-- lower marker direction;
-- hand contact point;
+- lower orientation/chirality;
+- fist contact point;
 - 30–45 degree diagonal;
-- four-marker readability;
-- Drive/Morozashi coherence;
+- symmetry/readability of four markers;
+- Drive/Morozashi;
 - TURNING hide.
 
 ## Stop Conditions
 
 STOP if:
-
-- correcting lower placement requires changing wrestler body art;
-- upper markers must be materially changed to make lower markers work;
+- reflection cannot achieve the desired lower-arm direction without editing the authored image;
+- upper markers must change;
 - gameplay/bond/facing changes are required;
-- authored marker PNG must be edited;
-- dynamic z sorting is required;
+- dynamic z-order is required;
 - unrelated accepted visuals regress.
+
+If reflection alone is insufficient, report the closest candidate and the exact remaining visual mismatch. Do not ask for a new User asset unless this Task proves reflection insufficient.
 
 ## Verification
 
 Verification Level: Standard Presentation Visual Tune
 
 Required:
-- focused marker-layout tests
+- focused marker reflection/layout tests
 - Grip success presentation regression
 - Grip/Grapple/Drive/Orientation regression
 - Push/Tsuppari/Counter/Kuzushi presentation regression
@@ -204,17 +275,19 @@ Required:
 - git diff --check
 - browser/runtime smoke
 - prove ACTION-11F/11H unchanged
-- prove authored marker assets unchanged
 - prove src/game/sumo / src/game/input unchanged.
 
 ## Completion Report
 
 Include:
 - Result
-- old lower geometry -> new lower geometry
-- upper geometry unchanged evidence
-- final lower marker angle
-- final hand/grip contact location
+- reflection candidates compared
+- selected reflection method
+- whether runtime flip or offline variant was used
+- old lower orientation -> new lower orientation
+- upper unchanged evidence
+- lower hand contact location
+- final lower angle
 - changed files
 - preservation evidence
 - verification results
@@ -241,7 +314,7 @@ Normal successful Task:
 - clean working tree.
 
 Suggested commit:
-feat(presentation): tune lower grip hand markers
+feat(presentation): reflect lower grip hand markers
 
 Do not modify:
 - main
@@ -250,68 +323,8 @@ Do not modify:
 
 # Final Instruction
 
-Tune only the two lower authored Grip-success markers.
+Keep upper authored Grip markers unchanged.
 
-Keep the fist/forearm art and upper markers unchanged.
+For the lower two markers, use deterministic image reflection as needed so the visible forearm/fist silhouette matches the User's latest reference: opponent shoulder/back -> mawashi.
 
-Position the lower markers symbolically so they appear to extend from the opponent shoulder/back area toward the opponent mawashi, with the hand still contacting the mawashi and a clear ~30–45 degree diagonal.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-24
-Overall Result: TECHNICAL PASS / USER VISUAL GATE REJECTED
-Accepted Technical Baseline: b7e4e2edfa75b9e273d420f02443a7c70408dbf4
-
-## Technical Review
-
-Confirmed:
-
-- ACTION-11M changed only presentation marker layout;
-- upper/head-side markers preserved ACTION-11L geometry;
-- lower/foot-side markers kept the mawashi hand contact but moved the elbow inward;
-- four markers still render in READY states;
-- TURNING hides all markers;
-- ACTION-11F compression unchanged;
-- ACTION-11H tone correction unchanged;
-- authored runtime marker PNG files unchanged;
-- no src/game/sumo or src/game/input changes;
-- canonical bond remains 0.70 m.
-
-Verification accepted:
-- focused tests: 17 / 17 PASS
-- pnpm test: 30 files / 522 PASS
-- pnpm build: PASS
-- git diff --check: PASS
-- browser smoke: 27 / 27 PASS.
-
-The authored-source exporter --check could not run because the ignored input.local source had been removed, but ACTION-11M did not modify public/tools marker assets and their committed hashes remain identical to ACTION-11L. This does not block the placement-only technical review.
-
-## User Visual Gate
-
-REJECTED.
-
-The lower two markers still do not visually match the User's desired reference.
-
-User clarification:
-- fist/hand shape is acceptable;
-- upper two markers are acceptable;
-- lower two should visually resemble the provided reference image;
-- use image reflection if needed;
-- lower arm should curve/orient like a mirrored counterpart, visually running from opponent shoulder/back toward mawashi;
-- self-character anatomical shoulder position is irrelevant;
-- symbolic placement is preferred.
-
-## Next Task Constraint
-
-Next task should:
-- preserve upper markers exactly;
-- preserve lower hand/grip points unless a very small local adjustment is necessary;
-- derive/use an offline reflected authored-arm variant for lower markers;
-- compare only the minimal deterministic reflection choices needed to match the User reference;
-- keep marker art source, gameplay, ACTION-11F/11H, pair READY visibility, 0.70 m bond unchanged;
-- avoid runtime mirroring if an offline derived variant suffices.
-
-Do not ask the User for a new image yet.
+Keep the fist anchored on the mawashi, preserve the four-marker READY rule, and do not change gameplay or wrestler body art.
