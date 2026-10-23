@@ -1,5 +1,5 @@
 Task-ID: ACTION-12A-GRAPPLE-WASD-ROTATION-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / DESIGN
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -527,3 +527,225 @@ WASD must rotate the grapple pair without directly pushing/translating the pair 
 Preserve ArrowUp Drive, existing Grappled Orientation, canonical 0.70 m bond, fixed-step determinism, ring-out ownership, and Simulation as the gameplay Source of Truth.
 
 Return a concrete implementation-ready design, but make no Production changes.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-24
+Overall Result: PASS — IMPLEMENTATION-READY DESIGN
+Accepted Investigation Baseline: af45d5d7c928994f7dfb0e87b0cde7323f16cadc
+
+## Current Source Alignment
+
+The Investigation findings are accepted as aligned with Current Source.
+
+Confirmed:
+
+- ParticipantIntent.move is already a source-independent world-frame WASD vector.
+- FREE movement consumes move as grounded locomotion.
+- GRAPPLED currently suppresses move to ZERO_MOVE.
+- ArrowUp hold is already separate as driveHeld.
+- Release and Drive both use tick-start canActInGrapple readiness.
+- Grappled Orientation readiness is derived, not stored.
+- Drive translates the bonded pair through shared externalVelocity.
+- canonical grapple bond is 0.70 m.
+- fixed-step Simulation owns canonical position/facing.
+- ring-out consumes canonical previous/current positions after all positional changes.
+
+No material Source/SPEC conflict was found.
+
+## Accepted Design Direction
+
+Recommend Option A: Tangential Projection / Grapple Footwork.
+
+Reuse the existing ParticipantIntent.move.
+
+For each READY grappled participant p:
+
+- pair midpoint m = (A.position + B.position) / 2
+- radial unit r_p = normalize(p.position - m)
+- positive-angle tangent t_p = (-r_p.y, r_p.x)
+- contribution c_p = dot(sanitizeMove(move_p), t_p)
+- pair angular intent = clamp(c_A + c_B, -1, +1)
+- delta = angularIntent * GRAPPLE_MANUAL_ROTATION_RATE * TICK_SECONDS.
+
+This means WASD does not push or translate the pair midpoint directly.
+Only the tangential component contributes to orbiting.
+
+Important control semantics:
+
+- WASD means a desired WORLD direction for that wrestler's grapple footwork.
+- Example: with a horizontal pair, Player on the left pressing W moves the Player toward the upper side of the opponent.
+- As the wrestler approaches the requested world direction, the tangential projection naturally decreases toward zero.
+- Therefore this is target-like world-direction orbit control, not a constant clockwise/counterclockwise spinner.
+
+This semantic is accepted for the future implementation.
+
+## Canonical Pair Update
+
+When delta != 0:
+
+- rotate both participant positions rigidly around the current pair midpoint by the same delta;
+- rotate both canonical facings by the same delta;
+- normalize facing with existing angle conventions.
+
+Required invariants:
+
+- pair midpoint unchanged by WASD rotation itself;
+- pair distance unchanged;
+- readiness/facing error unchanged by the rigid rotation;
+- no new pair-angle state.
+
+Do not perform a presentation-only rotation.
+
+## Readiness / TURNING
+
+Accepted:
+
+- manual grapple rotation is allowed only when BOTH participants are READY at tick start;
+- use the same tick-start canActInGrapple readiness already used by Release / Drive;
+- if either participant is TURNING, both participants' WASD grapple rotation is ignored;
+- once both are READY at tick start, manual rotation may begin.
+
+Do not add a stored READY/TURNING state.
+
+## Drive + Rotation
+
+Accepted ordering:
+
+1. tick-start readiness
+2. Release
+3. Drive action decision
+4. manual grapple rotation
+5. existing grapple self-velocity braking
+6. updateGrappledExternal using the ROTATED pair axis
+7. integration
+8. contact / grapple bond
+9. facing update
+10. ring-out.
+
+Therefore:
+
+- WASD + ArrowUp can rotate and Drive on the same tick;
+- Drive uses the newly rotated axis;
+- Drive tuning values remain unchanged;
+- zero grapple-WASD must preserve existing Drive behavior.
+
+## Velocity Semantics
+
+Accepted:
+
+- manual rotation changes canonical positions + facings only;
+- no linear impulse is created;
+- selfVelocity is not populated from the orbit;
+- existing grapple ZERO_MOVE braking remains;
+- existing world-frame externalVelocity is NOT rotated for free;
+- Snapshot velocity remains the current self + external definition.
+
+This deliberately avoids turning manual rotation into a hidden momentum/force mechanic.
+
+## Ring-Out
+
+Accepted:
+
+- no immunity or special rotation-ring-out rule;
+- existing ring-out logic evaluates the final canonical positions;
+- rotating near the edge may legitimately ring out either wrestler;
+- existing simultaneous ring-out/rematch semantics remain the owner.
+
+This is a desired gameplay tradeoff subject to User Play Test.
+
+## Provisional Tuning
+
+Initial implementation value:
+
+GRAPPLE_MANUAL_ROTATION_RATE = PI / 2 rad/s = 90 deg/s.
+
+This is PROVISIONAL.
+
+It is not accepted balance and must be User Play Tested.
+
+At the current 0.70 m bond:
+- orbit radius ~0.35 m;
+- maximum tangential speed ~0.55 m/s.
+
+## Morozashi
+
+Initial implementation should give Morozashi holder and disadvantaged wrestler the SAME manual-rotation authority.
+
+Do not apply MOROZASHI_DRIVE_FACTOR to rotation.
+
+Any advantage-specific rotation strength is Deferred until User Play Test demonstrates a need.
+
+## Input Ownership
+
+Accepted:
+
+- reuse ParticipantIntent.move;
+- do not add a separate grappleRotation semantic field;
+- do not add raw-key logic to Simulation;
+- no BoutScene gameplay formula.
+
+PushDummyController already emits move = zero while grappled, so it will not rotate accidentally.
+
+## Participant-Order Independence
+
+The symmetric tangential contribution design is accepted.
+
+Implementation tests must explicitly prove:
+
+- participant-array swap invariance;
+- one participant moves in its requested tangential world direction regardless of array index;
+- cooperative same-sense contributions clamp at max 1;
+- opposite-sense contributions cancel.
+
+## Required Implementation Verification
+
+Future Implementation must cover ALL boundary cases listed by ACTION-12A, including:
+
+- cardinal / diagonal / radial / tangential input;
+- same-sense and opposite-sense two-participant input;
+- TURNING gate;
+- first READY tick;
+- WASD + Drive;
+- release + WASD;
+- one-side / simultaneous ring-out cases;
+- Morozashi;
+- zero-input regression;
+- fixed-step determinism;
+- participant-order swap;
+- long-duration bond/midpoint/readiness invariants;
+- dummy non-rotation.
+
+Do not reduce this to representative sampling.
+
+## User Play Test Required After Implementation
+
+Primary feel gates:
+
+1. Is 90 deg/s too slow / right / too fast?
+2. Does W/A/S/D as world-direction orbit control feel intuitive?
+3. Is WASD + Drive understandable and useful?
+4. Does rotation near the dohyo edge create interesting risk/reward?
+5. Should Morozashi later affect rotation authority?
+6. Does radial input producing zero rotation feel natural?
+
+Technical PASS will not answer these.
+
+## Do Not Reopen
+
+Unless a future Task explicitly changes them:
+
+- ACTION-11N Grip visual baseline
+- current Drive tuning
+- ACTION-05B1 automatic Grappled Orientation
+- canonical 0.70 m bond
+- existing ring-out criterion.
+
+## Next Task Constraint
+
+A future implementation should implement exactly the accepted Option A design above.
+
+If implementation reveals that preserving current Drive semantics requires a material change to velocity ownership, readiness, or ring-out ordering, STOP rather than silently deviating.
