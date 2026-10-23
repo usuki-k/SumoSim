@@ -35,6 +35,28 @@
       "note": "Drawn ~1.40x larger than the idle source at nearly the idle orientation (hair sqrt ratio 1.371, mawashi 1.431, H -> B distance ratio 1.374); s is their area-ratio mean."
     }
   },
+  "skin_tone_match": {
+    "note": "ACTION-11H Visual Gate: deterministic skin-only tone match of the normalized red runtime toward the accepted idle red runtime, applied before the red -> blue derivation (blue inherits the corrected skin). Only RGB of skin-mask pixels changes; alpha, geometry and every other pixel are untouched. No AI regeneration; the input.local source is not edited.",
+    "reference": "public/assets/action/wrestler/red.png",
+    "reference_pixel_sha256": "d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa",
+    "luminance": "relative luminance Y = 0.2126 R + 0.7152 G + 0.0722 B of linear-light sRGB",
+    "mask": {
+      "note": "Runtime-resolution skin candidates: interior alpha, outside the accepted mawashi mask (runtime_wrestler_recipe.json rule), skin hue band with saturation / value floors (drops hair, outline, the white hair tie and white highlights).",
+      "min_alpha": 250,
+      "hue_deg": [12, 50],
+      "min_saturation": 0.2,
+      "min_value": 0.35
+    },
+    "method": "Candidate C (levels): monotonic piecewise-linear curve on skin Y through (0, 0), the uncorrected skin P20 / P50 / P80 -> the idle skin P20 / P50 / P80, and (1, 1); each pixel's linear RGB is scaled by Y' / Y (chromaticity kept), clipped at 1, re-encoded to 8-bit sRGB.",
+    "curve_points": [[0.0, 0.0], [0.44367, 0.32912], [0.55539, 0.534612], [0.5637, 0.554119], [1.0, 1.0]],
+    "measurement_evidence": {
+      "note": "Skin Y quantiles (P20 / P50 / P80) on the mask above: idle red runtime vs the uncorrected normalized Grip success red.",
+      "idle_skin_px": 11706,
+      "idle_quantiles": [0.32912, 0.534612, 0.554119],
+      "uncorrected_skin_px": 11073,
+      "uncorrected_quantiles": [0.44367, 0.55539, 0.5637]
+    }
+  },
   "mask_limits": {
     "note": "Validation of the accepted hue-band + largest-component mawashi mask at runtime scale (fail closed). Same limits as idle / Tsuppari / Grip attempt (no Grip-success-specific allowance).",
     "min_mask_px": 1500,

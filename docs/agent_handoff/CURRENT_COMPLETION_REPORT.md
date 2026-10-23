@@ -1,8 +1,8 @@
-Task-ID: ACTION-11G-GRIP-SUCCESS-ARM-HAND-VFX
+Task-ID: ACTION-11H-GRIP-SUCCESS-TONE-MATCH-GATE
 Result: PASS WITH USER VISUAL GATE REQUIRED
 Branch: develop
-Source-Baseline: a88234c335218cc5dc409e80ced3c8fd506675b6
-Agent-Start-Head: a4b0b5afd36fa4f69954a9d8e76d64bddd45010a
+Source-Baseline: 5938e76372ae0fc5a5099c4091defe630804a920
+Agent-Start-Head: ee6c2787687d60fe06740329ddbbbd45f9c51a50
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
@@ -12,211 +12,209 @@ Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 PASS WITH USER VISUAL GATE REQUIRED:
 
 - Technical PASS
-  - focused / full test、`pnpm build`、`git diff --check`、Browser Smoke 27 / 27（GPU、turningを含む）がすべてPASS
+  - focused / 全wrestler-art test、exporterの決定性と`--check`、`pnpm test`、`pnpm build`、`git diff --check`、Browser Smoke 27 / 27（GPU）がすべてPASS
 - 見た目の受け入れは、User Visual Gateで判断する
 
-Grip successのposeを表示しているあいだだけ、力士ごとに手続き的な前腕 + 丸い手を2本描く。presentationだけ。
+Grip successの書き出しで、正規化した後のred runtimeの肌だけを、採用済みのidle red runtimeの明るさ分布へ合わせた。
 
-- FARの腕: 体の下に描く
-- NEARの腕: 体の上に描く
-
-置き方:
-
-- ACTION-11Fで表示上ずらした体の中心と、canonicalなfacingから置く
-- ACTION-11Fのpair compression（+0.14 R / −0.20 R）、gameplay、Simulationの位置、bond、facing、asset、art toolingは変えていない
-
-NEARの腕のgeometryは、Taskの初期値だと自分の頭に重なった。そのため、肩と手の位置を外側へ調整した（Design Deviationsを参照）。
+- 方法: 決定的なtone補正（候補C: 肌の輝度P20 / P50 / P80によるlevels）
+- 変えていないもの: 髪・まわし・輪郭・alpha・geometry
+- blueは、補正済みのredから、既存の反射 + まわしの塗り替えで作る
+- AIによる再生成はしていない。`input.local`のsourceも編集していない
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `a88234c`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `a88234c..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `a4b0b5a`
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `5938e76`（`origin/develop`のancestor）、Handoff-Mode GITHUB
+- `5938e76..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `ee6c278`
 
-# Final VFX geometry（wrestler-local、R単位。+forward = FRONT、+lateral = 力士の右）
+# Reference / Source identity
 
-| limb | 肩（start） | 手（end） | 前腕の太さ | 手の半径 | 長さ |
-|---|---|---|---|---|---|
-| FAR | (0.18, +0.42) | (0.82, +0.25) | 0.20 R | 0.15 R | 0.662 R |
-| NEAR | (0.22, −0.65) | (1.12, −0.58) | 0.22 R | 0.16 R | 0.903 R |
-
-- 両者に同じlocal geometryを使う。正対したpairでは、ACTION-11Fのoffsetと同じく点対称になる
-  - blueのNEARの腕は上側で、redの上側の肩・脇へ届く
-  - redのNEARの腕は下側で、blueの下側の脇へ届く
-- neutral / Morozashi holder / disadvantaged / Drive / turningで同じ形。Morozashi専用の形・印は無い
-
-# Layers / depth
-
-| 対象 | depth |
+| 項目 | 値 |
 |---|---|
-| 影 | 1（既存） |
-| FARの腕 | **1.9**（`GRIP_LIMB_DEPTH.far`） |
-| 体 | 2（既存） |
-| NEARの腕 | **2.2**（`GRIP_LIMB_DEPTH.near`） |
-| Kuzushiの汗 | 2.5（既存） |
-| debug | 3（既存） |
-| HUD | 4（既存） |
+| tone reference | `public/assets/action/wrestler/red.png`（idle red runtime、158x178）、pixel SHA-256 `d66895bf7301cd3dc9573cea07db7dceca07f2114ba85bcc0be763334313cdaa` |
+| referenceの検証 | `export_runtime_wrestlers.py --check` ok。recipeの`reference_pixel_sha256` = test fixtureの`ACCEPTED_RED_PIXELS`（test T2） |
+| Grip success source | `input.local/candidate_red_grip_success.png`、1283 x 1226 RGBA、decoded `0cedde98…e566e`、file `aace9edc…cb1f679793`。編集なし。exporterがidentityを検証する（T1） |
 
-- 動的なdepth sortingは無い。depthが同じ物同士は、既存の生成順で並ぶ（A → B）
-- smokeで、frameごとに順序が変わらないことを確認した（L3）
+# Skin mask
 
-# Render method
+runtime解像度（160x183）で、次の条件をすべて満たす画素を肌とする（recipe `skin_tone_match.mask`）:
 
-- `WrestlerView`のconstructorで、腕ごとに`Phaser.GameObjects.Image`を1枚作る（力士あたり2枚、計4枚）。毎frameの生成・破棄は無い
-- texture: `Graphics.generateTexture`で、腕ごと・Rごとに1回だけ作る
-  - key: `grip-limb-far-<R>` / `grip-limb-near-<R>`
-  - 2倍で描いて、scale 0.5で表示する
-  - 形: 肩の丸い端 + 前腕の長方形 + 丸い手。まず輪郭色（`#231612`、幅0.035 R）で1回り大きく塗り、その上に肌色（`#f3b47c`、success textureの肌から採った色）を塗る
-  - 指は無い。glow・particle・icon・textも無い
-- `apply`のたびに次を行う:
-  - `gripSuccessLimbsVisible(state)`で表示 / 非表示を決める
-  - 表示中は`gripSuccessLimbPlacement`の肩の位置と、肩→手の角度を、imageの位置と回転にする
-  - 表示上の体の中心は、ACTION-11Fで求めた`display`を足して作る（pair compressionの式は複製していない）
-- `isGripSuccessPose`は、`gripSuccessGateArt.ts`の判定をexportしたものを共用する（success art・display offset・limbで1つ）
+- alpha ≥ 250
+  - runtimeの内部alphaは253前後。縁の半透明画素は対象外
+- 採用済みのまわしmask（`runtime_wrestler_recipe.json`のrule、`im.mawashi_mask`）の外
+- HSVで、hue 12–50°、saturation ≥ 0.2、value ≥ 0.35
+  - 黒い髪・輪郭・白い元結・白いhighlightは、ここで落ちる
 
-# ACTION-11F / gameplay unchanged
+診断:
 
-- `GRIP_SUCCESS_FORWARD_OFFSET_R = 0.14` / `GRIP_SUCCESS_LATERAL_OFFSET_R = -0.2`はそのまま（test O3、smoke 7）
-- `src/game/sumo/`・`src/game/input/`・`public/`・`tools/`のdiffは0行
-- Snapshotは不変、bondは0.70 m（test O1 / O2、smoke 6 / 16b）
-- success / attemptのtextureは不変（diff 0、smoke 4 / 14）
+| 項目 | 値 |
+|---|---|
+| 肌の画素数（Grip success） | 11073 |
+| 肌の画素数（idle red） | 11706 |
+| まわしmaskとの重なり | 0（T4） |
+| まわしmaskに隣接する肌の画素 | 32（境界。補正は明るさだけなので、色の混入は無い） |
+| 暗い画素（max RGB < 90）に隣接する肌の画素 | 1073（輪郭の内側の縁。画素そのものは value ≥ 0.35） |
+| 補正後のまわしmask（blue） | mask 2394 / missed 17 / fringe 47（補正前と同一、標準limit内） |
+
+# Brightness statistics（relative luminance Y、linear-light sRGB、Rec.709の重み）
+
+| | P05 | P20 | P50 | P80 | P95 | mean |
+|---|---|---|---|---|---|---|
+| idle red（目標） | 0.2170 | 0.3291 | 0.5346 | 0.5541 | 0.5661 | 0.4571 |
+| A: 補正なし | 0.2660 | 0.4437 | 0.5554 | 0.5637 | 0.5913 | 0.5029 |
+| B: gamma 1.065（P50を合わせる） | 0.2442 | 0.4193 | 0.5354 | 0.5435 | 0.5706 | 0.4822 |
+| **C: levels P20 / P50 / P80（採用）** | 0.1972 | 0.3294 | 0.5354 | 0.5556 | 0.5830 | 0.4609 |
+
+idleとの差（P20 / P50 / P80）とRMS:
+
+| 候補 | P20 | P50 | P80 | RMS | clip |
+|---|---|---|---|---|---|
+| A | +0.1145 | +0.0208 | +0.0096 | 0.0674 | 0 |
+| B | +0.0902 | +0.0007 | −0.0106 | 0.0524 | 0 |
+| **C** | +0.0003 | +0.0007 | +0.0015 | **0.0010** | 0 |
+
+分布の読み方:
+
+- 補正前のsuccessは、明るい部分（P50 / P80）はidleとほぼ同じで、影（P20）が明るい。陰影が浅い絵だった
+- Bは中間調しか動かせず、影の差が残る
+- Cは影を深くし、P20 / P50 / P80をほぼ一致させる
+- 目視（`tone_candidates.png`）でも、Cは白っぽく飛んだり平坦になったりせず、陰影の形は保たれた
+
+# Selected method / parameters
+
+- 候補C: 肌のY上の単調な折れ線
+  - 通る点: (0, 0)、(0.44367 → 0.32912)、(0.55539 → 0.534612)、(0.5637 → 0.554119)、(1, 1)
+  - 肌の各画素の線形RGBを Y' / Y 倍する（色度は保つ）。1でclipし、8-bit sRGBへ戻す
+- recipe: `grip_success_gate_recipe.json`の`skin_tone_match`
+  - 持つもの: reference、そのhash、輝度の定義、mask、method、`curve_points`、measurement_evidence
+  - `load_recipe`が、端点(0, 0)–(1, 1)と、狭義単調増加を検査する
+- pipeline: 正規化したred → 肌mask → tone補正 → 補正済みred → local-Y反射 → まわしの塗り替え → blue
+  - tone補正は1回だけ（red）。blueでは再計算しない（T15）
+
+色相 / 彩度（CIELAB、肌maskの中央値）:
+
+| | chroma | hue angle |
+|---|---|---|
+| idle red | 43.65 | 62.20° |
+| success 補正前 | 41.75 | 65.93° |
+| success 補正後 | 41.50 | 65.89° |
+
+- 画素ごとの色相の変化: 中央値0.37°、最大1.73°（8-bitへの丸め由来）。意図的な色相の変更はしていない
+- 残っている差: successの肌は、idleより約3.7°黄色寄りで、彩度がわずかに低い。この差はTaskの方針（明るさだけを補正する）により残した
+
+# Runtime textures
+
+| file | size / pivot | pixel SHA-256 | file SHA-256 |
+|---|---|---|---|
+| `grip-success-gate/red.png` | 160 x 183 / (83, 98)（不変） | `5852751b85dae79826848bd6daec751fa3addc572b5943ff95047f22c1187221` | `d22fa82db6c760fa011aa7fc31e193477d7fa554706bb7ade3ce9f3ff0a362f6` |
+| `grip-success-gate/blue.png` | 160 x 183 / (83, 85)（不変） | `624d2d51b9fba3a24aebcf6750335abc8054dd1fd5cfd239469daa679ee542e2` | `7aa9e544f8e95992724fee619fd8b7eea29bdf7f97b3de2b710120680d81c336` |
+
+旧hash: red `afab5fbc…`、blue `2336e895…`。
+
+# Invariants
+
+- alpha: 補正前後で完全一致（T8、real / synthetic）
+- 肌mask外の画素: 完全一致（T9、real / synthetic）。maskの中は過半数の画素が変わる
+- clipping: 0画素。補正後の肌に、channelが0または255の画素は無い（T12）
+- geometry: 寸法・pivot・body core 123.076923 px・FRONT 160.2°・root・body coreのsource点は不変（T16、`test_gate_pixels_sizes_and_pivots`、TS metadataとの一致test）
+- `src/game/presentation/`の変更は無い（TSのmetadataの寸法・pivotは不変なので、更新不要）
 
 # Tests
 
-`src/game/presentation/gripSuccessLimbVfx.test.ts`（新規）: 13 / 13 PASS
+`tests/test_export_grip_success_gate.py`: 24 / 24 OK（ACTION-11Hで6件追加、2件を更新）
 
-| ID | 内容 |
+| ID | test |
 |---|---|
-| geometry | 上のFAR / NEARの値（R単位）を固定 |
-| G1–G3 | idle / move / push / tsuppari / counter / kuzushi / gripでは非表示。grapple / driveでは表示 |
-| G4 | facing 0: 前 → +x、右 → +y、角度 |
-| G5 | facing π/2・π・−π/2: 肩・手・角度が剛体として回る。長さは不変 |
-| G6 | 長さ・太さ・手の大きさがRに比例 |
-| G7 | NEAR = 左、FAR = 右で、反対側。どちらも前へ伸びる |
-| G8 | 決定的 |
-| S1–S4 | neutral（両者）/ Morozashi holder / disadvantaged / Drive 40 tickで表示。Drive中のflickerは無い |
-| S5 / S6 | Grip attempt中、releaseのtick、recovery 12 tickで非表示 |
-| S7 | idle / Push / Tsuppari / Counter / Kuzushiで非表示 |
-| anchor | 肩の位置 = canonical + ACTION-11Fのoffset + limbのlocal点 |
-| O1–O3 | Snapshot不変、bond 0.70 m、ACTION-11Fの定数不変 |
-| ownership | Phaser / Simulationに依存しない。WrestlerViewのdepth 1.9 / 2 / 2.2と、表示上の中心からの配置（source assertion） |
+| T1 | `test_user_source_identity`、`test_missing_or_changed_source_fails_closed` |
+| T2 | `test_idle_reference_identity` |
+| T3–T6 | `test_real_skin_mask_excludes_mawashi_hair_and_outline`（決定的、まわしとの重なり0、暗い画素なし、alpha ≥ 250、5000画素より多い） |
+| T7–T9 | `test_tone_match_touches_only_skin_rgb`（synthetic）、`test_real_tone_match_improves_the_idle_match_without_clipping`（real） |
+| T10 | `test_tone_curve_is_monotonic`、`test_invalid_recipes_fail`（非単調・端点違反・欠落でfail） |
+| T11 | real: 補正後のquantile誤差 < 0.005、かつ補正前の1/10未満。evidenceの値は、新しく測った値と一致する |
+| T12 | real: clip 0、0 / 255の画素なし |
+| T13 / T14 | `test_red_is_the_tone_matched_normalized_pose_and_blue_its_reflected_recolor` |
+| T15 | `test_tone_match_runs_once_on_red_only` |
+| T16 | `test_gate_pixels_sizes_and_pivots`（新しいhash、寸法・pivotは不変） |
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| limb VFXのfocused test | 13 / 13 PASS |
-| Grip successのfocused test（`gripSuccessGateArt.test.ts`） | 19 / 19 PASS（変更なし） |
-| `pnpm test`（Grip attempt、Grip / Grapple / Drive / Orientationのgameplay、Counter / Tsuppari / Kuzushi / Pushのpresentationを含む） | 30 files、518 PASS |
+| Grip success exporterのfocused test | 24 / 24 OK |
+| wrestler-art suite全体 | 209 / 209 OK |
+| Grip success exporterの決定性 | 書き出しを2回繰り返し、`--check`（pixel + PNG byte）が一致 |
+| `export_grip_success_gate.py --check` | ok |
+| `export_grip_attempt_gate.py` / `export_runtime_wrestlers.py` / `export_tsuppari.py` / `export_counter.py --check` | すべてexit 0 |
+| `pnpm test` | 30 files、518 PASS |
 | `pnpm build` | PASS（既存の500 kB chunk warningのみ） |
 | `git diff --check` | clean |
-| `src/game/sumo/`・`src/game/input/`・`public/assets/action/wrestler/`・`tools/wrestler_art/`のdiff | 0行 |
+| `src/`と、`grip-success-gate/`以外のpublic wrestler assetのdiff | 0行（idle / Tsuppari / Counter / Grip attempt、ACTION-11Fの定数、ACTION-11Gのlimbのcode / geometryは不変） |
 
 # Browser / Runtime Smoke
 
-headless Chrome 156 + CDP、GPU（`--use-angle=d3d11`）、Vite dev server、1920x1080。ACTION-11Fのscript（18項目）に、limbの確認L1–L9を足した。
+headless Chrome 156 + CDP、GPU、Vite dev server、1920x1080。ACTION-11Gのscript（27項目）を、新しいtextureで実行した。結果は **27 / 27 PASS**。
 
-- limbの確認は、全frameで、4枚のimageの表示 / 位置 / 回転 / depthを、期待値と比べる
-- CPUの入力は、Morozashi（Counterの空振り）とturning（Pushを1回）のときだけ差し替えた
+確認できたこと:
 
-結果は **27 / 27 PASS**。
+- Grip attempt → success、neutral、Drive、Morozashi、turning、release → idleの選択・offset・limbは不変
+- success textureは200で読み込まれる
+- console error・例外は無い（既存の`/favicon.ico` 404は除外）
 
-| # | 確認 | 結果 |
-|---|---|---|
-| 1 | Enterでboutが始まる | PASS |
-| 2 / L1 | Grip attempt中は、offset 0、limb無し | PASS |
-| 3 / 4 / L2 | neutral grappleの最初のframeから、両者にFAR + NEARのlimb。肩 = 表示上の体の中心 + local点、角度 = facing + local角（誤差 < 1e-6 px / 1e-9 rad） | PASS |
-| 5–10 | ACTION-11Fのcompression（中心間108.671 px、canonicalは123.077 px）、facing、bond 0.70 m、scale、pivot、影は不変 | PASS |
-| 7b / L3 | 描画順が安定: FAR 1.9 < 体 2 < NEAR 2.2。display listの順序もframe間で不変 | PASS |
-| 11 / L4 | Drive（281 frame）で、limbが常に表示・追従する | PASS |
-| 12 / L5 | Morozashi（217 frame）で、limbが常に表示・追従する | PASS |
-| 16b / L6 | turning（639 frame、そのうちturningは132）: 全frameで、limbが現在のfacingに追従する。瞬間移動は無い | PASS |
-| 13 / L7 | releaseの最初のfree frameから、recoveryのあいだ、limb無し | PASS |
-| 14 / L8 | release後の新しいGrip attemptにlimbは残らず、成功で再び表示される | PASS |
-| 15 / L9 | Push / Tsuppari / Counter / Kuzushi（600 frame）でlimb無し。art・35°・汗は不変 | PASS |
-| 16 | Rでrestartできる | PASS |
-| 17 | console error・例外・失敗requestが無い | PASS（既存の`/favicon.ico` 404はこの判定から除外。Task外） |
+ACTION-11Gのlimb VFXは、Taskの指示どおり残してある（変更なし）。
 
-## Screenshots
+目視（`smoke11h\pair_sheet.png`）:
 
-ローカルのscratchpad、commitしない:
+- success中の肌は、ACTION-11Gの時点（`smoke11g\pair_sheet.png`）より影が深い
+- release直後のidle（`05`）との明るさの差が縮まった
+- 髪・まわし・輪郭は変わらない
+- limbの肌色（`#f3b47c`、ACTION-11Gで固定）は、補正後の体より明るく見える。limbはこのTaskの対象外なので、変えていない
 
-- 最終版: `smoke11g\`
-  - `01_neutral_immediately_after_success`
-  - `02_neutral_settled`
-  - `03_drive_while_grappled`
-  - `04_morozashi_grapple`
-  - `05_immediately_after_release`
-  - `06_turning_immediately_after_success`
-  - `07_turning_mid`
-  - `08_turning_settled`
-  - 一覧（2倍拡大）: `pair_sheet.png`
-- Taskの初期値で描いた比較: `smoke11g_pre\pair_sheet.png`
-- offline比較: `limbs_a.png`、`limbs_b.png`
+# Comparison artifacts（ローカルのscratchpad、commitしない）
 
-目視の所見（判断ではなく観察）:
-
-- neutral / Drive / Morozashi:
-  - 2本のNEARの腕が、それぞれ相手の外側の脇・肩口へ掛かる。体が重なっているだけの見た目から、腕を回して組んでいる見た目へ近づいた
-  - 手はどちらも相手の胴の脇に届く。頭には重ならない
-- FARの腕: 正対した状態では、両者の体にほぼ完全に隠れて見えない。Taskの層の設計どおりだが、正対では見た目への寄与はほぼ無い
-- 腕の形: 単純なcapsule + 丸い手なので、ゲームの縮尺では「棒に丸い手」に見える。輪郭と肌色は、spriteにおおむね馴染んでいる。iconのようには見えない
-- turning:
-  - 開始時（`06`）: 背を向けたredのNEARの腕は、red自身の前（blueから離れる向き）へ伸び、何もない空間へ出る
-  - 回り込みの途中（`07`）: 同じく、redの腕は外を向く
-  - 正対すると（`08`）: neutralと同じ形に戻る
-  - 層の切り替えやturning専用の処理は、Taskの指示どおり加えていない
-- release（`05`）: limbは同じframeで消え、idle spriteに戻る
+- `tone_candidates.png`: idle red / A（補正なし）/ B / C を同じ縮尺で並べ、統計値をlabelに入れた
+  - 1枚で、Taskが求める比較1–3を兼ねる
+- `tone_chosen_pair.png`: idle red / success A / success C / idle blue / success blue（補正済みredから派生）
+- in-game: `smoke11h\`の8枚と`pair_sheet.png`
 
 # Changed Files
 
-新規:
-
-- `src/game/presentation/gripSuccessLimbVfx.ts`: limbのgeometry（R単位）、表示の判定、canvasでの配置（Phaser非依存）
-- `src/game/presentation/gripSuccessLimbVfx.test.ts`
-
-変更:
-
-- `src/game/presentation/gripSuccessGateArt.ts`: `isGripSuccessPose`をexportした（1行のcommentを含む。挙動は不変）
-- `src/game/scenes/WrestlerView.ts`: `GRIP_LIMB_DEPTH`、limbの色・輪郭の定数、`ensureLimbTexture`、limbの4枚のimageの生成と配置。header comment
-- `docs/ARCHITECTURE.md`: ACTION-11G（暫定）のnoteを1項目追加
+- `tools/wrestler_art/grip_success_gate_recipe.json`: `skin_tone_match`の節
+- `tools/wrestler_art/export_grip_success_gate.py`:
+  - 追加: `luminance` / `skin_mask` / `tone_curve` / `skin_quantiles` / `tone_match`、`load_recipe`の検査
+  - 変更: `build_textures`で、正規化の直後にtone補正をかける
+- `tools/wrestler_art/tests/test_export_grip_success_gate.py`: T1–T16
+- `public/assets/action/wrestler/grip-success-gate/red.png` / `blue.png`: 再書き出し（tone補正済み）
+- `tools/wrestler_art/README.md`: Grip successの節に、tone補正の説明を1項目
+- `docs/ARCHITECTURE.md`: ACTION-11Dのnoteに、ACTION-11Hの補正を1文追加
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
 # Design Deviations
 
-- **NEARの腕のgeometryを、Taskの初期値から調整した**
-  - Taskの値: 肩(0.20, −0.42) → 手(0.92, −0.28)
-  - 最終値: 肩(0.22, −0.65) → 手(1.12, −0.58)
-  - 理由: ACTION-11Fのoffsetで、各力士の頭は自分の左側にある。初期値だとNEARの腕が自分の頭の真上を横切り、頭の上に棒が浮いて見えた（`smoke11g_pre\pair_sheet.png`）。Taskが認める「初期geometryが明らかに浮く場合の小さな局所調整」と判断した
-  - 4候補をoffline合成で比べ、頭を避けて相手の脇へ届く、最小の外側への移動を選んだ（`limbs_b.png`の候補C）
-  - 太さ・手の大きさ・FARの腕・ACTION-11Fの定数は、Taskの値のまま
+Design Deviations: NONE
 
 # Unexpected Scope
 
 - 既存の`/favicon.ico` 404。直していない
-- 検証のメモ: Vite dev serverの起動中にsourceを編集すると、HMRのtimestampで、smokeの計測hookが別のmodule instanceを掴む。dev serverを再起動して計測した。productの挙動には影響しない
-
-# Known Untested Items
-
-- 実機のTouch入力
-- turningは、CounterTransition後の背後からの組み（Morozashi）の1通りだけ確認した
+- 気づいた点（変更していない）: success textureのまわしの赤は、idleより明るく鮮やかに見える。まわしはTaskで保護対象なので、補正していない
+- 気づいた点（変更していない）: ACTION-11Gのlimbの肌色は、補正後の体より明るい。limbは別のTaskの対象
 
 # User Visual Gate: REQUIRED
 
-主な問い: 手続き的な腕・手で、ACTION-11Fの密着したpairが「互いに組み、つかんでいる」と、はっきり読めるか。
+主な問い: Grip successは、通常 / attemptの状態と同じ光の当たり方の、同じキャラクターに見えるか。successのposeの陰影は失われていないか。
 
-- 腕が相手の方へ回っているか。手が胴・脇をつかんでいるように見えるか
-- 腕が浮いていないか。太さはキャラクターに合っているか
-- iconのように見えないか
-- neutral / Drive / Morozashiで一貫しているか
-- turningの開始時に、背を向けた側の腕が外へ出る見え方は許容できるか
-- releaseで消える瞬間に違和感が無いか
+- 肌の明るさの跳びは減ったか
+- highlightは揃っているか、影は読めるか
+- 肌の色相は自然か。残りの約3.7°の黄色寄りが気になるか
+- まわし・髪・輪郭は変わっていないか
+- blueも揃って見えるか
+- idle / attempt → successの切り替えが、別の照明のイラストへの切り替えに見えなくなったか
 
-控えめすぎる、または繋がって見えない場合は、まずlimbのgeometry / 大きさ（`GRIP_SUCCESS_LIMBS`）だけを調整する。
+まだ合わない場合は、残りの問題が明るさ・コントラスト・色相・highlightの位置のどれかを教えてほしい。
 
 Technical PASSは、見た目の受け入れを意味しない。
 
 # Git delivery
 
-- Task-ownedのfileだけを明示的にstage → 1 commit（`feat(presentation): add grip success arm hand vfx`）
+- Task-ownedのfileだけを明示的にstage → 1 commit（`art(action): tone match grip success wrestler`）
 - fetch → fast-forwardの安全を確認 → `origin/develop`へpush → remote SHAを確認 → working tree clean

@@ -3,7 +3,8 @@
 One authored red Grip success pose (grip_success_gate_recipe.json `master`) is the only source:
   red   -> ART-WRESTLER-03A normalization (source identity check, one whole-sprite rotation so FRONT = +X,
            explicit root, body core scaled to 2R, exact /4 downscale)
-  blue  -> local-Y reflection of the normalized red ((x, y) -> (x, H - y), FRONT kept)
+           -> ACTION-11H skin-only tone match toward the accepted idle red runtime (recipe `skin_tone_match`)
+  blue  -> local-Y reflection of the tone-matched red ((x, y) -> (x, H - y), FRONT kept)
            + the accepted mawashi-only recolor (runtime_wrestler_recipe.json, single owner)
 Exactly red.png / blue.png under public/assets/action/wrestler/grip-success-gate/; only ever written by this script.
 
@@ -14,6 +15,7 @@ Exactly red.png / blue.png under public/assets/action/wrestler/grip-success-gate
 from __future__ import annotations
 
 import argparse
+import colorsys
 import hashlib
 import json
 import math
@@ -22,7 +24,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Sequence, Set, Tuple
 
 from PIL import Image
 
@@ -82,6 +84,16 @@ def load_recipe(path: Path) -> dict:
     # the accepted red -> blue rule has exactly one owner: the idle runtime recipe
     runtime = ex.load_recipe(path.parent / recipe.get("runtime_recipe", ex.DEFAULT_RECIPE.name))
     recipe["recolor"] = runtime["derived"]["recolor"]
+    tone = recipe.get("skin_tone_match", {})
+    for field in ("reference", "reference_pixel_sha256", "mask", "curve_points"):
+        if field not in tone:
+            raise AssemblyError(f"skin_tone_match is missing {field!r}")
+    points = tone["curve_points"]
+    if points[0] != [0.0, 0.0] or points[-1] != [1.0, 1.0]:
+        raise AssemblyError("skin_tone_match.curve_points must run from (0, 0) to (1, 1)")
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if not (x1 > x0 and y1 > y0):
+            raise AssemblyError("skin_tone_match.curve_points must be strictly increasing (monotonic curve)")
     limits = recipe.get("mask_limits", {})
     for field in ("min_mask_px", "max_missed_px", "max_fringe_px"):
         if not isinstance(limits.get(field), int):
@@ -89,9 +101,75 @@ def load_recipe(path: Path) -> dict:
     return recipe
 
 
+def _linear(c: int) -> float:
+    v = c / 255
+    return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+
+
+def _encode(v: float) -> int:
+    v = min(1.0, max(0.0, v))
+    return int(round((v * 12.92 if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055) * 255))
+
+
+def luminance(r: int, g: int, b: int) -> float:
+    """Relative luminance of an sRGB pixel (linear light, Rec. 709 weights)."""
+    return 0.2126 * _linear(r) + 0.7152 * _linear(g) + 0.0722 * _linear(b)
+
+
+def skin_mask(image: Image.Image, recipe: dict) -> Set[Tuple[int, int]]:
+    """Skin candidates: interior alpha, outside the accepted mawashi mask, in the skin hue band with floors."""
+    spec = recipe["skin_tone_match"]["mask"]
+    mawashi = im.mawashi_mask(image, recipe["recolor"])
+    lo, hi = spec["hue_deg"]
+    px = image.load()
+    mask: Set[Tuple[int, int]] = set()
+    for y in range(image.height):
+        for x in range(image.width):
+            r, g, b, a = px[x, y]
+            if a < spec["min_alpha"] or (x, y) in mawashi:
+                continue
+            h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            if v >= spec["min_value"] and s >= spec["min_saturation"] and lo <= h * 360 <= hi:
+                mask.add((x, y))
+    return mask
+
+
+def tone_curve(points: Sequence[Sequence[float]], y: float) -> float:
+    """Monotonic piecewise-linear curve through the recipe control points."""
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if y <= x1:
+            return y0 + (y1 - y0) * (y - x0) / (x1 - x0)
+    return points[-1][1]
+
+
+def skin_quantiles(image: Image.Image, mask: Set[Tuple[int, int]], qs: Sequence[float] = (0.2, 0.5, 0.8)) -> List[float]:
+    px = image.load()
+    ys = sorted(luminance(*px[p][:3]) for p in mask)
+    return [ys[int(q * (len(ys) - 1))] for q in qs]
+
+
+def tone_match(image: Image.Image, mask: Set[Tuple[int, int]], points: Sequence[Sequence[float]]) -> Tuple[Image.Image, int]:
+    """Skin-only tone match: linear RGB scaled by curve(Y) / Y (chromaticity kept); returns the image and the
+    number of pixels that clipped at 1. Alpha and every pixel outside the mask are copied unchanged."""
+    out = image.copy()
+    px = out.load()
+    clipped = 0
+    for p in sorted(mask):
+        r, g, b, a = px[p]
+        y = luminance(r, g, b)
+        k = tone_curve(points, y) / y if y > 0 else 1.0
+        rgb = [_linear(c) * k for c in (r, g, b)]
+        if max(rgb) > 1.0:
+            clipped += 1
+        px[p] = (_encode(rgb[0]), _encode(rgb[1]), _encode(rgb[2]), a)
+    return out, clipped
+
+
 def build_textures(recipe: dict, input_dir: Path) -> List[GripSuccessTexture]:
     spec = recipe["master"]
-    red = et.normalize(spec, input_dir / spec["file"], "grip success red", recipe["alpha_threshold"])
+    normalized = et.normalize(spec, input_dir / spec["file"], "grip success red", recipe["alpha_threshold"])
+    toned, _ = tone_match(normalized.image, skin_mask(normalized.image, recipe), recipe["skin_tone_match"]["curve_points"])
+    red = Part(toned, normalized.pivot, dict(normalized.joints))
     reflected = aw.mirror_part(red)
     rule = recipe["recolor"]
     mask = im.mawashi_mask(reflected.image, rule)

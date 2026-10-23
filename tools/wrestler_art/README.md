@@ -414,6 +414,10 @@ PY tools/wrestler_art/export_grip_success_gate.py --check    # verify the commit
 - red = the pose normalized like the idle red (1283x1226 source drawn ~1.40x the idle scale: front 160.2, root
   (662, 639), body core (481, 139)-(781, 971), measured once with the Product Tsuppari landmark registration;
   `measurement_evidence` records it and `tests/test_export_grip_success_gate.py` re-measures it).
+- ACTION-11H tone match (`skin_tone_match`): after normalization the red skin only (interior alpha, outside the
+  mawashi mask, skin hue band 12-50 deg with saturation / value floors) is moved toward the accepted idle red
+  runtime with a monotonic piecewise-linear curve on relative luminance through the skin P20 / P50 / P80
+  (chromaticity kept). Alpha and every other pixel are untouched; blue inherits the corrected skin.
 - blue = red reflected across the local X axis + the accepted mawashi recolor of `runtime_wrestler_recipe.json`
   (single owner), validated against the standard `mask_limits` (1500 / 60 / 120, fail closed; no
   Grip-success-specific allowance). The reflected pair faces each other as mirrored grappling wrestlers.

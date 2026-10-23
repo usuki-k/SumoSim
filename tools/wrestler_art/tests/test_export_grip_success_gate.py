@@ -1,7 +1,7 @@
 """Focused tests for export_grip_success_gate.py (ACTION-11D temporary Grip success Visual Gate).
 
-A synthetic red pose (never Product art) checks normalization, the red -> blue derivation, determinism and
-fail-closed behaviour. The last class checks the committed gate textures, the TypeScript metadata and that the
+A synthetic red pose (never Product art) checks normalization, the ACTION-11H skin tone match, the red -> blue
+derivation, determinism and fail-closed behaviour. The last class checks the committed gate textures, the TypeScript metadata and that the
 accepted idle / Product Tsuppari / Product Counter / Grip attempt gate textures are untouched (skipped when the
 local source is not present).
 """
@@ -44,8 +44,8 @@ TS_METADATA = aw.REPO_ROOT / "src" / "game" / "presentation" / "gripSuccessGateA
 RECIPE = eg.load_recipe(eg.DEFAULT_RECIPE)
 ACCEPTED_SOURCE_PIXELS = "0cedde984646384514e3b1609b69f04450d04c5446888da966de206a183e566e"
 GATE_PIXELS = {
-    "red.png": "afab5fbc87e586147ff9c35ae14aedddc0c78e436ef2142bd8cb0e906867ef0b",
-    "blue.png": "2336e895cfb92c625042f2af688d23d11c146bec70d51434849cb72122777a8b",
+    "red.png": "5852751b85dae79826848bd6daec751fa3addc572b5943ff95047f22c1187221",
+    "blue.png": "624d2d51b9fba3a24aebcf6750335abc8054dd1fd5cfd239469daa679ee542e2",
 }
 FRONT_DEG = 165.0
 
@@ -114,6 +114,9 @@ class RecipeTests(unittest.TestCase):
             (lambda r: r["master"].pop("root_source_px"), "missing 'root_source_px'"),
             (lambda r: r["master"].update(source_front_deg=100.0), "off perpendicular"),
             (lambda r: r["mask_limits"].pop("min_mask_px"), "mask_limits.min_mask_px"),
+            (lambda r: r["skin_tone_match"].pop("curve_points"), "missing 'curve_points'"),
+            (lambda r: r["skin_tone_match"]["curve_points"].insert(2, [0.5, 0.3]), "strictly increasing"),
+            (lambda r: r["skin_tone_match"]["curve_points"].__setitem__(-1, [1.0, 0.9]), r"\(0, 0\) to \(1, 1\)"),
         ]
         for mutate, pattern in cases:
             recipe = load_raw_recipe()
@@ -141,10 +144,15 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(self.run_cli(), 0)
         self.assertEqual(sorted(p.name for p in self.fx.out_dir.iterdir()), ["blue.png", "red.png"])
 
-    def test_red_is_the_normalized_pose_and_blue_its_reflected_recolor(self) -> None:
+    def test_red_is_the_tone_matched_normalized_pose_and_blue_its_reflected_recolor(self) -> None:
+        # T13 / T14: red = normalized + skin tone match; blue = reflection of that corrected red + mawashi recolor
         spec = self.fx.recipe["master"]
-        red_ref = et.normalize(spec, self.fx.input_dir / spec["file"], "ref", self.fx.recipe["alpha_threshold"])
+        normalized = et.normalize(spec, self.fx.input_dir / spec["file"], "ref", self.fx.recipe["alpha_threshold"])
+        toned, _ = eg.tone_match(normalized.image, eg.skin_mask(normalized.image, self.fx.recipe),
+                                 self.fx.recipe["skin_tone_match"]["curve_points"])
+        red_ref = aw.Part(toned, normalized.pivot, dict(normalized.joints))
         red, blue = eg.build_textures(self.fx.recipe, self.fx.input_dir)
+        self.assertNotEqual(toned.tobytes(), normalized.image.tobytes())  # the synthetic skin is corrected
         self.assertEqual(red.part.image.tobytes(), red_ref.image.tobytes())
         self.assertEqual(red.part.pivot, red_ref.pivot)
         reflected = aw.mirror_part(red_ref)
@@ -165,6 +173,43 @@ class ExportTests(unittest.TestCase):
                 elif bp[x, y] != rp[x, y]:
                     changed += 1
         self.assertGreater(changed, 0)
+
+    def test_tone_match_runs_once_on_red_only(self) -> None:
+        # T15: the skin correction is computed once (on red), never again for blue
+        calls = []
+        original = eg.tone_match
+
+        def spy(image, mask, points):
+            calls.append(image.size)
+            return original(image, mask, points)
+
+        with mock.patch.object(eg, "tone_match", spy):
+            eg.build_textures(self.fx.recipe, self.fx.input_dir)
+        self.assertEqual(len(calls), 1)
+
+    def test_tone_match_touches_only_skin_rgb(self) -> None:
+        # T7 / T8 / T9 on the synthetic pose
+        spec = self.fx.recipe["master"]
+        image = et.normalize(spec, self.fx.input_dir / spec["file"], "ref", self.fx.recipe["alpha_threshold"]).image
+        mask = eg.skin_mask(image, self.fx.recipe)
+        self.assertEqual(mask, eg.skin_mask(image, self.fx.recipe))  # deterministic
+        self.assertGreater(len(mask), 0)
+        out, _ = eg.tone_match(image, mask, self.fx.recipe["skin_tone_match"]["curve_points"])
+        self.assertEqual(out.getchannel("A").tobytes(), image.getchannel("A").tobytes())
+        a, b = image.load(), out.load()
+        for y in range(image.height):
+            for x in range(image.width):
+                if (x, y) not in mask:
+                    self.assertEqual(a[x, y], b[x, y], (x, y))
+
+    def test_tone_curve_is_monotonic(self) -> None:
+        # T10
+        points = self.fx.recipe["skin_tone_match"]["curve_points"]
+        samples = [eg.tone_curve(points, i / 1000) for i in range(1001)]
+        self.assertEqual(samples[0], 0.0)
+        self.assertAlmostEqual(samples[-1], 1.0, places=12)
+        for lo, hi in zip(samples, samples[1:]):
+            self.assertLess(lo, hi)
 
     def test_only_one_local_y_reflection(self) -> None:
         original = Image.Image.transpose
@@ -274,6 +319,67 @@ class CommittedGateTests(unittest.TestCase):
             self.assertEqual(ts[name]["size"], entry["size"], name)
             self.assertEqual(ts[name]["pivot"], entry["pivot"], name)
             self.assertAlmostEqual(ts[name]["body_core_px"], entry["body_core_px"], places=5)
+
+    def _normalized_red(self):
+        spec = RECIPE["master"]
+        return et.normalize(spec, self.input_dir / spec["file"], "red", RECIPE["alpha_threshold"]).image
+
+    def test_idle_reference_identity(self) -> None:
+        # T2: the tone reference is the accepted idle red runtime (export_runtime_wrestlers.py --check owns it)
+        tone = RECIPE["skin_tone_match"]
+        self.assertEqual(tone["reference_pixel_sha256"], ACCEPTED_RED_PIXELS)
+        with Image.open(aw.REPO_ROOT / tone["reference"]) as image:
+            self.assertEqual(aw.pixel_sha256(image.convert("RGBA")), ACCEPTED_RED_PIXELS)
+
+    def test_real_skin_mask_excludes_mawashi_hair_and_outline(self) -> None:
+        # T3-T6
+        image = self._normalized_red()
+        mask = eg.skin_mask(image, RECIPE)
+        self.assertEqual(mask, eg.skin_mask(image, RECIPE))
+        self.assertEqual(len(mask), RECIPE["skin_tone_match"]["measurement_evidence"]["uncorrected_skin_px"])
+        self.assertGreater(len(mask), 5000)
+        self.assertFalse(mask & im.mawashi_mask(image, RECIPE["recolor"]))
+        px = image.load()
+        for p in mask:
+            r, g, b, a = px[p]
+            self.assertGreaterEqual(max(r, g, b), 0.35 * 255 - 1)  # no hair / outline (dark)
+            self.assertGreaterEqual(a, 250)
+
+    def test_real_tone_match_improves_the_idle_match_without_clipping(self) -> None:
+        # T7-T9 / T11 / T12 on the real pose, and the recorded evidence reproduces
+        tone = RECIPE["skin_tone_match"]
+        evidence = tone["measurement_evidence"]
+        image = self._normalized_red()
+        mask = eg.skin_mask(image, RECIPE)
+        with Image.open(aw.REPO_ROOT / tone["reference"]) as idle_file:
+            idle = idle_file.convert("RGBA")
+        idle_mask = eg.skin_mask(idle, RECIPE)
+        self.assertEqual(len(idle_mask), evidence["idle_skin_px"])
+        idle_q = eg.skin_quantiles(idle, idle_mask)
+        before = eg.skin_quantiles(image, mask)
+        for fresh, recorded in ((idle_q, evidence["idle_quantiles"]), (before, evidence["uncorrected_quantiles"])):
+            for f, r in zip(fresh, recorded):
+                self.assertAlmostEqual(f, r, places=6)
+        self.assertEqual([p[0] for p in tone["curve_points"][1:-1]], evidence["uncorrected_quantiles"])
+        self.assertEqual([p[1] for p in tone["curve_points"][1:-1]], evidence["idle_quantiles"])
+        out, clipped = eg.tone_match(image, mask, tone["curve_points"])
+        self.assertEqual(clipped, 0)
+        after = eg.skin_quantiles(out, mask)
+        err = lambda q: max(abs(a - b) for a, b in zip(q, idle_q))  # noqa: E731
+        self.assertLess(err(after), 0.005)
+        self.assertLess(err(after), err(before) / 10)
+        self.assertEqual(out.getchannel("A").tobytes(), image.getchannel("A").tobytes())
+        a, b = image.load(), out.load()
+        changed = 0
+        for y in range(image.height):
+            for x in range(image.width):
+                if (x, y) not in mask:
+                    self.assertEqual(a[x, y], b[x, y])
+                elif a[x, y] != b[x, y]:
+                    changed += 1
+        self.assertGreater(changed, len(mask) // 2)
+        saturated = sum(1 for p in mask if max(b[p][:3]) == 255 or min(b[p][:3]) == 0)
+        self.assertEqual(saturated, 0)
 
     def test_real_mask_covers_the_mawashi(self) -> None:
         spec = RECIPE["master"]
