@@ -1,5 +1,5 @@
 Task-ID: ACTION-13A-GRAPPLE-THROW-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / DESIGN
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -1014,3 +1014,470 @@ Throw cannot be used while Driving. Investigate whether TURNING can safely suppo
 Define a deterministic pre-bout Throw capability / KO-roll boundary that does not invent Management stats and does not use Math.random in gameplay.
 
 Return one coherent implementation-ready v1 design and recommended task split.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-24
+Overall Result: PASS WITH REVIEW CORRECTIONS — IMPLEMENTATION-READY
+Accepted Investigation Baseline: 97cc7672a468e3b6a6d7041184b2cacbae61c179
+
+## Current Source / Scope Review
+
+Accepted:
+
+- Investigation-only scope was respected.
+- Agent Task diff changes only CURRENT_COMPLETION_REPORT.md.
+- No Production source, tests, assets, or accepted docs were modified.
+- Current Source findings match the report.
+- Existing focused regression run: 7 files / 145 PASS.
+
+No Source/SPEC material conflict was found.
+
+## Accepted V1 Throw Direction
+
+Own-left / own-right mapping is accepted.
+
+For canonical facing f = (cos(phi), sin(phi)) in +y-down coordinates:
+
+- ownLeft  = ( f.y, -f.x)
+- ownRight = (-f.y,  f.x)
+
+ArrowLeft = throw toward ownLeft.
+ArrowRight = throw toward ownRight.
+
+Direction is derived from the thrower's canonical facing on the accepted Throw tick. No cached screen-side direction.
+
+## Accepted Input Ownership
+
+Use dedicated semantic edges:
+
+- throwLeftPressed
+- throwRightPressed
+
+Do not reuse Tsuppari-named fields as Throw semantics.
+
+The Scene may consume the physical ArrowLeft/ArrowRight latch once and copy the same edge value into:
+- Tsuppari semantic fields;
+- Throw semantic fields.
+
+Simulation consumes only the state-appropriate semantic action.
+
+No generic contextual-action framework.
+
+## Accepted V1 Eligibility / TURNING Rule
+
+V1 Throw eligibility is participant-local:
+
+- engagement is GRAPPLED;
+- release did not win this tick;
+- thrower is READY at tick start via existing canActInGrapple;
+- thrower's tick-start action is not Drive;
+- thrower is not in Throw recovery;
+- exactly one of Left / Right Throw edges is present.
+
+Opponent READY is NOT required.
+
+Therefore:
+
+- a READY wrestler may Throw while the opponent is still TURNING;
+- a wrestler who is itself TURNING cannot Throw in v1.
+
+This is the accepted small Prototype interpretation of the User preference to allow TURNING Throw where practical.
+
+If User Play Test later shows rear/Morozashi Throw is too strong, the smallest future adjustment is both-READY gating. Do not add that now.
+
+## Accepted Same-Tick Priority
+
+Accepted priority:
+
+Release > Throw > Drive > WASD grapple rotation.
+
+Rules:
+
+- Release + Throw: Release wins; Throw dropped; no roll.
+- Already Drive at tick start + Throw: Throw dropped; Drive may continue; no roll.
+- ArrowUp and Throw begin on same tick while not already Driving: Throw wins.
+- Opponent may be Driving while thrower is eligible.
+- Throw + WASD on same tick: accepted Throw uses tick-start facing and suppresses manual WASD rotation for that tick.
+- No queueing.
+
+### Review Correction RC-1 — Throw Contest Consumes the Tick
+
+For S1 opposite-world-direction simultaneous Throw:
+
+- no KO roll;
+- no displacement;
+- Grip remains;
+- both participants enter Throw recovery;
+- **do not continue into Drive or ACTION-12B WASD rotation on that same tick**.
+
+Reason:
+Release > Throw > Drive > rotation means an accepted Throw contest consumes the grapple action opportunity for that tick. The report's proposed step order would otherwise allow WASD rotation after S1 because it continued the normal tick.
+
+Implementation must explicitly return/skip the later Drive + manual-rotation stages for S1 while still performing any required final canonical ring-out/no-op bookkeeping consistently.
+
+S4 (one participant presses both Left+Right and both are dropped) is different: that participant has no accepted Throw request, so normal lower-priority behavior may continue.
+
+## Accepted Non-KO Geometry
+
+Single successful non-KO Throw:
+
+- Geometry B accepted.
+- Thrower remains fixed.
+- Target orbits around thrower at canonical grapple bond radius.
+- ownLeft = negative throw arc;
+- ownRight = positive throw arc under current angle convention.
+- both canonical facings rotate by the same incremental Throw angle so facing errors remain unchanged.
+- Grip remains engaged after non-KO Throw.
+
+This keeps bond exact and makes left/right readable.
+
+Same-world-direction simultaneous equal-strength Prototype contest:
+
+- neither wrestler wins;
+- no KO roll;
+- pair shifts rigidly in the normalized shared requested world direction;
+- Grip remains;
+- both pay Throw recovery after the transition.
+
+This is accepted as the v1 placeholder for future Throw-power comparison.
+
+## Accepted Throw Transition
+
+Use a short Simulation-owned pair Throw transition rather than one-tick teleportation.
+
+Accepted reasons:
+- meaningful Play Test/readability;
+- existing ring-out can run every transition tick;
+- avoids a large arc being approximated by one long ring-out chord;
+- later Presentation can read canonical progress.
+
+Transition is explicit and small, similar in architectural spirit to CounterTransition.
+
+During an active Throw transition:
+- input is ignored / dropped;
+- canonical path owns position/facing;
+- ring-out is checked every transition tick;
+- no Phaser gameplay path.
+
+## Review Correction RC-2 — Existing Action State at Transition Entry
+
+A Throw may start while the opponent is currently Driving.
+
+Therefore implementation must explicitly avoid stale opponent Drive action during the Throw transition:
+
+- when Throw/shift transition begins, any participant action.kind === 'drive' involved in the pair is set to idle immediately;
+- Drive does not remain visible/stored while the transition owns movement.
+
+If the target was already in a prior Throw recovery:
+- preserve that recovery state and pause its timer while the pair-level Throw transition is active;
+- resume the remaining recovery after the transition;
+- do not silently cancel or reset that recovery.
+
+The new thrower's own recovery begins after the new transition ends.
+
+This preserves existing committed recovery while correctly stopping timerless Drive.
+
+## Accepted Recovery / Engagement
+
+After non-KO single Throw:
+- engagement remains GRAPPLED;
+- thrower enters provisional Throw recovery;
+- target does not receive a new recovery merely for being thrown;
+- any pre-existing target Throw recovery follows RC-2 pause/resume.
+
+During Throw recovery:
+- that participant cannot start Throw or contribute Drive;
+- Release and ACTION-12B WASD rotation may remain available when existing readiness gates permit.
+
+These are Prototype semantics subject to User Play Test.
+
+## Accepted Pre-Bout Capability Boundary
+
+Use precomputed effective Throw capability; BoutSimulation must not know Management-stat formulas.
+
+Accepted effective profile concept:
+
+- neutralKoChance
+- morozashiKoChance
+- neutralThrowAngle
+- morozashiThrowAngle
+
+Morozashi-disadvantaged thrower uses neutral values.
+Morozashi holder uses Morozashi values.
+
+### Review Correction RC-3 — Separate Capability from RNG Seed
+
+Do NOT put koRollSeed inside ThrowProfile.
+
+ThrowProfile is effective gameplay capability computed before the bout.
+Random stream identity is match/setup randomness, not wrestler capability.
+
+Preferred minimal boundary:
+
+- ParticipantSetup.throwProfile?: ThrowProfile
+- ParticipantSetup.throwKoSeed?: uint32
+
+or an equivalently explicit nested setup shape that keeps:
+- effective capability;
+- deterministic random seed
+
+semantically separate.
+
+Do not introduce Management or Save infrastructure.
+
+For Prototype fixtures, explicit defaults are allowed only if clearly marked Prototype.
+
+### Prototype Restart Seed Guidance
+
+Do not make every new Prototype bout silently replay the identical first Throw roll forever if User Play Test is meant to judge probabilistic KO feel.
+
+Preferred minimal approach:
+- build each Prototype BoutSetup with explicit deterministic per-participant seeds derived from a small Scene-owned prototype bout serial/base constants;
+- the seed remains part of the created Bout setup;
+- same setup + same semantic inputs still produces identical results;
+- no Math.random.
+
+Tests should always pass explicit seeds.
+
+This is Prototype fixture behavior, not a permanent RNG framework.
+
+## Accepted Deterministic KO Strategy
+
+Use participant-specific counter-based deterministic Throw roll streams.
+
+Requirements:
+
+- no Math.random in core;
+- participant-specific seed + eligible KO-attempt counter;
+- roll in [0,1);
+- KO iff roll < chance;
+- chance 0 never KO;
+- chance 1 always KO;
+- only a normal single-participant Throw resolution that reaches KO evaluation consumes that participant's next roll;
+- ineligible/dropped requests do not consume;
+- S1 opposite-direction contest consumes none;
+- S2 equal same-direction shift consumes none;
+- participant-array order does not affect rolls/results.
+
+The exact fmix32-style function proposed by ACTION-13A is acceptable if implemented as a small pure deterministic helper with tests.
+
+Hidden Throw roll counters do not need to be presentation Snapshot fields in this Prototype.
+
+## Accepted KO / Fall Outcome
+
+Extend gameplay finish semantics with generic fall plus Throw cause.
+
+Accepted conceptual shape:
+
+- BoutFinishReason includes 'fall';
+- fall outcome carries a small Throw cause payload identifying:
+  - kind: throw
+  - throwerId
+  - local side left/right
+  - locked world direction
+
+Reason:
+- fall can later be caused by techniques other than Throw;
+- presentation should not be encoded into the reason string;
+- outcome is sufficient as the persistent one-shot result; no event bus.
+
+KO Throw:
+- evaluate deterministic roll first;
+- on KO, finish immediately as fall;
+- no non-KO Throw displacement is applied;
+- existing canonical position/facing may freeze at Throw-start state;
+- later Presentation owns the visual falling motion.
+
+If KO roll fails:
+- start non-KO Throw transition;
+- existing ring-out owns any boundary finish during the path.
+
+## Accepted Simultaneous Throw Rules
+
+Resolve requests symmetrically from one immutable tick-local state.
+
+S1 opposite world directions:
+- action-level stalemate, not Bout rematch;
+- no roll;
+- no displacement;
+- Grip continues;
+- both recovery;
+- RC-1: no lower-priority Drive/WASD rotation that tick.
+
+S2 same world direction, equal/no Throw power in v1:
+- no roll;
+- pair rigid shift in shared direction;
+- Grip continues;
+- both recovery after transition.
+
+S3 one valid requester:
+- normal Throw roll -> KO or non-KO transition.
+
+S4 same participant Left+Right edges:
+- drop both requests deterministically;
+- no roll;
+- the other participant may still resolve as S3 if eligible.
+
+Future Throw power:
+- a dedicated same-direction contest helper may later compare power;
+- stronger participant becomes the normal S3 Throw winner;
+- equal continues to use v1 shared shift.
+Do not add a fake Throw-power stat in 13B.
+
+## Accepted KO / Ring-Out Priority
+
+Accepted:
+
+- KO roll first.
+- KO success -> fall immediately, no displacement.
+- KO failure -> Throw transition.
+- transition positions are judged by existing ring-out / Tokudawara every tick.
+- no Throw-specific wall/clamp/boundary.
+
+## Accepted Prototype Tuning for Initial 13B
+
+Provisional, User Play Test owned:
+
+- neutralKoChance = 0.15
+- morozashiKoChance = 0.35
+- neutralThrowAngle = 45 deg
+- morozashiThrowAngle = 75 deg
+- THROW_TRANSITION_TICKS = 18 (~0.3 s)
+- THROW_RECOVERY_TICKS = 30 (~0.5 s)
+- THROW_SHARED_SHIFT = 0.30 m
+- transition easing candidate = 1 - (1-u)^2
+
+These are not permanent balance decisions.
+
+13B may implement them as explicitly provisional prototype tuning.
+
+## Accepted Step-Order Direction
+
+Future 13B should preserve:
+
+1. cooldown / existing CounterTransition early path
+2. active Throw transition early path
+3. previous positions
+4. posture timer
+5. tick-start readiness
+6. Release
+7. determine grappled
+8. Throw request resolution from tick-start state
+9. if accepted single/shift Throw starts transition, run its first transition step and return
+10. if S1 stalemate, apply recovery and RC-1 consume the tick
+11. otherwise existing Drive decision
+12. existing ACTION-12B WASD rotation
+13. existing self/external update
+14. integration/contact/bond/action timers/facing/ring-out
+
+No-Throw path must remain semantically/bitwise compatible with current ACTION-12B behavior.
+
+## Accepted Task Split
+
+ACTION-13B — Throw Core Gameplay:
+- semantic Throw edges
+- eligibility/priority
+- simultaneous contest
+- deterministic KO streams
+- fall outcome
+- Simulation-owned Throw/shift transition
+- recovery
+- ring-out/Tokudawara interaction
+- provisional tuning
+- Heavy verification + Browser smoke
+- User Play Test required
+- minimal outcome formatting only as needed.
+
+ACTION-13C — Throw / Fall Presentation:
+- authored/symbolic Throw pose as later decided
+- thrown/fall visuals
+- impact/camera feel
+- presentation polish
+- User Visual Gate.
+
+Do not split KO probability out of 13B.
+
+## Verification Requirement for 13B
+
+All 38 ACTION-13A boundary cases remain mandatory.
+
+Add explicit tests for Review Corrections:
+
+RC1. S1 opposite-world contest + simultaneous WASD/Drive:
+- no Drive contribution;
+- no manual pair rotation;
+- both enter recovery;
+- no roll.
+
+RC2a. opponent was Driving when single Throw begins:
+- Drive action cleared at transition entry;
+- no stale Drive state during transition.
+
+RC2b. target already had Throw recovery when new Throw transition begins:
+- remaining recovery value is preserved/paused through transition;
+- resumes after transition.
+
+RC3. two setups with identical profiles but different explicit seeds:
+- capabilities are identical;
+- deterministic KO sequence differs;
+- seed is not part of ThrowProfile semantics.
+
+Prototype restart seed:
+- consecutive generated Prototype setups have explicit different deterministic seeds;
+- recreating the same prototype bout serial gives identical seeds/results.
+
+## User Play Test Required After 13B
+
+Judge:
+
+- Left/Right directional understanding;
+- READY-side Throw while opponent TURNING;
+- whether rear/Morozashi Throw is too strong;
+- 15% / 35% KO feel;
+- 45° / 75° non-KO displacement;
+- 0.3 s Throw motion;
+- 0.5 s recovery;
+- same-direction simultaneous pair shift;
+- opposite-direction stalemate;
+- Drive-to-Throw timing;
+- repeated Throw pacing;
+- edge/Tokudawara risk.
+
+Technical PASS != accepted Throw feel.
+
+## Do Not Reopen
+
+Unless explicitly changed by User:
+
+- ACTION-11N Grip visual baseline;
+- ACTION-12B WASD rotation semantics/rate;
+- ArrowUp Drive tuning;
+- canonical 0.70 m bond;
+- existing ring-out / Tokudawara ownership.
+
+## Deferred
+
+- Throw strength parameter and unequal same-direction contest;
+- TURNING wrestler's own Throw before READY;
+- Management formulas for Throw profile;
+- Save/replay system;
+- final Throw/Fall art and animation;
+- Morozashi balance retuning beyond the provisional profile;
+- Touch/Gamepad binding.
+
+## Next Task Constraint
+
+ACTION-13B may proceed from this reviewed design plus RC-1 / RC-2 / RC-3.
+
+If implementation requires changing:
+- ACTION-12B canonical rotation ownership;
+- Drive semantics beyond the accepted priority;
+- existing ring-out ownership;
+- engagement model beyond explicit Throw transition/recovery;
+- deterministic roll ownership beyond participant-specific Throw streams;
+
+STOP and report rather than silently deviating.
