@@ -1,44 +1,59 @@
-Task-ID: ACTION-11J-GRIP-SUCCESS-LIMB-VFX-READY-ONLY
+Task-ID: ACTION-11K-GRIP-SUCCESS-SYMBOLIC-FOREARM-HAND-VFX
 Status: READY
-Task-Type: PRESENTATION VISUAL TUNE
+Task-Type: PRESENTATION SYMBOLIC VFX VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: f0816e7439b72edcf6c5c5a11d4927208c9e1ff5
-Review-Handoff: ACTION-11I stopped before commit/push because tuned limbs floated badly during Grappled Orientation TURNING. Repository remained unchanged. User selected the minimal fix: adopt the improved settled/READY limb geometry from the 11I WIP, but hide both wrestlers' limb VFX whenever either wrestler is TURNING.
+Source-Baseline: 148006a4181e28bf2e75a5d94b99fc6ab7e72a23
+Review-Handoff: ACTION-11J technical PASS; User Visual Gate REJECTED. Pair READY visibility is technically good and should be preserved, but the anatomically connected shoulder->elbow->hand limbs are too literal/complex. User wants a much more symbolic anime-like forearm+hand mark placed over the opponent's mawashi, similar in spirit to the Kuzushi sweat VFX.
 Handoff-Mode: GITHUB
 
-# ACTION-11J — Grip Success Limb VFX: Settled Geometry + Pair TURNING Hide
+# ACTION-11K — Grip Success Symbolic Forearm / Hand VFX Gate
 
 ## Purpose
 
-Finish the rejected ACTION-11I visual tune safely.
+Replace the current anatomically connected Grip-success limb VFX with a much simpler symbolic visual.
 
-User-approved direction:
+User direction:
 
-1. keep the improved arm/hand geometry that looked better once both wrestlers were settled / facing each other;
-2. while either wrestler is still TURNING in a grapple, hide arm/hand VFX for BOTH wrestlers;
-3. once both are READY, show the tuned arm/hand VFX for both again.
+> もっと記号的な表現で良い。  
+> まわしの上に「肘から手」の記号を上から被せるだけで良い。  
+> Kuzushiの汗のようなアニメっぽい表現が良い。  
+> 体と腕が繋がっていなくてよい。  
+> 現在のキャラクター絵と統一感のある記号にしたい。
 
-This is Presentation-only.
+This Task is Presentation-only.
 
-Do not change gameplay, canonical positions, grapple bond, facing, or Grappled Orientation.
+Do not change gameplay.
 
 ---
 
-# Why ACTION-11I Stopped
+# Key Design Change
 
-ACTION-11I correctly hit its Stop Condition.
+The ACTION-11G / 11J model tried to visually reconstruct full connected arms:
 
-Observed problem:
+```
+body
+-> shoulder
+-> elbow
+-> forearm
+-> hand
+-> opponent
+```
 
-- the longer tuned arm geometry looked good in settled neutral / Drive / Morozashi;
-- during TURNING, the limb geometry still followed each wrestler's own facing;
-- because the geometry assumes a face-to-face grip, the turning wrestler's arms projected into empty space, in one case by roughly 2R;
-- the other wrestler's arm could also miss the opponent while the pair was not yet aligned.
+That approach is now rejected.
 
-This was a presentation-state mismatch, not a gameplay bug.
+ACTION-11K must instead use:
 
-Do not try to solve it by changing Grappled Orientation.
+```
+detached symbolic forearm + hand marker
+placed directly over the opponent's mawashi / waist area
+```
+
+The symbol does NOT need to connect to the wrestler's body.
+
+Do not try to fake anatomical continuity.
+
+The VFX is a readable anime/gameplay symbol, similar in abstraction level to the existing Kuzushi sweat effect.
 
 ---
 
@@ -46,18 +61,9 @@ Do not try to solve it by changing Grappled Orientation.
 
 ## ACTION-11C Gameplay
 
-Preserve:
+Preserve all Grip gameplay.
 
-- Grip lunge / timing
-- contact-driven Grip success
-- Push / Tsuppari / Counter / Grip contest rules
-- canonical 0.70 m grapple bond
-- Grappled Orientation
-- Drive
-- release
-- ring-out.
-
-No Production changes under:
+No changes under:
 
 ```
 src/game/sumo/
@@ -77,297 +83,406 @@ GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
 
 Keep the accepted Grip-success tone correction exactly.
 
-Do not change:
-- tone curve
-- skin mask
-- runtime hashes by re-exporting
-- source art
-- exporter/recipe.
+Do not re-export or retune Grip-success body art.
 
-## ACTION-11G Existing Limb VFX
+## ACTION-11J Pair READY Rule
 
-ACTION-11G was technically valid but visually rejected.
+Preserve the technically accepted visibility rule:
 
-ACTION-11J replaces its visual geometry with the improved settled geometry developed during the stopped 11I work.
+```
+if either wrestler is TURNING:
+    symbolic Grip VFX hidden for both
+
+if both wrestlers are READY:
+    symbolic Grip VFX may be shown
+```
+
+This avoids floating VFX during Grappled Orientation.
+
+Do not reintroduce TURNING limb geometry.
 
 ---
 
-# Optional Local WIP Patch
+# Remove / Replace Current Limb Presentation
 
-The stopped ACTION-11I work was saved locally as:
+The current ACTION-11J connected-arm model is NOT visually accepted.
 
-```
-C:\Users\Kazu\AppData\Local\Temp\claude\e--develop-CrazyGames-SumoSim\db9a9f45-e5aa-49b3-8e5b-2e28cda7a821\scratchpad\action11i_wip.patch
-```
+Replace its visible output.
 
-If this exact patch still exists on the same machine, it may be inspected or applied as a starting point.
+The final rendered Grip VFX must NOT show:
 
-Do NOT rely on it as the sole Source of Truth.
+- shoulder->elbow upper-arm segments
+- roots emerging from the wrestler body
+- long connected wrap geometry
+- detached-looking bars extending from the torso.
 
-Before applying:
-- inspect the patch;
-- confirm it only contains intended ACTION-11I presentation changes;
-- do not import scratch/debug-only code blindly.
+The underlying helper/code may be simplified or replaced as needed within presentation scope.
 
-If the patch is missing, reconstruct the settled geometry from this Task / previous report rather than stopping.
+Prefer removing dead geometry rather than leaving multiple competing VFX systems.
 
----
-
-# Settled / READY Limb Geometry
-
-The ACTION-11I WIP improved the arm model by splitting each visible arm into two segments:
-
-```
-shoulder -> elbow
-elbow -> hand
-```
-
-Visual intent:
-
-- shoulder -> elbow sits behind the body;
-- body overlap hides the root / cut-face;
-- elbow -> hand sits above the bodies;
-- hand visibly lands on the opponent;
-- high arm reaches opponent upper torso / shoulder;
-- low arm wraps farther toward opponent flank / waist / mawashi.
-
-Adopt that improved settled geometry rather than the ACTION-11G horizontal-bar geometry.
-
-Do NOT revert to the old ACTION-11G single straight capsule if the WIP geometry can be recovered/reconstructed safely.
+Do not leave old connected arms hidden but still maintained if a simpler replacement can cleanly own the same responsibility.
 
 ---
 
-# Geometry Requirements
+# Symbol Count
 
-Exact numeric values are not prescribed because the stopped 11I work was never committed as an accepted baseline.
+Preferred first Visual Gate:
 
-However, preserve the WIP's successful settled-state design principles:
+```
+2 symbolic forearm+hand markers total for the grapple pair
+```
 
-## High arm
+That means:
 
-- shorter than the low arm;
-- originates under/near own upper-side body;
-- elbow wraps around opponent upper-side silhouette;
-- hand lands around opponent upper torso / shoulder / upper flank;
-- root hidden beneath own body;
-- distal portion visible above body where useful.
+- one marker represents one wrestler's visible grip on the opponent;
+- one marker represents the other wrestler's visible grip.
 
-## Low arm
+Do NOT draw four full arm symbols.
 
-- longer wrap;
-- originates under/near own lower-side body;
-- elbow passes around opponent flank;
-- hand reaches opponent waist / mawashi / back-side region;
-- partial occlusion is preferred over showing the entire arm.
+The goal is clarity, not anatomical completeness.
 
-## Root
-
-Do not expose a circular cut-face / detached cylinder root.
-
-Bury the root beneath the owning wrestler body.
-
-## Shape
-
-Two-segment arm is preferred.
-
-Do not make the arm perfectly horizontal unless that falls out naturally from the local geometry.
+If the existing per-wrestler view architecture makes "one marker per wrestler" simpler, that is acceptable.
 
 ---
 
-# Pair READY Visibility Rule
+# Symbol Shape
 
-The new key rule:
-
-> Limb VFX is visible only when Grip-success pose is active AND both wrestlers are READY / not TURNING.
-
-Conceptually:
+Each symbol should depict only:
 
 ```
-successPose =
-  self.pose === 'grapple' || self.pose === 'drive'
-
-pairReady =
-  !self.turning && !opponent.turning
-
-limbsVisible =
-  successPose && pairReady
+elbow / short forearm -> simplified hand
 ```
 
-This rule applies symmetrically to both wrestlers.
+No shoulder/root connection.
 
-If either participant is TURNING:
+Preferred silhouette:
 
-```
-both wrestlers' limb VFX = hidden
-```
+- short curved or slightly bent forearm
+- rounded elbow-side end
+- small stylized hand / mitten-like palm at the distal end
+- optional tiny thumb bump
+- thick dark outline
+- skin fill close to the corrected Grip-success body
+- one simple highlight.
 
-Do not show one wrestler's arms while hiding only the turning wrestler's arms.
+It should read as an anime/game VFX mark, not as a realistic detached severed arm.
 
-Reason:
-- both arm layouts assume an aligned opponent;
-- showing one side alone can still point to empty space.
+Avoid:
+- visible cut-cylinder face
+- long straight bar
+- full anatomical upper arm
+- detailed fingers
+- photorealism.
 
 ---
 
-# Ownership / State Flow
+# Visual Style
 
-Do not add a new gameplay state.
+Match the existing wrestler art and Kuzushi sweat philosophy:
 
-Use existing Simulation-derived presentation data:
+- simple
+- bold silhouette
+- dark outline
+- readable at gameplay scale
+- minimal detail
+- intentionally symbolic.
 
-- `WrestlerVisualState.turning`
-- opponent's `WrestlerVisualState.turning`.
+Preferred colors:
 
-Preferred implementation:
+- skin fill sampled/derived from the corrected Grip-success body palette
+- dark outline near existing wrestler outline
+- small warm highlight.
 
-- derive a pair-level Presentation boolean in the Scene/View composition layer;
-- pass only the visibility decision / pair-ready context needed by WrestlerView.
+Do NOT reuse ACTION-11G's fixed `#f3b47c` blindly if it is visibly brighter than the ACTION-11H-corrected body.
 
-Do NOT:
-- store pairReady in Simulation;
-- duplicate Grappled Orientation state;
-- add a timer.
+Prefer a named presentation constant derived/selected to visually match the corrected success body.
 
-A small pure helper is preferred, e.g.:
-
-```
-gripSuccessPairLimbsVisible(selfState, opponentState)
-```
-
-or equivalent.
-
-It must be Phaser-free.
+No glow.
+No text.
+No UI icon box.
+No particles.
 
 ---
 
-# WrestlerView / Scene Integration
+# Placement — Main Requirement
 
-Current WrestlerView resolves one wrestler at a time.
+Place each symbolic forearm+hand marker **on top of the opponent's waist / mawashi region**.
 
-ACTION-11J may minimally extend the presentation call path so each wrestler's limb visibility can know whether the opponent is TURNING.
+Do not anchor the visible symbol to the owner's shoulder.
 
-Preferred constraints:
+The target is the opponent.
 
-- body art selection remains per-wrestler;
-- ACTION-11F body offset remains per-wrestler;
-- limb geometry remains per-wrestler;
-- only visibility needs pair context.
+Preferred conceptual ownership:
 
-Do not introduce a generic pair renderer unless strictly necessary.
+```
+self grips opponent
+-> marker position is derived primarily from opponent displayed center + opponent facing
+```
 
-If current scene code already has both visual states before calling WrestlerView.apply, derive pairReady there.
+The symbol may rotate using the pair axis or opponent facing so the hand appears to land naturally on the mawashi.
+
+The exact formula is a Presentation concern.
 
 ---
 
-# Depth / Occlusion
+# Target-Local Placement
 
-Keep the simple explicit layer approach.
+Use the opponent's displayed Grip-success center and local frame.
+
+Local convention of the target wrestler:
+
+- +X = target FRONT
+- -X = target BACK / mawashi-knot direction
+- +Y = target RIGHT
+- -Y = target LEFT.
+
+Preferred starting anchors for the two markers:
+
+Marker A:
+- opponent waist / mawashi side
+- approximately target local:
+  - forward = -0.35 R to -0.55 R
+  - lateral = +0.55 R to +0.80 R
+
+Marker B:
+- opposite waist / mawashi side
+- approximately target local:
+  - forward = -0.35 R to -0.55 R
+  - lateral = -0.55 R to -0.80 R
+
+These are exploration ranges, not exact required constants.
+
+The hand/palm should visibly overlap the opponent mawashi or adjacent waist.
+
+---
+
+# Forearm Orientation
+
+The short forearm should point approximately into the hand / mawashi contact point.
+
+It does NOT need to point back to the owner's shoulder.
 
 Preferred:
 
-- shoulder -> elbow / root segment: behind bodies
-- elbow -> hand / distal segment: above bodies.
+- length roughly 0.35–0.60 R
+- width roughly 0.16–0.22 R
+- hand/palm roughly 0.15–0.20 R.
 
-Use fixed depth values only.
+Allow small visual tuning within these ranges.
 
-Do not add dynamic z sorting.
-
-Stable overlap is acceptable.
-
-If the WIP patch uses different small explicit depths, preserve them if they meet this intent.
+The forearm can be slightly diagonal rather than perfectly radial.
 
 ---
 
-# Drive / Neutral / Morozashi
+# Pair Symmetry
 
-When both participants are READY:
+For a settled face-to-face pair:
 
-- neutral -> limbs visible;
-- Drive -> limbs visible;
-- Morozashi holder -> limbs visible;
-- Morozashi disadvantaged -> limbs visible.
+- the two markers should appear on complementary sides;
+- they should not stack exactly on top of each other;
+- they should make the pair read as mutually gripping.
 
-Same geometry for all.
+Do not require perfect mirror symmetry if a slightly asymmetric composition reads better.
 
-Do not add Morozashi-specific pose yet.
+A small art-id / side convention is allowed in presentation only if needed to keep the markers visually separated and deterministic.
 
----
-
-# TURNING
-
-Required:
-
-- if either wrestler is TURNING, all Grip limb VFX are hidden;
-- body success art and ACTION-11F pair compression remain visible;
-- turning animation/facing continues normally;
-- no limb flicker while turning remains true;
-- at the first frame where both are READY, both wrestlers' limbs appear together.
-
-Do not fade or interpolate.
-
-The sudden appearance at READY is acceptable for this Visual Gate.
+Do not add gameplay semantics.
 
 ---
 
-# Release
+# Visibility
 
-At release:
+Show symbolic Grip markers only when:
 
-- success art ends as currently;
-- pair compression ends as currently;
-- limb VFX remains hidden.
+- Grip success body art is active;
+- BOTH wrestlers are READY.
 
-No stale limb after release.
+Hide for:
+
+- either wrestler TURNING
+- Grip attempt
+- Grip recovery
+- release
+- idle
+- move
+- Push
+- Tsuppari
+- Counter
+- Kuzushi
+- pre-bout.
+
+No timer.
+No fade.
+
+---
+
+# Neutral / Drive / Morozashi
+
+Use the same symbolic markers for:
+
+- neutral grapple
+- Drive
+- Morozashi holder
+- Morozashi disadvantaged.
+
+Do not encode advantage yet.
+
+The symbols should remain visually attached to the opponent's waist as the pair moves.
+
+---
+
+# Rendering Strategy
+
+Preferred: procedural Phaser-generated texture, like Kuzushi sweat.
+
+Generate once and reuse.
+
+A small dedicated helper is preferred, for example:
+
+```
+src/game/presentation/gripSuccessSymbolVfx.ts
+```
+
+It should be Phaser-free and own:
+
+- visibility
+- target-local anchor
+- marker side
+- rotation
+- R-relative size.
+
+WrestlerView / BoutScene may own actual Phaser objects.
+
+Do not build a generic VFX framework.
+
+---
+
+# Reuse / Cleanup
+
+The existing connected limb code may be replaced.
+
+Preferred outcome:
+
+- no obsolete shoulder/elbow geometry remains active;
+- no four-segment connected-arm VFX remains rendered;
+- tests describe the new symbolic model.
+
+If a helper name can be retained without confusion, that is acceptable.
+
+If retained names become misleading, rename narrowly.
+
+Do not perform unrelated refactoring.
+
+---
+
+# Depth
+
+The symbolic forearm+hand marker should be above the opponent body so it visibly overlays the mawashi.
+
+Preferred depth:
+
+```
+body = 2.0
+symbolic grip marker ~= 2.2–2.35
+Kuzushi sweat = 2.5
+```
+
+Use one fixed depth.
+
+No far/near split is required.
+
+No dynamic sorting.
+
+Stable current body ordering remains.
+
+---
+
+# Interaction with ACTION-11F Display Offset
+
+The target anchor must use the **displayed Grip-success body position**, including ACTION-11F compression.
+
+Do not anchor to raw canonical center alone if that makes the marker drift off the displayed mawashi.
+
+Do not duplicate ACTION-11F formula.
+
+Use the already-derived displayed position or equivalent existing presentation data.
+
+---
+
+# Required Visual Cases
+
+## READY Neutral
+
+- exactly two symbolic forearm/hand markers visible for the pair;
+- each overlaps a waist / mawashi region;
+- no connected upper-arm geometry;
+- no obvious floating horizontal bars.
+
+## Drive
+
+- markers follow the displayed pair;
+- remain on the waist / mawashi area.
+
+## Morozashi
+
+- same markers for now;
+- stable.
+
+## TURNING
+
+- no symbolic markers for either wrestler.
+
+## Release
+
+- markers disappear immediately.
 
 ---
 
 # Required Tests
 
-## Pair visibility
+## Symbol Geometry
 
-V1. both grappled + both READY -> visible.
+G1. exactly one symbolic marker definition per wrestler / two total per pair.
 
-V2. self TURNING -> both hidden.
+G2. forearm length/width/hand size are R-relative.
 
-V3. opponent TURNING -> both hidden.
+G3. target-local anchor lies in waist/back/mawashi-side region.
 
-V4. both TURNING -> both hidden.
+G4. marker transforms correctly for facing 0, π/2, π, -π/2.
 
-V5. TURNING -> READY transition -> both become visible on same logical presentation frame.
+G5. complementary pair markers are deterministic and not coincident.
 
-V6. Drive + both READY -> visible.
+G6. no shoulder/root geometry is part of the new marker model.
 
-V7. Morozashi + both READY -> visible.
+## Visibility
 
-V8. Grip attempt/recovery/other actions -> hidden.
+V1. READY neutral -> visible.
 
-## Geometry
+V2. READY Drive -> visible.
 
-G1. settled tuned geometry is deterministic.
+V3. READY Morozashi -> visible.
 
-G2. high arm reaches upper torso / shoulder region.
+V4. either TURNING -> both hidden.
 
-G3. low arm reaches flank / waist / mawashi region.
+V5. attempt -> hidden.
 
-G4. shoulder roots are buried / behind body.
+V6. release/recovery -> hidden.
 
-G5. distal hands render above body where intended.
-
-G6. geometry remains R-relative.
+V7. other actions -> hidden.
 
 ## Preservation
 
-P1. ACTION-11F constants remain +0.14 / -0.20.
+P1. ACTION-11F constants unchanged.
 
-P2. ACTION-11H tone recipe / runtime textures unchanged.
+P2. ACTION-11H tone recipe/runtime unchanged.
 
-P3. canonical grapple bond remains 0.70 m.
+P3. canonical bond remains 0.70 m.
 
 P4. Snapshot unchanged.
 
-P5. no src/game/sumo or src/game/input Production diff.
+P5. no src/game/sumo or src/game/input diff.
 
-P6. no public wrestler asset / wrestler-art tool diff.
+P6. no public wrestler asset / wrestler-art tooling diff.
 
 ---
 
@@ -375,41 +490,34 @@ P6. no public wrestler asset / wrestler-art tool diff.
 
 Required.
 
-Capture the same 8-frame sequence:
+Capture the standard 8-frame montage:
 
 1. neutral immediately after success
 2. neutral settled
-3. Drive while grappled
-4. Morozashi grapple
-5. immediately after release
+3. Drive
+4. Morozashi
+5. release
 6. turning immediately after success
 7. turning mid
 8. turning settled.
 
-Required visual expectations:
+Expect:
 
-## 1–4 settled/READY
-- tuned arms/hands visible;
-- high arm wraps upper body;
-- low arm reaches waist/mawashi;
-- no detached horizontal bars;
-- no exposed cut-face roots.
+1–4 / 8 when READY:
+- exactly two symbolic markers;
+- markers overlap waist / mawashi;
+- visual reads as "gripping";
+- no long arms growing from bodies.
 
-## 6–7 TURNING
-- NO arm/hand VFX on either wrestler;
-- success body art / pair compression remain;
-- no floating limbs.
+6–7 TURNING:
+- no markers.
 
-## 8 settled after TURNING
-- both wrestlers' limb VFX appear again together;
-- tuned settled geometry matches ordinary neutral/Drive look.
-
-## 5 release
-- no limbs.
+5 release:
+- no markers.
 
 Also verify:
-- no new console/runtime errors;
-- R restart;
+- R restart
+- no new runtime errors
 - Push/Tsuppari/Counter/Kuzushi unchanged.
 
 ---
@@ -418,21 +526,38 @@ Also verify:
 
 REQUIRED.
 
-Primary questions:
+Primary question:
 
-1. In settled Grip, do the arms now read as wrapping upper torso + waist/mawashi?
-2. Do roots look attached rather than cut off?
-3. Is hiding arms during TURNING visually acceptable?
-4. Does the simultaneous reappearance once both are READY feel acceptable?
-5. Does neutral / Drive / Morozashi remain coherent?
+> Do the detached symbolic forearm+hand marks over the mawashi make the pair read as gripping, in the same simple anime-VFX spirit as Kuzushi sweat, without needing anatomically connected arms?
 
-If the settled geometry is still rejected:
-- identify whether the problem is root, elbow path, hand endpoint, width, or procedural shape.
+Judge:
 
-If TURNING hide/reappear is rejected:
-- then investigate a dedicated TURNING limb pose in a later Task.
+- symbol feels intentional, not severed
+- hand clearly lands on mawashi/waist
+- forearm is short enough
+- art style matches wrestler illustration
+- exactly two markers are enough
+- neutral/Drive/Morozashi remain clear
+- TURNING hide is acceptable
+- release removal is clean.
 
-Do not change Gameplay.
+If the procedural symbol still does not match the character art:
+- report that an authored small forearm+hand PNG would be the next smallest step.
+
+Do not automatically create external image assets in this Task.
+
+---
+
+# Should the User Provide an Image?
+
+For ACTION-11K, **no image is required initially**.
+
+First attempt the symbolic mark procedurally.
+
+If the User Visual Gate rejects the procedural drawing specifically because of art-style mismatch rather than placement/size:
+- the next Task may ask the User to provide one small transparent PNG of a stylized elbow-to-hand symbol.
+
+Do not ask for that asset before this Gate is tested.
 
 ---
 
@@ -440,27 +565,27 @@ Do not change Gameplay.
 
 ## In Scope
 
-- adopt/reconstruct ACTION-11I settled limb geometry
-- two-segment limb rendering if needed
-- fixed far/near segment depths
-- pair-level READY visibility
-- minimal presentation plumbing
-- tests / browser smoke / montage.
+- remove/replace connected limb VFX
+- detached symbolic elbow/forearm/hand marker
+- target-waist / mawashi placement
+- pair READY visibility
+- simple procedural art
+- focused tests
+- browser montage.
 
 ## Scope Out
 
 Do NOT:
 
-- change Grip gameplay
+- change gameplay
 - change Grappled Orientation
-- change canonical positions/bond/facing
-- change ACTION-11F offsets
-- change ACTION-11H tone correction
-- modify wrestler source/runtime assets
-- AI regenerate art
-- add TURNING-specific limb pose
-- add dynamic z sort
-- add generic pair renderer/framework
+- change ACTION-11F compression
+- change ACTION-11H tone matching
+- change Grip success/attempt body images
+- AI regenerate wrestler art
+- add Morozashi-specific symbol
+- add dynamic z sorting
+- add particles/audio/camera
 - modify PROJECT_HANDOFF.md.
 
 ---
@@ -469,25 +594,27 @@ Do NOT:
 
 STOP if:
 
-- pair TURNING visibility requires changing Simulation state
-- settled geometry still requires pair compression/gameplay changes
+- target-waist marker placement requires gameplay/canonical position changes
+- current presentation flow cannot access opponent displayed position without broad architecture changes
+- procedural symbolic mark cannot be made coherent without external art
 - dynamic z sorting is required
-- current presentation flow cannot expose opponent.turning without broad architecture changes
-- external authored limb art becomes necessary
 - unrelated accepted visuals regress.
+
+If stopped for art-style mismatch:
+- recommend a minimal transparent forearm+hand PNG specification for the User.
 
 ---
 
 # Verification
 
 Verification Level:
-Standard Presentation Visual Tune
+Standard Presentation Visual Gate
 
 Required:
 
-- focused limb geometry tests
+- focused symbolic geometry tests
 - pair READY visibility tests
-- Grip success presentation tests
+- Grip success presentation regression
 - Grip/Grapple/Drive/Orientation regression
 - Push/Tsuppari/Counter/Kuzushi presentation regression
 - `pnpm test`
@@ -505,21 +632,20 @@ Required:
 Include:
 
 - Result
-- whether WIP patch was used or geometry was reconstructed
-- old ACTION-11G geometry -> final settled geometry
-- two-segment/depth model
-- pair READY visibility implementation
+- old connected limb model -> new symbolic model
+- marker count
+- final R-relative geometry
+- target-local anchor values
+- render style/colors/depth
 - changed files
 - proof ACTION-11F/11H unchanged
 - proof gameplay/canonical bond unchanged
 - focused/full verification
 - 8-frame montage
-- explicit screenshots showing:
-  - TURNING limbs hidden
-  - READY limbs visible
 - Design Deviations
 - Unexpected Scope
 - User Visual Gate: REQUIRED
+- whether a User-authored small PNG is recommended next
 - Git delivery.
 
 If none:
@@ -545,7 +671,7 @@ Normal successful Task:
 
 Suggested commit:
 
-`feat(presentation): hide grip limbs while turning`
+`feat(presentation): replace grip limbs with symbolic markers`
 
 Do not modify:
 
@@ -555,8 +681,10 @@ Do not modify:
 
 # Final Instruction
 
-Adopt the improved ACTION-11I settled/READY arm geometry, but show Grip-success arm/hand VFX only when BOTH grappled wrestlers are READY.
+Replace the anatomically connected Grip-success limb VFX with two detached, symbolic elbow-to-hand markers placed directly over the opponent waist / mawashi region.
 
-If either wrestler is TURNING, hide limb VFX for BOTH wrestlers.
+The symbols do not need to connect to the wrestler body.
 
-Do not change Gameplay, Grappled Orientation, ACTION-11F pair compression, ACTION-11H tone matching, wrestler assets, or canonical 0.70 m bond.
+Keep the visual abstraction similar to the Kuzushi sweat effect: simple, anime-like, readable, and presentation-only.
+
+Preserve pair READY visibility: if either wrestler is TURNING, hide both symbolic markers.
