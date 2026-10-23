@@ -39,6 +39,9 @@ export interface BoutSetup {
 // Semantic per-tick input. Source-agnostic (keyboard / touch / CPU); never raw keys.
 export interface ParticipantIntent {
   // World-frame movement direction. Length is clamped to at most 1 by the simulation.
+  // FREE: locomotion. GRAPPLED with both participants READY: grapple footwork - only its component tangential to
+  // the participant's orbit around the pair midpoint rotates the pair (the radial part does nothing; no push).
+  // GRAPPLED while either is TURNING: ignored.
   readonly move: Vec2
   // A new Push press edge for this tick (one press = one Push), not the held key state.
   readonly pushPressed: boolean

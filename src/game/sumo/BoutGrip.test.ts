@@ -322,11 +322,13 @@ describe('Grip / Engagement foundation (ACTION-05A)', () => {
     expect(A(s).position.y).toBeCloseTo(0.3, 12)
   })
 
-  it('T103: the bond holds the exact distance under opposing WASD; no drift or jitter', () => {
+  // ACTION-12B: a READY pair now rotates on tangential WASD (BoutGrappleRotation.test.ts); radial WASD (pulling
+  // straight apart along the pair axis) must still hold the pair exactly in place.
+  it('T103: the bond holds the exact distance under opposing radial WASD; no drift or jitter', () => {
     const sim = grappled()
     const p0 = sim.getSnapshot()
     for (let k = 0; k < 180; k++) {
-      sim.step(intents({ move: [-1, 0.3] }, { move: [1, -0.5] }))
+      sim.step(intents({ move: [-1, 0] }, { move: [1, 0] }))
       const s = sim.getSnapshot()
       expectFinite(s)
       expect(dist(s)).toBeCloseTo(COMBINED, 12)

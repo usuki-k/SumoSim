@@ -366,7 +366,7 @@ export class BoutScene extends Phaser.Scene {
     const dummy =
       this.dummyMode === 'push' ? 'DUMMY: PUSH' : this.dummyMode === 'tsuppari' ? 'DUMMY: TSUPPARI' : 'DUMMY: STATIONARY'
     this.modeText?.setText(
-      `${dummy}   WASD move  Up push/drive  Left/Right tsuppari  Down counter  Shift grip  1/2/3 dummy  R restart  0 debug off`,
+      `${dummy}   WASD move/rotate  Up push/drive  Left/Right tsuppari  Down counter  Shift grip  1/2/3 dummy  R restart  0 debug off`,
     )
   }
 

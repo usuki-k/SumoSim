@@ -20,7 +20,7 @@ import type {
   TsuppariStrike,
   Vec2,
 } from './BoutTypes.ts'
-import { GRAPPLE_TURN_RATE, canActInGrapple, turnFacingTowardGrapple } from './grappleOrientation.ts'
+import { GRAPPLE_TURN_RATE, canActInGrapple, normalizeAngle, turnFacingTowardGrapple } from './grappleOrientation.ts'
 import { resolveArenaRingOut } from './ringOut.ts'
 
 // Provisional technical values for the movement foundation; NOT final balance. Subject to User Play Test.
@@ -100,6 +100,10 @@ export const GRIP_RECOVERY_TICKS = 12 // ~200 ms after a whiffed / defeated Grip
 export const GRAPPLE_DRIVE_SPEED = 0.6 // m/s pair target speed per unit of net Drive strength
 export const GRAPPLE_DRIVE_ACCELERATION = 4 // m/s^2 toward that target per unit of net strength
 export const MOROZASHI_DRIVE_FACTOR = 1.5 // Morozashi holder's Drive strength (others 1)
+
+// Grappled WASD footwork (ACTION-12B). Provisional Prototype tuning, subject to User Play Test; separate from the
+// automatic GRAPPLE_TURN_RATE on purpose.
+export const GRAPPLE_MANUAL_ROTATION_RATE = Math.PI / 2 // rad/s maximum pair rotation (90 deg/s, 1.5 deg/tick)
 
 // Inward self-velocity sums at or below this (m/s) count as no contribution.
 const INWARD_EPSILON = 1e-9
@@ -515,6 +519,38 @@ function sanitizeMove(move: Vec2): MutableVec2 {
   return { x: move.x, y: move.y }
 }
 
+// Grappled footwork (ACTION-12B): the signed pair rotation intent in [-1, 1] (+ = atan2 increase = clockwise on the
+// y-down screen). Each participant's world-frame move counts only along its own + orbit tangent around the pair
+// midpoint, (-r.y, r.x) / |r| for r = position - midpoint; the radial part (push / pull) is dropped. B's r is
+// exactly -A's, so the sum is antisymmetric bit for bit: participant order does not matter and equal opposite intents
+// cancel to exactly 0. It is clamped, so same-sense help does not double. Coincident centers contribute nothing.
+export function grappleManualRotationIntent(a: Vec2, moveA: Vec2, b: Vec2, moveB: Vec2): number {
+  const rx = (a.x - b.x) / 2 // A - midpoint; B - midpoint = -r
+  const ry = (a.y - b.y) / 2
+  const length = Math.hypot(rx, ry)
+  if (!(length > MIN_CONTACT_DISTANCE)) return 0
+  const alongA = (moveA.x * -ry + moveA.y * rx) / length
+  const alongB = -((moveB.x * -ry + moveB.y * rx) / length)
+  return Math.max(-1, Math.min(1, alongA + alongB))
+}
+
+// Rigid grappled footwork rotation: both centers orbit the pair midpoint by `delta` and both facings turn by the same
+// `delta` (normalized), so the midpoint, the bond distance and each facing error (READY / TURNING) are unchanged.
+// Positions and facings only: no velocity, impulse or external-momentum change.
+export function rotateGrappledPair(a: { position: MutableVec2; facing: number }, b: { position: MutableVec2; facing: number }, delta: number): void {
+  const mx = (a.position.x + b.position.x) / 2
+  const my = (a.position.y + b.position.y) / 2
+  const c = Math.cos(delta)
+  const s = Math.sin(delta)
+  for (const p of [a, b]) {
+    const rx = p.position.x - mx
+    const ry = p.position.y - my
+    p.position.x = mx + rx * c - ry * s
+    p.position.y = my + rx * s + ry * c
+    p.facing = normalizeAngle(p.facing + delta)
+  }
+}
+
 // Updates velocity in place for one tick. Velocity is split along the desired direction d:
 //  - perpendicular part: damped strongly (feet re-plant instead of sliding in an arc)
 //  - parallel part: opposing -> braked to zero first; same direction -> accelerates up to the
@@ -624,8 +660,9 @@ export class BoutSimulation {
 
   // Advances exactly one logical tick (TICK_SECONDS). Participants without an intent have zero move.
   // Order: Tsuppari hand cooldowns -> posture timers -> tick-start grapple readiness -> release (if the
-  // tick began grappled) -> FREE action start / grappled Drive decision -> effective move -> grounded self
-  // velocity -> external update (FREE decay / grappled shared Drive update) -> integrate (self + external)
+  // tick began grappled) -> grappled Drive decision -> grappled footwork rotation (both READY) -> FREE action start
+  // -> effective move -> grounded self velocity -> external update (FREE decay / grappled shared Drive update on the
+  // rotated pair axis) -> integrate (self + external)
   // -> contact -> grapple bond (grappled) / FREE: Push impact opening -> Grip contest (one state) -> Grip
   // cancellations -> Counter -> Grip grapple -> Push + Tsuppari forces (still free) -> action timers -> facing
   // -> ring-out (once, from the previous and final resolved centers).
@@ -678,6 +715,19 @@ export class BoutSimulation {
       }
     }
 
+    // Grappled footwork (ACTION-12B): only when both began this tick READY (a TURNING participant blocks both), WASD
+    // rigidly rotates the pair about its midpoint; it never translates or pushes it. Before the Drive update, so Drive
+    // follows the rotated axis. A zero intent skips the block entirely (positions / facings untouched).
+    if (grappled && ready(a) && ready(b)) {
+      const rotation = grappleManualRotationIntent(
+        a.position,
+        sanitizeMove(intents.get(a.id)?.move ?? ZERO_MOVE),
+        b.position,
+        sanitizeMove(intents.get(b.id)?.move ?? ZERO_MOVE),
+      )
+      if (rotation !== 0) rotateGrappledPair(a, b, rotation * GRAPPLE_MANUAL_ROTATION_RATE * TICK_SECONDS)
+    }
+
     for (const p of this.participants) {
       const intent = intents.get(p.id)
       const move = sanitizeMove(intent?.move ?? ZERO_MOVE)
@@ -710,7 +760,7 @@ export class BoutSimulation {
         }
       }
 
-      // Grappled: ordinary WASD is suppressed for both (no grappled footwork yet).
+      // Grappled: ordinary linear WASD stays suppressed for both; grapple footwork is the rotation above.
       applyGroundedVelocity(p.selfVelocity, grappled ? ZERO_MOVE : effectiveMove(p, move))
       if (!grappled) decayExternal(p.externalVelocity)
     }
@@ -870,7 +920,8 @@ export class BoutSimulation {
     this.resolveGrappleBond()
   }
 
-  // Grappled pair: one shared external update per tick along the tick-start pair axis (A -> B), with
+  // Grappled pair: one shared external update per tick along the current pair axis (A -> B, after this tick's
+  // footwork rotation; the tick-start axis when there is none), with
   // the signed, order-independent net Drive strength(A)*[A drives] - strength(B)*[B drives]. Both
   // participants end with the identical external velocity, so the bonded pair moves as one.
   private updateGrappledExternal(): void {

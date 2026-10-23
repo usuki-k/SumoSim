@@ -294,18 +294,24 @@ describe('Grappled orientation readiness (ACTION-05B1)', () => {
     expect(grappleOrientationSource).not.toMatch(/from ['"]phaser['"]/)
   })
 
+  // ACTION-12B: WASD footwork may rotate the pair only once both are READY; while either is TURNING (every tick
+  // checked here, with WASD held) turning still changes facing only and the pair axis stays fixed.
   it('T127: turning changes facing only; the bond distance and pair axis stay fixed, no NaN', () => {
     const sim = counterGrip('rear')
     const s0 = sim.getSnapshot()
     const axis0 = { x: B(s0).position.x - A(s0).position.x, y: B(s0).position.y - A(s0).position.y }
-    for (let k = 0; k < 70; k++) {
+    let turningTicks = 0
+    while (!(ready(sim.getSnapshot(), 0) && ready(sim.getSnapshot(), 1))) {
       sim.step(intents({ move: [1, 0] }, { move: [0, 1] }))
       const s = sim.getSnapshot()
       expect(dist(s)).toBeCloseTo(COMBINED, 12)
       expect(B(s).position.x - A(s).position.x).toBeCloseTo(axis0.x, 12)
       expect(B(s).position.y - A(s).position.y).toBeCloseTo(axis0.y, 12)
       for (const p of s.participants) expect(Number.isFinite(p.facing + p.position.x + p.position.y)).toBe(true)
+      turningTicks++
+      expect(turningTicks).toBeLessThan(200)
     }
+    expect(turningTicks).toBeGreaterThan(40) // the rear grip really spent its TURNING ticks under held WASD
   })
 
   it('T128: FREE instant facing and the Kuzushi freeze are unchanged; release returns to instant facing', () => {
