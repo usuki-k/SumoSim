@@ -1,5 +1,5 @@
 Task-ID: ACTION-11H-GRIP-SUCCESS-TONE-MATCH-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION ART TONE-MATCH VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -593,3 +593,230 @@ Do not regenerate Grip-success art with AI.
 Keep the authored Grip-success source, geometry, ACTION-11F pair compression and gameplay unchanged.
 
 Deterministically tone-match only the Grip-success skin at export time toward the accepted idle runtime `public/assets/action/wrestler/red.png`, then derive blue from the corrected red using the existing accepted reflection + mawashi recolor pipeline.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
+Accepted Technical Baseline: fe7fa46f473a09fa0df1d4c4fa02cf8179508b90
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-11H.
+
+Confirmed from Current Source / diff:
+
+- authored Grip-success source remains unchanged in input.local
+- accepted idle runtime red is the tone reference
+- tone correction runs after Grip-success normalization and before red -> blue derivation
+- only skin-mask RGB is changed
+- alpha is unchanged
+- non-skin pixels are unchanged
+- geometry / FRONT / root / pivot / body-core remain unchanged
+- corrected blue is derived from corrected red by the existing local-Y reflection + mawashi recolor
+- no AI regeneration
+- no runtime Phaser tint/filter
+- no src/game/sumo or src/game/input changes
+- ACTION-11F pair-compression constants remain unchanged
+- ACTION-11G limb geometry/code remains unchanged.
+
+## Accepted Tone Method
+
+Selected deterministic method:
+
+Candidate C — skin-only monotonic levels / piecewise-linear luminance mapping.
+
+Runtime skin luminance uses linear-light sRGB relative luminance:
+
+```
+Y = 0.2126 R + 0.7152 G + 0.0722 B
+```
+
+Recorded curve points:
+
+```
+(0, 0)
+(0.44367 -> 0.32912)
+(0.55539 -> 0.534612)
+(0.56370 -> 0.554119)
+(1, 1)
+```
+
+The transform scales linear RGB by Y'/Y so chromaticity is substantially preserved.
+
+## Brightness Match Evidence
+
+Accepted measured skin luminance:
+
+Idle reference:
+- P20 = 0.3291
+- P50 = 0.5346
+- P80 = 0.5541
+
+Uncorrected success:
+- P20 = 0.4437
+- P50 = 0.5554
+- P80 = 0.5637
+
+Corrected success:
+- P20 = 0.3294
+- P50 = 0.5354
+- P80 = 0.5556
+
+RMS quantile error:
+
+```
+uncorrected A: 0.0674
+gamma B:       0.0524
+levels C:      0.0010
+```
+
+Therefore the selected correction materially improves the idle-vs-success luminance-distribution match.
+
+The main original difference was not blown highlights but overly bright shadows / shallow contrast in the success art.
+
+## Skin Mask
+
+Accepted runtime skin mask:
+
+- alpha >= 250
+- outside accepted mawashi mask
+- hue 12–50 degrees
+- saturation >= 0.2
+- value >= 0.35.
+
+Reported real Grip-success skin pixels: 11073.
+
+Diagnostics accepted:
+
+- overlap with mawashi mask = 0
+- hair / dark outline excluded by mask conditions
+- no clipping introduced.
+
+This is sufficiently narrow for the current Visual Gate.
+
+## Color Preservation
+
+No intentional hue shift was introduced.
+
+Reported median skin hue/chroma:
+
+- success before: hue 65.93°, chroma 41.75
+- success after: hue 65.89°, chroma 41.50.
+
+Per-pixel hue change:
+- median ~0.37°
+- max ~1.73°.
+
+A pre-existing approximately 3.7° more-yellow skin hue versus idle remains intentionally uncorrected because ACTION-11H is brightness/tone matching, not hue repainting.
+
+## Runtime Outputs
+
+Corrected provisional Grip-success runtime hashes:
+
+Red:
+`5852751b85dae79826848bd6daec751fa3addc572b5943ff95047f22c1187221`
+
+Blue:
+`624d2d51b9fba3a24aebcf6750335abc8054dd1fd5cfd239469daa679ee542e2`
+
+Geometry remains:
+
+- red 160 x 183, pivot (83,98)
+- blue 160 x 183, pivot (83,85)
+- body core 123.076923 px.
+
+## Invariants
+
+Accepted:
+
+- alpha byte-for-byte unchanged
+- outside-mask pixels byte-for-byte unchanged
+- no corrected-skin channel clipping to 0/255
+- dimensions unchanged
+- pivots unchanged
+- body core unchanged
+- source FRONT/root unchanged
+- idle/Tsuppari/Counter/Grip-attempt art unchanged.
+
+## Verification Review
+
+Accepted:
+
+- focused Grip-success exporter tests: 24 / 24
+- full wrestler-art suite: 209 / 209
+- deterministic exporter rerun / --check: PASS
+- idle / attempt / Tsuppari / Counter exporter checks: PASS
+- pnpm test: 30 files / 518 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- browser/runtime smoke: 27 / 27 PASS
+- no src gameplay diff.
+
+This satisfies the Task's Standard Art / Presentation verification.
+
+## ACTION-11G Limb Note
+
+The rejected ACTION-11G limb VFX was correctly left unchanged.
+
+Because ACTION-11G uses a fixed procedural skin color (#f3b47c), those rejected limbs may now look brighter than the corrected success body.
+
+This is NOT an ACTION-11H failure and must not be corrected inside the tone-matching task.
+
+When arm/hand VFX is redesigned later, its color should be derived/aligned from the corrected body palette rather than retaining the rejected fixed visual.
+
+## User Visual Gate
+
+REQUIRED before visual acceptance.
+
+Primary question:
+
+> Does the corrected Grip-success body now look like the same wrestler under approximately the same lighting as idle / Grip attempt?
+
+Judge:
+
+- brightness jump at attempt -> success
+- shadow depth
+- highlight consistency
+- whether the remaining ~3.7° yellow hue difference is noticeable
+- red mawashi / hair / black outlines remain visually unchanged
+- blue success is consistent
+- authored success shading still looks natural.
+
+If still wrong, report the remaining problem specifically as one of:
+- brightness
+- contrast
+- hue
+- highlight placement.
+
+Do not reopen AI regeneration automatically.
+
+## Do Not Reopen
+
+Unless User explicitly requests:
+
+- ACTION-11C Grip gameplay
+- ACTION-11F +0.14R / -0.20R pair compression
+- Grip success geometry/pivot
+- Grip attempt art
+- accepted idle Product art.
+
+## Deferred
+
+- redesign of rejected ACTION-11G arm/hand VFX using the User's desired arm placement
+- possible hue/chroma matching only if User says brightness is fixed but color still differs
+- permanent Product promotion after visual gates are accepted.
+
+## Next Task Constraint
+
+Wait for User Visual Gate on ACTION-11H.
+
+If accepted:
+- treat Candidate C skin-tone correction as current Grip-success visual baseline
+- next visual task may return to the rejected arm/hand VFX redesign.
+
+If rejected:
+- adjust only the specific remaining tone dimension reported by User before touching pose/geometry/gameplay.
