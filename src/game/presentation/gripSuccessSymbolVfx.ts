@@ -6,13 +6,12 @@
 // target-local in units of the body radius R (+forward = FRONT, -forward = BACK / mawashi knot, +lateral = wrestler
 // RIGHT) from the target's displayed body center (canonical + Grip success display offset) and its canonical facing:
 // the fist (hand anchor) sits on the mawashi. The two markers of a wrestler differ by the side of its success art
-// (ACTION-11M). On the head side (the visually upper marker of a settled pair) the forearm crosses the waist band at
-// about 37 degrees with the elbow outside the waist and the upper-arm stub curling toward the pair contact (ACTION-11L
-// layout). On the foot side (the visually lower marker; ACTION-11N, after the User reference) the forearm runs forward
-// along the lower flank from the mawashi to an elbow in front, the reflected art putting the upper-arm bulge on the
-// outer edge, so it reads as reaching from the target's front shoulder down to its mawashi; anatomical attachment is
-// not intended. The blue success art is the red one reflected across the local X axis, so its head / foot sides (and
-// marker set) are the red ones mirrored laterally. The geometry
+// (ACTION-11M): the head side is the visually upper marker of a settled pair, the foot side the lower one. ACTION-11N
+// (User Play Test reference): on both sides the elbow / upper arm comes out just beside the target's front shoulder,
+// outside its outline, and the forearm runs diagonally back to the fist on the mawashi - on the head side the upper arm
+// lies along the upper edge, on the foot side the elbow bulge shows below the lower edge. Anatomical attachment to
+// either wrestler is not intended. The blue success art is the red one reflected across the local X axis, so its
+// head / foot sides (and marker set) are the red ones mirrored laterally. The geometry
 // assumes an aligned pair: shown only while both wrestlers are in the success pose and neither is TURNING (ACTION-11J
 // rule). No timer, no fade, no animation.
 import { isGripSuccessPose } from './gripSuccessGateArt.ts'
@@ -71,18 +70,18 @@ export interface GripSuccessMarker {
   readonly elbowLateralR: number
 }
 
-// Per target art: [head side (ACTION-11L), foot side (ACTION-11N)].
-// Head side elbow -> hand (-0.42, +/-0.56): 0.70 R, 36.87 degrees off the target's local lateral (waist band) axis.
-// Foot side elbow -> hand (-0.68, +/-0.17): 0.70 R, 75.96 degrees off that axis (forward along the lower flank).
+// Per target art: [head side, foot side] (ACTION-11N, User Play Test reference).
+// Head side elbow -> hand (-0.65, +/-0.35): 0.74 R, 61.70 degrees off the target's local lateral (waist band) axis.
+// Foot side elbow -> hand (-0.50, +/-0.50): 0.71 R, 45 degrees off that axis.
 // The red head side is its RIGHT (+lateral), the foot side its LEFT; blue (reflected) is the opposite.
 export const GRIP_SUCCESS_MARKERS: Readonly<Record<ProductWrestlerArtId, readonly GripSuccessMarker[]>> = {
   red: [
-    { role: 'headSide', side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 1.18 },
-    { role: 'footSide', side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: 0.23, elbowLateralR: -0.79 },
+    { role: 'headSide', side: 'right', art: 'authored', handForwardR: -0.4, handLateralR: 0.8, elbowForwardR: 0.25, elbowLateralR: 1.15 },
+    { role: 'footSide', side: 'left', art: 'mirrored', handForwardR: -0.55, handLateralR: -0.45, elbowForwardR: -0.05, elbowLateralR: -0.95 },
   ],
   blue: [
-    { role: 'headSide', side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -1.18 },
-    { role: 'footSide', side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: 0.23, elbowLateralR: 0.79 },
+    { role: 'headSide', side: 'left', art: 'mirrored', handForwardR: -0.4, handLateralR: -0.8, elbowForwardR: 0.25, elbowLateralR: -1.15 },
+    { role: 'footSide', side: 'right', art: 'authored', handForwardR: -0.55, handLateralR: 0.45, elbowForwardR: -0.05, elbowLateralR: 0.95 },
   ],
 }
 

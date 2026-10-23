@@ -105,9 +105,6 @@ const at = (center: { x: number; y: number }, f: number, fw: number, lat: number
   x: center.x + fw * R_PX * Math.cos(f) - lat * R_PX * Math.sin(f),
   y: center.y + fw * R_PX * Math.sin(f) + lat * R_PX * Math.cos(f),
 })
-// ACTION-11L layout (one per side) - the head-side markers keep exactly these values
-const L11_RIGHT = { side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 1.18 }
-const L11_LEFT = { side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -1.18 }
 const roleOf = (art: 'red' | 'blue', role: 'headSide' | 'footSide') => GRIP_SUCCESS_MARKERS[art].find((m) => m.role === role)!
 
 describe('Grip success authored hand markers (ACTION-11L; lower markers ACTION-11M / 11N)', () => {
@@ -145,11 +142,11 @@ describe('Grip success authored hand markers (ACTION-11L; lower markers ACTION-1
   it('G1 / G2: two markers per target wrestler (head side + foot side) -> four per READY pair', () => {
     expect(GRIP_SUCCESS_MARKERS.red.map((m) => `${m.role}:${m.side}:${m.art}`)).toEqual([
       'headSide:right:authored',
-      'footSide:left:mirrored', // ACTION-11N: reflected relative to ACTION-11M
+      'footSide:left:mirrored',
     ])
     expect(GRIP_SUCCESS_MARKERS.blue.map((m) => `${m.role}:${m.side}:${m.art}`)).toEqual([
       'headSide:left:mirrored',
-      'footSide:right:authored', // ACTION-11N: reflected relative to ACTION-11M
+      'footSide:right:authored',
     ])
     expect(viewSource).toMatch(/this\.gripMarkers = GRIP_SUCCESS_MARKERS\[art\.id\]\.map/)
     expect(viewSource).toMatch(/GRIP_SUCCESS_MARKERS\[this\.idleArt\.id\]\.forEach/)
@@ -159,32 +156,12 @@ describe('Grip success authored hand markers (ACTION-11L; lower markers ACTION-1
     expect(symbolSource).not.toMatch(/GRIP_SUCCESS_SYMBOL\b/)
   })
 
-  it('11M-1: the head-side (upper) markers keep the ACTION-11L geometry exactly', () => {
-    const { role: _r, ...redHead } = roleOf('red', 'headSide')
-    const { role: _b, ...blueHead } = roleOf('blue', 'headSide')
-    expect(redHead).toEqual(L11_RIGHT)
-    expect(blueHead).toEqual(L11_LEFT)
-  })
-
-  it('11N-2 / 11N-3: the foot-side (lower) marker uses only the reflected art and runs forward along the flank', () => {
-    // ACTION-11N values (User reference): fist unchanged on the mawashi, elbow in front on the lower flank
-    expect(roleOf('red', 'footSide')).toEqual({
-      role: 'footSide', side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: 0.23, elbowLateralR: -0.79,
-    })
-    expect(roleOf('blue', 'footSide')).toEqual({
-      role: 'footSide', side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: 0.23, elbowLateralR: 0.79,
-    })
-    for (const art of ['red', 'blue'] as const) {
-      const head = roleOf(art, 'headSide')
-      const foot = roleOf(art, 'footSide')
-      expect(Math.sign(foot.handLateralR)).toBe(-Math.sign(head.handLateralR)) // the other side of the waist
-      // the forearm runs forward from the mawashi; the elbow stays inside the target body (not hanging outside it as in
-      // ACTION-11L at 1.18 R) and far from the gripping opponent in front (displayed center at ~1.72 R)
-      expect(foot.elbowForwardR).toBeGreaterThan(foot.handForwardR + 0.5)
-      expect(Math.hypot(foot.elbowForwardR, foot.elbowLateralR)).toBeLessThan(0.9)
-      expect(Math.hypot(foot.elbowForwardR - 1.72, foot.elbowLateralR)).toBeGreaterThan(1.5)
-    }
-    // red foot side = LEFT, blue (reflected art) foot side = RIGHT: the two sets are lateral mirrors (deterministic)
+  it('11N: both markers follow the User Play Test reference (exact values)', () => {
+    expect(GRIP_SUCCESS_MARKERS.red).toEqual([
+      { role: 'headSide', side: 'right', art: 'authored', handForwardR: -0.4, handLateralR: 0.8, elbowForwardR: 0.25, elbowLateralR: 1.15 },
+      { role: 'footSide', side: 'left', art: 'mirrored', handForwardR: -0.55, handLateralR: -0.45, elbowForwardR: -0.05, elbowLateralR: -0.95 },
+    ])
+    // blue is the red art reflected across the local X axis: the same set mirrored laterally
     for (const role of ['headSide', 'footSide'] as const) {
       const r = roleOf('red', role)
       const b = roleOf('blue', role)
@@ -194,49 +171,52 @@ describe('Grip success authored hand markers (ACTION-11L; lower markers ACTION-1
         r.elbowForwardR,
         -r.elbowLateralR,
       ])
+      expect(b.art).toBe(r.art === 'authored' ? 'mirrored' : 'authored')
+    }
+  })
+
+  it('11N: elbows come out beside the target front shoulder (outside / on its outline), not from the opponent', () => {
+    for (const m of ALL_MARKERS) {
+      expect(m.elbowForwardR).toBeGreaterThan(m.handForwardR + 0.4) // forearm runs forward from the fist
+      expect(Math.hypot(m.elbowForwardR, m.elbowLateralR)).toBeGreaterThan(0.9) // at / beyond the body outline
+      expect(Math.abs(m.elbowLateralR)).toBeGreaterThan(Math.abs(m.handLateralR)) // on the outside of the fist
+      expect(Math.hypot(m.elbowForwardR - 1.72, m.elbowLateralR)).toBeGreaterThan(1.5) // far from the gripping opponent
+    }
+    for (const art of ['red', 'blue'] as const) {
+      const head = roleOf(art, 'headSide')
+      const foot = roleOf(art, 'footSide')
+      expect(Math.sign(foot.handLateralR)).toBe(-Math.sign(head.handLateralR))
+    }
+  })
+
+  it('G3: fists on opposite sides of the mawashi (back half of the waist, inside the body)', () => {
+    for (const m of ALL_MARKERS) {
+      expect(m.handForwardR).toBeLessThan(-0.3)
+      expect(Math.hypot(m.handForwardR, m.handLateralR)).toBeLessThan(0.95)
     }
   })
 
   it('11N-4: reflection only swaps the texture; the fist anchor world position is invariant', () => {
-    for (const art of ['red', 'blue'] as const) {
-      const foot = roleOf(art, 'footSide')
-      const other = { ...foot, art: foot.art === 'authored' ? ('mirrored' as const) : ('authored' as const) }
+    for (const m of ALL_MARKERS) {
+      const other = { ...m, art: m.art === 'authored' ? ('mirrored' as const) : ('authored' as const) }
       for (const f of [0, 1.1, Math.PI, -2.3]) {
-        const a = gripMarkerPlacement(foot, CENTER, f, R_PX)
+        const a = gripMarkerPlacement(m, CENTER, f, R_PX)
         const b = gripMarkerPlacement(other, CENTER, f, R_PX)
         expect(a.hand).toEqual(b.hand)
         expect(a.elbow).toEqual(b.elbow)
-        expect(a.lengthPx).toBeCloseTo(b.lengthPx, 12)
       }
     }
   })
 
-  it('G3 / 11M-3: fists on opposite sides of the mawashi (back half of the waist, inside the body), unchanged', () => {
+  it('G4 / G5: head side 61.70 deg / 0.74 R, foot side 45 deg / 0.71 R; texture scale gives the displayed length', () => {
     for (const m of ALL_MARKERS) {
-      expect(m.handForwardR).toBe(-0.45)
-      expect(Math.abs(m.handLateralR)).toBe(0.62)
-      expect(Math.hypot(m.handForwardR, m.handLateralR)).toBeLessThan(0.9)
-    }
-    for (const art of ['red', 'blue'] as const) {
-      const [a, b] = GRIP_SUCCESS_MARKERS[art]
-      expect(Math.sign(a.handLateralR)).toBe(-Math.sign(b.handLateralR))
-    }
-  })
-
-  it('G4 / G5 / 11N-5: head side 36.87 deg, foot side 75.96 deg off the waist band (User reference); 0.70 R long', () => {
-    for (const m of ALL_MARKERS) {
-      const expected = m.role === 'headSide' ? Math.atan2(0.42, 0.56) : Math.atan2(0.68, 0.17)
-      expect(gripMarkerWaistAngleDeg(m)).toBeCloseTo((expected * 180) / Math.PI, 9)
-      if (m.role === 'headSide') {
-        expect(gripMarkerWaistAngleDeg(m)).toBeGreaterThanOrEqual(30)
-        expect(gripMarkerWaistAngleDeg(m)).toBeLessThanOrEqual(45)
-      }
-      expect(gripMarkerLengthR(m)).toBeCloseTo(m.role === 'headSide' ? 0.7 : Math.hypot(0.68, 0.17), 9)
+      const [df, dl] = m.role === 'headSide' ? [0.65, 0.35] : [0.5, 0.5]
+      expect(gripMarkerWaistAngleDeg(m)).toBeCloseTo((Math.atan2(df, dl) * 180) / Math.PI, 9)
+      expect(gripMarkerLengthR(m)).toBeCloseTo(Math.hypot(df, dl), 9)
       expect(gripMarkerLengthR(m)).toBeGreaterThanOrEqual(0.65)
       expect(gripMarkerLengthR(m)).toBeLessThanOrEqual(0.75)
       const p = gripMarkerPlacement(m, CENTER, 0.3, R_PX)
       expect(p.lengthPx).toBeCloseTo(gripMarkerLengthR(m) * R_PX, 9)
-      // the texture's own elbow -> hand distance times the scale is the displayed length
       const art = GRIP_MARKER_ART[m.art]
       expect(Math.hypot(art.hand.x - art.elbow.x, art.hand.y - art.elbow.y) * p.scale).toBeCloseTo(p.lengthPx, 9)
     }
@@ -291,7 +271,7 @@ describe('Grip success authored hand markers (ACTION-11L; lower markers ACTION-1
     const facing = s.participants[0].facing
     const canonical = { x: 100, y: 100 }
     const display = gripSuccessDisplayOffsetPx(visualOf(s, 0), facing, R_PX)
-    const m = roleOf('blue', 'footSide')
+    const m = roleOf('blue', 'footSide') // any marker; the anchor rule is the same
     const p = gripMarkerPlacement(m, { x: canonical.x + display.x, y: canonical.y + display.y }, facing, R_PX)
     const expected = at(canonical, facing, m.handForwardR + GRIP_SUCCESS_FORWARD_OFFSET_R, m.handLateralR + GRIP_SUCCESS_LATERAL_OFFSET_R)
     expect(p.hand.x).toBeCloseTo(expected.x, 9)

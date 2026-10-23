@@ -26,6 +26,62 @@ PASS WITH USER VISUAL GATE REQUIRED:
 
 まわしに対する角度は約76°で、Taskの30–45°から外れる。Userの確認を取った上での選択（Design Deviationsを参照）。
 
+# User Play Test follow-up（同じTask内の追加修正、2 commit目）
+
+最初のcommit（`95b5802`、下の各節の内容）をpushした後、UserがPlay Testで違和感を報告し、2枚目の参照画像を貼った。
+
+- 参照画像の内容: 上下とも、相手（markerが乗る力士）の**肩の横から腕が出て**いて、まわしの拳へ向かう
+
+Userの直接の指示で、上下4つとも次の配置（候補P1）に変えた。
+
+- 上側も変えたので、Taskの「上側は固定」から外れる（Design Deviationsを参照）
+- offline比較: `m11o_a_grid.png`（0 = 最初のcommit、P1–P4 = 絵の向きの組み合わせ）。Userが「P1を今すぐ実装」を選んだ
+
+最終の配置（markerが乗る力士のlocal、R単位）:
+
+| 絵 | 役割 | 拳 | 肘 | texture | 肘→拳 | まわし（local横軸）との角度 |
+|---|---|---|---|---|---|---|
+| red | 頭の側（上） | (−0.40, +0.80) | (0.25, +1.15) | authored | 0.74 R | 61.70° |
+| red | 足の側（下） | (−0.55, −0.45) | (−0.05, −0.95) | mirrored | 0.71 R | 45.00° |
+| blue | 頭の側（上） | (−0.40, −0.80) | (0.25, −1.15) | mirrored | 0.74 R | 61.70° |
+| blue | 足の側（下） | (−0.55, +0.45) | (−0.05, +0.95) | authored | 0.71 R | 45.00° |
+
+配置の結果:
+
+- 肘はどれも、力士の前寄りの輪郭上か、その少し外（中心から0.95–1.18 R）。拳より外側・前側
+- 掴む側の力士（前方約1.72 R）からは1.5 Rより遠い
+- 上側: 上腕が上の縁に沿って前へ伸び、前腕がまわしの上側の拳へ下りる
+- 下側: 肘・力こぶが下の縁のすぐ外に出て、前腕がまわしの下側の拳へ上がる
+- 拳もまわしの上で少し動いた
+  - 上側: 上の縁寄り(−0.40, ±0.80)
+  - 下側: 下寄り(−0.55, ±0.45)
+- 絵は、既存のauthored / mirroredの2枚の選択だけ。pixel・anchor・exporterは不変
+
+検証（2 commit目）:
+
+- markerのfocused test: 18 / 18 PASS
+  - 4つの値の完全一致
+  - blueはredの鏡像
+  - 肘は肩の横（輪郭上か外）
+  - 反転で拳が動かない
+  - 角度・長さ（0.65–0.75 R）
+  - 表示 / 非表示の規則
+- `pnpm test` 523 PASS、`pnpm build` PASS、`git diff --check` clean
+- `src/game/sumo/`・`src/game/input/`・`public/`・`tools/`のdiffは0
+- Browser Smoke **27 / 27 PASS**
+  - READYで4つ、値どおり
+  - TURNINGの132 frameは0
+  - release / 他のactionで0
+  - console errorなし（`/favicon.ico` 404は除外）
+
+Screenshots（scratchpad、commitしない）:
+
+- 8枚と一覧: `smoke11n2\`
+- 拡大: `smoke11n2\zoom_02.png`
+- 最初のcommitとの比較: `smoke11n2\before_after.png`
+
+以下の各節は、最初のcommit（`95b5802`）の記録として残す。
+
 # Preflight / reference
 
 - working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
@@ -174,6 +230,10 @@ Screenshots（ローカルのscratchpad、commitしない）:
 
 # Design Deviations
 
+- **（最終）上側のmarkerも変更した**: Taskは上側の固定を求めていた
+  - User Play Testの2枚目の参照画像を受け、Userの直接の指示で、上下4つともP1の配置にした
+  - 最終の角度: 上側61.70°（Taskの30–45°の範囲外）、下側45.00°（範囲内）
+- （最初のcommitの記録）下側の角度75.96°も範囲外だった。Userの確認済み。その内容が次の2項目
 - **下側のmarkerの角度が75.96°で、Taskの「まわしに対して30–45°」の範囲外**
   - 理由: 30–45°のままでは、肘が腰の外に出て、Userの参照画像の「前腕が体の下側の縁に沿って前へ伸びる」腕にならない（候補1–3）
   - Userに候補（`m11n_b_grid.png`）を見せ、範囲外であることを伝えた上で、「4で進める」の回答を得た
