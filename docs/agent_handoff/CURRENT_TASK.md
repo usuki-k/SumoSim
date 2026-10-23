@@ -1,5 +1,5 @@
 Task-ID: ACTION-11K-GRIP-SUCCESS-SYMBOLIC-FOREARM-HAND-VFX
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION SYMBOLIC VFX VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -688,3 +688,137 @@ The symbols do not need to connect to the wrestler body.
 Keep the visual abstraction similar to the Kuzushi sweat effect: simple, anime-like, readable, and presentation-only.
 
 Preserve pair READY visibility: if either wrestler is TURNING, hide both symbolic markers.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: TECHNICAL PASS / USER VISUAL GATE NOT YET ACCEPTED
+Accepted Technical Baseline: dc8401a6c157b779502b71ed3defad7dbc26f08a
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-11K.
+
+Confirmed from Current Source / diff:
+
+- the connected ACTION-11G / 11J shoulder->elbow->hand model was removed
+- a detached symbolic forearm+hand model replaced it
+- one marker is rendered per wrestler view, therefore two markers total per settled pair
+- marker placement is target-local around waist / mawashi
+- marker depth = 2.3, above body 2.0 and below Kuzushi sweat 2.5
+- marker uses the ACTION-11H corrected body palette rather than the rejected fixed flat limb tone
+- marker visibility preserves the ACTION-11J pair READY rule
+- TURNING hides markers for both wrestlers
+- release / recovery / non-Grip actions hide markers
+- no src/game/sumo / src/game/input changes
+- ACTION-11F pair compression remains +0.14 R / -0.20 R
+- ACTION-11H tone correction remains unchanged
+- canonical grapple bond remains 0.70 m.
+
+## Current Symbol Baseline
+
+Current provisional marker geometry:
+
+```
+elbow = (-0.10 R, +0.95 R)
+hand  = (-0.55 R, +0.60 R)
+
+length      ~= 0.570 R
+width       = 0.20 R
+hand radius = 0.18 R
+bend        = 0.12
+```
+
+Current render style:
+
+- dark outline
+- two-tone skin
+- small highlight
+- simplified mitten-like hand
+- no shoulder/root connection
+- no particles / glow / UI box.
+
+This direction is visually closer to the User's requested symbolic/anime-like VFX than the prior connected-arm model.
+
+## Verification Review
+
+Accepted:
+
+- focused symbolic VFX tests: 14 / 14 PASS
+- pnpm test: 30 files / 519 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- browser/runtime smoke: 27 / 27 PASS
+- ACTION-11F compression / ACTION-11H tone / gameplay regressions preserved
+- public wrestler assets / wrestler-art tooling unchanged.
+
+This is sufficient for Technical PASS.
+
+## User Visual Gate
+
+NOT YET ACCEPTED.
+
+User feedback after visual inspection:
+
+- the symbolic approach is close to the intended direction
+- two markers total are not enough
+- both hands should be represented for each wrestler
+- desired count is therefore:
+
+```
+2 markers per wrestler
+= 4 symbolic forearm+hand markers total for the settled pair
+```
+
+- marker orientation should be more clearly diagonal relative to the mawashi
+- desired visual angle is approximately 30–45 degrees relative to the mawashi / waist band, rather than appearing too aligned with it.
+
+The User-provided zoom confirms the current symbolic style itself is reasonably close; the main remaining issues are count / placement / angle, not the need to return to connected anatomy.
+
+## Correction Direction
+
+Future focused tune should preserve the detached symbolic model and change only marker layout.
+
+Preferred next direction:
+
+- two symbolic forearm+hand markers per wrestler
+- four total per settled pair
+- place them on complementary mawashi / waist positions
+- each marker visually crosses the mawashi at roughly 30–45 degrees
+- avoid exact stacking
+- maintain pair READY visibility:
+  - either TURNING -> all markers hidden
+  - both READY -> all markers visible
+- no body connection required
+- keep the same simple anime-like procedural style unless User later rejects the art style itself.
+
+Do not reopen connected shoulder/elbow anatomy.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- ACTION-11C Grip gameplay
+- ACTION-11F pair compression
+- ACTION-11H tone correction
+- Grip success / attempt body art
+- canonical 0.70 m bond
+- ACTION-11J pair READY visibility.
+
+## Next Task Constraint
+
+The next Grip VFX task should be a narrow symbolic-marker layout tune only.
+
+It should NOT:
+- redesign gameplay
+- reintroduce connected arms
+- change tone matching
+- change pair compression
+- add external PNG assets unless procedural style itself is later rejected.
+
+Primary User Gate for the next task:
+
+> Do four symbolic forearm+hand markers, angled about 30–45° across the mawashi, make the pair read as both wrestlers using both hands to grip?
