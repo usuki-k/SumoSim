@@ -1,8 +1,8 @@
-Task-ID: ACTION-11J-GRIP-SUCCESS-LIMB-VFX-READY-ONLY
+Task-ID: ACTION-11K-GRIP-SUCCESS-SYMBOLIC-FOREARM-HAND-VFX
 Result: PASS WITH USER VISUAL GATE REQUIRED
 Branch: develop
-Source-Baseline: f0816e7439b72edcf6c5c5a11d4927208c9e1ff5
-Agent-Start-Head: e77cce6ee5f4a8836624861563ee74eda45ced05
+Source-Baseline: 148006a4181e28bf2e75a5d94b99fc6ab7e72a23
+Agent-Start-Head: 4d12c735a78c410dd1d0c2b7c0147ef27f85a194
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
@@ -15,205 +15,185 @@ PASS WITH USER VISUAL GATE REQUIRED:
   - focused / full test、`pnpm build`、`git diff --check`、Browser Smoke 27 / 27（GPU、turningを含む）がすべてPASS
 - 見た目の受け入れは、User Visual Gateで判断する
 
-ACTION-11Iで止めた作業のうち、正対した（READYの）状態で良く見えた腕のgeometryを採用した。そのうえで、組み合っている2人のどちらかがTURNINGのあいだは、2人とも腕・手のVFXを隠す。
+ACTION-11G / 11Jの「体につながった腕」（肩 → 肘 → 手）を廃止し、記号的なmarkerに置き換えた。
 
-- 両者がREADYになったframeで、2人の腕が同時に現れる
+- markerは、肘から先だけの短い前腕 + 手の記号で、相手の腰・まわしの上に重ねる
+- Kuzushiの汗と同じ、アニメ調の手続き的なVFX
+- 体とはつながらない
+- ACTION-11JのpairのREADY規則（どちらかがTURNINGなら2人とも隠す）は、そのまま引き継いだ
 - gameplay、Grappled Orientation、canonicalな位置・bond・facing、ACTION-11Fのcompression、ACTION-11Hのtone補正、asset、art toolingは変えていない
 
 # Preflight
 
 - working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
-- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `f0816e7`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `f0816e7..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `e77cce6`
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `148006a`（`origin/develop`のancestor）、Handoff-Mode GITHUB
+- `148006a..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `4d12c73`
 
-# WIP patchの扱い
+# Old → New
 
-ACTION-11Iで退避した`action11i_wip.patch`（scratchpad、同じ機械）を使った。
-
-- 適用前に中身を確認した
-  - 対象は3 fileだけ: `gripSuccessLimbVfx.ts` / `gripSuccessLimbVfx.test.ts` / `WrestlerView.ts`
-  - 中身はACTION-11Iの腕の配置変更とそのtestだけ
-  - scratchやdebug用のcodeは含まれていない
-- `git apply --check`の後に適用した
-- その上に、ACTION-11Jのpair READY表示を足した
-
-# Geometry: ACTION-11G → ACTION-11J
-
-wrestler-localのR単位。+forward = FRONT、+lateral = 力士の右。
-
-ACTION-11G（不採用、単一のcapsule × 2本）:
-
-| limb | start | end | 太さ | 手 | depth |
-|---|---|---|---|---|---|
-| FAR | (0.18, +0.42) | (0.82, +0.25) | 0.20 | 0.15 | 1.9 |
-| NEAR | (0.22, −0.65) | (1.12, −0.58) | 0.22 | 0.16 | 2.2 |
-
-ACTION-11J（2区間の腕 × 2本。各腕は肩→肘→手）:
-
-| 腕 | 区間 | start | end | 太さ | 手 | layer / depth |
-|---|---|---|---|---|---|---|
-| LOW（右、長い） | 上腕 | 肩 (0.35, +0.8) | 肘 (1.55, +1.5) | 0.26 | なし | FAR 1.9 |
-| LOW | 前腕 | 肘 (1.55, +1.5) | 手 (2.2, +1.15) | 0.26 | 0.19 | NEAR 2.2 |
-| HIGH（左、短い） | 上腕 | 肩 (0.35, −0.8) | 肘 (1.25, −0.75) | 0.24 | なし | FAR 1.9 |
-| HIGH | 前腕 | 肘 (1.25, −0.75) | 手 (1.6, −0.45) | 0.24 | 0.17 | NEAR 2.2 |
-
-正対したpairで、相手のlocal座標に直した位置:
-
-- 相手の表示上の中心は、自分のlocalで(1.72, +0.40)
-- LOWの手: 相手の(−0.48, −0.75) → 相手の背中側の脇。まわしのあたり
-- HIGHの手: 相手の(+0.12, +0.85) → 相手の前半身の脇・肩口
-- 肘は、どちらも相手の輪郭上（相手の中心から1.0–1.3 R）
-
-# 2区間 / depthのmodel
-
-| 区間 | depth | 役割 |
+| | ACTION-11J（不採用） | ACTION-11K |
 |---|---|---|
-| 上腕（肩→肘） | FAR 1.9 | 影1と体2のあいだ。付け根が自分の体の下に隠れるので、丸い切り口は見えない |
-| 前腕（肘→手） | NEAR 2.2 | 体の上。手が相手の体に乗る |
+| model | 体につながった腕2本 × 2区間（肩→肘 / 肘→手）。自分の肩から相手へ伸ばす | 相手の腰に置く、独立した記号「肘→手」 |
+| 数 | 1人あたり4区間（pairで8枚） | 1人あたり1つ、**pairで2つ** |
+| anchor | 腕の持ち主の体 | 記号が乗る側（掴まれる側）の体 |
+| depth | 上腕1.9 / 前腕2.2 | 2.3の1枚だけ |
+| code | `gripSuccessLimbVfx.ts`（4区間のgeometry、`gripSuccessPairLimbsVisible`） | 削除して`gripSuccessSymbolVfx.ts`に置き換えた。古いgeometry・texture・depthは残していない |
 
-その他:
+数の設計:
 
-- 前腕は肘から、上腕と同じ太さで始まる。肘は丸いcapで繋がる
-- 上腕には手が無く、端は腕の太さの丸いcap（textureの手の半径 = max(手, 太さ/2)）
-- textureのkeyは`grip-limb-<arm>-<segment>-<R>`。区間ごと・Rごとに1回だけ生成する
-- depthは固定で、動的なsortは無い。smokeで、display listの順序が全frameで不変なことを確認した
+- 各`WrestlerView`は、自分の腰に乗る1つ（= 相手の掴み）だけを描く
+- このため、相手の表示上の位置を受け渡す必要が無い。自分の表示上の中心（ACTION-11Fのoffset込み）と自分のfacingだけで置ける
+- Taskが認める「1人1つ」の形
 
-# Pair READYの表示
+# Final geometry（記号が乗る力士のlocal、R単位。+forward = FRONT、−forward = BACK / まわしの結び目側、+lateral = 力士の右）
 
-- pure helper（Phaser非依存）: `gripSuccessPairLimbsVisible(self, opponent)`（`gripSuccessLimbVfx.ts`）
-  - = 両者がsuccess pose（grapple / drive）かつ `!self.turning && !opponent.turning`
-  - 2人とも同じ答えになる
-- 入力は既存の`WrestlerVisualState.turning`だけ（Simulation由来の値）
-  - 新しいgameplay state、timer、Grappled Orientationの複製は無い
-- `BoutScene.syncViews`の変更: 両者の`WrestlerVisualState`を先に求め、`WrestlerView.apply(state, participant, pos, opponentState)`へ相手のvisual stateを渡す
-  - 体のart選択・ACTION-11Fのoffset・limbのgeometryは、従来どおり力士ごと。pair contextを使うのはlimbの表示判定だけ
-  - visual stateの計算そのもの（`resolveWrestlerVisualState`と、moveのhysteresisに使う前frameの`moving`）は従来と同じ
-- `WrestlerView`: 体の位置・影・artは不変。limbの表示判定だけが`gripSuccessPairLimbsVisible(state, opponentState)`に替わった
-- ついでの整理: ACTION-11Gでlimbのblockが、Kuzushiの汗のcommentとそのcodeのあいだに入っていた。commentを汗のcodeの直前へ戻した（挙動は不変）
+| 項目 | 値 | Taskの探索範囲 |
+|---|---|---|
+| 肘（前腕の始点、丸い端） | (−0.10, +0.95) | — |
+| 手の中心 | (−0.55, +0.60) | forward −0.35〜−0.55、\|lateral\| 0.55〜0.80 |
+| 前腕の長さ | 0.570 R（肘→手） | 0.35〜0.60 |
+| 前腕の太さ | 0.20 R | 0.16〜0.22 |
+| 手の半径 | 0.18 R | 0.15〜0.20 |
+| 曲がり | 長さの0.12（親指側へ膨らむ） | — |
+
+配置の結果:
+
+- 手は記号が乗る力士の右の脇から、背中側のまわしに掛かる
+- 正対したpairでは、2つのmarkerが表示上のpairの中点について点対称になる。軸の反対側に分かれ、重ならない（手の間隔は2Rより大きい）
+- smokeでの位置（R = 61.54 px）: Aの肘 (962.46, 586.15)、Bの肘 (1080.62, 493.85)
+
+offline比較（`symbols_a.png`）:
+
+- 4つの候補（S1–S4）を比べた
+- S2が、手が背中側のまわしに掛かり、2つが対角に分かれて最も読みやすかったので採用した
+
+# Render style
+
+- 形: 少し曲げた前腕。肘側の端は丸い。先端は親指の膨らみがある、ミトン状の手
+- 塗り:
+  - 太い輪郭 `#231612`（幅0.045 R）
+  - 影色 `#d38c56`
+  - 肌 `#f5b47d`。親指側へずらして塗り、cel調の2トーンにする
+  - 前腕のhighlight `#fde0b8` 1つ
+  - 指先の筋（輪郭色）2本
+- 色の由来: ACTION-11Hで補正したGrip successの体の、肌maskのP50（`#f5b47d`）とP20（`#d38c56`）。名前付きの定数にした（`GRIP_SYMBOL_SKIN` / `GRIP_SYMBOL_SHADE`）
+  - 補足: 補正後の肌の中間調は、ACTION-11Gの`#f3b47c`とほぼ同じだった。前の腕が明るく見えたのは、体の影の面積が増えたのに、腕が1色だったため。今回は影色の帯を入れて、体の塗り方に合わせた
+- 手続き的なtexture: `Graphics.generateTexture`。4倍で描き、scale 0.25で表示。key `grip-symbol-<R>`、Rごとに1回だけ生成
+- depth: **2.3**（`GRIP_SYMBOL_DEPTH`。体2の上、Kuzushiの汗2.5の下）。1枚だけで、動的なsortは無い
+- glow・text・iconの枠・particleは無い
+
+# Visibility
+
+- `gripSuccessPairSymbolVisible(self, opponent)` = 両者がsuccess pose（grapple / drive）、かつ `!self.turning && !opponent.turning`
+- ACTION-11Jの経路をそのまま使う: `BoutScene`が両者のvisual stateを先に求め、`WrestlerView.apply(..., opponentState)`へ渡す
+- 次の場合は非表示: どちらかがTURNING、Grip attempt、recovery、release、idle、move、Push、Tsuppari、Counter、Kuzushi、pre-bout
+- timer・fadeは無い
 
 # ACTION-11F / 11H / gameplay unchanged
 
-- `GRIP_SUCCESS_FORWARD_OFFSET_R = 0.14` / `GRIP_SUCCESS_LATERAL_OFFSET_R = -0.2`は不変（`gripSuccessGateArt.ts`はdiff 0。test P1、smoke 7）
-- ACTION-11H: `tools/wrestler_art/`（recipe / curve / exporter）と`public/assets/action/wrestler/`（success textureを含む）のdiffは0。再書き出しもしていない
+- `GRIP_SUCCESS_FORWARD_OFFSET_R = 0.14` / `GRIP_SUCCESS_LATERAL_OFFSET_R = -0.2`は不変
+  - `gripSuccessGateArt.ts`の変更は、comment 1行（「limb VFX」→「grip symbol VFX」）だけ
+- ACTION-11H: `tools/wrestler_art/`と`public/assets/action/wrestler/`のdiffは0。再書き出しもしていない
 - `src/game/sumo/`・`src/game/input/`のdiffは0
 - Snapshotは不変、bondは0.70 m（test P3 / P4、smoke 6 / 16b）
 
 # Tests
 
-`src/game/presentation/gripSuccessLimbVfx.test.ts`: 20 / 20 PASS
+`src/game/presentation/gripSuccessSymbolVfx.test.ts`（新規）: 14 / 14 PASS。旧`gripSuccessLimbVfx.test.ts`は、対象のcodeと一緒に削除した。
 
 | ID | 内容 |
 |---|---|
-| geometry | 上の4区間の値。各前腕は上腕の肘から同じ太さで始まり、手は前腕にだけある |
-| G1 | placementは決定的 |
-| G2 / G4（Task） | 腕の付け根（上腕のstart）は自分の体の内側（< 0.95 R）で、FAR = 体の下 |
-| G3 / G5（Task） | 前腕はNEAR = 体の上。手は相手の体の内側に乗る。肘は相手の輪郭上（1.0–1.3 R） |
-| G2（Task）HIGH | 手は相手の前半身（上半身・肩口） |
-| G3（Task）LOW | 手は相手の後半身（腰・まわし）。LOWの前腕はHIGHより長い。HIGH = 左、LOW = 右 |
-| rotation | facing 0 / π/2 / π / −π/2で剛体として回る |
-| G6 | 長さ・太さ・手の大きさがRに比例 |
-| V1 | 両者grappledでREADY → 2人とも表示 |
-| V2 / V3 | 片方がTURNING（背後からの組み）→ TURNINGの側も、READYの相手側も非表示（success poseそのものは表示中） |
-| V4 | 両者TURNING → 非表示 |
-| V5 | TURNING → READY: 2人の表示は常に一致し、READYになった同じtickで両者が表示される。その後30 tickは消えない |
-| V6 / V7 | Drive（40 tick）とMorozashi、どちらも両者READY → 表示 |
-| V8 | Grip attempt / releaseのtick / recovery / Tsuppari / Counter / Kuzushi / Push → 非表示 |
-| 既存 | pose単位の表示（G1–G3）、attempt / release / 他のactionで非表示、表示上の中心へのanchor |
+| G1 / G6 | markerの定義は1つ（肘→手だけ。shoulder / start / root / upperの項目は無い）。WrestlerViewが作るmarkerのimageは1枚。旧limbの参照は無い |
+| G2 | 長さ・太さ・手の大きさがTaskの範囲内で、Rに比例 |
+| G3 | 手は記号が乗る力士の腰の後ろ半分（まわし側）で、体の内側にある。前腕は脇から手へ向かう |
+| G4 | facing 0 / π/2 / π / −π/2で剛体として回る |
+| G5 | 正対したpair: 2つは決定的で、重ならない（手の間隔 > 2R）。中点について点対称で、軸の反対側に分かれる |
+| anchor | 表示上の中心（canonical + ACTION-11Fのoffset）に置かれる |
+| V1–V3 | READYのneutral / Drive（40 tick、flickerなし）/ Morozashiのholder・disadvantagedで、2人とも表示 |
+| V4 | どちらかがTURNING → 2人とも非表示。READYになった同じtickで2人とも表示され、その後は消えない |
+| V5 / V6 | Grip attempt中、releaseのtick、recoveryで非表示 |
+| V7 | idle / Push / Tsuppari / Counter / Kuzushiで非表示 |
 | P1 / P3 / P4 | Snapshot不変、bond 0.70 m、ACTION-11Fの定数不変 |
-| ownership | Phaser / Simulationに依存しない。WrestlerViewのdepth 1.9 / 2 / 2.2、表示上の中心からの配置、pair判定の使用（source assertion） |
+| ownership | Phaser / Simulationに依存しない。depth 2 < 2.3 < 2.5、pair判定と表示上の中心からの配置、BoutSceneが相手のvisual stateを渡すこと（source assertion） |
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| limb VFXのfocused test（geometry + pair READY） | 20 / 20 PASS |
-| `pnpm test`（Grip success / attemptのpresentation、Grip / Grapple / Drive / Orientationのgameplay、Push / Tsuppari / Counter / Kuzushiのpresentationを含む） | 30 files、525 PASS |
+| symbol VFXのfocused test（geometry + pair READY） | 14 / 14 PASS |
+| `pnpm test`（Grip success / attemptのpresentation、Grip / Grapple / Drive / Orientationのgameplay、Push / Tsuppari / Counter / Kuzushiのpresentationを含む） | 30 files、519 PASS |
 | `pnpm build` | PASS（既存の500 kB chunk warningのみ） |
 | `git diff --check` | clean |
 | `src/game/sumo/`・`src/game/input/`・`public/`・`tools/`のdiff | 0行 |
 
+`pnpm test`の件数は、ACTION-11Jの525から519に減った。旧limbのtest 20件を削除し、symbolのtest 14件を追加したため。
+
 # Browser / Runtime Smoke
 
-headless Chrome 156 + CDP、GPU、Vite dev server、1920x1080。ACTION-11Gのscriptを、次のように変えて実行した:
-
-- limbを4区間に対応させた
-- 判定を「pair READYのときだけ表示」に変えた
-
-結果は **27 / 27 PASS**。
+headless Chrome 156 + CDP、GPU、Vite dev server、1920x1080。ACTION-11Jのscriptで、記録と判定をsymbol 1枚に置き換えた。結果は **27 / 27 PASS**。
 
 | 項目 | 結果 |
 |---|---|
-| L1 | Grip attempt中はlimb無し |
-| L2 | neutralの最初のframe + 落ち着いた後: 両者に4区間。表示上の中心と向きに正しく付く（< 1e-6 px / 1e-9 rad） |
-| L3 | 描画順が安定: 上腕1.9 < 体2 < 前腕2.2。display listの順序も全frameで不変 |
-| L4 / L5 | Drive（290 frame）、Morozashi（211 frame）で常に表示 |
-| L6（TURNING） | 背後から組んだgrappleで、TURNINGの132 frameは両者とも非表示。最初のREADY frame（index 132）から、両者が同じframeで表示され、以後消えない（519 frame） |
-| L7 / L8 | releaseの最初のfree frameからlimb無し。後の新しいGrip attemptにも残らない |
-| L9 | Push / Tsuppari / Counter / Kuzushi（599 frame）でlimb無し |
-| その他 | ACTION-11Fのcompression / bond 0.70 m / scale / pivot / 影 / 描画順、Tsuppari / Counter 35° / Kuzushiの汗 / Push、R restartは不変。console error・例外なし（既存の`/favicon.ico` 404は除外） |
-
-smoke scriptの補足: 計測hookが`apply`の第4引数（相手のvisual state）を渡しておらず、初回は計測側で例外になった。hookを直して再実行した。productには影響しない。
+| L1 | Grip attempt中はmarker無し |
+| L2 | neutralの最初のframe + 落ち着いた後: 2人に1つずつ（pairで2つ）。表示上の中心と向きに正しく付く（< 1e-6 px / 1e-9 rad） |
+| L3 | 描画順が安定: 体2 < marker 2.3。display listの順序も全frameで不変 |
+| L4 / L5 | Drive（286 frame）、Morozashi（221 frame）で常に表示。pairと一緒に動く |
+| L6（TURNING） | TURNINGの132 frameは2人とも非表示。最初のREADY frame（index 132）から2人とも同時に表示され、以後消えない（526 frame） |
+| L7 / L8 | releaseの最初のfree frameからmarker無し。後の新しいGrip attemptにも残らない |
+| L9 | Push / Tsuppari / Counter / Kuzushi（601 frame）でmarker無し |
+| その他 | ACTION-11Fのcompression / bond 0.70 m / scale / pivot / 影 / 体の描画順、Tsuppari / Counter 35° / Kuzushiの汗 / Push、R restartは不変。console error・例外なし（既存の`/favicon.ico` 404は除外） |
 
 ## Screenshots（ローカルのscratchpad、commitしない）
 
-8枚と一覧: `smoke11j\`
+8枚と一覧: `smoke11k\`
 
-- `01_neutral_immediately_after_success`（READY、腕あり）
-- `02_neutral_settled`（READY、腕あり）
-- `03_drive_while_grappled`（READY、腕あり）
-- `04_morozashi_grapple`（READY、腕あり）
-- `05_immediately_after_release`（腕なし）
-- `06_turning_immediately_after_success`（**TURNING、腕なし**）
-- `07_turning_mid`（**TURNING、腕なし**）
-- `08_turning_settled`（**READY、腕あり**）
+- `01_neutral_immediately_after_success`（READY、markerが2つ）
+- `02_neutral_settled`（READY、2つ）
+- `03_drive_while_grappled`（READY、2つ）
+- `04_morozashi_grapple`（READY、2つ）
+- `05_immediately_after_release`（なし）
+- `06_turning_immediately_after_success`（TURNING、なし）
+- `07_turning_mid`（TURNING、なし）
+- `08_turning_settled`（READY、2つ）
 - 一覧（2倍拡大）: `pair_sheet.png`
-
-before / after:
-
-- ACTION-11G: `smoke11h\pair_sheet.png`（11Hのtone補正後、11Gの腕）
-- ACTION-11Iで止めた時点: `smoke11i\pair_sheet.png`（TURNING中に腕が浮く）
-- ACTION-11J: `smoke11j\pair_sheet.png`
+- 拡大: `zoom_02.png`
+- before: ACTION-11J `smoke11j\pair_sheet.png`
 
 目視（観察）:
 
-- READY（01–04、08）:
-  - LOWの腕が、相手の脇の外側を回り、手が相手の背中側（まわしのあたり）に掛かる
-  - HIGHの前腕は、相手の肩口に短く乗る
-  - 上腕の付け根は体の下に隠れ、切り口は見えない
-  - 「横に置いた棒」ではなくなった
-  - ただし形は単純なcapsuleなので、硬い棒のような質感は残る
-- TURNING（06–07）: 腕は無い。success poseとcompressionは表示されたまま。空中に浮く腕は無い
-- 08: 正対した後、ACTION-11Jの形が両者に同時に現れる
-- 腕の肌色（`#f3b47c`、ACTION-11Gのまま）は、ACTION-11Hで補正した体の肌より明るく見える。色は今回の範囲外なので変えていない
+- READY:
+  - redの上側の脇と、blueの下側の脇に、短い前腕 + 手の記号が1つずつ乗る
+  - 手はまわしの縁に掛かる
+  - 体から伸びる長い腕や、横に置いた棒は無い
+- 輪郭の太さ、2トーンの肌、highlightで、体のillustrationに近い描き方になっている
+  - ただし手続き的な形なので、手は単純なミトン形
+- 2つは対角に分かれ、互いに掴み合っているように読める
 
 # Changed Files
 
-- `src/game/presentation/gripSuccessLimbVfx.ts`:
-  - 腕を2区間（`arm` / `segment`）にし、geometryを更新した
-  - `gripSuccessPairLimbsVisible`を追加した
-  - header comment
-- `src/game/presentation/gripSuccessLimbVfx.test.ts`: geometry G1–G6と、pair READYのV1–V8
-- `src/game/scenes/WrestlerView.ts`:
-  - `apply`が相手のvisual stateを受け取り、limbの表示をpair判定にした
-  - 区間ごとのtexture keyと、手の無い端のcap
-  - comment（汗のcommentの位置も直した）
-- `src/game/scenes/BoutScene.ts`: `syncViews`で両者のvisual stateを先に求め、相手の分を`apply`へ渡す
-- `docs/ARCHITECTURE.md`:
-  - ACTION-11Gのnoteを11G / 11Jの内容に更新した
-  - ACTION-11Gで紛れ込んでいた、11E / 11Fのnoteの末尾1文を、元の項目へ戻した
-- `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
+- 削除:
+  - `src/game/presentation/gripSuccessLimbVfx.ts`
+  - `src/game/presentation/gripSuccessLimbVfx.test.ts`
+- 新規:
+  - `src/game/presentation/gripSuccessSymbolVfx.ts`: markerのgeometry（R単位）、長さ、pair READYの判定、canvasでの配置（Phaser非依存）
+  - `src/game/presentation/gripSuccessSymbolVfx.test.ts`
+- 変更:
+  - `src/game/scenes/WrestlerView.ts`
+    - 4区間のlimbのimage / texture / depthを、symbol 1枚（`ensureGripSymbolTexture`、`GRIP_SYMBOL_DEPTH`、色の定数）に置き換えた
+    - `apply`では、symbolを自分の表示上の中心とfacingから置く
+    - header comment
+  - `src/game/scenes/BoutScene.ts`: commentだけ（両者のvisual stateを渡す経路はACTION-11Jのまま）
+  - `src/game/presentation/gripSuccessGateArt.ts`: commentを1行
+  - `docs/ARCHITECTURE.md`: ACTION-11G / 11Jの項目を、ACTION-11Kの記号VFXの説明に置き換えた（暫定）
+  - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
 # Design Deviations
 
 Design Deviations: NONE
 
-（Taskが数値を指定していないgeometryは、ACTION-11IのWIPの値をそのまま使った。ACTION-11IでHIGHの手を相手の前半身へ寄せた調整（手(1.75, −0.4) → (1.6, −0.45)）も、WIPの時点で入っている。）
-
 # Unexpected Scope
 
 - 既存の`/favicon.ico` 404。直していない
-- 腕の肌色が、tone補正後の体より明るい（上記）。色は今回の範囲外
-- art toolingのメモ: このmachineのPython 3.9.7は、非常に長い行に多byte文字があるsource fileを、「Non-UTF-8」として読めないことがある。docsの編集はNodeで行った。productには影響しない
 
 # Known Untested Items
 
@@ -222,19 +202,27 @@ Design Deviations: NONE
 
 # User Visual Gate: REQUIRED
 
-1. 正対したGripで、腕が上半身と腰・まわしへ巻きついているように見えるか
-2. 付け根が、切れた棒ではなく体に付いて見えるか
-3. TURNINGのあいだ腕を隠すのは許容できるか
-4. 両者がREADYになった瞬間に、2人の腕が同時に現れるのは許容できるか
-5. neutral / Drive / Morozashiで一貫しているか
+主な問い: まわしの上の、独立した記号の前腕 + 手で、体につながった腕が無くても、Kuzushiの汗と同じ簡単なアニメ調のVFXとして、pairが「掴み合っている」と読めるか。
 
-正対時の形がまだ合わない場合は、どこが問題か教えてほしい: 付け根、肘の通り道、手の位置、太さ、手続き的な形そのもの、のどれか。
+- 記号が意図的に見えるか。切れた腕に見えないか
+- 手がまわし・腰に掛かって見えるか
+- 前腕の短さは適切か
+- 絵柄が力士のillustrationと合っているか
+- 2つで足りるか
+- neutral / Drive / Morozashiで分かりやすいか
+- TURNING中に隠すこと、releaseで消えることは許容できるか
 
-TURNING中に隠す方式が合わない場合は、後のTaskで、TURNING専用の腕のposeを検討する。
+## User作成の小さなPNGを勧めるか
+
+- 今の時点では勧めない
+  - 置き方・数・大きさを先にこのGateで判断してほしいため
+  - 手続き的な描画でも、輪郭と2トーンで体の絵柄にかなり近づいた
+- 位置・大きさは良いが、絵柄だけが合わないと判定された場合は、次の小さな一歩として、Userが描いた透過PNGを1枚使う案を勧める
+  - 仕様の案: 肘から手まで、1本分。手は軽く握る形。キャラクターと同じ太い黒の輪郭と2トーンの肌。肘を左、手を右に向けた横向き。背景は透過。元の解像度は約300 x 160 px（runtimeでは約35 x 20 pxに縮小される）
 
 Technical PASSは、見た目の受け入れを意味しない。
 
 # Git delivery
 
-- Task-ownedのfileだけを明示的にstage → 1 commit（`feat(presentation): hide grip limbs while turning`）
+- Task-ownedのfileだけを明示的にstage → 1 commit（`feat(presentation): replace grip limbs with symbolic markers`）
 - fetch → fast-forwardの安全を確認 → `origin/develop`へpush → remote SHAを確認 → working tree clean

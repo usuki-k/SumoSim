@@ -421,7 +421,7 @@ export class BoutScene extends Phaser.Scene {
       this.grappleLine.lineStyle(advantage.kind === 'morozashi' ? 8 : 4, holderColor, 1)
       this.grappleLine.lineBetween(p0.x, p0.y, p1.x, p1.y)
     }
-    // Both visual states first: the Grip limb VFX visibility is pair-level (ACTION-11J).
+    // Both visual states first: the Grip symbol VFX visibility is pair-level (ACTION-11J / 11K).
     const visuals = new Map<ParticipantId, WrestlerVisualState>()
     for (const participant of snapshot.participants) {
       const view = this.views.get(participant.id)

@@ -47,7 +47,7 @@ export function allGripSuccessGateArts(): ProductWrestlerArt[] {
   return [GRIP_SUCCESS_GATE_ART.red, GRIP_SUCCESS_GATE_ART.blue]
 }
 
-// The Grip success pose (grappled, with or without Drive): the success art, its display offset and limb VFX.
+// The Grip success pose (grappled, with or without Drive): the success art, its display offset and grip symbol VFX.
 export function isGripSuccessPose(state: WrestlerVisualState): boolean {
   return state.pose === 'grapple' || state.pose === 'drive'
 }
