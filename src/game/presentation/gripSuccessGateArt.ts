@@ -4,16 +4,19 @@
 // local X axis + the accepted offline mawashi recolor, so the pair faces each other as mirrored grappling wrestlers.
 // Shown exactly while the Simulation-derived visual pose is 'grapple' or 'drive' (the same pose for neutral and
 // Morozashi, holder or not). A release drops it on that tick; everything else is the Grip attempt selection.
-// ACTION-11E Visual Gate: while the success pose is shown, each sprite (and its shadow) is drawn a little to its own
-// LEFT of the canonical center. Both wrestlers face each other, so the pair shifts point-symmetrically and the two
-// heads slip past each other onto the opponent's shoulder instead of meeting nose to nose. Display only: the
-// Simulation positions, bond distance and facing are unchanged.
+// ACTION-11E / 11F Visual Gate: while the success pose is shown, each sprite (and its shadow) is drawn a little
+// forward (toward the opponent) and a little to its own LEFT of the canonical center. Face to face, the forward terms
+// press the two bodies into each other (overlap is intended) and the lateral terms shift the pair point-symmetrically,
+// so the heads slip onto the opponent's shoulder instead of meeting nose to nose. Display only: the Simulation
+// positions, bond distance and facing are unchanged.
 import { selectWrestlerDisplayArt } from './gripAttemptGateArt.ts'
 import type { ProductWrestlerArt, ProductWrestlerArtId } from './productWrestlerArt.ts'
 import type { WrestlerVisualState } from './wrestlerVisualState.ts'
 
-// Wrestler-local lateral display offset in units of R (+ = wrestler RIGHT, like the Kuzushi sweat placement).
-export const GRIP_SUCCESS_LATERAL_OFFSET_R = -0.3
+// Wrestler-local display offset in units of R (+forward = FRONT, +lateral = wrestler RIGHT, like the Kuzushi sweat
+// placement). Provisional Visual Gate values.
+export const GRIP_SUCCESS_FORWARD_OFFSET_R = 0.14
+export const GRIP_SUCCESS_LATERAL_OFFSET_R = -0.2
 
 // Body core at 2R, like the idle sprites.
 export const GRIP_SUCCESS_GATE_BODY_CORE_DIAMETER_PX = 123.076923
@@ -54,14 +57,17 @@ export function selectWrestlerArt(idle: ProductWrestlerArt, state: WrestlerVisua
   return selectWrestlerDisplayArt(idle, state)
 }
 
-// Canvas offset (px) of the displayed sprite from the canonical center: the lateral offset for the canonical facing
-// while the success pose is shown, otherwise zero.
+// Canvas offset (px) of the displayed sprite from the canonical center: the forward + lateral offset for the canonical
+// facing while the success pose is shown, otherwise zero.
 export function gripSuccessDisplayOffsetPx(
   state: WrestlerVisualState,
   facing: number,
   bodyRadiusPx: number,
 ): { x: number; y: number } {
   if (!isGripSuccessPose(state)) return { x: 0, y: 0 }
+  const f = GRIP_SUCCESS_FORWARD_OFFSET_R * bodyRadiusPx
   const l = GRIP_SUCCESS_LATERAL_OFFSET_R * bodyRadiusPx
-  return { x: -l * Math.sin(facing), y: l * Math.cos(facing) }
+  const c = Math.cos(facing)
+  const s = Math.sin(facing)
+  return { x: f * c - l * s, y: f * s + l * c }
 }

@@ -1,8 +1,8 @@
-Task-ID: ACTION-11E-GRIP-SUCCESS-PAIR-OFFSET-TUNE
+Task-ID: ACTION-11F-GRIP-SUCCESS-PAIR-COMPRESSION-TUNE
 Result: PASS WITH USER VISUAL GATE REQUIRED
 Branch: develop
-Source-Baseline: 4db810ed790434e4b73186297faa7a2727f440c0
-Agent-Start-Head: 4db810ed790434e4b73186297faa7a2727f440c0
+Source-Baseline: 97ef733bbad7cebdcdbc3d64621ff5909574354d
+Agent-Start-Head: a3aac27c179fd867ced582d7092bc24497b1cdc2
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
@@ -12,126 +12,171 @@ Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 PASS WITH USER VISUAL GATE REQUIRED:
 
 - Technical PASS
-  - `pnpm test` / `pnpm build` / `git diff --check`はPASS
-  - Browser Smokeは15 / 16で、唯一のFAILは既存の`/favicon.ico` 404（Task外、ACTION-11Dと同じ）
+  - pure / focused test、`pnpm test`、`pnpm build`、`git diff --check`、Browser Smoke 18 / 18（GPU、turningを含む）がすべてPASS
 - 見た目の受け入れは、User Visual Gateで判断する
 
-Grip successのposeを表示しているあいだだけ、2人の表示位置を、各力士自身の左へ0.30 Rずらす。presentationだけのpair offsetで、Simulationの位置・bondの距離・facingは変えていない。向かい合った2人は点対称にずれるので、頭は軸上で鼻先同士にぶつからず、互いに相手の肩口へ入る。
+ACTION-11Eの「横だけ−0.30 R」をやめ、前へ+0.14 R、横へ−0.20 Rの2成分にした。いずれも各力士のlocal frameで、presentationだけの表示offset。
 
-左右のoffsetだけで改善できたので、Stop条件（回転・別画像・Gameplay変更が必要）には当たらない。
+- 向かい合った2人は、表示上で互いに押し込まれて重なる
+- 頭は横にずれたまま、相手の肩口へ入る
+- Simulationの位置、0.70 mのbond、facing、gameplay、asset、Grip attemptは変えていない
 
-# Handoff note
+# Preflight
 
-- このTaskはUserがチャットで直接指示したもの。remoteの`CURRENT_TASK.md`はACTION-11D（Status: REVIEWED）のままで、ACTION-11Eはqueueされていない
-- Preflight: working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
-  - `5f10b3e..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `4db810e`
-- ACTION-11D Reviewとの整合: Next Task Constraintの「頭をずらしたいなら、gameplayの幾何を変える前に、presentation-onlyのpair offset / rotationを調べる」に沿う。Do Not Reopen（11Cのgameplay、0.70 mのbond、Grip attempt art、Push / Tsuppari / Counter / Kuzushi）には触れていない
-- `CURRENT_TASK.md`は編集していない
+- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `97ef733`（`origin/develop`のancestor）、Handoff-Mode GITHUB
+- `97ef733..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `a3aac27`
+- 前回、11Fがqueueされる前の開始指示ではTask-ID / Status不一致でSTOPし、Repositoryには何も書いていない
 
-# 原因と設計
+# Values
 
-- ACTION-11Dの構造: blueはredのlocal-Y反射なので、向かい合ったペアは中央の垂線について鏡映対称になる
-  - 実測: success textureの頭（髪の塊）は、どちらも自分の中心から約0.22 R横にある。その結果、world上で2つの頭が同じ高さに来て、鼻先同士でぶつかる
-- 対策: 各力士を、自分のcanonicalなfacingに垂直な方向へ、同じlocal offsetでずらす
-  - 向かい合う2人のlocal軸は逆向きなので、world上の移動は逆向きで同じ大きさになる（点対称。pairの中点は不変）
-  - 頭は横に2 × 0.30 R = 0.60 Rすれ違う
-- 符号と量はoffline合成で比較して選んだ（±0.15〜0.55 R、scratchpadの`offset_sheet.png` / `offset_sheet2.png`）
-  - 右（+）へずらすと、頭が体の外側へ逃げて、すれ違うように見える
-  - 左（−）へずらすと、頭が相手の肩口へ入り、体の重なりも自然に見えた
-  - 0.30 Rより小さいと頭がまだ触れ合う。大きいと体同士が離れて見える
-  - 暫定値として−0.30 Rを採用した
+| 定数 | ACTION-11E | ACTION-11F |
+|---|---|---|
+| `GRIP_SUCCESS_FORWARD_OFFSET_R` | （無し、0） | **+0.14** |
+| `GRIP_SUCCESS_LATERAL_OFFSET_R` | −0.30 | **−0.20** |
 
-# Implementation
+Task指定の暫定値のまま。実装後に値は調整していない。
 
-`src/game/presentation/gripSuccessGateArt.ts`（Phaser非依存）:
+# Final transform formula
 
-- `GRIP_SUCCESS_LATERAL_OFFSET_R = -0.3`: R単位のlocal横offset。+は力士の右で、Kuzushiの汗と同じ規約
-- `gripSuccessDisplayOffsetPx(state, facing, bodyRadiusPx)`:
-  - success poseのとき（`pose === 'grapple' || pose === 'drive'`。success textureの選択と同じ判定`isGripSuccessPose`）は、`(−l·sin f, l·cos f)`を返す
-  - それ以外は`(0, 0)`
-- `selectWrestlerArt`は、同じ判定関数を使うようにしただけで、挙動は不変
+`gripSuccessDisplayOffsetPx(state, facing, bodyRadiusPx)`（`src/game/presentation/gripSuccessGateArt.ts`。既存のhelperを拡張し、新しいhelperは作っていない）:
 
-`src/game/scenes/WrestlerView.ts`:
+```
+if pose !== 'grapple' && pose !== 'drive': (0, 0)
+f = GRIP_SUCCESS_FORWARD_OFFSET_R * R      // +0.14 R
+l = GRIP_SUCCESS_LATERAL_OFFSET_R * R      // -0.20 R
+x = f * cos(facing) - l * sin(facing)
+y = f * sin(facing) + l * cos(facing)
+```
 
-- `apply`でoffsetを1回求め、体と影の位置に同じ量を足す。影の相対位置は不変
-- 回転・scale・texture・Kuzushiの汗の配置は不変
-  - 汗はpose = kuzushiのときだけで、そのときoffsetは0
-- releaseの最初のframeでposeがgrapple / driveでなくなるので、offsetは即0になる
+- local +X = FRONT、local +Y = 力士の右。ACTION-11E / Kuzushiの汗と同じ規約
+- `WrestlerView.apply`は、このoffsetを体と影の位置に足すだけ。影の相対offsetは不変
+- 汗・回転・scale・texture選択は不変
 
-変えていないもの:
+実測（R = 61.54 px、正対したneutral）:
 
-- Simulationの位置・速度、facing、bond、接触、Grip / Drive / releaseのgameplay
-- textureとsource art、exporter、recipe
+- A（blue、facing 0）のoffsetは(+8.615, −12.308) px、B（red、facing π）は(−8.615, +12.308) px。点対称で、pairの中点は不変
+- 表示上の中心間距離は108.671 px。canonicalな中心間距離は123.077 px（= 2R = 0.70 m）
+- 軸方向に2 × 0.14 R近づき、軸と垂直に2 × 0.20 Rずれる
+
+# Simulation / canonical bond unchanged
+
+- `src/game/sumo/`・`src/game/input/`・`public/`・`tools/`のdiffは0行
+- helperはSnapshotを変えない（test O1）
+- grapple中のcanonicalな中心間距離は0.70 m（test O2、smoke 6 / 16b）
+- smoke: free中の全frameで、体の位置 = canonicalな位置。success中は、offsetがちょうど上の式の値
+
+# Tests
+
+`src/game/presentation/gripSuccessGateArt.test.ts`: 19 / 19 PASS（ACTION-11Eの横だけのtest 2件を置き換え、追加）
+
+| ID | 内容 | test |
+|---|---|---|
+| P1 / P2 | 正対したgrappleで、local前 +0.14 R、local横 −0.20 R | `P1 / P2: provisional values…` |
+| P3–P5 | 17通りのfacingで、大きさ・成分・前（facing方向）・横（力士の左）が正しく回る | `P3-P5: …` |
+| P6 / S6–S8 | 次の場面でちょうど(0, 0): attempt、whiff / releaseのrecovery、idle、Push、Tsuppari、Counter、Kuzushi | `zero for idle, Grip attempt, …` |
+| P7–P9 | 正対で、前の成分は互いに内向き（逆向き）、横の成分も逆向き、和は0（中点不変）。表示上の距離 = hypot(2R − 0.28 R, 0.40 R) | `P7-P9: …` |
+| S1–S3 | grapple / Drive（40 tick）/ neutralでoffsetあり。offsetの有無はsuccess textureの有無と常に一致 | `applies exactly while…` |
+| S4 / S5 | Morozashiのholder / disadvantagedとも同じoffset | `S4 / S5: …` |
+| O1 / O2 | Snapshot不変、bond 0.70 m | `display only: …` |
+| O3 | `WrestlerView`は体と影にだけoffsetを足す（source assertion） | `stays Phaser-free…` |
+| O4 / O5 | gameplay / asset / toolingのdiff 0 | `git diff --stat HEAD -- src/game/sumo src/game/input public tools`が空 |
 
 # Verification
 
 | 項目 | 結果 |
 |---|---|
-| `gripSuccessGateArt.test.ts` | 17 / 17 PASS（ACTION-11Eで5件追加） |
-| `pnpm test` | 29 files、503 PASS |
+| Grip successのfocused test（pure offsetを含む） | 19 / 19 PASS |
+| `pnpm test`（Grip attempt、Grip / Grapple / Drive / Orientationのgameplay、Counter / Tsuppari / Kuzushi / Pushのpresentationを含む） | 29 files、505 PASS |
 | `pnpm build` | PASS（既存の500 kB chunk warningのみ） |
 | `git diff --check` | clean |
-| `src/game/sumo/`・`src/game/input/`・`public/`・`tools/`のdiff | 0行 |
-
-追加したtest（ACTION-11E）:
-
-- offsetは力士自身の左向き、大きさ0.30 R、facingに垂直（前後成分0）
-- 向かい合ったpairでは、2人のoffsetの和が0（点対称）、差が0.60 R
-- grapple / Drive中（40 tick）/ Morozashiで常にoffsetあり。offsetの有無は、success textureの有無と常に一致する
-- 次の場面では常にoffset 0: Grip attempt中、release tickとrecovery 12 tick、Tsuppari / Counter / Kuzushi / Push / idle
-- Snapshotは不変、bondの距離は0.70 mのまま
+| `src/game/sumo/`・`src/game/input/`・`public/`・`tools/wrestler_art/`のdiff | 0行 |
 
 # Browser / Runtime Smoke
 
-headless Chrome 156 + CDP、GPU（`--use-angle=d3d11`）、Vite dev server、1920x1080。ACTION-11Dのscriptに、offsetと影の確認を足して実行した。結果は **15 / 16**:
+headless Chrome 156 + CDP、GPU（`--use-angle=d3d11`）、Vite dev server、1920x1080。ACTION-11Eのscriptに、2成分のoffset・描画順・turningの確認を足して実行した。
+
+- CPUの入力は、Morozashi（Counterの空振り）とturning（Pushを1回）のときだけ差し替えた
+
+結果は **18 / 18 PASS**:
 
 | # | 確認 | 結果 |
 |---|---|---|
 | 1 | Enterでboutが始まる | PASS |
-| 2 | Shiftでattempt pose。attempt中はoffset 0 | PASS |
-| 3 | 接触からのGripで、neutral grapple | PASS |
-| 4 | 両者が同じframeでsuccess textureに切り替わる | PASS |
-| 5 | 体の回転 = canonicalなfacing（A 0、B π） | PASS |
-| 6 | bondの距離は0.70 mのまま（Simulation） | PASS |
-| 7 | free中はcanonicalな位置。success中は自分の左へ0.30 R（R = 61.54 px → 18.46 px。Aは上へ、Bは下へ）で点対称。影も同じ量だけ動く | PASS |
-| 8 | scaleが跳ばない | PASS |
-| 10 | pivot originが正しい | PASS |
-| 11 | Drive中（230 frame）もsuccess textureとoffsetが保たれる | PASS |
-| 12 | Morozashiでも同じtextureとoffset | PASS |
-| 13 | releaseの最初のfree frameからoffset 0、idle sprite | PASS |
-| 14 | release後の新しいGripは、attempt → success | PASS |
+| 2 | attempt中は表示offset 0 | PASS |
+| 3 / 4 | neutral grappleの最初のframeで、両者がsuccess texture + 2成分のoffset | PASS |
+| 5 | 体の回転 = canonicalなfacing | PASS |
+| 6 | canonicalなbondは0.70 m | PASS |
+| 7 | free中はcanonicalな位置。success中は前+0.14 R / 横−0.20 Rで点対称、影も追従 | PASS |
+| 7b | 重なりの描画順が安定（両者depth 2、display list上はA 4 / B 5で固定。redが上） | PASS |
+| 8 / 10 | scale / pivot originは不変 | PASS |
+| 11 | Drive（231 frame）中もoffsetが保たれる | PASS |
+| 12 | Morozashiでも同じoffset | PASS |
+| 13 | releaseの最初のfree frameでoffset 0、idle sprite | PASS |
+| 14 | release後の新しいGripのattemptはoffset 0 | PASS |
 | 15 | Tsuppari / Counter（35°）/ Kuzushiの汗 / Pushは不変、offset 0 | PASS |
 | 16 | Rでrestartできる | PASS |
-| 17 | console error・例外が無い。gate PNGは200 | FAIL: `/favicon.ico` 404が1件。既存の問題で、Task外（ACTION-11Dと同じ。`public/`にfaviconが無い） |
+| 16b | Grappled Orientationのturning（下記） | PASS |
+| 17 | console error・例外・失敗requestが無い。gate PNGは200 | PASS |
 
-Screenshot（ローカルのscratchpad `smoke11e\`、commitしない）:
+17の補足: 既存の`/favicon.ico` 404（ACTION-11D / 11Eで報告済み、Task外）は、この判定から明示的に除外した。
+
+## Turning
+
+手順:
+
+- playerのCounterが、CPUのPushを捕まえる → CounterTransition
+- その後、playerがGrip → Morozashi（holder = player）
+- CPUはdisadvantagedで、TURNINGから始まる
+
+結果:
+
+- grappleは644 frame、そのうちturningは132 frame。最後は両者READYで正対（facing A π、B 0）
+- 全frameで、各自のoffsetは「その時のfacingで回した+0.14 R / −0.20 R」と一致
+- frame間でのoffsetの変化は、facingの回転で説明できる量を超えない（超過分の最大は8.5e-14 px）
+  - facingの変化と無関係な横への瞬間移動は無い
+- canonicalなbondは0.70 mのまま、描画順も安定
+
+目視:
+
+- turningの開始時（`06`）: redは背を向けている。前のoffsetはred自身の前（blueから離れる向き）に働くが、blueは前へ寄るので、背後から組みついた形に見える。pairが離れて飛び散ることは無い
+- 回り込みの途中（`07`）: redの向きに沿って表示が回る
+- 正対したとき（`08`）: neutralと同じ密着の形になる
+- turning専用の処理は加えていない（明確な破綻は見えなかったため）
+
+## Screenshots
+
+ローカルのscratchpad `smoke11f\`、commitしない:
 
 - `01_neutral_immediately_after_success`
 - `02_neutral_settled`
 - `03_drive_while_grappled`
 - `04_morozashi_grapple`
 - `05_immediately_after_release`
+- `06_turning_immediately_after_success`
+- `07_turning_mid`
+- `08_turning_settled`
 - 一覧: `pair_sheet.png`
 
 目視の所見（判断ではなく観察）:
 
-- 頭は中央の軸から外れた。blueの頭は上側でredの肩口へ、redの頭は下側でblueの胸・肩口へ入る。鼻先同士の衝突は無くなった
-- 肩・腕の重なりは保たれ、Drive中・Morozashiでも同じ見え方
-- releaseの瞬間は、2人がcanonicalな位置へ0.30 Rずつ戻る。idle spriteへの切り替えと同じframeで起こる。Taskの「releaseで即解除」どおりで、補間は無い
+- ACTION-11Eより体が近く、肩・胸・腕が大きく重なって、密着して見える
+- 頭は横にずれたままで、鼻先同士の衝突には戻らない。blueの頭は上側、redの頭は下側で、相手の肩口に入る
+- 重なった部分は、redの体が上に描かれる（既存の生成順。frameごとに入れ替わらない）
+- Drive / Morozashiでも同じ形
+- releaseの瞬間、両者はcanonicalな位置へ戻る（offsetの大きさは約0.245 R）。idle spriteへの切り替えと同じframeで、補間は無い
 
 # Changed Files
 
-- `src/game/presentation/gripSuccessGateArt.ts`: offsetの定数と`gripSuccessDisplayOffsetPx`、判定の共通化、header comment
-- `src/game/presentation/gripSuccessGateArt.test.ts`: ACTION-11Eのtest 5件と、WrestlerViewの配線のassertion
-- `src/game/scenes/WrestlerView.ts`: 体と影にoffsetを足す。header comment
-- `docs/ARCHITECTURE.md`: ACTION-11Dのnoteの「pair offsetは無い」を外し、ACTION-11E（暫定）のnoteを1項目追加
+- `src/game/presentation/gripSuccessGateArt.ts`: `GRIP_SUCCESS_FORWARD_OFFSET_R = 0.14`を追加。`GRIP_SUCCESS_LATERAL_OFFSET_R`を−0.3から−0.2に変更。`gripSuccessDisplayOffsetPx`を前 + 横の2成分にした。header comment
+- `src/game/presentation/gripSuccessGateArt.test.ts`: P1–P9 / S4–S5のtestと、S2の補足
+- `src/game/scenes/WrestlerView.ts`: header commentだけ（offsetを足す処理は、ACTION-11Eのまま）
+- `docs/ARCHITECTURE.md`: ACTION-11Eのnoteを、11E / 11Fの2成分（暫定）に更新
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
 # Design Deviations
 
 Design Deviations: NONE
-
-補足: 影も体と同じ量だけずらした。影は体の真下に置くための見た目で、gameplayとは無関係。体だけずらすと影が体から外れるため。
 
 # Unexpected Scope
 
@@ -139,20 +184,21 @@ Design Deviations: NONE
 
 # Known Untested Items
 
-- Grappled Orientationの回転中（turning）は、2人のfacingが軸と揃わない。そのあいだはoffsetが厳密には点対称にならない。各自のfacingに沿ってずれるだけで、破綻の心配は少ないが、目視では確かめていない
 - 実機のTouch入力
+- turningは、CounterTransition後の背後からの組み（Morozashi）の1通りだけ確認した。他の横からの組みは確かめていない
 
 # User Visual Gate: REQUIRED
 
-- 頭が少し左右へ逃げ、肩側で組んでいるように見えるか
-- 0.30 Rの量は適切か。小さく / 大きく、の希望があれば定数1つで調整できる
-- Drive中、Morozashiで破綻しないか
-- releaseで2人が0.30 Rずつ元の位置へ戻る動きが気にならないか
-- turning中の見え方
+主な問い: 横のずれを減らし、2人を内側へ寄せたことで、離れているのではなく、きつく組み合っているように見えるか。
+
+- 重なりの量は自然か。足りなければ、まず`GRIP_SUCCESS_FORWARD_OFFSET_R`だけを調整する
+- −0.20 Rの横のずれで、頭が肩側に入っているか。違えば`GRIP_SUCCESS_LATERAL_OFFSET_R`を別に調整する
+- 重なりでredが上に描かれる点は気にならないか
+- Drive / Morozashi / releaseの瞬間の戻り / turningの見え方
 
 Technical PASSは、見た目の受け入れを意味しない。
 
 # Git delivery
 
-- Task-ownedのfileだけを明示的にstage → 1 commit（`feat(presentation): add grip success pair offset`）
+- Task-ownedのfileだけを明示的にstage → 1 commit（`feat(presentation): compress grip success pair`）
 - fetch → fast-forwardの安全を確認 → `origin/develop`へpush → remote SHAを確認 → working tree clean

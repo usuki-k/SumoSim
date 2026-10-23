@@ -12,8 +12,8 @@
 // turn); Grip recovery keeps the existing selection.
 // ACTION-11D Visual Gate: while grappled (pose grapple or drive) the temporary Grip success pose is shown the same
 // rigid way at the canonical facing (no extra turn); a release returns to the idle sprite.
-// ACTION-11E Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
-// presentation-only lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
+// ACTION-11E / 11F Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
+// presentation-only forward + lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,

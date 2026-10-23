@@ -11,6 +11,7 @@ import {
 import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from '../sumo/BoutTypes.ts'
 import { GRIP_ATTEMPT_GATE_ART, allGripAttemptGateArts } from './gripAttemptGateArt.ts'
 import {
+  GRIP_SUCCESS_FORWARD_OFFSET_R,
   GRIP_SUCCESS_GATE_ART,
   GRIP_SUCCESS_LATERAL_OFFSET_R,
   allGripSuccessGateArts,
@@ -270,32 +271,71 @@ describe('Grip success gate art (ACTION-11D)', () => {
     expect(JSON.stringify(sim.getSnapshot())).toBe(before)
   })
 
-  describe('pair display offset (ACTION-11E)', () => {
+  describe('pair display offset (ACTION-11E / 11F)', () => {
     const R_PX = 40
     const offsetOf = (s: BoutSnapshot, who: 0 | 1) =>
       gripSuccessDisplayOffsetPx(visualOf(s, who), s.participants[who].facing, R_PX)
     const isZero = (o: { x: number; y: number }) => o.x === 0 && o.y === 0
+    // components in the wrestler's own frame (+forward = facing, +lateral = wrestler RIGHT)
+    const local = (o: { x: number; y: number }, f: number) => ({
+      forward: o.x * Math.cos(f) + o.y * Math.sin(f),
+      lateral: -o.x * Math.sin(f) + o.y * Math.cos(f),
+    })
 
-    it('a small lateral offset to the own LEFT of each wrestler, perpendicular to its canonical facing', () => {
-      expect(GRIP_SUCCESS_LATERAL_OFFSET_R).toBeLessThan(0)
-      expect(Math.abs(GRIP_SUCCESS_LATERAL_OFFSET_R)).toBeLessThanOrEqual(0.5)
+    it('P1 / P2: provisional values forward +0.14 R, lateral -0.20 R', () => {
+      expect(GRIP_SUCCESS_FORWARD_OFFSET_R).toBe(0.14)
+      expect(GRIP_SUCCESS_LATERAL_OFFSET_R).toBe(-0.2)
       const s = neutralGrapple().getSnapshot()
       for (const who of [0, 1] as const) {
-        const o = offsetOf(s, who)
-        const f = s.participants[who].facing
-        expect(Math.hypot(o.x, o.y)).toBeCloseTo(Math.abs(GRIP_SUCCESS_LATERAL_OFFSET_R) * R_PX, 9)
-        expect(o.x * Math.cos(f) + o.y * Math.sin(f)).toBeCloseTo(0, 9) // no forward component
-        expect(-o.x * Math.sin(f) + o.y * Math.cos(f)).toBeLessThan(0) // along the wrestler's LEFT
+        const l = local(offsetOf(s, who), s.participants[who].facing)
+        expect(l.forward).toBeCloseTo(0.14 * R_PX, 9) // P1
+        expect(l.lateral).toBeCloseTo(-0.2 * R_PX, 9) // P2
       }
     })
 
-    it('face to face the pair shifts point-symmetrically (opposite offsets, pair midpoint kept)', () => {
+    it('P3-P5: the offset rotates with any facing: forward along the facing, lateral to the wrestler LEFT', () => {
+      const visual = visualOf(neutralGrapple().getSnapshot(), 0)
+      for (let k = -8; k <= 8; k++) {
+        const f = (k * Math.PI) / 7 + 0.1
+        const o = gripSuccessDisplayOffsetPx(visual, f, R_PX)
+        expect(Math.hypot(o.x, o.y)).toBeCloseTo(Math.hypot(0.14, 0.2) * R_PX, 9) // P3
+        expect(o.x).toBeCloseTo(0.14 * R_PX * Math.cos(f) + 0.2 * R_PX * Math.sin(f), 9)
+        expect(o.y).toBeCloseTo(0.14 * R_PX * Math.sin(f) - 0.2 * R_PX * Math.cos(f), 9)
+        const l = local(o, f)
+        expect(l.forward).toBeCloseTo(0.14 * R_PX, 9) // P4
+        expect(l.lateral).toBeCloseTo(-0.2 * R_PX, 9) // P5
+      }
+    })
+
+    it('P7-P9: face to face the forward and lateral offsets are opposite; the pair midpoint is kept', () => {
       const s = neutralGrapple().getSnapshot()
+      const [pa, pb] = s.participants
+      expect(Math.abs(Math.atan2(Math.sin(pa.facing - pb.facing - Math.PI), Math.cos(pa.facing - pb.facing - Math.PI)))).toBeLessThan(1e-9)
       const a = offsetOf(s, 0)
       const b = offsetOf(s, 1)
-      expect(a.x + b.x).toBeCloseTo(0, 9)
+      const axis = { x: Math.cos(pa.facing), y: Math.sin(pa.facing) } // A -> B
+      const along = (o: { x: number; y: number }) => o.x * axis.x + o.y * axis.y
+      const across = (o: { x: number; y: number }) => -o.x * axis.y + o.y * axis.x
+      expect(along(a)).toBeCloseTo(0.14 * R_PX, 9) // P7: both move inward
+      expect(along(b)).toBeCloseTo(-0.14 * R_PX, 9)
+      expect(across(a)).toBeCloseTo(-across(b), 9) // P8
+      expect(Math.abs(across(a))).toBeCloseTo(0.2 * R_PX, 9)
+      expect(a.x + b.x).toBeCloseTo(0, 9) // P9
       expect(a.y + b.y).toBeCloseTo(0, 9)
-      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(2 * Math.abs(GRIP_SUCCESS_LATERAL_OFFSET_R) * R_PX, 9)
+      // displayed centers: 2 x 0.14 R closer along the canonical 2R bond (intended overlap), 2 x 0.20 R apart across it
+      const shown = Math.hypot(2 * R_PX + along(b) - along(a), across(b) - across(a))
+      expect(shown).toBeCloseTo(Math.hypot(2 * R_PX - 2 * 0.14 * R_PX, 2 * 0.2 * R_PX), 9)
+    })
+
+    it('S4 / S5: Morozashi holder and disadvantaged get the same combined offset', () => {
+      const s = morozashiGrapple().getSnapshot()
+      expect(visualOf(s, 0).grappleRole).toBe('morozashi-holder')
+      expect(visualOf(s, 1).grappleRole).toBe('morozashi-disadvantaged')
+      for (const who of [0, 1] as const) {
+        const l = local(offsetOf(s, who), s.participants[who].facing)
+        expect(l.forward).toBeCloseTo(0.14 * R_PX, 9)
+        expect(l.lateral).toBeCloseTo(-0.2 * R_PX, 9)
+      }
     })
 
     it('applies exactly while the success art is shown: grapple, Drive and Morozashi', () => {
@@ -310,6 +350,7 @@ describe('Grip success gate art (ACTION-11D)', () => {
       }
       const m = morozashiGrapple().getSnapshot()
       expect(isZero(offsetOf(m, 0)) || isZero(offsetOf(m, 1))).toBe(false)
+      expect(isZero(gripSuccessDisplayOffsetPx({ ...visualOf(m, 0), pose: 'drive' }, 0, R_PX))).toBe(false) // S2
     })
 
     it('zero for idle, Grip attempt, whiff / release recovery and every other action', () => {
