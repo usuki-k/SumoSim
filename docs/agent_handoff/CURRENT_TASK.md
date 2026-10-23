@@ -1,5 +1,5 @@
 Task-ID: ACTION-11N-GRIP-SUCCESS-LOWER-MARKER-REFLECTION-TUNE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION VISUAL TUNE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -328,3 +328,125 @@ Keep upper authored Grip markers unchanged.
 For the lower two markers, use deterministic image reflection as needed so the visible forearm/fist silhouette matches the User's latest reference: opponent shoulder/back -> mawashi.
 
 Keep the fist anchored on the mawashi, preserve the four-marker READY rule, and do not change gameplay or wrestler body art.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-24
+Overall Result: ACCEPTED — TECHNICAL PASS / USER PLAY TEST ACCEPTED PROVISIONALLY
+Accepted Baseline: 1384036d768b88a8f97bd5515cef73fc0544a571
+
+## Technical Review
+
+Confirmed from Current Source / diff:
+
+- Grip hand VFX remains presentation-only;
+- four authored markers remain visible only for READY grapple states;
+- either wrestler TURNING -> all markers hidden;
+- release / recovery / non-Grip actions -> zero markers;
+- authored runtime marker pixels remain unchanged;
+- no src/game/sumo or src/game/input changes;
+- canonical grapple bond remains 0.70 m;
+- ACTION-11F pair compression remains unchanged;
+- ACTION-11H tone correction remains unchanged.
+
+Current final marker layout:
+
+Red:
+- headSide:
+  - hand (-0.40, +0.80)
+  - elbow (+0.25, +1.15)
+  - authored
+  - ~0.74 R
+  - 61.70°
+- footSide:
+  - hand (-0.55, -0.45)
+  - elbow (-0.05, -0.95)
+  - mirrored
+  - ~0.71 R
+  - 45.00°
+
+Blue is the lateral reflection of Red:
+- headSide uses mirrored
+- footSide uses authored.
+
+## Design Deviation Review
+
+The final ACTION-11N state differs from the original Task constraints:
+
+- upper/head-side markers were originally required to stay fixed;
+- original visual target requested roughly 30–45°;
+- final head-side angle is 61.70°.
+
+This deviation is ACCEPTED because, during the same Task, the User:
+- PlayTested the first implementation,
+- supplied a new reference image,
+- explicitly selected the P1 layout for all four markers.
+
+The later direct User instruction supersedes the earlier Task constraint.
+
+No gameplay semantics changed.
+
+## Verification Review
+
+Accepted:
+
+- focused marker tests: 18 / 18 PASS
+- pnpm test: 30 files / 523 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- browser/runtime smoke: 27 / 27 PASS
+- TURNING visibility regression: PASS
+- release / other-action hiding: PASS
+- ACTION-11F / 11H preservation: PASS
+- gameplay / canonical bond preservation: PASS.
+
+Known verification caveat:
+
+- `export_grip_forearm_hand_gate.py --check` was not run because the local ignored source image present at review time had a different decoded hash from the accepted ACTION-11L source.
+- ACTION-11N does not modify the authored marker runtime assets or exporter/tooling.
+- committed authored runtime PNG hashes remained unchanged.
+
+This does not block acceptance of this placement-only Task.
+
+## User Play Test
+
+User result:
+
+> 少し見た目に違和感はありますが一旦良いです。
+
+Treat this as provisional visual acceptance.
+
+The current four-marker Grip-success VFX is now the baseline unless a later Task explicitly reopens it.
+
+## Accepted Grip Success Visual Baseline
+
+Preserve unless explicitly changed:
+
+- ACTION-11F pair compression
+- ACTION-11H body tone correction
+- authored forearm/fist runtime markers
+- four markers total
+- current ACTION-11N marker placement/orientation
+- pair READY-only visibility
+- TURNING hides all markers
+- release removes all markers.
+
+## Deferred
+
+Potential future polish only if explicitly requested:
+
+- refine hand/forearm visual awkwardness;
+- improve grip-specific hand shape;
+- tune upper marker angle/position;
+- replace temporary Grip visual-gate assets with final Product art.
+
+Do not reopen these automatically.
+
+## Next Task Constraint
+
+Future Action work should treat ACTION-11N as the accepted current Grip visual baseline.
+
+Do not modify Grip success VFX incidentally while working on unrelated Push / Tsuppari / Counter / Management tasks.
