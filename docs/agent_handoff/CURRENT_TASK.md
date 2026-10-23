@@ -1,477 +1,420 @@
-Task-ID: ACTION-11H-GRIP-SUCCESS-TONE-MATCH-GATE
-Status: REVIEWED
-Task-Type: PRESENTATION ART TONE-MATCH VISUAL GATE
+Task-ID: ACTION-11I-GRIP-SUCCESS-LIMB-VFX-POSITION-TUNE
+Status: READY
+Task-Type: PRESENTATION VISUAL TUNE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: 5938e76372ae0fc5a5099c4091defe630804a920
-Review-Handoff: ACTION-11G technical PASS but User Visual Gate REJECTED; current arm/hand VFX is not accepted. ACTION-11F pair compression remains accepted. This Task is brightness/tone correction only and must not redesign 11G limbs.
+Source-Baseline: f062164afa668c2329f2203ddb46c1d3b3183788
+Review-Handoff: ACTION-11H technical PASS; User Visual Gate accepted the tone correction as good enough for now. ACTION-11G limb VFX remains visually rejected. ACTION-11F pair compression remains accepted baseline.
 Handoff-Mode: GITHUB
 
-# ACTION-11H — Grip Success Skin Tone / Brightness Match Gate
+# ACTION-11I — Grip Success Limb VFX Position Tune
 
 ## Purpose
 
-Make the Grip-success wrestler body match the brightness / lighting tone of the accepted normal wrestler more closely.
+Rework only the position / orientation / layering of the existing Grip-success arm/hand VFX so the pair reads more like two wrestlers actively wrapping and holding each other.
 
-User feedback:
+User feedback on ACTION-11G:
 
-> 組む前と組んだ後でキャラクターの光の当たり具合がかなり違って気になる。  
-> 組んだ後の画像を、組む前の画像の明るさに近づけたい。
+- the procedural limb VFX is technically functional but visually wrong
+- current arms look like detached horizontal bars laid across the bodies
+- desired hand/arm relationship is closer to the latest User reference:
+  - arms originate from the wrestler body
+  - one arm wraps higher around the opponent's upper torso / shoulder area
+  - another arm reaches lower around the opponent's side / waist / mawashi area
+  - partial occlusion by the opponent body is acceptable and often preferable
+  - it is NOT necessary for the whole hand/forearm to remain visible.
 
-This Task must test and implement a deterministic offline tone correction.
+This is a Presentation-only visual tune.
 
-Do NOT regenerate the image with AI.
-
-Do NOT change the authored source pixels in `input.local`.
-
----
-
-# Reference / Target
-
-Use the accepted in-game red idle runtime as the tone reference:
-
-```
-public/assets/action/wrestler/red.png
-```
-
-This is the actual "before Grip" Product body shown in the game and therefore is the correct visual target.
-
-Verify it using the existing accepted idle exporter:
-
-```
-tools/wrestler_art/export_runtime_wrestlers.py --check
-```
-
-Do not alter the idle runtime image.
+Do not change gameplay.
 
 ---
 
-# Source to Correct
+# Accepted Baselines — Preserve
 
-Grip success authored source remains:
+## ACTION-11H Tone Match
 
-```
-tools/wrestler_art/input.local/candidate_red_grip_success.png
-```
+Accepted by User for now.
 
-Current accepted source identity remains:
+Do not reopen:
 
-```
-size: 1283 x 1226 RGBA
+- Grip-success skin tone correction
+- selected Candidate C levels curve
+- Grip-success runtime dimensions / pivot / body core
+- red -> blue derivation.
 
-decoded RGBA SHA-256:
-0cedde984646384514e3b1609b69f04450d04c5446888da966de206a183e566e
+Current corrected Grip success assets remain as-is.
 
-PNG file SHA-256:
-aace9edc143176673aabf78b66120885d54fb722aa2f50a0f3a031cb1f679793
-```
+## ACTION-11F Pair Compression
 
-Do NOT overwrite / edit this source file.
+Accepted by User.
 
-The tone adjustment belongs in the deterministic Grip-success export pipeline.
+Preserve exactly:
 
----
-
-# Current Runtime to Replace
-
-Current provisional Grip success runtime:
-
-```
-public/assets/action/wrestler/grip-success-gate/red.png
-public/assets/action/wrestler/grip-success-gate/blue.png
-```
-
-Current geometry / normalization must stay unchanged:
-
-- source FRONT: 160.2°
-- root: (662, 639)
-- body core: (481, 139) – (781, 971)
-- runtime body core: 123.076923 px
-- runtime red size/pivot: 160 x 183 / (83, 98)
-- runtime blue size/pivot: 160 x 183 / (83, 85).
-
-Only tone/color values may change.
-
-No geometry/pivot/alpha shape changes.
-
----
-
-# Scope Discipline
-
-This Task is brightness/tone correction only.
-
-Preserve:
-
-## ACTION-11C Gameplay
-- all Grip gameplay
-- Simulation position/facing/bond
-- Drive / release
-- Push/Tsuppari/Counter/Kuzushi interactions.
-
-## ACTION-11F Accepted Pair Presentation
 ```
 GRIP_SUCCESS_FORWARD_OFFSET_R = +0.14
 GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
 ```
 
-Do not change these values.
+Do not retune these in ACTION-11I.
 
-## ACTION-11G Rejected Limb VFX
+## ACTION-11C Gameplay
 
-Leave its implementation untouched in this Task.
+Preserve exactly:
 
-The User rejected its visual design, but limb redesign is a separate future Task.
-
-Do not:
-- tune limb geometry
-- hide/remove limbs
-- change limb color
-- change limb depth
-- use limb appearance as the brightness reference.
-
-This Task corrects only the Grip-success wrestler body art.
-
----
-
-# Tone-Matching Principle
-
-Prefer a **skin-only luminance / tone adjustment**.
-
-Protect:
-
-- black hair
-- chonmage
-- red/blue mawashi
-- black outline
-- transparent pixels / alpha.
-
-The goal is not to repaint the art.
-
-The goal is:
-
-> Preserve the Grip-success drawing and shading structure while moving its skin brightness / light distribution closer to the accepted idle runtime.
-
-Do not flatten highlights/shadows.
-
-Do not recolor skin to a completely new palette.
-
----
-
-# Work at Normalized Runtime Resolution
-
-Preferred pipeline:
-
-```
-authored red success source
--> existing normalization
--> normalized red success
--> skin-tone correction
--> corrected red runtime
--> local-Y reflection
--> accepted mawashi recolor
--> corrected blue runtime
-```
-
-Reason:
-
-- the reference `public/assets/action/wrestler/red.png` is runtime art
-- both comparison images are then in the same display space / scale
-- the blue should inherit exactly the corrected skin from corrected red.
-
-Do not tone-correct red and blue independently.
-
----
-
-# Deterministic Skin Mask
-
-Use existing art-tool information where practical.
-
-Preferred mask concept at runtime resolution:
-
-```
-opaque body pixels
-- accepted mawashi region
-- hair region
-- dark/black outline pixels
-= skin candidate region
-```
-
-Reuse existing:
-- mawashi mask / hue ownership from `runtime_wrestler_recipe.json`
-- hair measurement/component logic where practical.
-
-Do not build a generic semantic segmentation system.
-
-A small Grip-success tone helper is sufficient.
-
-## Mask safety
-
-The mask must not materially include:
-
-- black hair
-- red/blue mawashi
-- black outline/background.
-
-Report mask pixel count and contamination diagnostics.
-
-If reliable skin isolation cannot be established:
-- STOP and report
-- do not apply a global brightness filter as a shortcut.
-
----
-
-# Measurement Before Correction
-
-Measure and report skin brightness statistics for:
-
-1. accepted idle runtime red
-2. current uncorrected normalized Grip-success red.
-
-Use a documented luminance space.
-
-Preferred:
-- relative luminance or linear-light luma
-- report at least P20 / P50 / P80 or equivalent lower/mid/high quantiles.
-
-Also report:
-- mean if useful
-- number of skin pixels.
-
-The important point is to compare **distribution**, not only one average.
-
----
-
-# Candidate Tone Curves
-
-Evaluate at least these deterministic candidates offline before selecting one:
-
-## Candidate A — no correction
-
-Reference only.
-
-## Candidate B — skin-only gamma/exposure-style correction
-
-A monotonic curve that:
-- keeps darks/highlights ordered
-- matches median brightness toward idle
-- preserves hue/chroma as much as possible.
-
-## Candidate C — skin-only percentile/levels correction
-
-A monotonic mapping using at least two skin luminance quantiles, e.g. lower/high percentiles, to better match both midtone and highlight/shadow spread.
-
-Do not implement arbitrary per-pixel histogram equalization if it introduces visible banding or destroys authored shading.
-
-Do not alter non-skin pixels.
-
----
-
-# Selection Rule
-
-Use objective statistics to choose the best first candidate, then visually inspect.
-
-Preferred objective comparison:
-
-- difference in idle-vs-success P20
-- difference in P50
-- difference in P80
-- weighted aggregate error.
-
-The selected candidate should improve the brightness-distribution match materially over Candidate A.
-
-However:
-
-**Technical metric PASS != User visual acceptance.**
-
-If the objectively closest candidate looks obviously washed out / flat / unnatural:
-- prefer the visually safer deterministic candidate
-- report the metric tradeoff.
-
-Do not manually paint pixels.
-
----
-
-# Preserve Skin Hue
-
-The transform should primarily change luminance / value, not hue.
-
-Required diagnostics:
-
-- representative skin hue/chroma shift before vs after
-- ensure no gross orange/red hue rotation.
-
-Small numeric changes caused by luminance scaling are acceptable.
-
-Do not intentionally shift hue unless required and explicitly reported.
-
----
-
-# Alpha / Geometry Invariants
-
-Required:
-
-- alpha channel byte-for-byte unchanged by tone correction
-- non-transparent footprint unchanged
-- runtime dimensions unchanged
-- pivots unchanged
-- body core unchanged
-- FRONT/root normalization unchanged.
-
-Only RGB values inside the accepted skin mask may change.
-
-Outside-mask pixels must be byte-identical before/after tone correction.
-
----
-
-# Exporter / Recipe Ownership
-
-Update the existing Grip-success gate pipeline only.
-
-Preferred files:
-
-```
-tools/wrestler_art/grip_success_gate_recipe.json
-tools/wrestler_art/export_grip_success_gate.py
-tools/wrestler_art/tests/test_export_grip_success_gate.py
-```
-
-Add a small explicit tone section to the Grip-success recipe, for example:
-
-```
-"skin_tone_match": {
-  "reference": "...",
-  "method": "...",
-  "parameters": ...
-}
-```
-
-Exact schema is not prescribed.
-
-Do not move ownership into `runtime_wrestler_recipe.json`; that recipe owns the accepted idle Product art and shared red->blue recolor rule.
-
-Do not modify idle / Tsuppari / Counter / Grip-attempt exporters.
-
----
-
-# Comparison Artifacts
-
-Create local scratch comparison images, not committed Product assets.
-
-At minimum create:
-
-1. idle red runtime vs uncorrected success red
-2. idle red runtime vs Candidate B
-3. idle red runtime vs Candidate C
-4. chosen corrected success red / blue pair.
-
-Prefer:
-- same scale
-- neutral background
-- labeled candidate name/statistics.
-
-These are User Visual Gate evidence only.
-
-Do not commit scratch sheets unless Task conventions explicitly require it.
-
----
-
-# In-Game Browser Smoke
-
-Required after selected tone correction is exported.
-
-Use the current accepted ACTION-11F pair presentation.
-
-The rejected ACTION-11G limb VFX may still be present because this Task must not change it.
-
-Verify body tone in:
-
-- Grip attempt -> success transition
-- neutral grapple
+- Grip lunge / timing
+- contact success
+- Push / Tsuppari / Counter / Grip contest rules
+- canonical 0.70 m grapple bond
+- Grappled Orientation
 - Drive
-- Morozashi
-- turning settled
-- release -> idle.
+- release
+- ring-out.
 
-Primary transition to inspect:
-
-```
-idle / attempt
--> Grip success
-```
-
-The skin should no longer appear to jump to a materially different lighting/brightness treatment.
-
----
-
-# Required Tests
-
-## Source / Reference
-
-T1. Grip-success source identity remains unchanged.
-
-T2. accepted idle runtime reference exporter --check passes.
-
-## Mask
-
-T3. deterministic skin mask.
-
-T4. mawashi pixels excluded.
-
-T5. hair/dark outline excluded.
-
-T6. mask non-empty and sufficiently large.
-
-## Tone
-
-T7. correction changes only skin-mask RGB.
-
-T8. alpha unchanged exactly.
-
-T9. outside-mask pixels unchanged exactly.
-
-T10. selected tone transform is monotonic.
-
-T11. corrected brightness quantile error vs idle improves over uncorrected.
-
-T12. no severe clipping at 0/255.
-
-## Red / Blue
-
-T13. red is corrected first.
-
-T14. blue is derived from corrected red using the existing local-Y reflection + mawashi recolor.
-
-T15. skin correction is not independently recomputed for blue.
-
-## Geometry
-
-T16. runtime dimensions/pivots/body-core unchanged.
-
----
-
-# Regression
-
-Must prove unchanged:
-
-- idle Product art
-- Tsuppari Product art
-- Counter Product art
-- Grip attempt gate art
-- Grip gameplay
-- ACTION-11F offsets
-- ACTION-11G limb code/geometry
-- public assets outside `grip-success-gate/`.
-
-No changes under:
+No Production changes under:
 
 ```
 src/game/sumo/
 src/game/input/
 ```
 
-No changes expected under `src/game/presentation/` unless a test needs to update an expected Grip-success pixel hash/metadata reference.
+---
 
-Runtime metadata dimensions/pivots must remain unchanged.
+# Current Rejected Limb VFX Baseline
+
+Current ACTION-11G uses two procedural limbs per wrestler:
+
+```
+FAR:
+start (0.18, +0.42)
+end   (0.82, +0.25)
+width 0.20 R
+hand  0.15 R
+
+NEAR:
+start (0.22, -0.65)
+end   (1.12, -0.58)
+width 0.22 R
+hand  0.16 R
+```
+
+Depths:
+
+```
+far = 1.9
+body = 2.0
+near = 2.2
+```
+
+These values are NOT visually accepted.
+
+ACTION-11I may change:
+- limb start/end points
+- limb angle
+- width / hand size if needed
+- far/near assignment
+- fixed depth values
+- whether part of an arm is intentionally hidden by body overlap.
+
+Do not change the underlying success body placement.
+
+---
+
+# Visual Goal
+
+The revised VFX should read like:
+
+> each wrestler has arms wrapped around the opponent rather than bars floating over the pair.
+
+Target relationship:
+
+## High arm
+
+- originates around the wrestler's shoulder / upper side
+- crosses toward the opponent's upper torso / shoulder / upper back region
+- may disappear partially behind the opponent body
+- only the useful visible forearm / hand segment needs to remain visible.
+
+## Low arm
+
+- originates lower on the wrestler's side
+- wraps toward the opponent's flank / waist / mawashi region
+- hand should visually land near the opponent torso / waist / mawashi
+- partial overlap/occlusion is desirable if it makes the grip read more naturally.
+
+The two arms do not need to be perfectly symmetric vertically.
+
+It is acceptable for one arm to be visually more prominent than the other.
+
+---
+
+# Important Visual Rule
+
+Do NOT optimize for showing the whole arm.
+
+Optimize for a believable grip.
+
+If necessary:
+
+- hide the shoulder/root under the wrestler body
+- hide part of forearm under the opponent body
+- show only the distal forearm/hand
+- let one wrestler visually cover the other's limb where the fixed draw order does so naturally.
+
+The User explicitly accepts overlap.
+
+---
+
+# Preferred Rendering Strategy
+
+Reuse the current procedural limb system.
+
+Do not regenerate wrestler images.
+
+Do not add external limb image assets.
+
+Prefer updating:
+
+```
+src/game/presentation/gripSuccessLimbVfx.ts
+```
+
+and, only as needed:
+
+```
+src/game/scenes/WrestlerView.ts
+```
+
+Keep the helper Phaser-free.
+
+Do not introduce a generic animation or limb framework.
+
+---
+
+# Placement Strategy
+
+Use wrestler-local geometry in R units, anchored to the ACTION-11F displayed body center.
+
+Local convention:
+
+- +X = FRONT
+- +Y = wrestler RIGHT
+- -Y = wrestler LEFT.
+
+However, unlike ACTION-11G, do not assume both useful arms should simply extend forward in near-parallel lines.
+
+Investigate geometry that better crosses toward the opponent.
+
+Recommended exploration:
+
+### Candidate A — upper wrap + low waist grip
+
+High arm:
+- shoulder relatively lateral / upper side
+- hand endpoint nearer opponent shoulder / upper torso
+
+Low arm:
+- shoulder lower / opposite side
+- hand endpoint farther forward and closer to opponent waist / mawashi.
+
+### Candidate B — one visible near arm + one mostly hidden far arm
+
+- make the NEAR limb the main readable grip
+- keep FAR limb mostly behind / occluded so it adds depth without looking like another bar.
+
+### Candidate C — asymmetric visible lengths
+
+- shorter visible high arm
+- longer low arm reaching toward mawashi.
+
+Do not mechanically preserve the current ACTION-11G geometry if another small geometry better matches the User reference.
+
+---
+
+# Reference Image Interpretation
+
+The latest User reference should guide the geometry:
+
+- both arms appear to wrap around an opponent
+- hands are not centered on the wrestler's own body
+- arm roots are visually connected to shoulders/sides
+- distal hands sit on the opponent side / waist
+- no obvious circular cut-face / detached tube appearance should dominate.
+
+The VFX does NOT need to reproduce full fingers or exact anatomy.
+
+At gameplay scale:
+- attachment
+- direction
+- grip destination
+matter more than anatomical detail.
+
+---
+
+# Root / Cut-Face Problem
+
+The current VFX can expose a rounded/circular shoulder-end that reads like a cut cylinder.
+
+Reduce that visual.
+
+Preferred methods:
+
+1. bury root deeper under the wrestler body
+2. let body occlude the start cap
+3. shorten the visible segment
+4. adjust texture/origin so the cap is hidden beneath body.
+
+Do not solve by editing the wrestler source sprite.
+
+If necessary, the procedural texture may omit the visible shoulder-end cap on the exposed side.
+
+Keep the change small and explicit.
+
+---
+
+# Depth / Occlusion
+
+The current simple depth split may be adjusted.
+
+Goal:
+
+- at least one arm visually passes behind the bodies
+- at least one forearm / hand appears on top where it indicates holding.
+
+Allowed:
+- tweak FAR depth
+- tweak NEAR depth
+- use existing stable body creation order
+- assign one wrestler's visible grip arm differently only if needed through existing stable order.
+
+Do NOT add:
+- dynamic per-frame depth sorting
+- generic z-order system.
+
+If convincing overlap requires dynamic sorting, STOP and report.
+
+---
+
+# Visibility Scope
+
+Still only:
+
+```
+state.pose === 'grapple'
+|| state.pose === 'drive'
+```
+
+Hidden for:
+
+- Grip attempt
+- Grip recovery
+- idle
+- move
+- Push
+- Tsuppari
+- Counter
+- Kuzushi
+- after release.
+
+No timer.
+
+---
+
+# Neutral / Morozashi / Drive
+
+Use the same tuned geometry for:
+
+- neutral
+- Morozashi holder
+- Morozashi disadvantaged
+- Drive.
+
+Do not add advantage-specific limbs yet.
+
+---
+
+# Turning
+
+Inspect:
+
+1. turning immediately after grapple
+2. turning mid
+3. turning settled.
+
+The VFX must follow current canonical facing.
+
+However, the User's primary target is the settled/front-facing grip.
+
+Do not over-engineer a turning-specific solution.
+
+If the tuned limbs look temporarily less perfect during turning but remain coherent / attached, that is acceptable.
+
+If turning causes severe floating / inversion:
+- STOP and report
+- do not change Grappled Orientation gameplay.
+
+---
+
+# Required Browser Screens
+
+Capture the same 8-frame set:
+
+1. neutral immediately after success
+2. neutral settled
+3. Drive while grappled
+4. Morozashi grapple
+5. immediately after release
+6. turning immediately after success
+7. turning mid
+8. turning settled.
+
+Create a montage/sheet.
+
+Also create a before/after comparison against ACTION-11G if practical.
+
+---
+
+# Required Tests
+
+## Geometry
+
+G1. tuned limb geometry is deterministic.
+
+G2. limb start is attached sufficiently close to wrestler body region.
+
+G3. hand endpoints are meaningfully in front / across toward the opponent.
+
+G4. one limb is clearly higher / upper-wrap oriented.
+
+G5. one limb is clearly lower / waist-grip oriented.
+
+G6. dimensions remain R-relative.
+
+## Visibility
+
+V1. grapple visible.
+
+V2. Drive visible.
+
+V3. attempt hidden.
+
+V4. release/recovery hidden.
+
+V5. other actions hidden.
+
+## Preservation
+
+P1. ACTION-11F forward/lateral constants unchanged.
+
+P2. ACTION-11H tone-match recipe/curve unchanged.
+
+P3. Grip-success body textures unchanged by this Task.
+
+P4. canonical 0.70 m bond unchanged.
+
+P5. Snapshot unchanged.
+
+P6. no src/game/sumo or src/game/input Production diff.
 
 ---
 
@@ -481,23 +424,56 @@ REQUIRED.
 
 Primary question:
 
-> Does Grip success now look like the same character under the same lighting as the normal/attempt state, without losing the success pose's authored shading?
+> Do the revised arms/hands now look like they belong to each wrestler and wrap around the opponent toward upper torso / waist, rather than floating horizontal bars?
 
 Judge:
 
-- skin brightness jump is reduced
-- highlights feel consistent
-- shadows still read
-- skin hue remains natural
-- red mawashi unchanged
-- black hair/outline unchanged
-- blue derived wrestler also looks consistent
-- idle/attempt -> success transition no longer feels like switching to a differently lit illustration.
+- arm root feels attached
+- high arm reads as upper-body wrap
+- low arm reads as waist/mawashi grip
+- hands look like they land on the opponent
+- partial occlusion looks natural
+- settled neutral is convincing
+- Drive remains coherent
+- turning remains acceptable
+- release removes all limb VFX cleanly.
 
-If still mismatched:
-- report whether the remaining issue is brightness, contrast, hue, or highlight placement.
+If rejected again:
+- report whether the failure is:
+  - arm root
+  - endpoint / hand position
+  - thickness
+  - depth / occlusion
+  - procedural shape itself.
 
-Do not use AI regeneration in this Task.
+Do not jump to authored limb sprites unless the User explicitly asks.
+
+---
+
+# Scope
+
+## In Scope
+
+- existing procedural Grip limb VFX geometry
+- width/hand size if needed
+- fixed depth/layer assignment
+- root occlusion
+- before/after visual evidence
+- tests and browser smoke.
+
+## Scope Out
+
+Do NOT:
+
+- change ACTION-11F compression
+- change ACTION-11H tone matching
+- change gameplay
+- change canonical bond
+- modify Grip success / attempt source images
+- AI regenerate art
+- add audio/camera/particles
+- add Morozashi-specific pose
+- modify PROJECT_HANDOFF.md.
 
 ---
 
@@ -505,32 +481,32 @@ Do not use AI regeneration in this Task.
 
 STOP if:
 
-- safe skin isolation is not possible
-- correcting brightness requires editing hair/mawashi/outline substantially
-- a global runtime Phaser tint/filter is required
-- source geometry/pivot must change
-- AI regeneration becomes necessary
-- accepted idle Product art would need modification
-- correcting body tone would require modifying ACTION-11F/11G presentation geometry.
+- position/depth tuning cannot make procedural limbs read naturally
+- an authored external limb asset becomes necessary
+- pair compression must be retuned materially
+- gameplay/facing/bond changes would be required
+- dynamic z-order framework is required
+- unrelated accepted visuals regress.
 
 ---
 
-# Verification Level
+# Verification
 
-Standard Art / Presentation Visual Gate
+Verification Level:
+Standard Presentation Visual Tune
 
 Required:
 
-- focused Grip-success exporter tests
-- full wrestler-art suite
-- deterministic export + --check
-- idle/Tsuppari/Counter/Grip-attempt exporter --check
+- focused limb geometry tests
+- Grip success presentation tests
+- Grip/Grapple/Drive/Orientation regression
+- Push/Tsuppari/Counter/Kuzushi presentation regression
 - `pnpm test`
 - `pnpm build`
 - `git diff --check`
 - browser/runtime smoke
-- comparison sheets
-- Product-regression proof.
+- prove ACTION-11F/11H unchanged
+- prove src/game/sumo and src/game/input unchanged.
 
 ---
 
@@ -539,17 +515,17 @@ Required:
 Include:
 
 - Result
-- reference image identity
-- source identity
-- skin-mask method/diagnostics
-- before idle/success brightness statistics
-- Candidate A/B/C statistics
-- selected method and parameters
-- corrected red/blue runtime hashes
-- proof alpha/outside-mask invariants
-- proof geometry metadata unchanged
-- comparison artifact paths
-- browser smoke
+- old limb geometry -> new limb geometry
+- final depth values
+- any root-cap/occlusion change
+- changed files
+- proof ACTION-11F constants unchanged
+- proof ACTION-11H tone curve unchanged
+- proof gameplay/canonical bond unchanged
+- focused/full verification
+- 8-frame montage
+- before/after comparison if available
+- turning observation
 - Design Deviations
 - Unexpected Scope
 - User Visual Gate: REQUIRED
@@ -578,7 +554,7 @@ Normal successful Task:
 
 Suggested commit:
 
-`art(action): tone match grip success wrestler`
+`feat(presentation): retune grip success limb placement`
 
 Do not modify:
 
@@ -588,235 +564,11 @@ Do not modify:
 
 # Final Instruction
 
-Do not regenerate Grip-success art with AI.
-
-Keep the authored Grip-success source, geometry, ACTION-11F pair compression and gameplay unchanged.
-
-Deterministically tone-match only the Grip-success skin at export time toward the accepted idle runtime `public/assets/action/wrestler/red.png`, then derive blue from the corrected red using the existing accepted reflection + mawashi recolor pipeline.
-
-
----
-
-# ChatGPT Review Handoff
-
-Review-Date: 2026-10-23
-Overall Result: TECHNICAL PASS / USER VISUAL GATE REQUIRED
-Accepted Technical Baseline: fe7fa46f473a09fa0df1d4c4fa02cf8179508b90
-
-## Reported Implementation vs Design
-
-Accepted as aligned with ACTION-11H.
-
-Confirmed from Current Source / diff:
-
-- authored Grip-success source remains unchanged in input.local
-- accepted idle runtime red is the tone reference
-- tone correction runs after Grip-success normalization and before red -> blue derivation
-- only skin-mask RGB is changed
-- alpha is unchanged
-- non-skin pixels are unchanged
-- geometry / FRONT / root / pivot / body-core remain unchanged
-- corrected blue is derived from corrected red by the existing local-Y reflection + mawashi recolor
-- no AI regeneration
-- no runtime Phaser tint/filter
-- no src/game/sumo or src/game/input changes
-- ACTION-11F pair-compression constants remain unchanged
-- ACTION-11G limb geometry/code remains unchanged.
-
-## Accepted Tone Method
-
-Selected deterministic method:
-
-Candidate C — skin-only monotonic levels / piecewise-linear luminance mapping.
-
-Runtime skin luminance uses linear-light sRGB relative luminance:
-
-```
-Y = 0.2126 R + 0.7152 G + 0.0722 B
-```
-
-Recorded curve points:
-
-```
-(0, 0)
-(0.44367 -> 0.32912)
-(0.55539 -> 0.534612)
-(0.56370 -> 0.554119)
-(1, 1)
-```
-
-The transform scales linear RGB by Y'/Y so chromaticity is substantially preserved.
-
-## Brightness Match Evidence
-
-Accepted measured skin luminance:
-
-Idle reference:
-- P20 = 0.3291
-- P50 = 0.5346
-- P80 = 0.5541
-
-Uncorrected success:
-- P20 = 0.4437
-- P50 = 0.5554
-- P80 = 0.5637
-
-Corrected success:
-- P20 = 0.3294
-- P50 = 0.5354
-- P80 = 0.5556
-
-RMS quantile error:
-
-```
-uncorrected A: 0.0674
-gamma B:       0.0524
-levels C:      0.0010
-```
-
-Therefore the selected correction materially improves the idle-vs-success luminance-distribution match.
-
-The main original difference was not blown highlights but overly bright shadows / shallow contrast in the success art.
-
-## Skin Mask
-
-Accepted runtime skin mask:
-
-- alpha >= 250
-- outside accepted mawashi mask
-- hue 12–50 degrees
-- saturation >= 0.2
-- value >= 0.35.
-
-Reported real Grip-success skin pixels: 11073.
-
-Diagnostics accepted:
-
-- overlap with mawashi mask = 0
-- hair / dark outline excluded by mask conditions
-- no clipping introduced.
-
-This is sufficiently narrow for the current Visual Gate.
-
-## Color Preservation
-
-No intentional hue shift was introduced.
-
-Reported median skin hue/chroma:
-
-- success before: hue 65.93°, chroma 41.75
-- success after: hue 65.89°, chroma 41.50.
-
-Per-pixel hue change:
-- median ~0.37°
-- max ~1.73°.
-
-A pre-existing approximately 3.7° more-yellow skin hue versus idle remains intentionally uncorrected because ACTION-11H is brightness/tone matching, not hue repainting.
-
-## Runtime Outputs
-
-Corrected provisional Grip-success runtime hashes:
-
-Red:
-`5852751b85dae79826848bd6daec751fa3addc572b5943ff95047f22c1187221`
-
-Blue:
-`624d2d51b9fba3a24aebcf6750335abc8054dd1fd5cfd239469daa679ee542e2`
-
-Geometry remains:
-
-- red 160 x 183, pivot (83,98)
-- blue 160 x 183, pivot (83,85)
-- body core 123.076923 px.
-
-## Invariants
-
-Accepted:
-
-- alpha byte-for-byte unchanged
-- outside-mask pixels byte-for-byte unchanged
-- no corrected-skin channel clipping to 0/255
-- dimensions unchanged
-- pivots unchanged
-- body core unchanged
-- source FRONT/root unchanged
-- idle/Tsuppari/Counter/Grip-attempt art unchanged.
-
-## Verification Review
-
-Accepted:
-
-- focused Grip-success exporter tests: 24 / 24
-- full wrestler-art suite: 209 / 209
-- deterministic exporter rerun / --check: PASS
-- idle / attempt / Tsuppari / Counter exporter checks: PASS
-- pnpm test: 30 files / 518 PASS
-- pnpm build: PASS
-- git diff --check: PASS
-- browser/runtime smoke: 27 / 27 PASS
-- no src gameplay diff.
-
-This satisfies the Task's Standard Art / Presentation verification.
-
-## ACTION-11G Limb Note
-
-The rejected ACTION-11G limb VFX was correctly left unchanged.
-
-Because ACTION-11G uses a fixed procedural skin color (#f3b47c), those rejected limbs may now look brighter than the corrected success body.
-
-This is NOT an ACTION-11H failure and must not be corrected inside the tone-matching task.
-
-When arm/hand VFX is redesigned later, its color should be derived/aligned from the corrected body palette rather than retaining the rejected fixed visual.
-
-## User Visual Gate
-
-REQUIRED before visual acceptance.
-
-Primary question:
-
-> Does the corrected Grip-success body now look like the same wrestler under approximately the same lighting as idle / Grip attempt?
-
-Judge:
-
-- brightness jump at attempt -> success
-- shadow depth
-- highlight consistency
-- whether the remaining ~3.7° yellow hue difference is noticeable
-- red mawashi / hair / black outlines remain visually unchanged
-- blue success is consistent
-- authored success shading still looks natural.
-
-If still wrong, report the remaining problem specifically as one of:
-- brightness
-- contrast
-- hue
-- highlight placement.
-
-Do not reopen AI regeneration automatically.
-
-## Do Not Reopen
-
-Unless User explicitly requests:
-
-- ACTION-11C Grip gameplay
-- ACTION-11F +0.14R / -0.20R pair compression
-- Grip success geometry/pivot
-- Grip attempt art
-- accepted idle Product art.
-
-## Deferred
-
-- redesign of rejected ACTION-11G arm/hand VFX using the User's desired arm placement
-- possible hue/chroma matching only if User says brightness is fixed but color still differs
-- permanent Product promotion after visual gates are accepted.
-
-## Next Task Constraint
-
-Wait for User Visual Gate on ACTION-11H.
-
-If accepted:
-- treat Candidate C skin-tone correction as current Grip-success visual baseline
-- next visual task may return to the rejected arm/hand VFX redesign.
-
-If rejected:
-- adjust only the specific remaining tone dimension reported by User before touching pose/geometry/gameplay.
+Keep accepted Grip gameplay, ACTION-11F pair compression and ACTION-11H tone matching unchanged.
+
+Retune only the existing procedural Grip-success arm/hand VFX so that:
+- one arm wraps higher toward the opponent's upper torso/shoulder
+- one arm wraps lower toward the opponent's waist/mawashi
+- roots are visually attached/occluded
+- hands visibly land on the opponent
+- the result no longer looks like detached horizontal bars.
