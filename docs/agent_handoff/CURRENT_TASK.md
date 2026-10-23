@@ -1,5 +1,5 @@
 Task-ID: ACTION-12B-GRAPPLE-WASD-ROTATION-IMPLEMENTATION
-Status: READY
+Status: REVIEWED
 Task-Type: IMPLEMENTATION
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -678,3 +678,219 @@ While GRAPPLED and both READY, reuse ParticipantIntent.move as world-frame grapp
 Rigidly rotate both canonical positions and facings around the pair midpoint at provisional 90°/s maximum.
 
 Do not translate the pair midpoint from WASD, do not add impulse, preserve 0.70 m bond, preserve existing Drive/Orientation/ring-out ownership, and require Heavy verification plus User Play Test.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-24
+Overall Result: ACCEPTED — TECHNICAL PASS / USER PLAY TEST PASS
+Accepted Baseline: c1a81dd58c27783f63044c59d70fed6cd9cb80bb
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-12A / ACTION-12B.
+
+Confirmed from Current Source / diff:
+
+- existing ParticipantIntent.move is reused;
+- no new grapple rotation input field was added;
+- manual rotation is Simulation-owned in Pure TypeScript;
+- GRAPPLE_MANUAL_ROTATION_RATE = Math.PI / 2;
+- manual rotation is gated by tick-start readiness for BOTH participants;
+- TURNING blocks manual rotation for both;
+- release remains before manual rotation;
+- Drive action decision remains before manual rotation;
+- manual rotation happens before updateGrappledExternal;
+- Drive therefore uses the rotated pair axis;
+- ordinary linear WASD movement remains suppressed while GRAPPLED;
+- no selfVelocity / externalVelocity / impulse is created by manual rotation;
+- existing external momentum is not rotated for free;
+- existing ring-out remains authoritative;
+- ACTION-11N Grip visual baseline was not changed.
+
+## Accepted Input Semantics
+
+While FREE:
+
+- WASD remains ordinary world-frame movement.
+
+While GRAPPLED and both participants begin the tick READY:
+
+- WASD means world-frame grapple footwork;
+- only the participant's tangential component around the pair midpoint contributes;
+- radial component is discarded;
+- therefore WASD does not directly push or pull the pair.
+
+Accepted signed pair intent:
+
+```
+rA = (A.position - B.position) / 2
+tA = (-rA.y, rA.x) / |rA|
+
+cA = dot(moveA, tA)
+cB = -dot(moveB, tA)
+
+angularIntent = clamp(cA + cB, -1, +1)
+delta = angularIntent * GRAPPLE_MANUAL_ROTATION_RATE * TICK_SECONDS
+```
+
+The exact antisymmetric B formulation is accepted as numerically stronger than independently recomputing both radii while being mathematically equivalent to the reviewed design.
+
+## Accepted Pair Update
+
+When angularIntent != 0:
+
+- both canonical positions rotate rigidly around the shared midpoint by delta;
+- both canonical facings rotate by the same delta;
+- facings use existing normalizeAngle.
+
+Preserved invariants:
+
+- midpoint unchanged by WASD rotation itself;
+- pair distance / grapple bond unchanged;
+- facing error / READY relation unchanged by the rigid rotation;
+- no new pair-angle state.
+
+## Accepted Manual Rotation Rate
+
+Current baseline:
+
+```
+GRAPPLE_MANUAL_ROTATION_RATE = Math.PI / 2
+```
+
+= 90 deg/s maximum.
+
+User Play Test result: OK.
+
+Treat this value as the current accepted prototype baseline.
+
+Do not retune it in unrelated tasks.
+
+## Drive Interaction
+
+Accepted:
+
+```
+tick-start readiness
+-> release
+-> Drive action decision
+-> manual WASD rotation
+-> grapple self braking
+-> updateGrappledExternal on rotated pair axis
+-> integration
+-> bond
+-> facing
+-> ring-out
+```
+
+Therefore:
+
+- WASD + ArrowUp may rotate and Drive on the same tick;
+- Drive constants and Morozashi Drive factor are unchanged.
+
+## TURNING / Grappled Orientation
+
+Accepted:
+
+- existing ACTION-05B1 automatic Grappled Orientation remains authoritative;
+- if either participant is TURNING at tick start, manual rotation is disabled for both;
+- manual rotation begins on the first tick that starts with both READY;
+- no stored readiness or new TURNING state was added.
+
+## Ring-Out
+
+Accepted:
+
+- no rotation-specific immunity;
+- no special edge slowdown;
+- existing canonical ring-out decides outcomes after final tick positions;
+- manual rotation near the edge may ring out the opponent or the rotating wrestler;
+- existing simultaneous/rematch ownership remains unchanged.
+
+This risk/reward is accepted by User Play Test for the current prototype.
+
+## Morozashi
+
+Accepted current rule:
+
+- Morozashi holder and disadvantaged wrestler have equal manual rotation authority;
+- MOROZASHI_DRIVE_FACTOR remains Drive-only.
+
+Do not add rotation advantage unless explicitly requested in a future balance task.
+
+## Velocity Ownership
+
+Accepted:
+
+- manual rotation writes position + facing only;
+- no orbit velocity is stored;
+- selfVelocity / externalVelocity ownership remains unchanged;
+- Snapshot velocity semantics remain self + external.
+
+Do not silently reinterpret Snapshot velocity later.
+
+## Verification Review
+
+Heavy verification accepted:
+
+- B1–B19 all covered;
+- B12 correctly classified N/A for pure rigid rotation with explicit proof/boundary case;
+- focused Grip/Orientation/Drive/RingOut/input regression: PASS;
+- pnpm test: 31 files / 542 PASS;
+- pnpm build: PASS;
+- git diff --check: PASS;
+- browser/runtime smoke: 11 / 11 PASS;
+- participant-order swap: PASS;
+- fixed-step determinism: PASS;
+- long-duration midpoint/bond/readiness invariants: PASS;
+- zero-input / radial-input regression: PASS;
+- dummy no-rotation: PASS.
+
+No mandatory verification remains unrun.
+
+## User Play Test
+
+User result: OK.
+
+Therefore the following are now accepted as current prototype baseline:
+
+- world-direction WASD grapple footwork;
+- tangential projection semantics;
+- radial input does nothing;
+- 90 deg/s manual rotation rate;
+- WASD + Drive simultaneous use;
+- equal Morozashi rotation authority;
+- existing edge ring-out risk/reward.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- ACTION-11N Grip success visual baseline;
+- ACTION-12B tangential-projection semantics;
+- GRAPPLE_MANUAL_ROTATION_RATE = PI / 2;
+- both-READY gate;
+- rotation-before-Drive ordering;
+- canonical 0.70 m grapple bond;
+- automatic GRAPPLE_TURN_RATE;
+- existing ring-out ownership.
+
+## Deferred
+
+Only future explicit tasks may consider:
+
+- Morozashi-specific rotation strength;
+- edge-specific rotation slowdown;
+- CPU grapple rotation AI;
+- touch/gamepad mapping;
+- throws / lifts;
+- further Grip visual polish.
+
+## Next Task Constraint
+
+Future Grip / Drive work must preserve ACTION-12B's canonical position/facing ownership and must not add a second pair rotation Source of Truth.
+
+Any future change to manual rotation semantics or rate is a gameplay-feel change and requires User Play Test.
