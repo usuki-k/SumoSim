@@ -1,150 +1,230 @@
-Task-ID: ACTION-13A-GRAPPLE-THROW-INVESTIGATION
-Status: REVIEWED
+Task-ID: ACTION-13A2-GRIP-RPS-TIMING-STATE-INVESTIGATION
+Status: READY
 Task-Type: INVESTIGATION / DESIGN
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: fe27c90e63fe384edfe556669f3eb92d32019b83
-Review-Handoff: ACTION-12B is accepted: GRAPPLED + both READY uses WASD tangential footwork at 90 deg/s, ArrowUp remains Drive, TURNING blocks manual rotation, canonical bond is 0.70 m, existing ring-out remains authoritative. ACTION-11N remains the accepted Grip visual baseline. Do not modify either in this Investigation.
+Source-Baseline: 67bd34cd56940150789ce45391594830f773fe09
+Review-Handoff: ACTION-13A was reviewed implementation-ready, but the User has now materially changed the Grip design before ACTION-13B implementation. Random Throw KO is removed. Normal non-KO Throw now releases GRAPPLED -> FREE. Grip combat is now a three-way RPS: Yori > Lift > Throw > Yori. Best Timing acts as the Grip-state analogue of Kuzushi, usually ~1.5x effect, while Throw Best vs Yori is a Fall/KO. Shift Release is removed. ACTION-12B WASD grapple rotation and ACTION-11N Grip visuals remain accepted baselines unless this Investigation explicitly identifies a required integration change.
 Handoff-Mode: GITHUB
 
-# ACTION-13A — Grapple Throw Investigation / Design
+# ACTION-13A2 — Grip Action RPS / Timing / State Design Investigation
 
 ## Purpose
 
-Investigate and design the first Grip Throw gameplay for SumoSim.
+Redesign the GRAPPLED gameplay loop around a coherent three-way action RPS before any Throw implementation begins.
 
 This Task is Investigation / Design only.
 
 NO Production implementation.
 
-The design must be implementation-ready for a later Throw Core Gameplay task, while keeping the first prototype small enough to verify through User Play Test.
+The goal is to produce one implementation-ready Grip combat design for:
+
+- Yori / Drive on ArrowUp
+- Throw on ArrowLeft / ArrowRight
+- Lift on ArrowDown
+- Best Timing
+- Morozashi multipliers
+- normal Throw -> FREE
+- Shift Release removal
+- Lifted state
+- same-tick action contest / priority
+- compatibility with ACTION-12B WASD grapple rotation.
 
 Only `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md` may be changed/committed under the AGENTS.md Investigation-only Report Commit Exception.
 
 ---
 
-# Authoritative User Requirements
+# Authoritative User Decisions — These Supersede ACTION-13A Where Conflicting
 
-Treat the following as current requirements unless Current Source reveals a material conflict.
+## Grip RPS
 
-## Controls
+The basic GRAPPLED RPS is:
+
+```
+Yori (ArrowUp) > Lift (ArrowDown) > Throw (ArrowLeft / ArrowRight) > Yori
+```
+
+Interpretation:
+
+- Yori beats Lift.
+- Lift beats Throw.
+- Throw beats Yori.
+
+This is the primary Grip-state action contest.
+
+## Random Throw KO Removed
+
+ACTION-13A's probabilistic Throw KO design is REJECTED / SUPERSEDED.
+
+Do NOT design:
+- Throw KO chance;
+- Throw RNG;
+- Throw seed;
+- Throw roll counter;
+- pre-generated Throw results.
+
+Normal Throw is deterministic.
+
+## Throw Best vs Yori
+
+Throw wins against Yori.
+
+If Throw is entered at the defined Best Timing against Yori:
+
+- the Throw becomes an immediate Fall / KO;
+- no random roll.
+
+If Throw beats Yori outside Best Timing:
+
+- it is a normal non-KO Throw.
+
+## Normal Throw Releases Grip
+
+A normal non-KO Throw:
+
+1. moves the target laterally to the thrower's own Left / Right;
+2. then changes the pair from GRAPPLED to FREE.
+
+This is intentional.
+
+Normal Throw is therefore also the primary deliberate escape from Grip.
+
+The previous ACTION-13A design "non-KO Throw keeps Grip" is superseded.
+
+## Shift Release Removed
+
+Existing GRAPPLED Shift / gripPressed instant Release is to be removed in the future implementation.
+
+While FREE:
+- Shift remains the Grip-attempt input.
 
 While GRAPPLED:
+- Shift should no longer provide free Release.
 
-- ArrowLeft = throw to the wrestler's OWN left.
-- ArrowRight = throw to the wrestler's OWN right.
-- This should feel consistent with the existing world-space understanding created by WASD grapple rotation.
+Investigate the cleanest semantic behavior:
+- normally ignore/drop the Grip edge while GRAPPLED;
+- no queue.
 
-The exact world vector must be derived from that participant's canonical facing / grapple geometry, not from screen-side assumptions.
+Do NOT design a separate Grip Break in this Task.
 
-## Neutral Grip
+Throw is the only planned Grip-break / return-to-FREE mechanic for now.
 
-Throw is allowed from a neutral Grip.
+## Best Timing = Grip-State Kuzushi Analogue
 
-Morozashi is NOT required to access Throw.
+GRIP state itself does not use the existing FREE-state Kuzushi posture.
+
+Instead, the winning Grip RPS action may receive a Best Timing bonus analogous to Kuzushi's ~1.5x effect.
+
+General concept:
+
+```
+normal winning effect = 1.0x
+Best Timing winning effect = ~1.5x
+```
+
+Exception:
+- Throw Best vs Yori = Fall / KO rather than "1.5x displacement".
+
+Do NOT reuse or create ParticipantPosture.kuzushi inside GRAPPLED merely to model this.
+Investigate a Grip-specific timing / contest result.
+
+## Yori Reward
+
+Yori should use approximately the same movement result as the current FREE Push baseline.
+
+User intent:
+
+- normal Yori movement amount ~= normal Push movement amount;
+- Best Yori movement amount ~= Push against Kuzushi, i.e. approximately 1.5x the normal movement amount.
+
+Important:
+- future Simulation / Management will have separate Push strength and Yori strength parameters;
+- do NOT merge those future parameters;
+- for Prototype tuning only, matching the current Push displacement is the reference target.
+
+## Lift Reward
+
+When Lift wins over Throw:
+
+- enter a Lifted state;
+- for a fixed duration, the lifter can carry the opponent one-sidedly.
+
+During Lifted:
+
+- WASD = change direction / orientation;
+- ArrowUp = move forward;
+- only these 5 keys are usable:
+  - W
+  - A
+  - S
+  - D
+  - ArrowUp
+- Throw / Lift / other Grip actions are not usable during Lifted.
+
+Best Lift:
+- Lift effect is ~1.5x normal.
+
+The exact meaning of "Lift effect" is not yet fixed.
+Investigate whether the cleanest v1 multiplier should apply to:
+- Lift duration;
+- carry movement amount / speed;
+- another single scalar;
+- or a minimal combination.
+
+Do NOT multiply multiple independent Lift dimensions unless clearly justified.
 
 ## Morozashi
 
-Morozashi should improve Throw in two ways:
+Current design direction:
 
-1. increase the probability that the Throw becomes an immediate KO / fall finish;
-2. if the Throw is NOT an immediate KO, increase the amount the opponent is thrown/displaced sideways.
+- Morozashi holder's Grip action effects ~= 1.5x.
+- Morozashi disadvantaged wrestler's Grip action effects ~= 0.5x.
+- Best Timing multiplies the applicable normal effect by ~1.5x.
 
-Exact values are not yet decided.
+Therefore a Morozashi holder + Best is approximately:
 
-Do not invent permanent balance numbers.
+```
+1.5 * 1.5 = 2.25x
+```
 
-## KO / Non-KO
+A disadvantaged wrestler + Best would analogously be approximately:
 
-A Throw has two broad outcomes:
+```
+0.5 * 1.5 = 0.75x
+```
 
-### Immediate KO
-- the thrown opponent falls;
-- the bout is decided even if the opponent remains inside the dohyo;
-- the final KO decision is probabilistic.
+This is a design direction, not final balance.
 
-### Non-KO
-- the opponent is thrown / displaced to the requested left or right;
-- this displacement may itself create an ordinary ring-out through the existing ring-out rules.
+Investigate exactly which quantitative effects this multiplier should apply to:
 
-## Throw KO Probability
+- Yori displacement / drive result;
+- normal Throw displacement;
+- Lift effect.
 
-The Throw KO probability should be calculated before the bout, not continuously recalculated during the bout.
+Throw Best KO does not need a numeric 2.25x KO.
 
-The UI does NOT need to display a live throw success percentage during the bout.
+Do NOT invent Management/stat formulas.
 
-Future Management / wrestler parameters may determine the probability, but those parameter formulas do not exist yet and MUST NOT be invented in this Task.
+## Grip Ability Parameters
 
-The Investigation must define the boundary by which the Bout receives already-computed Throw capability.
+How future wrestler parameters affect:
+- Best Window width;
+- Yori strength;
+- Throw strength;
+- Lift strength;
+- Grip escape;
 
-## Deterministic Randomness
+is intentionally UNDECIDED.
 
-The User is open to either:
+Do not design these formulas.
 
-- a random determination when Throw occurs; or
-- pre-generating approximately the first 20 Throw results and consuming / looping them.
-
-However, the implementation must preserve deterministic / testable gameplay.
-
-Do NOT recommend direct `Math.random()` inside core gameplay.
-
-Investigate a deterministic approach that avoids participant-order / resolver-order dependence and avoids an obviously short repeating pattern if possible.
-
-## Knockdown / Fall
-
-A Throw KO adds a new non-ring-out finish: the opponent is considered fallen / defeated.
-
-The Gameplay result and later visual fall animation should remain architecturally separated.
-
-## Simultaneous Throw Inputs
-
-Resolve both participants from one tick-local state, not by resolver call order.
-
-### Throws toward opposite WORLD directions
-Current intended behavior:
-- they contest / stalemate ("Draw");
-- neither should arbitrarily win because its resolver ran first.
-
-Interpret "Draw" as an action-level Throw stalemate unless a Current Source conflict makes a Bout-level rematch necessary.
-
-If this interpretation is materially ambiguous, report it explicitly.
-
-### Throws toward the same WORLD direction
-Future rule:
-- the wrestler with the stronger Throw parameter wins.
-
-Current prototype has no Throw parameter.
-
-The User considers "both wrestlers move in that same direction" more natural than an arbitrary winner if their Throw strength is equal / absent.
-
-Investigate and recommend a minimal prototype rule that can later accept Throw strength without redesign.
-
-## Drive
-
-Throw is NOT allowed while the participant is currently contributing Drive.
-
-A Throw edge during an ineligible Drive state must not queue for later.
-
-## TURNING
-
-User preference:
-- Throw should ideally be possible while TURNING.
-
-But:
-- if supporting TURNING Throw materially complicates the first prototype, it may be restricted to READY initially.
-
-Investigate both.
-Recommend whether v1 should:
-A. allow Throw while TURNING, or
-B. require READY.
-
-Do not silently choose; justify the recommendation against current ACTION-05B1 / ACTION-12B ownership.
+Only preserve a clean boundary so future pre-bout / Simulation data can tune them later.
 
 ---
 
 # Required Reading
 
-Inspect Current Source, not only previous Handoffs.
+Inspect Current Source before designing.
 
 At minimum:
 
@@ -160,712 +240,978 @@ At minimum:
 - src/game/input/movementVector.ts
 - src/game/input/pushDummyController.ts
 - src/game/scenes/BoutScene.ts
-- Bout Grip / Orientation / Drive / RingOut / ACTION-12B rotation tests
-- result / HUD formatting code that currently assumes ring-out as the only finish reason.
+- ACTION-12B grapple rotation tests
+- current Drive tests
+- current Grip / Orientation / RingOut / Push / Kuzushi tests.
 
-Confirm the actual current file names and ownership.
+Also inspect ACTION-13A review handoff in CURRENT_TASK before replacing assumptions.
+
+Current Source outranks old discussion.
 
 ---
 
 # Current Baseline to Confirm
 
-Report whether all of these are true:
+Report whether these are currently true:
 
-1. ArrowLeft / ArrowRight currently feed Tsuppari press latches.
-2. Tsuppari only starts in FREE state.
-3. GRAPPLED currently ignores those Tsuppari action edges.
-4. ArrowUp held is Drive while GRAPPLED.
-5. Drive action state is timerless and re-decided every tick.
-6. Grip release uses Shift / gripPressed and READY gating.
-7. GRAPPLED manual WASD rotation uses both-READY gating.
-8. canonical participant positions/facings live only in BoutSimulation.
-9. canonical grapple bond is 0.70 m.
-10. neutral / Morozashi are stored only in pair-level engagement.
-11. BoutOutcome currently has ring-out as its only win reason.
-12. Ring-out resolves after all positional changes using previous/final canonical positions.
-13. there is currently no production RNG / bout seed / Throw parameter model.
-14. result presentation currently formats only the existing outcome reasons.
+1. GRAPPLED ArrowUp hold becomes timerless `driveHeld`.
+2. GRAPPLED Drive is re-decided every tick and stored as action kind `drive`.
+3. Drive contributes pair shared external velocity along the pair axis.
+4. current Drive target speed is 0.6 m/s and acceleration is 4 m/s^2.
+5. Morozashi holder currently receives MOROZASHI_DRIVE_FACTOR = 1.5 for Drive only.
+6. ACTION-12B manual WASD rotation is allowed only when both participants are READY.
+7. GRAPPLED Shift edge currently releases from Grip when the participant is READY.
+8. ArrowLeft / Right are currently Tsuppari edges in FREE.
+9. ArrowDown is currently Counter edge in FREE.
+10. GRAPPLED currently ignores Tsuppari / Counter action edges.
+11. canonical grapple bond is 0.70 m.
+12. existing ParticipantPosture.kuzushi is not a GRAPPLED contest state.
+13. BoutOutcome currently only has ring-out finish.
+14. no Lifted state exists.
+15. no Throw transition exists.
 
-If materially false, STOP the design and report the mismatch.
-
----
-
-# Investigation Part 1 — Throw Direction Semantics
-
-Define exactly how own-left / own-right maps to a world direction.
-
-Current coordinate convention:
-- +x right
-- +y down
-- facing = atan2 direction toward opponent while READY.
-
-Investigate the exact local lateral vectors.
-
-For facing unit:
-```
-f = (cos(facing), sin(facing))
-```
-
-A likely candidate in y-down coordinates is:
-```
-ownLeft  = ( f.y, -f.x)
-ownRight = (-f.y,  f.x)
-```
-
-Verify against Current Source conventions and ACTION-12B world-direction semantics.
-
-The Completion Report must include concrete fixtures:
-- facing right
-- facing down
-- facing left
-- facing up
-
-and show the world vector for Left / Right.
-
-Do not leave sign conventions implicit.
+If Current Source materially contradicts these assumptions, report and STOP if it affects the design.
 
 ---
 
-# Investigation Part 2 — Input / Intent Ownership
+# Investigation Part 1 — Define the Grip Action Model
 
-ArrowLeft / ArrowRight already have Tsuppari semantics while FREE.
+The major design question is whether GRAPPLED actions remain "held continuous controls" or become explicit contest actions.
+
+Current Yori/Drive is timerless and held.
+
+Throw / Lift need timing windows and same-tick contest resolution.
 
 Compare at least:
 
-## Option I — add Throw semantic edges
-Add future semantic fields such as:
-- `throwLeftPressed`
-- `throwRightPressed`
+## Model A — all three are discrete Grip actions
 
-The same raw ArrowLeft/Right press may feed both Tsuppari and Throw semantic edges, while Simulation consumes only the state-appropriate action.
+- ArrowUp edge starts Yori action.
+- ArrowLeft/Right edge starts Throw.
+- ArrowDown edge starts Lift.
+- actions have short commitment / contest windows.
+- Best Timing is defined relative to the opponent's action start / phase.
+
+Pros:
+- clean RPS;
+- clear Best window;
+- easy presentation state;
+- symmetric contest resolver.
+
+Cons:
+- changes existing hold-to-Drive feel materially;
+- requires ArrowUp edge/hold ownership redesign.
+
+## Model B — Yori remains held, Throw/Lift are edges
+
+- ArrowUp hold starts / sustains Yori;
+- Throw / Lift are discrete edges;
+- Best Timing against Yori is measured from the transition into Yori / beginning of continuous pressure;
+- after the initial Best window, Yori continues normally.
+
+Pros:
+- preserves current ArrowUp hold-to-Drive feel;
+- smaller change.
+
+Cons:
+- asymmetric action model;
+- must define when a new Yori "attempt" begins after hold/release;
+- repeated Yori contest timing needs care.
+
+## Model C — short Yori pulse repeated while held
+
+- ArrowUp hold automatically starts discrete Yori pulses separated by commitment/recovery.
+- Throw/Lift remain edge actions.
 
 Evaluate:
 - clarity;
-- edge duplication;
-- queue/drop behavior;
-- same raw key mapping to state-specific gameplay;
-- touch/gamepad future mapping.
+- spam;
+- feel;
+- implementation complexity.
 
-## Option II — reuse Tsuppari edge fields while GRAPPLED
-Interpret `tsuppariLeftPressed/rightPressed` as Throw while grappled.
+Recommend exactly one for v1.
 
-Evaluate:
-- semantic naming mismatch;
-- test readability;
-- future rebinding;
-- whether it couples two unrelated actions unnecessarily.
+The recommendation must preserve User intent:
+- ArrowUp still feels like "寄り";
+- Yori has meaningful risk against Throw;
+- Yori can have Success / Best outcomes;
+- RPS is readable.
 
-## Option III — generic left/right action edge
-Rename / redesign toward a contextual action field.
-
-Evaluate scope impact and whether this is premature abstraction.
-
-Recommend exactly one.
-
-Preference: keep raw keys out of Simulation and keep semantic intent explicit, but do not introduce a generic action framework.
+Do not silently preserve current Drive if it makes Best Timing impossible to define cleanly.
 
 ---
 
-# Investigation Part 3 — Throw Eligibility / Action Timing
+# Investigation Part 2 — Grip RPS Resolver
 
-Define exact eligibility.
+Design one symmetric tick-local contest resolver for:
 
-At minimum compare:
+- Yori
+- Lift
+- Throw Left
+- Throw Right
+- no Grip action
 
-- GRAPPLED neutral
-- GRAPPLED Morozashi holder
-- GRAPPLED Morozashi disadvantaged
-- participant action idle
-- participant action drive
-- participant TURNING / READY
-- opponent Drive state
-- simultaneous Throw edges
-- release edge on the same tick
-- WASD rotation on the same tick
-- ArrowUp Drive hold + Throw edge same tick.
+Do not resolve participant A then B.
 
-Required User rule:
-- a participant currently contributing Drive cannot Throw.
+The resolver must decide from one immutable state.
 
-Investigate whether Throw should require both participants not driving, or only the thrower not driving.
+Base RPS:
 
-Recommend the exact same-tick priority among:
-- Release
+```
+Yori > Lift
+Lift > Throw
+Throw > Yori
+```
+
+Define what happens for:
+
+- one participant acts, other does nothing;
+- both choose different RPS actions;
+- same action vs same action;
+- one participant is in action recovery / commitment;
+- one participant is TURNING;
+- Morozashi holder vs disadvantaged;
+- Throw Left vs Throw Right;
+- simultaneous conflicting edges from one participant.
+
+Explicitly distinguish:
+
+1. intra-participant same-tick input priority;
+2. inter-participant RPS contest.
+
+Do not conflate them.
+
+---
+
+# Investigation Part 3 — "No Action" Behavior
+
+The User mentioned "非グリップ" when discussing simultaneous choices, but has now approved removing Shift Release.
+
+Therefore investigate the clean v1 interpretation of "no Grip action":
+
+- no Yori / Lift / Throw this tick;
+- participant may still use ACTION-12B WASD rotation if eligible;
+- Shift edge while GRAPPLED is ignored/dropped;
+- no free Release.
+
+Define how a RPS action behaves against an opponent choosing no Grip action.
+
+Likely candidates:
+
+- Yori vs none -> ordinary Yori effect;
+- Throw vs none -> ordinary Throw -> FREE;
+- Lift vs none -> does Lift succeed, fail, or require catching Throw?
+
+This last point is important.
+
+The RPS says Lift beats Throw, but it is not yet explicit whether Lift is also a standalone action against none.
+
+Compare:
+A. Lift can be initiated against no action.
+B. Lift only succeeds as a counter to Throw.
+C. Lift initiates normally but weaker than a counter success.
+
+Recommend one.
+
+---
+
+# Investigation Part 4 — Best Timing General Rule
+
+Design a Grip-specific Success / Best timing model analogous in spirit to Counter/Kuzushi but not stored as Kuzushi posture.
+
+Need a clean answer for:
+
+- what event starts the timing clock;
+- whose timing is measured;
+- how many ticks are Success vs Best;
+- whether the window exists only when the opponent's losing action begins;
+- how same-tick inputs classify;
+- whether "Best" means earliest response or a centered timing window;
+- whether Best can be derived from opponent action phase rather than a new timer.
+
+Minimum required matchups:
+
+- Throw timing against Yori.
+- Lift timing against Throw.
+- Yori timing against Lift.
+
+The User wants all three RPS winners to have Best Timing.
+
+General effect:
+- Success winner = normal effect.
+- Best winner = ~1.5x effect.
+- Throw Best vs Yori = Fall / KO.
+
+Recommend one common timing model if possible.
+
+If one common model produces unnatural behavior, explain the minimal exception.
+
+Do not design wrestler-stat influence on window width.
+
+Prototype window width may be a named provisional constant.
+
+---
+
+# Investigation Part 5 — Same-Tick Inputs and Best
+
+Define whether simultaneous starts count as Best.
+
+Examples:
+
+- Yori and Throw begin on the exact same tick.
+- Throw and Lift begin on same tick.
+- Lift and Yori begin on same tick.
+
+Candidate interpretations:
+
+A. exact same tick = Best.
+B. exact same tick = normal Success; Best requires reaction after seeing commitment.
+C. matchup-specific.
+
+Recommend one consistent rule.
+
+This materially affects risk/reward and must be explicit.
+
+---
+
+# Investigation Part 6 — Yori Redesign
+
+Current Drive is not yet the desired final Yori.
+
+User requirement:
+- normal Yori should move approximately as much as current FREE Push.
+- Best Yori should move approximately as much as Push against Kuzushi (~1.5x normal).
+
+Investigate how to produce a discrete, testable Yori outcome while preserving existing Grip movement ownership.
+
+Compare:
+
+## Yori A — impulse/displacement action
+One successful Yori produces a fixed Simulation-owned forward pair displacement/transition roughly matching current Push result.
+
+## Yori B — short high-strength Drive phase
+A successful Yori temporarily applies tuned grapple Drive until cumulative movement matches the target displacement.
+
+## Yori C — retain current Drive hold, but RPS victory temporarily boosts its effect
+
+Evaluate:
+- predictable movement amount;
+- compatibility with Best 1.5x;
+- edge/ring-out;
+- visual readability;
+- future Yori strength parameter.
+
+Recommend one.
+
+The movement reference is current Push displacement, not permanent formula equality.
+
+Do not make Yori literally use Push strength state.
+
+---
+
+# Investigation Part 7 — Yori Same-Action Contest
+
+Define Yori vs Yori.
+
+Current Drive vs Drive nets contributions.
+
+Possible v1:
+- both commit Yori;
+- their effective Yori strengths contest;
+- equal Prototype strengths cancel / no net movement;
+- future Yori parameter can resolve difference.
+
+Compare with current Drive net behavior and recommend.
+
+Morozashi multiplier must be considered carefully:
+- if holder is 1.5x and disadvantaged 0.5x, equal base Prototype may no longer cancel.
+
+Determine whether this is desired.
+
+Do not invent a future stat formula.
+
+---
+
+# Investigation Part 8 — Throw Redesign
+
+ACTION-13A random KO is removed.
+
+Accepted baseline to design around:
+
+## Throw vs none / ordinary Throw
+- non-KO;
+- target displaced toward thrower's own Left / Right;
+- after the Throw transition, engagement -> FREE;
+- both participants' post-Throw positions/facings/velocities must be explicitly defined;
+- no free Shift Release.
+
+## Throw beats Yori
+- ordinary Success -> normal Throw -> FREE;
+- Best -> immediate Fall / KO.
+
+## Throw loses to Lift
+- no Throw displacement;
+- Lift winner gets Lift result.
+
+Investigate whether ACTION-13A's target-orbit geometry is still appropriate now that Grip breaks afterward.
+
+Compare:
+- orbit target around thrower during transition then FREE;
+- direct lateral throw path then FREE;
+- another smallest explicit path.
+
+Recommend exact post-Throw FREE geometry:
+- final distance between wrestlers;
+- facings;
+- velocities;
+- recovery states;
+- whether thrown target receives recovery/stagger;
+- how normal ring-out is checked during transition.
+
+Do not leave them at exact contact in FREE if that would immediately create confusing re-contact.
+
+---
+
+# Investigation Part 9 — Throw Best / Fall
+
+Throw Best against Yori is deterministic Fall / KO.
+
+No RNG.
+
+Design the minimal BoutOutcome extension.
+
+Review the ACTION-13A proposal:
+- generic reason `fall`
+- cause `throw`
+
+Determine whether it remains appropriate.
+
+Define:
+- whether Throw Best uses a transition before outcome or resolves immediately;
+- final canonical position/facing frozen at outcome;
+- what later Presentation needs for fall direction.
+
+Do not implement fall animation.
+
+---
+
+# Investigation Part 10 — Lift Eligibility
+
+Define whether Lift:
+
+- is usable only while GRAPPLED;
+- requires the lifter to be READY;
+- requires the opponent to be READY;
+- can begin while opponent is TURNING;
+- can begin against no action;
+- wins only against Throw;
+- loses to Yori.
+
+User intent is a real action, not merely a hidden resolver outcome.
+
+Recommend exact v1 eligibility consistent with Throw/Yori.
+
+---
+
+# Investigation Part 11 — Lifted State Ownership
+
+Design the smallest explicit Lifted state.
+
+Do NOT store duplicate participant flags.
+
+Compare:
+
+## Lifted pair-level engagement variant
+For example:
+```
+engagement:
+  free
+  grappled { advantage }
+  lifted { lifterId, targetId, ... }
+```
+
+## Separate pair-level liftTransition / liftState alongside grappled engagement
+
+Evaluate:
+- whether lifted still semantically counts as Grip;
+- what happens to Morozashi;
+- release / throw after Lift ends;
+- ring-out ownership;
+- snapshot/presentation clarity.
+
+Recommend one Source of Truth.
+
+User intent:
+- during Lifted, one wrestler is carrying the other one-sidedly for a limited duration.
+
+No physics engine.
+
+---
+
+# Investigation Part 12 — Lifted Controls
+
+During Lifted only these inputs are active:
+
+- W/A/S/D: change orientation / direction
+- ArrowUp: move forward
+
+All other action keys are ignored/dropped:
+- ArrowLeft / Right
+- ArrowDown
+- Shift
+- other Grip actions.
+
+Design exact semantics.
+
+WASD:
+- should it set desired facing direction like FREE movement?
+- should it use ACTION-12B tangential pair rotation?
+- should it rotate the carrier/lifted pair around a midpoint?
+- or should it steer a carrier-centered formation?
+
+ArrowUp:
+- forward relative to which canonical facing?
+- how does the carried target follow?
+- pair distance / carried offset?
+- canonical movement owner?
+
+Recommend the smallest deterministic top-down rule.
+
+The user says "WASDで向きの変更可能、↑キーで前進" — preserve this control feel.
+
+---
+
+# Investigation Part 13 — Lift Duration and "Effect"
+
+Best Lift effect = ~1.5x.
+
+Morozashi holder effect = ~1.5x.
+Morozashi holder + Best = ~2.25x.
+
+Disadvantaged effect direction = ~0.5x.
+
+Determine the single clearest Lift scalar to multiply.
+
+Compare:
+
+A. duration multiplier
+B. forward carry speed multiplier
+C. maximum carry distance multiplier
+D. another single scalar
+
+Recommendation should avoid multiplying duration AND speed unless necessary, because that would square the effect.
+
+Example:
+- if duration is the effect, 1.5x means 1.5x carry opportunity;
+- if speed is the effect, duration stays readable and 1.5x means 1.5x distance.
+
+Recommend one for v1 and explain User Play Test implications.
+
+All values provisional.
+
+---
+
+# Investigation Part 14 — Lift End
+
+Define how Lifted ends:
+
+- timer expires;
+- ring-out;
+- bout Fall if any? (do not invent unless required);
+- whether releasing ArrowUp affects duration;
+- whether Lift can be manually dropped.
+
+User has not requested a drop key.
+
+Prefer no extra input unless required.
+
+At normal timer end, define:
+- return to GRAPPLED or FREE?
+- neutral or previous Morozashi advantage?
+- positions/facings;
+- readiness/TURNING.
+
+Because User said Yori and Lift keep Grip, preferred hypothesis:
+- Lift end -> GRAPPLED.
+
+But verify ownership and balance.
+
+---
+
+# Investigation Part 15 — Morozashi Multiplier Model
+
+Design a clean function / conceptual rule for effective Grip action strength.
+
+Prototype direction:
+
+```
+advantageMultiplier:
+  neutral = 1.0
+  morozashi holder = 1.5
+  morozashi disadvantaged = 0.5
+
+timingMultiplier:
+  Success = 1.0
+  Best = 1.5
+```
+
+Then:
+
+```
+effectiveMultiplier = advantageMultiplier * timingMultiplier
+```
+
+Examples:
+- neutral Success = 1.0
+- neutral Best = 1.5
+- holder Success = 1.5
+- holder Best = 2.25
+- disadvantaged Success = 0.5
+- disadvantaged Best = 0.75
+
+Investigate whether this can consistently drive:
+- Yori effect;
+- normal Throw displacement;
+- Lift effect.
+
+Throw Best Fall is a categorical exception.
+
+Also determine what happens when RPS loser has Morozashi:
+- does multiplier ever overturn the RPS result?
+Preferred direction:
+- NO. RPS winner remains winner; multiplier changes reward magnitude only.
+
+Verify and recommend explicitly.
+
+---
+
+# Investigation Part 16 — Best Timing and Morozashi
+
+Do NOT use Morozashi to widen Best Window in v1 unless clearly necessary.
+
+User's latest direction is primarily:
+- Morozashi = effect multiplier;
+- Best = effect multiplier;
+- future parameters/window tuning undecided.
+
+Therefore compare:
+A. Best window identical for everyone in Prototype.
+B. Morozashi also widens Best window.
+
+Prefer A unless strong reason otherwise.
+
+Do not invent skill-stat timing formulas.
+
+---
+
+# Investigation Part 17 — Recovery / Commitment
+
+To prevent action spam, design minimal action/recovery timing for:
+
+- Yori
 - Throw
-- Drive
-- WASD grapple rotation.
+- Lift attempt/win/loss
+- RPS stalemate/same-action contest.
 
-Do not allow queueing.
+Need enough state for:
+- Best timing;
+- readable gameplay;
+- future animation.
 
----
-
-# Investigation Part 4 — TURNING Throw
-
-This is a required design comparison.
-
-## Candidate A — READY-only Throw
-
-Advantages to evaluate:
-- reuses canActInGrapple;
-- own-left/right is unambiguous relative to an opponent-facing canonical orientation;
-- preserves ACTION-05B1 progression;
-- smaller implementation.
-
-Cost:
-- cannot immediately throw from side/rear Grip until auto TURNING finishes.
-
-## Candidate B — TURNING Throw allowed
-
-Investigate:
-- what own-left/right means when canonical facing is still not toward opponent;
-- whether throw direction uses current facing or pair axis;
-- whether Throw cancels automatic TURNING;
-- whether Morozashi from Counter Best becomes too immediately powerful;
-- whether result is deterministic without a new orientation state.
-
-Recommend A or B for Prototype v1.
-
-If B requires a larger state/transition model, recommend A now and explicitly defer B.
-
----
-
-# Investigation Part 5 — Throw Resolution Geometry
-
-This is central.
-
-For a NON-KO Throw, the User wants the opponent displaced sideways.
-
-Compare at least these canonical geometry models.
-
-## Geometry A — direct target lateral translation
-Move only the target by a fixed left/right vector, then allow existing bond correction.
-
-Evaluate:
-- hidden movement of attacker caused by bond correction;
-- midpoint shift;
-- whether the final direction still reads as a Throw;
-- ring-out behavior.
-
-## Geometry B — target orbits around thrower
-Keep thrower fixed and move the target around the thrower at the canonical bond radius by a Throw arc / lateral displacement.
-
-Evaluate:
-- preserves bond exactly;
-- clear "throw opponent to my left/right" meaning;
-- pair midpoint changes;
-- facing updates needed;
-- Grip can remain engaged naturally.
-
-## Geometry C — pair-level lateral transition
-Move both wrestlers in a controlled pair transition with target moving farther than thrower.
-
-Evaluate:
-- readability;
-- whether it feels like a Throw versus ordinary pair translation;
-- similarity to same-direction simultaneous Throw.
-
-Recommend one minimal geometry for:
-1. one successful non-KO Throw;
-2. equal-strength same-world-direction simultaneous Throw if "both move" is selected.
-
-Do not create a physics engine.
-
----
-
-# Investigation Part 6 — Instantaneous vs Transitioned Throw
+Do not overbuild phases.
 
 Compare:
+- startup + resolve + recovery
+- active contest window + recovery
+- pair transition + recovery.
 
-## Instant resolution
-- resolve KO or displacement in one Simulation tick;
-- simple;
-- but canonical position may visibly snap.
+Recommend minimal shape per action.
 
-## Short Simulation-owned Throw transition
-Analogous in spirit to CounterTransition:
-- fixed deterministic duration;
-- canonical positions/facing follow a small explicit path;
-- input locked during transition;
-- ring-out remains Simulation-owned;
-- later presentation can animate from canonical state.
-
-Evaluate:
-- implementation size;
-- Game Feel/readability;
-- whether a transition is necessary for User Play Test;
-- whether it creates unnecessary complexity before Throw feel is known.
-
-Recommend the smallest approach that still allows meaningful gameplay/visual verification.
-
-Do not design full skeletal animation here.
+All numeric durations provisional.
 
 ---
 
-# Investigation Part 7 — Engagement After Non-KO Throw
+# Investigation Part 18 — Same-Action Contests
+
+Define:
+
+## Yori vs Yori
+- equal base strengths?
+- Morozashi effects?
+- movement/no movement?
+- future Yori strength extension.
+
+## Throw vs Throw
+Preserve the useful ACTION-13A direction logic where appropriate:
+- opposite WORLD directions -> action stalemate?
+- same WORLD direction -> both shift?
+But note normal Throw now releases Grip.
+Determine whether same-direction tie:
+- stays GRAPPLED;
+- becomes FREE;
+- pair shifts then remains Grip;
+- pair shifts then both break Grip.
+
+Recommend exact v1.
+
+## Lift vs Lift
+No rule exists yet.
 
 Compare:
+- stalemate/recovery;
+- future Lift strength contest;
+- another simple rule.
 
-A. Grip remains GRAPPLED after a non-KO Throw.
-B. Throw breaks the Grip and returns to FREE.
-C. Result depends on advantage / outcome.
-
-Current preferred hypothesis to evaluate:
-- non-KO Throw keeps the Grip;
-- new canonical positions/facing define the next decision state;
-- player can continue WASD rotation / Drive / later Throw.
-
-Assess:
-- whether the chosen geometry can preserve bond/readiness;
-- whether immediate repeat Throw spam becomes a problem;
-- whether a short Throw action/recovery is required.
-
-Recommend exactly one for Prototype v1.
+Do not use participant order to choose a winner.
 
 ---
 
-# Investigation Part 8 — Throw Action State / Cooldown
+# Investigation Part 19 — Same Participant Multiple Action Inputs
 
-The User has not specified timing.
+Define deterministic handling if one participant has more than one Grip action edge/hold in the same tick.
 
-Investigate whether a discrete `throw` ParticipantActionState is necessary.
+Examples:
+- ArrowUp + ArrowLeft
+- ArrowUp + ArrowDown
+- ArrowLeft + ArrowRight
+- ArrowDown + ArrowRight
+
+This is separate from the between-wrestler RPS.
 
 Compare:
+A. explicit priority
+B. conflicting actions cancel/drop
+C. held Yori loses to discrete Throw/Lift edges
+D. another small rule.
 
-## No Throw action state
-Edge resolves immediately.
-Potential issue:
-- no presentation-readable action phase;
-- repeated key presses may resolve too quickly;
-- difficult to animate later.
+Recommend one.
 
-## Small Throw action
-Possible phases:
-- startup / resolve / recovery
-or a simpler fixed transition/recovery.
-
-Do not invent final timing without reason.
-
-Recommend:
-- whether a Throw state is needed;
-- minimal state shape;
-- what locks input;
-- when KO/displacement resolves;
-- whether non-KO Grip remains active after recovery.
-
-Any numeric timing must be explicitly provisional / User Play Test.
+Do not let raw property order decide.
 
 ---
 
-# Investigation Part 9 — Pre-Bout Throw Capability Boundary
+# Investigation Part 20 — Shift Release Removal
 
-Do not invent wrestler stats.
+Design exact future behavior:
 
-Design a minimal interface by which the bout receives already-computed Throw capability.
+FREE:
+- Shift starts Grip exactly as current baseline.
 
-Compare at least:
+GRAPPLED:
+- Shift edge is ignored/dropped;
+- no Release;
+- no recovery;
+- no queue.
 
-## Profile A
-```
-ThrowProfile {
-  neutralKoChance
-  morozashiKoChance
-  neutralDisplacement
-  morozashiDisplacement
-}
-```
+Lifted:
+- Shift ignored/dropped.
 
-Advantages:
-- all effective Throw values are computed before bout;
-- BoutSimulation does not know Management parameters.
+Throw normal is the intentional Grip escape.
 
-## Profile B
-```
-ThrowProfile {
-  baseKoChance
-  baseDisplacement
-}
-```
-and BoutSimulation applies fixed Morozashi multipliers.
-
-Evaluate:
-- "pre-bout calculation" requirement;
-- future Management ownership;
-- avoiding permanent balance formulas in core.
-
-Also investigate how future `throwPower` for simultaneous same-direction contests should enter without forcing it into v1 prematurely.
-
-Recommend the minimal BoutSetup / participant boundary.
-
-No Management system implementation.
+Review current tests/docs that will need deliberate updates.
 
 ---
 
-# Investigation Part 10 — Prototype Values
+# Investigation Part 21 — RPS and ACTION-12B WASD Rotation
 
-Implementation will require actual prototype values even though permanent balance is undecided.
+Outside Lifted:
 
-Recommend provisional values/ranges for:
-- neutral KO probability
-- Morozashi KO probability or boost
-- neutral non-KO displacement / arc
-- Morozashi non-KO displacement / arc
-- optional Throw recovery/transition duration.
+- ACTION-12B WASD manual rotation should remain available when no higher-priority Grip action consumes the tick and existing readiness allows.
 
-Base recommendations on:
-- BODY_RADIUS = 0.35 m
-- grapple bond = 0.70 m
-- current ring radius / Tokudawara geometry
-- current Drive speed
-- ACTION-12B manual rotation speed.
+Define exact order:
 
-Do NOT present these as final accepted parameters.
+- Grip action resolver vs WASD rotation.
+- Throw/Yori/Lift accepted action should normally consume that tick's manual rotation?
+- recovery ticks and WASD rotation?
+- same-action stalemate and rotation?
 
-Flag each for User Play Test.
+Recommend exact behavior.
+
+Do not silently alter ACTION-12B semantics on no-action ticks.
 
 ---
 
-# Investigation Part 11 — Deterministic KO Resolution
+# Investigation Part 22 — Ring-Out / Tokudawara
 
-Compare deterministic approaches.
+All canonical movement must continue to use existing ring-out ownership.
 
-At minimum:
+Cover:
 
-## RNG A — core-seeded PRNG state
-Bout receives a numeric seed; core owns a small deterministic PRNG state.
+- Yori pushes pair toward edge.
+- normal Throw crosses edge before Grip breaks.
+- Throw transition finishes inside vs outside.
+- Lift carry moves opponent/carrier across edge.
+- same-action pair shift.
+- Tokudawara windows.
 
-Evaluate:
-- replay determinism;
-- simultaneous Throw order;
-- snapshot/save implications;
-- testability.
+No new Throw/Lift/Yori-specific wall or boundary.
 
-## RNG B — per-participant deterministic stream
-Each participant has a pre-bout seed / stream and Throw attempt index.
-
-Evaluate:
-- participant-order independence;
-- simultaneous Throw;
-- future save/replay;
-- whether extra state is needed.
-
-## RNG C — pre-generated roll/result schedule
-BoutSetup receives a sequence of future rolls/results.
-
-Evaluate:
-- simplest testing;
-- where generation belongs;
-- finite sequence exhaustion;
-- whether looping ~20 values creates an obvious repeating pattern.
-
-Recommend exactly one.
-
-Requirements:
-- no direct Math.random in Simulation;
-- same setup/seed + same semantic input sequence => same Throw outcomes;
-- simultaneous resolution must not change because participant array order changed;
-- unused/ineligible Throw edges must not consume a KO roll;
-- stalemated simultaneous Throw should have explicitly defined roll-consumption behavior.
-
-Define whether KO probability comparison is:
-```
-roll < chance
-```
-or another exact boundary, including chance 0 and 1.
+Define outcome priority if:
+- RPS action would later transition state but ring-out happens first.
 
 ---
 
-# Investigation Part 12 — Simultaneous Throw Contest
+# Investigation Part 23 — Outcome / Presentation Boundary
 
-Resolve both participants from one immutable tick-local Throw request state.
+Design the minimum Simulation/Snapshot data needed for later visuals.
 
-First convert each local Left/Right request into a WORLD throw direction.
+Potential needs:
 
-Then classify.
+- Grip action state / phase / side;
+- contest result tier Success / Best;
+- Yori transition progress;
+- Throw transition progress;
+- Lifted state / remaining ticks / lifterId;
+- Fall cause and direction.
 
-## Case S1 — opposite WORLD directions
-User requirement:
-- Throw contest stalemates / Draw.
+Do not create an event bus.
 
-Design:
-- movement?
-- action/recovery?
-- KO rolls consumed or not?
-- engagement stays?
-- any cooldown?
+Do not implement final art.
 
-Current preference to evaluate:
-- no KO roll;
-- no displacement;
-- Grip continues;
-- if a Throw action/recovery exists, both may still pay the commitment.
-
-## Case S2 — same WORLD direction
-Future:
-- higher Throw strength wins.
-
-Prototype:
-- no meaningful Throw stat yet.
-
-Compare:
-A. action-level stalemate
-B. both wrestlers move in that world direction while Grip persists
-C. deterministic arbitrary winner (not preferred)
-
-User considers B more natural.
-
-Recommend one prototype rule and define exact geometry.
-
-## Case S3 — one participant requests Throw
-Resolve the normal Throw.
-
-## Case S4 — both inputs from same participant in one tick
-If both Left and Right edges are somehow present:
-- define deterministic priority or drop both.
-
-Do not leave this to object/property order.
+Keep Pure Simulation -> State -> Phaser.
 
 ---
 
-# Investigation Part 13 — KO Outcome / Fall Result
+# Investigation Part 24 — Prototype Tuning
 
-Current `BoutFinishReason` only includes `ring-out`.
+Recommend provisional named values only where implementation requires them.
 
-Design the minimal new outcome semantics.
+Need candidates/ranges for:
 
-Candidate:
+- common Grip Best Window ticks;
+- Yori normal displacement target (reference current Push);
+- Yori transition/action duration if needed;
+- Throw normal lateral/orbit displacement;
+- Throw transition duration;
+- Throw post-release separation if needed;
+- Lift duration;
+- Lift carry speed or whichever single effect scalar is chosen;
+- action recovery/commitment durations.
+
+Also recommend:
+- MOROZASHI_EFFECT_MULTIPLIER = ~1.5
+- MOROZASHI_DISADVANTAGED_EFFECT_MULTIPLIER = ~0.5
+- GRIP_BEST_EFFECT_MULTIPLIER = ~1.5
+
+All are provisional User Play Test tuning.
+
+Do not treat current example values as final balance.
+
+---
+
+# Investigation Part 25 — Future Parameter Boundary
+
+Do NOT design Simulation/Management stat formulas.
+
+But report what future effective values the Bout layer may eventually need, e.g.:
+
+- yoriStrength/effect
+- throwEffect
+- liftEffect
+- Best window ticks
+
+Only if needed.
+
+Prefer effective pre-bout values over raw Management stats.
+
+Do not add these to Production in this Task.
+
+---
+
+# Required Coherent V1 State Machine
+
+Completion Report must provide one compact state machine covering at least:
+
 ```
-reason: 'throw'
-```
-or
-```
-reason: 'fall'
+FREE
+  -> Grip attempt
+  -> GRAPPLED
+
+GRAPPLED
+  -> Yori contest/result
+  -> Throw contest/result
+  -> Lift contest/result
+  -> WASD rotate
+  -> normal Throw -> FREE
+  -> Throw Best vs Yori -> FALL outcome
+  -> Lift win -> LIFTED
+
+LIFTED
+  -> steer with WASD
+  -> ArrowUp carry
+  -> timer end -> GRAPPLED
+  -> ring-out outcome
 ```
 
-Recommend which semantic best represents:
-- Throw caused a fall / KO;
-- later other techniques may also cause a fall.
-
-Avoid encoding presentation text into Simulation.
-
-Determine:
-- whether KO Throw immediately ends the engagement/bout;
-- what final canonical position/facing/action is frozen;
-- what data later Presentation needs to know throw direction / loser fall direction.
-
-If a one-shot Throw result/event must be retained for presentation, propose the smallest explicit state/result boundary.
-Do not introduce a global event bus.
+Include recoveries/transitions without creating duplicate state ownership.
 
 ---
 
-# Investigation Part 14 — KO vs Ring-Out Priority
+# Required Same-Tick Priority Proposal
 
-Define exact semantics when a Throw attempt can both:
-- pass its KO roll; and
-- move the opponent across the ring boundary.
+Completion Report must recommend exact order for future BoutSimulation.step() around:
 
-Possible approaches:
-1. KO Throw resolves first => reason Throw/Fall.
-2. perform non-KO displacement only when KO roll fails; therefore KO and displacement never coexist.
-3. always apply displacement and then choose outcome priority.
+1. CounterTransition / existing special transitions
+2. future Grip-action transition / Lifted update
+3. tick-start readiness
+4. GRAPPLED Shift edge (now ignored)
+5. Grip action request capture
+6. RPS contest resolution
+7. Yori / Throw / Lift result start
+8. existing Drive replacement / deprecation
+9. ACTION-12B WASD rotation
+10. velocity/integration
+11. bond
+12. facing
+13. ring-out.
 
-Current simplest candidate to evaluate:
-- roll first;
-- KO => finish immediately without non-KO displacement;
-- KO fail => perform displacement, then existing ring-out may decide.
-
-Recommend explicitly.
-
-Also cover simultaneous Throw contest + ring edge cases.
-
----
-
-# Investigation Part 15 — Throw Direction and Existing WASD Rotation
-
-Ensure the design remains coherent after ACTION-12B pair rotation.
-
-Required:
-- own-left/right is computed from current canonical orientation on the Throw tick;
-- rotating the pair with WASD changes the future world direction of a Throw naturally;
-- no cached throw direction survives from before rotation unless a Throw action intentionally locks it.
-
-If Throw and WASD rotation occur on the same tick, define exact priority:
-- does Throw direction use tick-start facing?
-- or facing after that tick's manual rotation?
-
-Recommend one exact order.
+Make explicit which existing `driveHeld` semantics remain, change, or are replaced by Yori.
 
 ---
 
-# Investigation Part 16 — Drive Interaction
+# Required Boundary Cases for Future Implementation
 
-User requirement:
-- Drive participant cannot Throw.
+Map every case to a future test plan.
 
-Define exact same-tick behavior for:
-- ArrowUp already held from previous tick + new Throw edge;
-- ArrowUp and Throw edge begin on same tick;
-- opponent is Driving but thrower is not;
-- both are Driving + Throw edges;
-- Throw state / recovery and later Drive.
+## RPS / Timing
 
-Recommend whether:
-- Throw edge loses to Drive if driveHeld is true; or
-- Throw edge has priority and prevents Drive from starting that tick.
+1. Yori vs Lift -> Yori Success.
+2. Yori Best vs Lift -> ~1.5x Yori.
+3. Lift vs Throw -> Lift Success.
+4. Lift Best vs Throw -> ~1.5x Lift effect.
+5. Throw vs Yori -> normal Throw -> FREE.
+6. Throw Best vs Yori -> Fall / KO.
+7. exact-same-tick Yori/Throw classification.
+8. exact-same-tick Lift/Throw classification.
+9. exact-same-tick Yori/Lift classification.
+10. late input outside Best -> normal Success.
 
-User wording strongly implies "Drive中に投げられない", but same-tick start priority is not yet explicit.
-Recommend the least surprising rule.
+## No Action / Standalone
 
----
+11. Yori vs none.
+12. Throw Left vs none -> normal Throw -> FREE.
+13. Throw Right vs none -> normal Throw -> FREE.
+14. Lift vs none according to chosen v1 rule.
+15. no action -> ACTION-12B rotation unchanged.
 
-# Investigation Part 17 — Release Interaction
+## Morozashi
 
-Define same-tick priority:
-- Shift Release + Throw edge.
+16. neutral Success multiplier = 1.0.
+17. neutral Best = 1.5.
+18. holder Success = 1.5.
+19. holder Best = 2.25.
+20. disadvantaged Success = 0.5.
+21. disadvantaged Best = 0.75.
+22. multiplier does not overturn RPS winner.
+23. Throw Best remains KO categorical result.
 
-Existing Grip release currently precedes Drive and WASD rotation.
+## Yori
 
-Preferred candidate:
-- Release wins;
-- Throw edge dropped;
-- no roll consumed.
+24. normal Yori movement ~= current Push reference.
+25. Best Yori ~= 1.5x reference.
+26. Yori near edge -> existing ring-out.
+27. Yori vs Yori neutral equal case.
+28. Yori vs Yori Morozashi asymmetry according to chosen design.
+29. no Yori input -> old ACTION-12B zero-input behavior unchanged.
 
-Verify against current step ownership.
+## Throw
 
----
+30. own-left / own-right world direction at four cardinal facings.
+31. arbitrary facing direction.
+32. normal Throw transition lateral displacement.
+33. normal Throw ends GRAPPLED -> FREE.
+34. final post-Throw separation/facing/velocity per design.
+35. normal Throw near edge -> ordinary ring-out before/at release.
+36. Tokudawara crossing.
+37. Throw Best outcome = fall cause throw.
+38. no RNG / no seed / deterministic replay.
+39. Throw vs Throw opposite world directions.
+40. Throw vs Throw same world direction.
+41. one participant Left+Right same tick.
+42. same-direction future strength extension point without fake v1 stat.
 
-# Investigation Part 18 — Ring-Out / Tokudawara
+## Lift / Lifted
 
-Non-KO Throw displacement/transition must use canonical positions and existing ring-out ownership.
+43. Lift win enters Lifted state.
+44. Lift loser cannot act during Lifted.
+45. Lifted W/A/S/D steering.
+46. Lifted ArrowUp forward carry.
+47. Lifted ArrowLeft/Right/Down/Shift ignored.
+48. normal Lift effect.
+49. Best Lift = ~1.5x effect.
+50. holder Lift = ~1.5x.
+51. holder Best Lift = ~2.25x.
+52. disadvantaged Lift = ~0.5x.
+53. Lift timer end -> GRAPPLED.
+54. Grip advantage after Lift end according to chosen design.
+55. Lift ring-out.
+56. Lift Tokudawara.
+57. Lift vs Lift same-action rule.
+58. no hidden second Lift/Grip source of truth.
 
-No Throw-specific ring boundary.
+## Input / State / Release
 
-Investigate:
-- one throw directly creates ring-out;
-- throw movement crosses a Tokudawara window;
-- if transition is multi-tick, ring-out checked every transition tick;
-- if instant, existing previous/final interpolation semantics apply.
+59. FREE Shift still starts Grip.
+60. GRAPPLED Shift no longer Releases.
+61. LIFTED Shift ignored.
+62. normal Throw is the Grip-break path.
+63. same participant Up+Left.
+64. same participant Up+Down.
+65. same participant Left+Right.
+66. same participant Down+Right.
+67. RPS accepted action vs WASD same tick.
+68. action recovery vs WASD rotation.
+69. TURNING eligibility according to chosen rule.
+70. first READY tick.
+71. no action edge queueing.
 
-No wall/clamp/bounce.
+## Regression
 
----
+72. FREE Push unchanged.
+73. FREE Tsuppari Left/Right unchanged.
+74. FREE Counter Down unchanged.
+75. Grip attempt Shift unchanged.
+76. ACTION-12B WASD rotation unchanged on no-action ticks.
+77. ring-out fixtures unchanged.
+78. CounterTransition unchanged.
+79. Kuzushi FREE-state logic unchanged.
+80. ACTION-11N Grip visuals unchanged.
 
-# Investigation Part 19 — Presentation Boundary
-
-Do not create final Throw art in this Task.
-
-Determine what a later Visual Task needs from Simulation:
-- participant action = throw?
-- direction = left/right?
-- throwerId / targetId?
-- KO vs non-KO?
-- transition progress?
-- final outcome reason?
-
-Keep gameplay canonical.
-Do not make Phaser Scene infer gameplay outcome from pixels/animation.
-
-Recommend the smallest Snapshot-facing data.
-
----
-
-# Required Design Alternatives Summary
-
-Completion Report must explicitly compare and choose:
-
-1. input fields:
-   - dedicated Throw edges vs reuse Tsuppari vs generic contextual edge
-2. TURNING:
-   - allowed vs READY-only v1
-3. non-KO geometry:
-   - target translate vs target orbit vs pair transition
-4. throw timing:
-   - instant vs Simulation transition
-5. engagement after non-KO:
-   - retain Grip vs release
-6. deterministic probability:
-   - seeded core PRNG vs per-participant stream vs pre-generated schedule
-7. simultaneous same-world-direction prototype:
-   - stalemate vs both move
-8. KO outcome semantic:
-   - throw-specific vs generic fall reason
-9. same-tick Throw vs Drive priority
-10. Throw vs WASD rotation order.
-
-Recommend exactly one coherent v1 design.
-
----
-
-# Required Boundary Cases for Future Implementation Plan
-
-Do not sample these away.
-
-1. neutral READY + Left Throw.
-2. neutral READY + Right Throw.
-3. pair rotated 90° via WASD, then Left/Right maps to rotated world directions.
-4. Morozashi holder Throw.
-5. Morozashi disadvantaged Throw.
-6. neutral KO roll succeeds.
-7. neutral KO roll fails -> non-KO movement.
-8. Morozashi KO probability enhancement.
-9. Morozashi non-KO displacement enhancement.
-10. chance 0.
-11. chance 1.
-12. deterministic repeated replay.
-13. participant-order swap with identical semantic inputs.
-14. unused/ineligible Throw edge consumes no roll.
-15. Drive + Throw same tick.
-16. participant already Driving + Throw edge.
-17. opponent Driving while thrower is eligible.
-18. Release + Throw same tick.
-19. Throw + WASD same tick.
-20. TURNING Throw behavior according to recommended v1 rule.
-21. both Throw opposite WORLD directions.
-22. both Throw same WORLD direction.
-23. both Left+Right edges on one participant.
-24. same-direction prototype equal-strength behavior.
-25. future unequal Throw-strength boundary represented in API/design even if not implemented.
-26. non-KO Throw near edge -> ordinary ring-out.
-27. Tokudawara crossing.
-28. KO Throw near edge -> chosen KO/ring-out priority.
-29. Grip state after non-KO Throw.
-30. immediate repeat Throw / recovery/cooldown behavior.
-31. four cardinal facing directions -> own-left/right mapping.
-32. diagonal/arbitrary facing -> own-left/right mapping.
-33. Morozashi holder/disadvantaged participant array order swapped.
-34. result presentation can distinguish Throw/Fall finish from ring-out.
-35. existing ACTION-12B WASD rotation unchanged when no Throw edge.
-36. existing Drive unchanged when no Throw edge.
-37. existing Tsuppari ArrowLeft/Right behavior unchanged while FREE.
-38. existing ring-out-only fixtures unchanged.
-
-Future Implementation must explicitly account for every case.
+Future Implementation must not reduce this to representative sampling.
 
 ---
 
-# Suggested Task Split After Investigation
+# Recommended Task Split to Evaluate
 
-The Investigation must recommend final split, but evaluate this default:
+The Investigation must recommend the safest implementation sequence.
 
-## ACTION-13B — Throw Core Gameplay
-Include:
-- semantic Throw input
-- eligibility / contest
-- deterministic KO resolution
-- KO outcome
-- non-KO canonical movement
-- ring-out interaction
-- tests / browser smoke.
+Default candidate:
 
-## ACTION-13C — Throw / Fall Presentation
-Include:
-- Throw pose/transition visual
-- fall/KO presentation
-- impact/camera feel if requested
-- User Visual Gate.
+## ACTION-13B — Grip RPS Foundation + Yori + Throw
+- new GRAPPLED semantic action inputs
+- Shift Release removal
+- Grip action resolver
+- common Best Timing
+- Yori redesign
+- Throw normal -> FREE
+- Throw Best -> Fall
+- Morozashi effect multiplier
+- transitions/recoveries
+- Heavy verification + User Play Test
 
-If the Investigation concludes a Simulation-owned multi-tick Throw transition is necessary for Core correctness/readability, include that transition in ACTION-13B but leave authored art/animation to 13C.
+## ACTION-14A — Lift Core Investigation/Implementation
+Because Lifted introduces a materially new state/control mode:
+- Lifted pair state
+- WASD steering
+- ArrowUp carry
+- Lift duration/effect
+- return to GRAPPLED
+- ring-out
+- User Play Test.
 
-Do not split KO probability into a disconnected later Task if doing so would prevent ACTION-13B from testing the central Throw gameplay hypothesis.
+Alternatively, if Current Source makes Lift cheap enough to integrate safely, explain why all three RPS actions should land together.
+
+Prioritize small verifiable gameplay over implementing every subsystem at once.
 
 ---
 
@@ -874,20 +1220,22 @@ Do not split KO probability into a disconnected later Task if doing so would pre
 Maintain:
 
 Pure TypeScript Game / Simulation
--> canonical State / Results
+-> State / Results
 -> Phaser Rendering / Input / Animation.
 
 Do not:
-- put Throw success probability in BoutScene;
-- call Math.random from Scene or Simulation;
-- make pixels decide Throw result;
-- store duplicate grapple state on participants;
-- add global event bus;
-- add ECS / physics engine / generic rule engine;
+- put RPS formulas in BoutScene;
+- add Scene-owned timers;
+- reuse ParticipantPosture.kuzushi for Grip Best;
+- create duplicate Grip/Lift state on both participants;
+- introduce RNG for Throw;
+- create generic rule engine;
+- add ECS/physics framework;
 - implement Management stats;
 - implement Save;
-- redesign ACTION-12B WASD rotation;
-- modify ACTION-11N Grip VFX.
+- modify accepted art.
+
+ACTION-12B canonical position/facing ownership must remain the basis unless explicitly superseded by a reviewed state transition.
 
 ---
 
@@ -896,22 +1244,23 @@ Do not:
 ## In Scope
 
 - Current Source inspection
-- Throw input ownership
-- own-left/right mapping
-- Throw eligibility
-- TURNING comparison
-- Drive/Release/WASD same-tick priority
-- non-KO geometry
-- Grip retention/release
-- Throw action/transition need
-- pre-bout Throw capability boundary
-- deterministic probability strategy
-- simultaneous Throw resolution
-- KO/fall BoutOutcome design
+- Grip action RPS
+- Yori action redesign
+- common Best Timing
+- Throw deterministic redesign
+- normal Throw -> FREE
+- Throw Best Fall
+- Lift/Lifted state design
+- Lift controls
+- Morozashi effect multipliers
+- Shift Release removal
+- same-action contests
+- same-participant input conflicts
+- transitions/recovery
+- state ownership
 - ring-out/Tokudawara interaction
-- presentation-facing state boundary
-- prototype tuning recommendations
-- future Implementation file/test plan.
+- future effective parameter boundary
+- recommended implementation task split.
 
 ## Scope Out
 
@@ -922,10 +1271,17 @@ Do not change:
 - public/**
 - tools/**
 - accepted architecture docs/spec
-- Grip visuals
-- current gameplay values.
+- gameplay tuning in source
+- Grip visuals.
 
-Do not implement Throw.
+Do not implement Yori / Throw / Lift.
+
+Do not design:
+- raw Management stat formulas;
+- Save;
+- final CPU AI;
+- final Touch/Gamepad;
+- final Throw/Lift art.
 
 ---
 
@@ -933,14 +1289,15 @@ Do not implement Throw.
 
 Result BLOCKED / STOP if:
 
-- Current Source materially contradicts the baseline assumptions;
-- adding Throw requires redesigning existing engagement ownership before any small prototype can work;
-- deterministic KO resolution cannot be made participant-order independent without a broader RNG/save architecture decision;
-- TURNING support materially changes ACTION-05B1 and no clean READY-only v1 exists;
-- same-direction simultaneous Throw cannot be represented without inventing a full Throw stat system;
-- user decision is required on a semantic issue that materially changes the Core implementation.
+- Current Source materially conflicts with the accepted baseline;
+- one coherent RPS cannot be defined without redesigning engagement ownership beyond a small explicit model;
+- Yori Best Timing cannot coexist with held ArrowUp semantics without a User decision between materially different control models;
+- Lifted requires a fundamentally separate physics/constraint framework;
+- Morozashi multipliers can overturn RPS in unavoidable ways;
+- removing Shift Release creates an unavoidable deadlock without inventing another escape;
+- implementation order cannot be split into small verifiable tasks without semantic duplication.
 
-If BLOCKED, identify the smallest exact User decision needed.
+If blocked, identify the smallest exact User decision needed.
 
 ---
 
@@ -950,9 +1307,9 @@ Investigation-only.
 
 Required:
 - Current Source inspection;
-- relevant existing tests inspection;
-- run focused current tests if useful;
-- scratch pure calculations/scripts allowed but not committed;
+- relevant tests inspection;
+- focused current tests if useful;
+- scratch calculations allowed, not committed;
 - no Production source/docs changes.
 
 Allowed repository change:
@@ -962,7 +1319,7 @@ Use AGENTS.md Investigation-only Report Commit Exception.
 
 User Play Test:
 - Not Applicable to this Investigation.
-- Future Throw Core implementation requires User Play Test.
+- Future implementation requires User Play Test.
 
 ---
 
@@ -972,30 +1329,35 @@ Must include:
 
 - Result: PASS / BLOCKED
 - Current Source findings
-- confirmed ArrowLeft/Right current ownership
-- own-left/right world-vector formula with cardinal examples
-- Input Option I/II/III comparison + recommendation
-- exact Throw eligibility
-- TURNING A/B comparison + recommendation
-- exact same-tick action priority
-- non-KO Geometry A/B/C comparison + recommendation
-- instant vs transition comparison
-- engagement-after-non-KO recommendation
-- Throw action state/recovery recommendation
-- pre-bout ThrowProfile boundary
-- provisional prototype values/ranges
-- deterministic RNG A/B/C comparison + recommendation
-- exact roll consumption rules
-- simultaneous Throw S1–S4 rules
-- future Throw strength extension point
-- KO/fall BoutOutcome shape
-- KO vs ring-out priority
-- ring-out/Tokudawara semantics
-- Presentation/Snapshot data needed later
+- explicit list of ACTION-13A decisions superseded
+- chosen Yori control model A/B/C
+- exact Grip RPS resolver
+- no-action behavior
+- exact common Best Timing model
+- exact same-tick / Best rule
+- Yori movement model
+- Yori vs Yori
+- Throw normal geometry + final FREE state
+- Throw Best Fall semantics
+- Lift eligibility
+- Lifted Source of Truth
+- Lifted controls
+- chosen Lift effect scalar
+- Lift end state
+- Morozashi multiplier function
+- Best + Morozashi composition
+- same-action contests
+- same-participant input conflict rule
+- Shift Release removal semantics
+- ACTION-12B WASD integration
 - exact future step order
-- exact future changed-file candidates
-- all 38 future boundary cases mapped to verification
-- recommended ACTION-13B / 13C split
+- ring-out/Tokudawara
+- minimal Snapshot/presentation boundary
+- provisional tuning candidates
+- future effective parameter boundary
+- coherent state machine
+- all 80 future boundary cases mapped to verification
+- recommended implementation task split
 - User decisions still required, if any
 - Design Deviations: N/A
 - Unexpected Scope
@@ -1003,481 +1365,24 @@ Must include:
 
 # Final Instruction
 
-Design the first Grip Throw implementation without writing Production code.
+Design the complete GRAPPLED action RPS before implementation.
 
-ArrowLeft / ArrowRight mean the thrower's own left / right. Neutral Grip can Throw. Morozashi raises KO chance and non-KO displacement. A Throw either wins immediately by a deterministic probabilistic fall/KO, or moves the opponent sideways and may then ring out through existing rules.
+Use:
 
-Resolve simultaneous Throws symmetrically from one tick-local state. Opposite world directions stalemate. Same world direction must have a clean prototype tie rule that can later be replaced by Throw-strength comparison.
+```
+Yori > Lift > Throw > Yori
+```
 
-Throw cannot be used while Driving. Investigate whether TURNING can safely support Throw; if not, recommend READY-only for v1.
+Remove random Throw KO. Best Throw vs Yori is deterministic Fall / KO. Normal Throw displaces laterally and then breaks Grip to FREE. Yori and Lift keep Grip. Shift no longer releases while GRAPPLED.
 
-Define a deterministic pre-bout Throw capability / KO-roll boundary that does not invent Management stats and does not use Math.random in gameplay.
+Use a Grip-specific Best Timing concept analogous to Kuzushi: normal winning effect 1.0x, Best ~1.5x, without entering Kuzushi posture.
 
-Return one coherent implementation-ready v1 design and recommended task split.
+Treat Morozashi as an effect multiplier direction: holder ~1.5x, disadvantaged ~0.5x; Best compounds to ~2.25x for holder, while RPS winner itself never changes because of multiplier.
 
+Yori should approximately match current Push displacement; Best Yori approximately matches Kuzushi-amplified Push displacement.
 
----
+Lift win enters a temporary one-sided Lifted state. During Lifted, only WASD steering and ArrowUp forward carry are active. Determine one clean Lift effect scalar for Best/Morozashi multiplication.
 
-# ChatGPT Review Handoff
+Keep future wrestler-stat formulas undecided.
 
-Review-Date: 2026-10-24
-Overall Result: PASS WITH REVIEW CORRECTIONS — IMPLEMENTATION-READY
-Accepted Investigation Baseline: 97cc7672a468e3b6a6d7041184b2cacbae61c179
-
-## Current Source / Scope Review
-
-Accepted:
-
-- Investigation-only scope was respected.
-- Agent Task diff changes only CURRENT_COMPLETION_REPORT.md.
-- No Production source, tests, assets, or accepted docs were modified.
-- Current Source findings match the report.
-- Existing focused regression run: 7 files / 145 PASS.
-
-No Source/SPEC material conflict was found.
-
-## Accepted V1 Throw Direction
-
-Own-left / own-right mapping is accepted.
-
-For canonical facing f = (cos(phi), sin(phi)) in +y-down coordinates:
-
-- ownLeft  = ( f.y, -f.x)
-- ownRight = (-f.y,  f.x)
-
-ArrowLeft = throw toward ownLeft.
-ArrowRight = throw toward ownRight.
-
-Direction is derived from the thrower's canonical facing on the accepted Throw tick. No cached screen-side direction.
-
-## Accepted Input Ownership
-
-Use dedicated semantic edges:
-
-- throwLeftPressed
-- throwRightPressed
-
-Do not reuse Tsuppari-named fields as Throw semantics.
-
-The Scene may consume the physical ArrowLeft/ArrowRight latch once and copy the same edge value into:
-- Tsuppari semantic fields;
-- Throw semantic fields.
-
-Simulation consumes only the state-appropriate semantic action.
-
-No generic contextual-action framework.
-
-## Accepted V1 Eligibility / TURNING Rule
-
-V1 Throw eligibility is participant-local:
-
-- engagement is GRAPPLED;
-- release did not win this tick;
-- thrower is READY at tick start via existing canActInGrapple;
-- thrower's tick-start action is not Drive;
-- thrower is not in Throw recovery;
-- exactly one of Left / Right Throw edges is present.
-
-Opponent READY is NOT required.
-
-Therefore:
-
-- a READY wrestler may Throw while the opponent is still TURNING;
-- a wrestler who is itself TURNING cannot Throw in v1.
-
-This is the accepted small Prototype interpretation of the User preference to allow TURNING Throw where practical.
-
-If User Play Test later shows rear/Morozashi Throw is too strong, the smallest future adjustment is both-READY gating. Do not add that now.
-
-## Accepted Same-Tick Priority
-
-Accepted priority:
-
-Release > Throw > Drive > WASD grapple rotation.
-
-Rules:
-
-- Release + Throw: Release wins; Throw dropped; no roll.
-- Already Drive at tick start + Throw: Throw dropped; Drive may continue; no roll.
-- ArrowUp and Throw begin on same tick while not already Driving: Throw wins.
-- Opponent may be Driving while thrower is eligible.
-- Throw + WASD on same tick: accepted Throw uses tick-start facing and suppresses manual WASD rotation for that tick.
-- No queueing.
-
-### Review Correction RC-1 — Throw Contest Consumes the Tick
-
-For S1 opposite-world-direction simultaneous Throw:
-
-- no KO roll;
-- no displacement;
-- Grip remains;
-- both participants enter Throw recovery;
-- **do not continue into Drive or ACTION-12B WASD rotation on that same tick**.
-
-Reason:
-Release > Throw > Drive > rotation means an accepted Throw contest consumes the grapple action opportunity for that tick. The report's proposed step order would otherwise allow WASD rotation after S1 because it continued the normal tick.
-
-Implementation must explicitly return/skip the later Drive + manual-rotation stages for S1 while still performing any required final canonical ring-out/no-op bookkeeping consistently.
-
-S4 (one participant presses both Left+Right and both are dropped) is different: that participant has no accepted Throw request, so normal lower-priority behavior may continue.
-
-## Accepted Non-KO Geometry
-
-Single successful non-KO Throw:
-
-- Geometry B accepted.
-- Thrower remains fixed.
-- Target orbits around thrower at canonical grapple bond radius.
-- ownLeft = negative throw arc;
-- ownRight = positive throw arc under current angle convention.
-- both canonical facings rotate by the same incremental Throw angle so facing errors remain unchanged.
-- Grip remains engaged after non-KO Throw.
-
-This keeps bond exact and makes left/right readable.
-
-Same-world-direction simultaneous equal-strength Prototype contest:
-
-- neither wrestler wins;
-- no KO roll;
-- pair shifts rigidly in the normalized shared requested world direction;
-- Grip remains;
-- both pay Throw recovery after the transition.
-
-This is accepted as the v1 placeholder for future Throw-power comparison.
-
-## Accepted Throw Transition
-
-Use a short Simulation-owned pair Throw transition rather than one-tick teleportation.
-
-Accepted reasons:
-- meaningful Play Test/readability;
-- existing ring-out can run every transition tick;
-- avoids a large arc being approximated by one long ring-out chord;
-- later Presentation can read canonical progress.
-
-Transition is explicit and small, similar in architectural spirit to CounterTransition.
-
-During an active Throw transition:
-- input is ignored / dropped;
-- canonical path owns position/facing;
-- ring-out is checked every transition tick;
-- no Phaser gameplay path.
-
-## Review Correction RC-2 — Existing Action State at Transition Entry
-
-A Throw may start while the opponent is currently Driving.
-
-Therefore implementation must explicitly avoid stale opponent Drive action during the Throw transition:
-
-- when Throw/shift transition begins, any participant action.kind === 'drive' involved in the pair is set to idle immediately;
-- Drive does not remain visible/stored while the transition owns movement.
-
-If the target was already in a prior Throw recovery:
-- preserve that recovery state and pause its timer while the pair-level Throw transition is active;
-- resume the remaining recovery after the transition;
-- do not silently cancel or reset that recovery.
-
-The new thrower's own recovery begins after the new transition ends.
-
-This preserves existing committed recovery while correctly stopping timerless Drive.
-
-## Accepted Recovery / Engagement
-
-After non-KO single Throw:
-- engagement remains GRAPPLED;
-- thrower enters provisional Throw recovery;
-- target does not receive a new recovery merely for being thrown;
-- any pre-existing target Throw recovery follows RC-2 pause/resume.
-
-During Throw recovery:
-- that participant cannot start Throw or contribute Drive;
-- Release and ACTION-12B WASD rotation may remain available when existing readiness gates permit.
-
-These are Prototype semantics subject to User Play Test.
-
-## Accepted Pre-Bout Capability Boundary
-
-Use precomputed effective Throw capability; BoutSimulation must not know Management-stat formulas.
-
-Accepted effective profile concept:
-
-- neutralKoChance
-- morozashiKoChance
-- neutralThrowAngle
-- morozashiThrowAngle
-
-Morozashi-disadvantaged thrower uses neutral values.
-Morozashi holder uses Morozashi values.
-
-### Review Correction RC-3 — Separate Capability from RNG Seed
-
-Do NOT put koRollSeed inside ThrowProfile.
-
-ThrowProfile is effective gameplay capability computed before the bout.
-Random stream identity is match/setup randomness, not wrestler capability.
-
-Preferred minimal boundary:
-
-- ParticipantSetup.throwProfile?: ThrowProfile
-- ParticipantSetup.throwKoSeed?: uint32
-
-or an equivalently explicit nested setup shape that keeps:
-- effective capability;
-- deterministic random seed
-
-semantically separate.
-
-Do not introduce Management or Save infrastructure.
-
-For Prototype fixtures, explicit defaults are allowed only if clearly marked Prototype.
-
-### Prototype Restart Seed Guidance
-
-Do not make every new Prototype bout silently replay the identical first Throw roll forever if User Play Test is meant to judge probabilistic KO feel.
-
-Preferred minimal approach:
-- build each Prototype BoutSetup with explicit deterministic per-participant seeds derived from a small Scene-owned prototype bout serial/base constants;
-- the seed remains part of the created Bout setup;
-- same setup + same semantic inputs still produces identical results;
-- no Math.random.
-
-Tests should always pass explicit seeds.
-
-This is Prototype fixture behavior, not a permanent RNG framework.
-
-## Accepted Deterministic KO Strategy
-
-Use participant-specific counter-based deterministic Throw roll streams.
-
-Requirements:
-
-- no Math.random in core;
-- participant-specific seed + eligible KO-attempt counter;
-- roll in [0,1);
-- KO iff roll < chance;
-- chance 0 never KO;
-- chance 1 always KO;
-- only a normal single-participant Throw resolution that reaches KO evaluation consumes that participant's next roll;
-- ineligible/dropped requests do not consume;
-- S1 opposite-direction contest consumes none;
-- S2 equal same-direction shift consumes none;
-- participant-array order does not affect rolls/results.
-
-The exact fmix32-style function proposed by ACTION-13A is acceptable if implemented as a small pure deterministic helper with tests.
-
-Hidden Throw roll counters do not need to be presentation Snapshot fields in this Prototype.
-
-## Accepted KO / Fall Outcome
-
-Extend gameplay finish semantics with generic fall plus Throw cause.
-
-Accepted conceptual shape:
-
-- BoutFinishReason includes 'fall';
-- fall outcome carries a small Throw cause payload identifying:
-  - kind: throw
-  - throwerId
-  - local side left/right
-  - locked world direction
-
-Reason:
-- fall can later be caused by techniques other than Throw;
-- presentation should not be encoded into the reason string;
-- outcome is sufficient as the persistent one-shot result; no event bus.
-
-KO Throw:
-- evaluate deterministic roll first;
-- on KO, finish immediately as fall;
-- no non-KO Throw displacement is applied;
-- existing canonical position/facing may freeze at Throw-start state;
-- later Presentation owns the visual falling motion.
-
-If KO roll fails:
-- start non-KO Throw transition;
-- existing ring-out owns any boundary finish during the path.
-
-## Accepted Simultaneous Throw Rules
-
-Resolve requests symmetrically from one immutable tick-local state.
-
-S1 opposite world directions:
-- action-level stalemate, not Bout rematch;
-- no roll;
-- no displacement;
-- Grip continues;
-- both recovery;
-- RC-1: no lower-priority Drive/WASD rotation that tick.
-
-S2 same world direction, equal/no Throw power in v1:
-- no roll;
-- pair rigid shift in shared direction;
-- Grip continues;
-- both recovery after transition.
-
-S3 one valid requester:
-- normal Throw roll -> KO or non-KO transition.
-
-S4 same participant Left+Right edges:
-- drop both requests deterministically;
-- no roll;
-- the other participant may still resolve as S3 if eligible.
-
-Future Throw power:
-- a dedicated same-direction contest helper may later compare power;
-- stronger participant becomes the normal S3 Throw winner;
-- equal continues to use v1 shared shift.
-Do not add a fake Throw-power stat in 13B.
-
-## Accepted KO / Ring-Out Priority
-
-Accepted:
-
-- KO roll first.
-- KO success -> fall immediately, no displacement.
-- KO failure -> Throw transition.
-- transition positions are judged by existing ring-out / Tokudawara every tick.
-- no Throw-specific wall/clamp/boundary.
-
-## Accepted Prototype Tuning for Initial 13B
-
-Provisional, User Play Test owned:
-
-- neutralKoChance = 0.15
-- morozashiKoChance = 0.35
-- neutralThrowAngle = 45 deg
-- morozashiThrowAngle = 75 deg
-- THROW_TRANSITION_TICKS = 18 (~0.3 s)
-- THROW_RECOVERY_TICKS = 30 (~0.5 s)
-- THROW_SHARED_SHIFT = 0.30 m
-- transition easing candidate = 1 - (1-u)^2
-
-These are not permanent balance decisions.
-
-13B may implement them as explicitly provisional prototype tuning.
-
-## Accepted Step-Order Direction
-
-Future 13B should preserve:
-
-1. cooldown / existing CounterTransition early path
-2. active Throw transition early path
-3. previous positions
-4. posture timer
-5. tick-start readiness
-6. Release
-7. determine grappled
-8. Throw request resolution from tick-start state
-9. if accepted single/shift Throw starts transition, run its first transition step and return
-10. if S1 stalemate, apply recovery and RC-1 consume the tick
-11. otherwise existing Drive decision
-12. existing ACTION-12B WASD rotation
-13. existing self/external update
-14. integration/contact/bond/action timers/facing/ring-out
-
-No-Throw path must remain semantically/bitwise compatible with current ACTION-12B behavior.
-
-## Accepted Task Split
-
-ACTION-13B — Throw Core Gameplay:
-- semantic Throw edges
-- eligibility/priority
-- simultaneous contest
-- deterministic KO streams
-- fall outcome
-- Simulation-owned Throw/shift transition
-- recovery
-- ring-out/Tokudawara interaction
-- provisional tuning
-- Heavy verification + Browser smoke
-- User Play Test required
-- minimal outcome formatting only as needed.
-
-ACTION-13C — Throw / Fall Presentation:
-- authored/symbolic Throw pose as later decided
-- thrown/fall visuals
-- impact/camera feel
-- presentation polish
-- User Visual Gate.
-
-Do not split KO probability out of 13B.
-
-## Verification Requirement for 13B
-
-All 38 ACTION-13A boundary cases remain mandatory.
-
-Add explicit tests for Review Corrections:
-
-RC1. S1 opposite-world contest + simultaneous WASD/Drive:
-- no Drive contribution;
-- no manual pair rotation;
-- both enter recovery;
-- no roll.
-
-RC2a. opponent was Driving when single Throw begins:
-- Drive action cleared at transition entry;
-- no stale Drive state during transition.
-
-RC2b. target already had Throw recovery when new Throw transition begins:
-- remaining recovery value is preserved/paused through transition;
-- resumes after transition.
-
-RC3. two setups with identical profiles but different explicit seeds:
-- capabilities are identical;
-- deterministic KO sequence differs;
-- seed is not part of ThrowProfile semantics.
-
-Prototype restart seed:
-- consecutive generated Prototype setups have explicit different deterministic seeds;
-- recreating the same prototype bout serial gives identical seeds/results.
-
-## User Play Test Required After 13B
-
-Judge:
-
-- Left/Right directional understanding;
-- READY-side Throw while opponent TURNING;
-- whether rear/Morozashi Throw is too strong;
-- 15% / 35% KO feel;
-- 45° / 75° non-KO displacement;
-- 0.3 s Throw motion;
-- 0.5 s recovery;
-- same-direction simultaneous pair shift;
-- opposite-direction stalemate;
-- Drive-to-Throw timing;
-- repeated Throw pacing;
-- edge/Tokudawara risk.
-
-Technical PASS != accepted Throw feel.
-
-## Do Not Reopen
-
-Unless explicitly changed by User:
-
-- ACTION-11N Grip visual baseline;
-- ACTION-12B WASD rotation semantics/rate;
-- ArrowUp Drive tuning;
-- canonical 0.70 m bond;
-- existing ring-out / Tokudawara ownership.
-
-## Deferred
-
-- Throw strength parameter and unequal same-direction contest;
-- TURNING wrestler's own Throw before READY;
-- Management formulas for Throw profile;
-- Save/replay system;
-- final Throw/Fall art and animation;
-- Morozashi balance retuning beyond the provisional profile;
-- Touch/Gamepad binding.
-
-## Next Task Constraint
-
-ACTION-13B may proceed from this reviewed design plus RC-1 / RC-2 / RC-3.
-
-If implementation requires changing:
-- ACTION-12B canonical rotation ownership;
-- Drive semantics beyond the accepted priority;
-- existing ring-out ownership;
-- engagement model beyond explicit Throw transition/recovery;
-- deterministic roll ownership beyond participant-specific Throw streams;
-
-STOP and report rather than silently deviating.
+Return one coherent implementation-ready state machine and recommend whether Yori+Throw should be implemented before Lifted as a separate later task.
