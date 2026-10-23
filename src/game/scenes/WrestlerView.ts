@@ -11,7 +11,9 @@
 // ACTION-11A Visual Gate: during Grip reach the temporary Grip attempt pose is shown the same rigid way (no extra
 // turn); Grip recovery keeps the existing selection.
 // ACTION-11D Visual Gate: while grappled (pose grapple or drive) the temporary Grip success pose is shown the same
-// rigid way at the canonical position / facing (no pair offset, no extra turn); a release returns to the idle sprite.
+// rigid way at the canonical facing (no extra turn); a release returns to the idle sprite.
+// ACTION-11E Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
+// presentation-only lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -21,7 +23,11 @@ import {
 } from '../presentation/productWrestlerArt.ts'
 import { allProductCounterArts, counterVisualRotationOffset } from '../presentation/productCounterArt.ts'
 import { allGripAttemptGateArts } from '../presentation/gripAttemptGateArt.ts'
-import { allGripSuccessGateArts, selectWrestlerArt } from '../presentation/gripSuccessGateArt.ts'
+import {
+  allGripSuccessGateArts,
+  gripSuccessDisplayOffsetPx,
+  selectWrestlerArt,
+} from '../presentation/gripSuccessGateArt.ts'
 import { allProductTsuppariArts } from '../presentation/productTsuppariArt.ts'
 import { KUZUSHI_SWEAT_DROPS, kuzushiSweatOffsetPx, kuzushiSweatVisual } from '../presentation/kuzushiVisualEffect.ts'
 import type { WrestlerVisualState } from '../presentation/wrestlerVisualState.ts'
@@ -122,10 +128,14 @@ export class WrestlerView {
   apply(state: WrestlerVisualState, participant: ParticipantState, positionPx: { x: number; y: number }): void {
     this.moving = state.pose === 'move'
     this.show(selectWrestlerArt(this.idleArt, state))
+    const display = gripSuccessDisplayOffsetPx(state, participant.facing, this.R)
     this.body
-      .setPosition(positionPx.x, positionPx.y)
+      .setPosition(positionPx.x + display.x, positionPx.y + display.y)
       .setRotation(participant.facing + counterVisualRotationOffset(this.idleArt.id, state))
-    this.shadow.setPosition(positionPx.x + SHADOW_OFFSET.x * this.R, positionPx.y + SHADOW_OFFSET.y * this.R)
+    this.shadow.setPosition(
+      positionPx.x + display.x + SHADOW_OFFSET.x * this.R,
+      positionPx.y + display.y + SHADOW_OFFSET.y * this.R,
+    )
     this.shadow.setRotation(participant.facing)
     // Overlay only: placed from the canonical center / facing (not the Counter body turn); drops stay upright.
     const sweat = kuzushiSweatVisual(this.idleArt.id, state)

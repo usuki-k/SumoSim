@@ -12,7 +12,9 @@ import type { BoutSetup, BoutSnapshot, ParticipantId, ParticipantIntent } from '
 import { GRIP_ATTEMPT_GATE_ART, allGripAttemptGateArts } from './gripAttemptGateArt.ts'
 import {
   GRIP_SUCCESS_GATE_ART,
+  GRIP_SUCCESS_LATERAL_OFFSET_R,
   allGripSuccessGateArts,
+  gripSuccessDisplayOffsetPx,
   selectWrestlerArt,
 } from './gripSuccessGateArt.ts'
 import gateSource from './gripSuccessGateArt.ts?raw'
@@ -268,10 +270,97 @@ describe('Grip success gate art (ACTION-11D)', () => {
     expect(JSON.stringify(sim.getSnapshot())).toBe(before)
   })
 
+  describe('pair display offset (ACTION-11E)', () => {
+    const R_PX = 40
+    const offsetOf = (s: BoutSnapshot, who: 0 | 1) =>
+      gripSuccessDisplayOffsetPx(visualOf(s, who), s.participants[who].facing, R_PX)
+    const isZero = (o: { x: number; y: number }) => o.x === 0 && o.y === 0
+
+    it('a small lateral offset to the own LEFT of each wrestler, perpendicular to its canonical facing', () => {
+      expect(GRIP_SUCCESS_LATERAL_OFFSET_R).toBeLessThan(0)
+      expect(Math.abs(GRIP_SUCCESS_LATERAL_OFFSET_R)).toBeLessThanOrEqual(0.5)
+      const s = neutralGrapple().getSnapshot()
+      for (const who of [0, 1] as const) {
+        const o = offsetOf(s, who)
+        const f = s.participants[who].facing
+        expect(Math.hypot(o.x, o.y)).toBeCloseTo(Math.abs(GRIP_SUCCESS_LATERAL_OFFSET_R) * R_PX, 9)
+        expect(o.x * Math.cos(f) + o.y * Math.sin(f)).toBeCloseTo(0, 9) // no forward component
+        expect(-o.x * Math.sin(f) + o.y * Math.cos(f)).toBeLessThan(0) // along the wrestler's LEFT
+      }
+    })
+
+    it('face to face the pair shifts point-symmetrically (opposite offsets, pair midpoint kept)', () => {
+      const s = neutralGrapple().getSnapshot()
+      const a = offsetOf(s, 0)
+      const b = offsetOf(s, 1)
+      expect(a.x + b.x).toBeCloseTo(0, 9)
+      expect(a.y + b.y).toBeCloseTo(0, 9)
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(2 * Math.abs(GRIP_SUCCESS_LATERAL_OFFSET_R) * R_PX, 9)
+    })
+
+    it('applies exactly while the success art is shown: grapple, Drive and Morozashi', () => {
+      const sim = neutralGrapple()
+      for (let k = 0; k < 40; k++) {
+        sim.step(intents({ drive: true, move: [1, 0] }, { drive: k % 3 === 0 }))
+        const s = sim.getSnapshot()
+        for (const who of [0, 1] as const) {
+          expect(isSuccess(artOf(s, who))).toBe(!isZero(offsetOf(s, who)))
+          expect(isZero(offsetOf(s, who))).toBe(false)
+        }
+      }
+      const m = morozashiGrapple().getSnapshot()
+      expect(isZero(offsetOf(m, 0)) || isZero(offsetOf(m, 1))).toBe(false)
+    })
+
+    it('zero for idle, Grip attempt, whiff / release recovery and every other action', () => {
+      const attempt = newSim(COMBINED)
+      attempt.step(intents({ grip: true }))
+      while (attempt.getSnapshot().engagement.kind === 'free') {
+        const s = attempt.getSnapshot()
+        expect(artOf(s, 0)).toBe(GRIP_ATTEMPT_GATE_ART.red)
+        expect(isZero(offsetOf(s, 0))).toBe(true)
+        expect(isZero(offsetOf(s, 1))).toBe(true)
+        attempt.step(intents())
+      }
+      attempt.step(intents({ grip: true })) // release
+      for (let k = 0; k <= GRIP_RECOVERY_TICKS; k++) {
+        const s = attempt.getSnapshot()
+        expect(s.engagement.kind).toBe('free')
+        expect(isZero(offsetOf(s, 0)) && isZero(offsetOf(s, 1))).toBe(true)
+        attempt.step(intents())
+      }
+      const free = newSim(FAR)
+      const seen = new Set<string>()
+      const steps: Input[] = [{ left: true }, ...Array(40).fill({}), { counter: true }, ...Array(120).fill({}), { push: true }]
+      for (const step of [...steps, ...Array(60).fill({})]) {
+        free.step(intents(step))
+        const v = visualOf(free.getSnapshot())
+        seen.add(v.pose)
+        expect(isZero(gripSuccessDisplayOffsetPx(v, free.getSnapshot().participants[0].facing, R_PX))).toBe(true)
+      }
+      expect([...seen]).toEqual(expect.arrayContaining(['tsuppari', 'counter', 'kuzushi', 'push', 'idle']))
+    })
+
+    it('display only: the Snapshot positions / bond distance are unchanged', () => {
+      const sim = neutralGrapple()
+      const before = JSON.stringify(sim.getSnapshot())
+      offsetOf(sim.getSnapshot(), 0)
+      offsetOf(sim.getSnapshot(), 1)
+      const s = sim.getSnapshot()
+      expect(JSON.stringify(s)).toBe(before)
+      const [a, b] = s.participants
+      expect(Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y)).toBeCloseTo(COMBINED, 9)
+    })
+  })
+
   it('stays Phaser-free and Simulation-free; WrestlerView preloads and selects through the success gate', () => {
     expect(gateSource).not.toMatch(/from ['"]phaser['"]/)
     expect(gateSource).not.toMatch(/BoutSimulation/)
     expect(viewSource).toMatch(/allGripSuccessGateArts\(\)/)
     expect(viewSource).toMatch(/this\.show\(selectWrestlerArt\(this\.idleArt, state\)\)/)
+    // ACTION-11E: body and shadow share the success display offset
+    expect(viewSource).toMatch(/gripSuccessDisplayOffsetPx\(state, participant\.facing, this\.R\)/)
+    expect(viewSource).toMatch(/setPosition\(positionPx\.x \+ display\.x, positionPx\.y \+ display\.y\)/)
+    expect(viewSource).toMatch(/positionPx\.x \+ display\.x \+ SHADOW_OFFSET\.x/)
   })
 })
