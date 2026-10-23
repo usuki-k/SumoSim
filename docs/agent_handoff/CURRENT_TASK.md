@@ -49,15 +49,17 @@ Expected identity:
 size: 1283 x 1226 RGBA
 
 decoded RGBA pixel SHA-256:
-b2d38c4fb70a7b91682dab8949b27b2ccc917c820ffd440a14906c3e23117a56
+0cedde984646384514e3b1609b69f04450d04c5446888da966de206a183e566e
 
 reviewed PNG file SHA-256:
-0c08d0f9f7297531263398d3a42cfd2845d9cd414aaf09fa0bcf2fcccfb93154
+aace9edc143176673aabf78b66120885d54fb722aa2f50a0f3a031cb1f679793
 ```
 
 The source stays under `input.local/` and must NOT be committed.
 
 The decoded RGBA hash is the authoritative source identity.
+
+User clarification (2026-10-23): the currently placed local file with decoded hash `0cedde98...` is the intended Grip-success image. This supersedes the earlier source-identity hash only; visual/gameplay scope is unchanged.
 
 ## Stop condition
 
