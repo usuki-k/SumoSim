@@ -1,5 +1,5 @@
 Task-ID: ACTION-11M-GRIP-SUCCESS-LOWER-MARKER-POSITION-TUNE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION VISUAL TUNE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -255,3 +255,63 @@ Tune only the two lower authored Grip-success markers.
 Keep the fist/forearm art and upper markers unchanged.
 
 Position the lower markers symbolically so they appear to extend from the opponent shoulder/back area toward the opponent mawashi, with the hand still contacting the mawashi and a clear ~30–45 degree diagonal.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-24
+Overall Result: TECHNICAL PASS / USER VISUAL GATE REJECTED
+Accepted Technical Baseline: b7e4e2edfa75b9e273d420f02443a7c70408dbf4
+
+## Technical Review
+
+Confirmed:
+
+- ACTION-11M changed only presentation marker layout;
+- upper/head-side markers preserved ACTION-11L geometry;
+- lower/foot-side markers kept the mawashi hand contact but moved the elbow inward;
+- four markers still render in READY states;
+- TURNING hides all markers;
+- ACTION-11F compression unchanged;
+- ACTION-11H tone correction unchanged;
+- authored runtime marker PNG files unchanged;
+- no src/game/sumo or src/game/input changes;
+- canonical bond remains 0.70 m.
+
+Verification accepted:
+- focused tests: 17 / 17 PASS
+- pnpm test: 30 files / 522 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- browser smoke: 27 / 27 PASS.
+
+The authored-source exporter --check could not run because the ignored input.local source had been removed, but ACTION-11M did not modify public/tools marker assets and their committed hashes remain identical to ACTION-11L. This does not block the placement-only technical review.
+
+## User Visual Gate
+
+REJECTED.
+
+The lower two markers still do not visually match the User's desired reference.
+
+User clarification:
+- fist/hand shape is acceptable;
+- upper two markers are acceptable;
+- lower two should visually resemble the provided reference image;
+- use image reflection if needed;
+- lower arm should curve/orient like a mirrored counterpart, visually running from opponent shoulder/back toward mawashi;
+- self-character anatomical shoulder position is irrelevant;
+- symbolic placement is preferred.
+
+## Next Task Constraint
+
+Next task should:
+- preserve upper markers exactly;
+- preserve lower hand/grip points unless a very small local adjustment is necessary;
+- derive/use an offline reflected authored-arm variant for lower markers;
+- compare only the minimal deterministic reflection choices needed to match the User reference;
+- keep marker art source, gameplay, ACTION-11F/11H, pair READY visibility, 0.70 m bond unchanged;
+- avoid runtime mirroring if an offline derived variant suffices.
+
+Do not ask the User for a new image yet.
