@@ -239,6 +239,7 @@ describe('Grip attempt gate art (ACTION-11A)', () => {
     expect(gateSource).not.toMatch(/from ['"]phaser['"]/)
     expect(gateSource).not.toMatch(/BoutSimulation/)
     expect(viewSource).toMatch(/allGripAttemptGateArts\(\)/)
-    expect(viewSource).toMatch(/this\.show\(selectWrestlerDisplayArt\(this\.idleArt, state\)\)/)
+    // ACTION-11D: the view selects through the Grip success wrapper, which delegates everything else to this gate
+    expect(viewSource).toMatch(/this\.show\(selectWrestlerArt\(this\.idleArt, state\)\)/)
   })
 })

@@ -7,6 +7,7 @@ Offline review and export tools for SumoSim Product wrestler art:
 | `export_tsuppari.py` / `measure_tsuppari_pose.py` / `preview_tsuppari.py` | ACTION-07D | **current runtime export** of the four Product Tsuppari poses (accepted SEPARATE) + measurement helper + review preview ([below](#product-tsuppari-poses-action-07d)) |
 | `export_counter.py` | ACTION-08C | **current runtime export** of the Product Counter pose (red + derived blue; accepted) ([below](#product-counter-pose-action-08c)) |
 | `export_grip_attempt_gate.py` | ACTION-11A | **temporary Visual Gate** export of the Grip attempt pose (red + derived blue; provisional, not Product art) ([below](#grip-attempt-pose-visual-gate-action-11a-provisional)) |
+| `export_grip_success_gate.py` | ACTION-11D | **temporary Visual Gate** export of the Grip success / grappled pose (red + derived blue; provisional, not Product art) ([below](#grip-success-pose-visual-gate-action-11d-provisional)) |
 | `export_runtime_wrestlers.py` | ART-WRESTLER-04B | **current runtime export**: red master + derived blue ([below](#runtime-export-art-wrestler-04b-red-master)) |
 | `preview_idle_mirror_workflow.py` | ART-WRESTLER-04A | mirror / recolor comparison (history; red-master branch promoted) |
 | `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | two separately authored sprites as rigid objects (history / comparison; runtime no longer uses the blue source) ([below](#dual-rigid-sprites-art-wrestler-03a)) |
@@ -396,6 +397,29 @@ PY tools/wrestler_art/export_grip_attempt_gate.py --check    # verify the commit
 - Runtime: `src/game/presentation/gripAttemptGateArt.ts` mirrors the two sizes / pivots (checked by
   `tests/test_export_grip_attempt_gate.py`). The pose is shown exactly while the visual pose is `grip` with
   `gripPhase === 'reach'`; Grip recovery and the grapple use the existing selection.
+
+## Grip success pose Visual Gate (ACTION-11D, provisional)
+
+A temporary Visual Gate for the Grip success / grappled look, shown while grappled (visual pose `grapple` or
+`drive`; the same pose for neutral and Morozashi). Not Product art until the User Visual Gate accepts it. The
+idle, Product Tsuppari / Counter and Grip attempt gate textures and recipes are not touched.
+
+```bash
+PY tools/wrestler_art/export_grip_success_gate.py            # write public/assets/action/wrestler/grip-success-gate/
+PY tools/wrestler_art/export_grip_success_gate.py --check    # verify the committed red.png / blue.png, write nothing
+```
+
+- Input: `input.local/candidate_red_grip_success.png` only (never committed; identity = decoded RGBA pixel
+  SHA-256 in `grip_success_gate_recipe.json`).
+- red = the pose normalized like the idle red (1283x1226 source drawn ~1.40x the idle scale: front 160.2, root
+  (662, 639), body core (481, 139)-(781, 971), measured once with the Product Tsuppari landmark registration;
+  `measurement_evidence` records it and `tests/test_export_grip_success_gate.py` re-measures it).
+- blue = red reflected across the local X axis + the accepted mawashi recolor of `runtime_wrestler_recipe.json`
+  (single owner), validated against the standard `mask_limits` (1500 / 60 / 120, fail closed; no
+  Grip-success-specific allowance). The reflected pair faces each other as mirrored grappling wrestlers.
+- Runtime: `src/game/presentation/gripSuccessGateArt.ts` mirrors the two sizes / pivots (checked by
+  `tests/test_export_grip_success_gate.py`); its `selectWrestlerArt` shows the pose for `grapple` / `drive` and
+  otherwise delegates to the Grip attempt selection. No pair offset; canonical position / facing only.
 
 ## Idle mirror + mawashi recolor (ART-WRESTLER-04A, comparison / history)
 

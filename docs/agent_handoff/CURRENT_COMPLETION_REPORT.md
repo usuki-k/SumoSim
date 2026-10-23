@@ -1,284 +1,225 @@
-Task-ID: ACTION-11C-GRIP-LUNGE-CONTEST-IMPLEMENTATION
-Result: PASS WITH USER PLAY TEST REQUIRED
+Task-ID: ACTION-11D-GRIP-SUCCESS-ART-VISUAL-GATE
+Result: PASS WITH USER VISUAL GATE REQUIRED
 Branch: develop
-Source-Baseline: 710d86e58cb7c8d9b6695828a08175f931225043
-Agent-Start-Head: e9a710e944853cd99afdcf7fac97d94a0d7eddaa
+Source-Baseline: 6264e95052c60dcbe4b4a998d169047d5c608e1f
+Agent-Start-Head: 4f8766a13a933f91c2f0ca556e3907aeb0343fa2
 Implementation-Commit: THIS_COMMIT
 Push-Target: origin/develop
 Push-Verification: RESOLVE_FROM_GITHUB_AFTER_THIS_COMMIT
 
 # Result
 
-PASS WITH USER PLAY TEST REQUIRED:
+PASS WITH USER VISUAL GATE REQUIRED:
 
 - Technical PASS
-  - 必須ケース（G / V / C / TG / PG / GC / GG / IK / R / D / P）をすべて実行した
-  - timing sweep 441 cell × 4通り（役割の入れ替え / id / 配列順）が一致した
-  - `pnpm test`は486件すべてPASS、`pnpm build`もPASS
-  - Browser Smokeは20 / 20 PASS（GPU）
-- Game Feelは、User Play Testで判断する
+  - focused / full test、build、exporterの決定性と`--check`、Browser Smoke 16 / 16（GPU）がすべてPASS
+- 見た目の受け入れは、User Visual Gateで判断する
 
-ACTION-11Bの推奨設計を、User選択（D1 = 4 tick、D2 = neutral、D3 / D4 = Push / Tsuppariのstartupとrecoveryは掴めないまま）どおりに実装した。
+Userが用意したred Grip success pose 1枚から、一時的なVisual Gate textureを2枚書き出した:
 
-- Gripのreachは、8 tickの短い突進になった
-  - 押下時の方向とfacingで固定する
-  - 移動は約0.10 m、制動の惰性を含めて0.1267 m
-- 成功の条件は、実接触と、reachの経過4 tick以上
-- Gripの関係は、純関数`resolveFreeGripContest`が1つの状態から対称に決める
-  - Tsuppari > Grip
-  - Push impact > Grip
-  - Grip > Counter（neutral）
-  - Grip / Grip（neutral）
-- 実装がACTION-11Bの推奨prototypeと一致することも確認した
-  - random入力200 bout、211,978 tick、FREEからのgrapple突入737回で、Snapshotの不一致は0（Gripの`direction`を除いて比較）
+- red: idleと同じ正規化
+- blue: redの反射（local Y）+ まわしの塗り替え
+
+表示は`pose === 'grapple' || pose === 'drive'`のあいだ。neutral / Morozashi（holder・disadvantaged）で同じpose。releaseの瞬間にidle spriteへ戻る。Grip attempt（ACTION-11A）、gameplay、bondの距離、pair配置は変えていない。
 
 # Preflight
 
-- working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 2`
-- Remote CURRENT_TASK: Task-IDは一致、Status READY、Target-Branch develop、Source-Baseline `710d86e`（`origin/develop`のancestor）、Handoff-Mode GITHUB
-- `710d86e..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `e9a710e`
+- 1回目・2回目の開始指示: Source identityの不一致（decoded RGBA `0cedde98…` ≠ Taskの`b2d38c4f…`）でSTOP。Repositoryには何も書いていない
+- 3回目: working tree clean、branch `develop`、fetch後 `HEAD...origin/develop` = `0 1`
+- Remote CURRENT_TASK: Task-ID一致、Status READY、Target-Branch develop、Source-Baseline `6264e95`（`origin/develop`のancestor）、Handoff-Mode GITHUB。期待hashは`4f8766a`（`docs(agent): align grip success source identity`）で現物の値に更新されていた
+- `6264e95..origin/develop`で変わったのは`docs/agent_handoff/CURRENT_TASK.md`だけ → `merge --ff-only` → `4f8766a`
 
-# 定数
+# Source identity
 
-| 定数 | 値 | 備考 |
+| 項目 | 値 | 判定 |
 |---|---|---|
-| `GRIP_REACH_TICKS` | **8**（6から） | reach = 突進 |
-| `GRIP_MIN_ATTEMPT_TICKS` | **4**（新規） | 成功は、reachの経過 ≥ 4 のtickから |
-| `GRIP_RECOVERY_TICKS` | 12 | 変更なし |
-| `GRIP_RANGE_MARGIN` | **削除** | Gripの成功は実接触だけ。test / docsの参照も更新した |
+| path | `tools/wrestler_art/input.local/candidate_red_grip_success.png`（commitしない。`git check-ignore`で確認） | 存在 |
+| size / mode | 1283 x 1226 RGBA | 一致 |
+| decoded RGBA pixel SHA-256 | `0cedde984646384514e3b1609b69f04450d04c5446888da966de206a183e566e` | 一致（正） |
+| PNG file SHA-256 | `aace9edc143176673aabf78b66120885d54fb722aa2f50a0f3a031cb1f679793` | 一致 |
 
-`BODY_RADIUS`、`CONTACT_SLOP`、movement / Push / Tsuppari / Counter / Kuzushi / Driveの値は変えていない。
+使ったsourceはこの1枚だけ（attempt / idle / 他の候補で代用していない）。exporterは`aw.load_source`でsize / decoded hashが違えばfail closedする。
 
-# Gripのactionの最終形（`BoutTypes.ts`）
+# Measurement（FRONT / root / body core）
 
-```ts
-{ kind: 'grip'; phase: 'reach' | 'recovery'; ticksRemaining: number; direction: Vec2 }
+既存のProduct Tsuppari / Counter / Grip attemptと同じlandmark registration（`measure_tsuppari_pose.measure_landmarks` / `normalization`。idle red masterへ、髪の塊とまわしの重心で合わせる）をこのsourceで1回実行した。attempt / Counter / idleの値は流用していない。
+
+| 項目 | idle reference | Grip success |
+|---|---|---|
+| hair centroid（source px） | (428.7, 542.7) | (359.8, 549.1) |
+| mawashi centroid | (878.6, 565.5) | (978.0, 574.7) |
+| hair px / mawashi px | 42652 / 56028 | 80116 / 114724 |
+| rotation delta | — | −0.528° |
+| scale s | — | 1.4007（hair sqrt比 1.371、mawashi 1.431、H→B距離比 1.374） |
+
+recipeに記録した値（front 0.1°、点 1 px に丸め）:
+
+- `source_front_deg` 160.2（idle 160.7 + delta）
+- `root_source_px` (662, 639)
+- `body_core_source_px` (481, 139)–(781, 971)、body coreはfront軸に垂直（`load_recipe`が検査）
+- 測定は`test_recorded_measurement_is_reproducible`で毎回再測定して照合（丸め誤差 ≤ 0.1° / 1 px）
+
+判断: sourceはidleの約1.40倍の大きさで、向きはほぼidleと同じ。2つの面積比のずれ（約4%）は、Counterで受理済みの前例（1.317 / 1.009）より小さい。安全に測定できると判断した。
+
+# Runtime textures
+
+| file | size | pivot | body core | pixel SHA-256 | file SHA-256 |
+|---|---|---|---|---|---|
+| `grip-success-gate/red.png` | 160 x 183 | (83, 98) | 123.076923 px（= 2R） | `afab5fbc87e586147ff9c35ae14aedddc0c78e436ef2142bd8cb0e906867ef0b` | `8a9aa64bce6047f4196b80facb1537b00b7c08390df8228d158565bb4db5abf5` |
+| `grip-success-gate/blue.png` | 160 x 183 | (83, 85) = redの反射（183 − 98） | 123.076923 px | `2336e895cfb92c625042f2af688d23d11c146bec70d51434849cb72122777a8b` | `0ee7d78a772b6cfb8a965d09ef5422e93d1a197ed827d1468eb64adda83f25d7` |
+
+表示scaleはidleと同じ（body coreの直径が同一のため。smokeで差 < 1e-9）。
+
+# Mask diagnostics
+
+標準の`mask_limits`（1500 / 60 / 120）。Grip success専用の許容値は作っていない。global limitも変えていない。
+
+| 項目 | 値 | 上限 |
+|---|---|---|
+| mask px | 2394 | ≥ 1500 |
+| missed band px | 17 | ≤ 60 |
+| fringe px | 47 | ≤ 120 |
+
+- 塗り替えのruleの持ち主は`runtime_wrestler_recipe.json`だけ（`test_recolor_rule_is_owned_by_the_idle_runtime_recipe`）
+- mask外のpixelは不変、alphaは反射と同一（test）
+- 目視でも、肌・髪への塗り替えの漏れは無い
+
+# Selector composition
+
+```
+selectWrestlerArt (gripSuccessGateArt.ts, ACTION-11D)
+  pose === 'grapple' || pose === 'drive' -> GRIP_SUCCESS_GATE_ART[id]
+  else -> selectWrestlerDisplayArt (gripAttemptGateArt.ts, ACTION-11A, unchanged)
+            grip && reach -> Grip attempt gate
+            else -> selectWrestlerPoseArt (Counter) -> selectWrestlerArt (Tsuppari / idle)
 ```
 
-- `direction`は、押下時の`(cos facing, sin facing)`
-  - whiffや取り消しのrecoveryでも、そのまま持つ
-  - 解除（release）のrecoveryは、解除時のfacingを入れる。recoveryでは使わない
-- Snapshotにdeep copyする（testあり）
-- target id、hit flag、eligible flag、startup timerは足していない
-- eligibleは`GRIP_REACH_TICKS − ticksRemaining ≥ GRIP_MIN_ATTEMPT_TICKS`から導く（`isGripEligible`。stableも条件）
+- 小さな純粋wrapperが1つだけ。既存のselectorは複製していない
+- `WrestlerView`はpreloadに2枚を追加し、`this.show(selectWrestlerArt(this.idleArt, state))`で選ぶ
+- 位置 / facing / textureごとのpivot・scaleは既存のまま。pair offset、追加の回転、timer、VFXは無い。影も不変
+- Counterのrotation offsetはpose = counterのときだけ働くので、grapple中は0
 
-# FREE 1 tickの解決順（実装）
+# Neutral / Morozashi / Drive / Release（tick / frame単位の結果）
 
-```
-… → 積分 → resolveContact
-→ openPushImpact（接触で、PushのimpactWindowを開く）
-→ const grip = resolveFreeGripContest(a, b, contact !== null)   // 1つの状態から、対称に
-→ grip.cancelled → Grip recovery（GRIP_RECOVERY_TICKS、direction保持）
-→ resolveCounter（変更なし）
-→ grip.grapple があれば enterGripGrapple: Morozashiなら相手のKuzushiを消費 → enterGrapple（変更なし）
-→ engagementがまだFREEなら resolveForces（Push / Tsuppariの力。変更なし）
-→ advanceAction → updateFacing（Grip reach中はfacingを固定）→ ring-out
-```
-
-- 旧`resolveGrip`（距離0.79の判定）は削除した
-- Tsuppariの命中判定（`isTsuppariHitTick` / `inTsuppariReach`）とPushの`isPushActive`は、helperと既存のresolverが同じ述語を使う
-  - これらの述語は、`ActionFacts`（Snapshotのparticipantでもよい構造型）を受け取るように一般化した
-- `resolveCounter`は、Gripを含むpairでは何もしない
-  - Counterが捕えるのはPush / Tsuppariの攻撃側だけで、そのとき相手はGripをしていない
-- そのため、Counterとgrapple突入の順序は結果に影響しない
-
-# 実測（Simulation）
-
-| 項目 | 値 | 確認したtest |
-|---|---|---|
-| reachの終わりまでの移動（開けた場所） | **0.100000 m**（誤差1e-9以内） | G4 |
-| 制動の惰性を含めた移動 | **0.126667 m** | G5 / smoke 3（0.1267 m） |
-| 最高速度 | **1.333333 m/s** | G6 |
-| reach / recoveryのSnapshot数（whiff） | reach 7（押下tickを含めて8 tickの解決）→ recovery 12 → idle | G10 / smoke 6 |
-| 接触してから押した場合 | 経過1〜3はfree、経過4でneutral。成功前のreach Snapshotは**4枚**（ticksRemaining 7 / 6 / 5 / 4） | V1–V4 / smoke 4・5 |
-| 止まった相手に届く距離 | 0.800 / 0.801 mは成功、0.803 / 0.85 mはwhiff | C4 |
-| 接触による成功時のbond補正 | 相手の位置は動かない（誤差1e-15）。距離は0.70 m（誤差1e-12）。grapple tickのGrip側の移動は、自分の突進1 tick分以下 | C3、T102 |
-| 斜めにかすめる接触 | 相手の横歩き中（gap 0.78）でも成功。Grip側はまっすぐ進む | C5 |
-| homingしない | reach中のfacingは0のまま、y = 0のまま。WASDは無視。recoveryで相手の方を向き直る | G7–G9 / smoke 7 |
-
-# 全pairの結果（実装 + test）
-
-| Pair | 結果 | test |
-|---|---|---|
-| Push / Push | 変更なし。両方のimpact中は、pairのexternalが0（7 tick） | R1 |
-| Push / Tsuppari | 変更なし。連結され、pairの押し出しは0.5325 → 0.2914 m、buildup +1 | R2 |
-| Push / Grip | 接触中のimpactが、reach中のGripを取り消す → Grip recovery。Pushの力は、idleの相手のときと1 tickごとに完全に同じ。startup / 接触前のcharge / recoveryは取り消さず、掴むこともできない | PG1–PG7 / smoke 9 |
-| Push / Counter | 変更なし。Best、CounterTransition、pusherはKuzushi | R3 |
-| Tsuppari / Tsuppari | 変更なし。両方が命中し、impulseは逆向きで同じ大きさ | R4 |
-| Tsuppari / Grip | 命中tickに、reach中のGripを取り消す → Grip recovery。impulse 2.13 m/sとbuildup +1はidleの相手のときと同じ。6発目のKuzushiも成立する（buildupは0に戻る）。Grip側の負けにKuzushiは無い | TG1–TG6 / smoke 8 |
-| Tsuppari / Counter | 変更なし。攻撃側がKuzushi、impulseなし、CounterTransitionなし | R5 |
-| Grip / Grip | 実接触で、eligible + 相手がreach中（または両方eligible）→ neutral。両方同時に押すと経過4。片方が2 tick早いと経過2 | GG1–GG3 / smoke 13 |
-| Grip / Counter | eligible + 実接触 + Counter window中 → neutral。Counterはidleに戻り、Kuzushi / CounterTransitionは無い。先に時間切れでKuzushiになっていればMorozashi | GC1–GC5 / smoke 10・11 |
-| Counter / Counter | 変更なし。両者ともwindowの終わりにKuzushi | R6 |
-| Idle / Grip | neutral | IK1 |
-| Kuzushi / Grip | Morozashi（Gripした側）。Kuzushiの消費はgrapple tickだけ（突進中や接触中はKuzushiのまま） | IK2 / IK3 / smoke 12 |
-| Kuzushiの相手に届かないGrip | Kuzushiは消費しない | IK4（BoutKuzushiFollowup G2–G4も） |
-
-`resolveFreeGripContest`の純関数testでは、次を引数を入れ替えた両方の順序で確認した:
-
-- 掴める相手: idle / Kuzushi / Counter / Grip reach（経過0と6）
-- 取り消すもの: 命中tickのTsuppari / impact中のPush
-- 取り消さず、掴めもしないもの: Pushのcharge / startup / recovery、Grip recovery、Tsuppariのstartup / recovery
-- 成功しないもの: eligibleでないGrip、接触なし
-- 境界: Tsuppariの命中は接触なしでも届く。Pushのimpactは接触が必要
-
-# Timing sweep（`BoutGripContest.test.ts`）
-
-各cellを4通りで実行した。
-
-- 役割: Gripする側を`a`にするか`b`にするか
-- 配列: participantの並びを通常のままにするか、入れ替えるか
-
-役割（G / O）で書いたtimelineが4通りすべてで同じであること、cellごとの不変条件を確かめた。
-
-- 不変条件:
-  - grappleに入るtickには、eligibleなGrip reachがある
-  - 相手はidle / Counter / Grip reach
-  - grapple後の距離は0.70 m
-
-| sweep | gap | offset d | cell | 主な結果（0 = Gripの押下tick） |
-|---|---|---|---|---|
-| Grip / Counter | 0.70 / 0.75 / 0.80 | −14..+7 | 66 | windowが重なる → neutral（例: 0.70、d = −6 → 4: neutral）。先に時間切れ → Morozashi（0.70、d = −8 → 3: Kuzushi、4: Morozashi） |
-| Grip / Tsuppari | 0.70 / 0.75 / 0.80 / 0.85 | −17..+8 | 104 | d = −6..+1は、全gapで`d+6: 取り消し + 命中`。d = +3（0.75）→ 7: whiff、9: 命中。d = +6（0.75）→ 5: neutral（Tsuppariは始まらない） |
-| Grip / Push | 0.70 / 0.75 / 0.80 / 1.2 / 1.6 | −30..+8 | 195 | 1.2、d = −24 → 0: 取り消し + impact。startup / recovery / 接触前のchargeは取り消さない。d = +6（0.75）→ 5: neutral |
-| Grip / Grip | 0.70 / 0.75 / 0.80 / 0.90 | −9..+9 | 76 | 0.75、d = 0 → 4: neutral。0.90、d = 0 → 7: neutral（同時の突進だけが届く）。0.90、d = 2 → 両者whiff |
-| 合計 | | | **441 cell × 4通り** | **すべて一致**。不変条件の違反は0 |
-
-この結果は、ACTION-11Bで測った表と同じ。上記のprototypeとの一致（211,978 tick）でも裏付けられる。
-
-# 参加者の順序
-
-- sweep全体: 441 × 4で一致
-- 純関数: 全ケースで引数の順序を入れ替えて一致
-- 既存: BoutGripのT99（同時Grip、配列を入れ替え）、BoutDriveのT147は引き続きPASS
-
-# Regression
-
-- `pnpm test`: 28 files、**486 PASS**
-  - 新規: `BoutGripContest.test.ts` 35件、`gripAttemptGateArt.test.ts`のV6 2件
-- `pnpm build`: PASS（既存の500 kB chunkの警告だけ）
-- `npx tsc --noEmit`: clean
-- `git diff --check`: clean
-- D1–D5（grapple / Drive）: 既存のBoutGrip（T101: externalの平均、T102 / T103: bond、T105–T107: 解除）、BoutOrientation（15件）、BoutDrive（19件）がPASS
-  - grapple突入の位置だけを、新しい成立tickに合わせた
-- Ring-out / Tokudawara:
-  - 新しいtestを追加した（Tokudawaraのring、縁から2.2〜2.274 m、相手はring内、静止 / 左右へ横歩き、300 run超）
-    - Grip側のring-outは0件で、決着の理由は既存の`ring-out`だけ
-  - BoutRingOut / BoutTokudawaraの既存testはPASS
-- P1–P5（presentation）:
-  - attemptはreachのあいだだけ。recoveryと取り消しの後はidle sprite、成功後は既存のfallback
-    - V6: 接触から押すとattemptのframeが4、Tsuppariに負けたtickからidle
-  - Push / Tsuppari / Counter / Kuzushiの見た目のtestはPASS
-  - art exporterは4本とも`--check`がexit 0
-  - `public/`と`tools/`に差分なし（Product assetのhashは不変）
-- `src/game/input/`のproductionは変更なし（testだけ変更）
-
-# 既存testの更新（仕様変更に合わせたもの。弱めてはいない）
-
-| test | 変更 |
-|---|---|
-| BoutGrip T93 / T94 / T98–T101 / T105–T109 ほか | 接触してから押すGripは、押下tick + 4 tickで成立（`pressGrip`）。T93は「押下tickでは成立せず、経過4で成立」を明示的に確認する |
-| BoutGrip T95 | 「範囲0.79の境界」→「突進が届かなければwhiff（Kuzushiでも迂回できない）」 |
-| BoutGrip T97 | Counterを掴まない部分は削除（Grip > Counterになったため、新testのGC1–GC4へ）。Grip recoveryの相手は、解除によるrecoveryで確認する形に変えた |
-| BoutGrip T102 | 「marginからの対称なattach」→「突進が隙間を詰め、実接触で成立。snapなし、相手は動かない」 |
-| BoutGrip T106 / BoutOrientation T124 | 解除の同時recoveryは、`direction`以外（phase / timer）が一致することを確認する |
-| BoutRingOut T170 | marginによるattachの引き込みは無くなったため、「縁ちょうどの相手を掴んでも、相手は動かずIN、ring-outしない」に変えた（後半のDrive部分は変更なし） |
-| BoutDrive T146 / pushDummyController T110 | Mode 2のdummyは、FREEで接触するとPushを出し、そのimpactでGripが負ける（Push > Gripのとおり）。testの目的はgrapple中のDriveとcooldownなので、dummyは最初のgrapple以降だけ使う |
-| 他（Orientation / Drive / Kuzushi / Tsuppari / CounterTransition / Tokudawara / visual state / 汗 / 11A art） | 成立tickを`GRIP_MIN_ATTEMPT_TICKS`ずらし、旧範囲の定数を、突進で届かない距離に置き換えた |
-
-# Browser / Runtime Smoke
-
-headless Chrome + CDP、GPU、Vite dev server。
-
-- `WrestlerView.apply`を読み取り専用でwrapした
-- CPUの入力は、test専用のhookで差し込んだ
-- fixtureでsimulationを差し替えた
-
-結果は **20 / 20 PASS**。
-
-| # | 確認 | 結果 |
-|---|---|---|
-| 1 | Enterでboutが始まる | PASS |
-| 2 | Shiftで、blueのattempt texture（reachのあいだだけ） | PASS |
-| 3 | 短い突進。移動0.1267 m | PASS |
-| 4 | 接触してから押しても、成功前にreach Snapshotが4枚、attemptのframeが出る | PASS |
-| 5 | 経過4でneutral grapple。距離0.7、相手のx = 0.35のまま。attemptは消える | PASS |
-| 6 | whiff: reach 7 Snapshot → recovery 12（idle texture）→ idle | PASS |
-| 7 | homingしない（CPUが0.058 m横へ動いても、facingとyは固定） | PASS |
-| 8 | Tsuppariの命中で、CPUのGripが同じtickに取り消される（recoveryの残り11）。attempt → idle sprite | PASS |
-| 9 | Pushのimpact（接触）で、CPUのGripが取り消される。Pushはそのまま続く（CPUのx 0.35 → 0.882） | PASS |
-| 10 | CPUのGripが、playerのCounter（window中）をneutralで取る | PASS |
-| 11 | Counterで負けた側はKuzushiにならない。CounterTransitionも汗も無い | PASS |
-| 12 | Kuzushiのplayerを、CPUのGripがMorozashi（holder CPU）。Kuzushiはそのtickに消費 | PASS |
-| 13 | 同時のGrip（両者reach中）→ neutral。両者ともattempt textureを表示 | PASS |
-| 14 | Tsuppari（product-tsuppari-blue-left）/ Push（idle sprite）/ Counter（product-counter-blue + 体の回転）は変わらない | PASS（3項目） |
-| 15 | Rでrestartできる | PASS |
-| 16 | console error、runtime error、失敗したrequestが無い | PASS |
-
-最初の2回の実行では、script側のbug（記録をclearした後に読んでいた、待機条件の誤り）でFAILが出た。修正後に全項目PASS。
-
-Screenshot（scratchpad `smoke11c\`、commitしない）:
-
-| 状況 | file |
-|---|---|
-| 突進の途中 | `01_blue_lunge_attempt_midway` |
-| 成功前のattempt | `02_contact_attempt_before_success` |
-| 最小attempt後の成功 | `03_grip_success_after_min_attempt` |
-| Tsuppari > Grip | `04_tsuppari_beats_grip` |
-| Push > Grip | `05_push_beats_grip` |
-| Grip > Counter | `06_grip_beats_counter` |
-| Kuzushi → Morozashi | `07_kuzushi_grip_morozashi` |
-| Grip vs Grip | `08_grip_vs_grip_both_reaching` / `09_grip_vs_grip_neutral` |
+- 接触からのGrip（test S4）: attemptがちょうど`GRIP_MIN_ATTEMPT_TICKS` = 4 tick → grappleのtickで両者が同時にsuccess
+  - smoke: blue `idle x1 > grip:attempt x9 > grapple:success`、red `idle x10 > grapple:success`。同じframeで切り替わる
+- 突進からのGrip: 着地したtickに両者がsuccess（test）
+- Morozashi: holder / disadvantagedとも同じsuccess texture（test S5、smoke 12）
+- Drive（test S6 / S7、smoke 11）: `grapple x2 > drive x223 > grapple x57`のあいだ、ずっとsuccess。idleへのflickerは無い
+- Release（test S8 / S9、smoke 13）: 最初のfreeのframeで、releaserは`grip/recovery:product-wrestler-blue`、相手はidle。success / attemptのtextureは出ない。recovery 12 tickの後はidle
+- release後の新しいGrip: 再びattempt → success（test、smoke 14）
 
 # Implementation Evidence
 
 | Design Requirement | Implemented As | Verified By |
 |---|---|---|
-| Gripの8 tickの突進 | `GRIP_REACH_TICKS = 8`。`effectiveMove`はreach中に`direction`を返す（既存のgrounded rule、Grip専用の加速なし）。recoveryは`ZERO_MOVE` | G1 / G4–G6 / G10、smoke 3・6 |
-| 最小attempt 4 | `GRIP_MIN_ATTEMPT_TICKS = 4`、`isGripEligible`（ticksRemainingから導く） | V1–V5、V6（presentation）、smoke 4・5 |
-| 実接触で成功 | `resolveFreeGripContest(…, contact !== null)`。`GRIP_RANGE_MARGIN`は削除 | C1–C5、T102、T170 |
-| facing / 方向の固定 | 押下時の`direction`をactionに保存。`updateFacing`はGrip reachを飛ばす。recoveryは通常 | G7–G9、smoke 7 |
-| contest helper | export済みの純関数`resolveFreeGripContest`（対称。cancelled + grappleを返す） | 純関数のpair表test（引数の入れ替え）、sweep |
-| Tsuppari > Grip | 命中tick × reach中 → 取り消し → recovery。命中は既存のresolver | TG1–TG6、sweep、smoke 8 |
-| Push > Grip | impact中 × 実接触 → 取り消し。startup / charge / recoveryは取り消さず、掴めない | PG1–PG7、sweep、smoke 9 |
-| Grip > Counter | Counter windowは掴める相手 → neutral、Kuzushiなし | GC1–GC5、sweep、smoke 10・11 |
-| Grip vs Grip | eligible + 相手がreach中 → neutral（空白なし） | GG1–GG3、sweep d = −9..+9、smoke 13 |
-| Kuzushi / Morozashi | `enterGripGrapple`でgrapple tickにだけ消費 | IK1–IK4、T94 / T98、BoutKuzushiFollowup G1、smoke 12 |
-| resolverの順序に依存しない | helperが1つの状態から決め、resolverは適用だけ | sweep 441 × 4、純関数の引数入れ替え |
-| 既存systemの維持 | Push / Tsuppari / Counter / Kuzushi / Grapple / Driveのcodeと値は変更なし | R1–R7、既存suite全体、prototypeとの一致211,978 tick |
+| exact source identity | recipeの`pixel_sha256` / `size` / `reviewed_file_sha256`。違えばfail closed | `test_user_source_identity`、`test_missing_or_changed_source_fails_closed`、Preflightの照合 |
+| measured FRONT / root / body core | 既存landmark registrationを、このsourceで実測。front 160.2、root (662, 639)、core (481, 139)–(781, 971) | `test_recorded_measurement_is_reproducible`、`load_recipe`の垂直検査 |
+| normalization | `et.normalize`（idleと同じ。FRONT = +X、root = pivot、body core = 2R、/4 downscale）。Scene側の補正は無い | `test_red_is_the_normalized_pose_and_blue_its_reflected_recolor`、TS metadataとexportの一致test、smoke 7 / 8 / 10 |
+| red → blue | `aw.mirror_part`（local-Y反射1回）+ `im.mawashi_mask` / `im.recolor`。runtimeでの反転・塗り替えは無い | `test_only_one_local_y_reflection`、alpha / mask外不変のtest、TSのpivot反射test |
+| temporary runtime paths | `public/assets/action/wrestler/grip-success-gate/red.png` / `blue.png`（2枚だけ）。permanentな`grip/`は使っていない | `test_exactly_two_files_from_the_one_red_pose`、`--check`、smokeの200応答 |
+| grapple / drive-only selection | `selectWrestlerArt`: `pose === 'grapple' \|\| pose === 'drive'` | S1–S9 test、smoke 3 / 4 / 11 |
+| attempt preservation | ACTION-11Aのselector・recipe・exporter・textureは不変。success以外は全部attemptのselectorへ渡す | `gripAttemptGateArt.test.ts` 12 PASS、attempt `--check`、attempt pixelの固定test、smoke 2 / 14 |
+| neutral / Morozashi same pose | roleで分岐しない | S4 / S5 test、smoke 12 |
+| release fallback | grapple終了 → pose grip/recovery または idle → idle sprite | S8 / S9 test、smoke 13 |
+| gameplay unchanged | `src/game/sumo/`・`src/game/input/`のdiffは0行。Snapshotにも書き込まない | `git diff`が空、Snapshot不変test、Grip / GripContest / Drive / Orientation / PushChargeの128 test |
+| Product art regression | idle / Tsuppari / Counter / Grip attemptのtexture・recipe・exporterは不変 | pixelの固定test、5 exporter `--check`、R1–R5 test、smoke 15 |
+
+# Verification
+
+| 項目 | 結果 |
+|---|---|
+| Grip success exporterのfocused test（`test_export_grip_success_gate.py`） | 18 / 18 OK |
+| wrestler-art suite全体（`unittest discover -s tools/wrestler_art/tests`） | 203 / 203 OK |
+| Grip success selectorのfocused test（`gripSuccessGateArt.test.ts`） | 12 / 12 PASS |
+| Grip attempt selectorのtest（`gripAttemptGateArt.test.ts`） | 12 / 12 PASS |
+| presentationのその他（Counter / Tsuppari / Kuzushi / visual state / idle art / HUD等） | 8 files、71 PASS |
+| Grip / Grapple / Drive gameplay regression（BoutGrip / BoutGripContest / BoutDrive / BoutOrientation / BoutPushCharge） | 5 files、128 PASS |
+| `pnpm test` | 29 files、498 PASS |
+| `pnpm build` | PASS（既存の500 kB chunk warningのみ） |
+| `git diff --check` | clean |
+| Grip success exporterの決定性 | 2回続けて書き出し、`--check`（pixel + PNG byte）が一致。fixtureでも2つのdirectoryへの書き出しが同一byte（test） |
+| `export_grip_success_gate.py --check` | ok（red / blue） |
+| `export_grip_attempt_gate.py` / `export_runtime_wrestlers.py` / `export_tsuppari.py` / `export_counter.py --check`、`measure_tsuppari_pose.py --check` | すべてexit 0 |
+| Product artが不変であること | `git diff`で`red.png` / `blue.png` / `tsuppari/` / `counter/` / `grip-attempt-gate/`に差分なし。pixelの固定test |
+| `src/game/sumo/`・`src/game/input/`が不変であること | diffなし（`GRIP_REACH_TICKS = 8` / `GRIP_MIN_ATTEMPT_TICKS = 4` / `GRIP_RECOVERY_TICKS = 12`はそのまま） |
+
+# Browser / Runtime Smoke
+
+headless Chrome 156 + CDP、GPU（`--use-angle=d3d11`）、Vite dev server、1920x1080。
+
+- 計測のために`WrestlerView.apply`を読み取り専用でwrapした
+- Morozashiだけ、CPU dummyの`nextIntent`を1 tickだけ差し替えて、Counterを空振りさせた（Kuzushi）
+- 撮影のために、grapple開始 / release直後のframeでsceneを一時停止した
+
+結果は **16 / 16 PASS**:
+
+| # | 確認 | 結果 |
+|---|---|---|
+| 1 | Enterでboutが始まる | PASS |
+| 2 | Shiftで、reachのあいだattempt pose | PASS（9 frame） |
+| 3 | 接触で最小attemptの後、neutral grapple | PASS |
+| 4 | 最初のgrapple frameで、両者が同時にsuccess texture。free中はsuccessが出ない | PASS |
+| 5 | 体の回転 = canonicalなfacing。互いに相手を向く（A 0、B π） | PASS |
+| 6 | bondの距離は0.70 mのまま | PASS |
+| 7 | textureの切り替えで中心が跳ばない（body x/y = canonicalな位置、swap時の移動 0 px） | PASS |
+| 8 | scaleが跳ばない（idle = success = 1.000000000625） | PASS |
+| 9 | 頭の見え方 | 目視の所見を下に記載（User Visual Gateで判断） |
+| 10 | pivotのoriginが正しく適用される（pivotのずれによる重なり無し） | PASS |
+| 11 | Driveでsuccess textureが変わらない | PASS |
+| 12 | Morozashi（holder = player）もsuccess texture | PASS |
+| 13 | releaseで、最初のfree frameからidle | PASS |
+| 14 | release後の新しいGripでattemptが出る | PASS |
+| 15 | Tsuppari左 / Counter（最大35.00°）/ Kuzushiの汗 / Push（idle sprite）は不変 | PASS |
+| 16 | Rでrestartできる | PASS |
+| 17 | console error・例外・失敗requestが無い。success gateのPNG 2枚は200 | PASS |
+
+最初の実行では2件がFAILした。どちらもscriptの問題だった:
+
+- Phaserの回転は±πで折り返すので、角度を差の正規化で比べるよう直した
+- 4xxの応答が1件あった。Task外の既存の`/favicon.ico` 404（`public/`にfaviconが無い）で、cacheを無効にした再現では出ない
+
+Screenshot（ローカルのscratchpad `smoke11d\`、commitしない）:
+
+- `01_neutral_immediately_after_success`
+- `02_neutral_settled`
+- `03_drive_while_grappled`
+- `04_morozashi_grapple`
+- `05_immediately_after_release`
+
+目視の所見（判断ではなく観察）:
+
+- 肩・腕は相手の体へ回り込んで見え、idle 2体が接するだけの形より、組んでいる形に近い
+- 頭は横顔の向きで、組みの軸の上でほぼ鼻先同士が接している
+  - 原因: blueはredのlocal-Y反射なので、向かい合ったペアは中央の垂線について鏡映対称になる。頭の左右のoffsetが両者で同じ側になり、頭が同じ高さで向かい合う
+  - 「頭が互いに相手の肩の脇へずれて組む」形にはならない。現在の配置（offset無し）の構造上の性質で、Taskの指示どおり位置の補正は加えていない
+- 自分の体との不自然な重なり・切れ目は見えない。中央で2人の頭の輪郭が少し重なる
+- release直後は、2人ともidle spriteに戻る
 
 # Changed Files
 
-Production:
+新規:
 
-- `src/game/sumo/BoutSimulation.ts`
-  - 定数
-  - Gripのaction（`direction`）
-  - `effectiveMove`
-  - 述語の一般化（`ActionFacts`）
-  - `isGripEligible`、`resolveFreeGripContest`、`enterGripGrapple`
-  - FREE tickの順序
-  - `updateFacing`
-  - copy / 解除 / advanceAction
-  - 旧`resolveGrip`の削除
-- `src/game/sumo/BoutTypes.ts`: Gripのactionに`direction`
+- `tools/wrestler_art/grip_success_gate_recipe.json`: source identity、測定値と根拠、標準のmask上限
+- `tools/wrestler_art/export_grip_success_gate.py`: `export_grip_attempt_gate.py`と同じ構造の決定的なexporter（`--check`あり）
+- `tools/wrestler_art/tests/test_export_grip_success_gate.py`
+- `public/assets/action/wrestler/grip-success-gate/red.png`
+- `public/assets/action/wrestler/grip-success-gate/blue.png`
+- `src/game/presentation/gripSuccessGateArt.ts`
+- `src/game/presentation/gripSuccessGateArt.test.ts`
 
-Test:
+変更:
 
-- `src/game/sumo/BoutGripContest.test.ts`（新規）
-- 更新: `BoutGrip` / `BoutDrive` / `BoutOrientation` / `BoutKuzushiFollowup` / `BoutRingOut` / `BoutTokudawara` / `BoutTsuppari` / `BoutCounterTransition` の各test
-- 更新: `src/game/input/pushDummyController.test.ts`
-- 更新: `src/game/presentation/gripAttemptGateArt.test.ts`、`kuzushiVisualEffect.test.ts`、`wrestlerVisualState.test.ts`
-
-Docs:
-
-- `docs/ARCHITECTURE.md`: ACTION-05AのGripの記述、新しい「Grip lunge + contest」の項、`step()`の順序、ACTION-11Aの注記
+- `src/game/scenes/WrestlerView.ts`: preloadにsuccessの2枚を追加し、選択を`selectWrestlerArt`（success wrapper）に替えた。header commentを更新
+- `src/game/presentation/gripAttemptGateArt.test.ts`: WrestlerViewの配線を確かめるassertion 1行だけを、新しいwrapper名に合わせた（attemptのselectorの挙動のtestは不変）
+- `docs/ARCHITECTURE.md`: 暫定（Visual Gate）のACTION-11D noteを1項目追加。ACTION-11Aのnoteで古くなった「成功はidle sprite」の1文を直した
+- `tools/wrestler_art/README.md`: tool表に1行と、暫定の節を追加
 - `docs/agent_handoff/CURRENT_COMPLETION_REPORT.md`
 
 変更していない:
 
-- `WrestlerView` / `BoutScene` / inputのproduction
-- art / asset
+- `src/game/sumo/`、`src/game/input/`
+- Grip attempt / idle / Tsuppari / Counterのtexture・recipe・exporter
 - `WRESTLER_PRODUCT_ART_SPEC.md`
 - `PROJECT_HANDOFF.md`、`CURRENT_TASK.md`
 
@@ -286,46 +227,39 @@ Docs:
 
 Design Deviations: NONE
 
-実装上の解釈を2点、明記する:
-
-1. 取り消されたGripは、取り消したtickに`GRIP_RECOVERY_TICKS`（12）のrecoveryへ入る。そのtickが12 tickのうちの最初になる
-   - Snapshotでは残り11。ここは既存の解除（release）のrecoveryと同じ数え方
-   - 時間切れのwhiffは、tickの終わりに12で入る（既存どおり）
-2. 解除によるGrip recoveryにも、shapeをそろえるために`direction`（解除時のfacing）を入れた。recoveryでは使わない
-
 # Unexpected Scope
 
-なし。
+- 既存の`/favicon.ico`の404（初回の読み込みでだけ出る）。Task外なので直していない
 
-- Mode 2のdummy（Pushを出すharness）がFREEで接触すると、新しいPush > Gripの規則により、playerのGripはimpactで負ける
-  - dummyのcodeは変えていない
-  - 2つのtest（T110 / T146）の使い方を合わせた
+# Known Untested Items
 
-# User Play Test: REQUIRED
+- 実機のTouch入力、GPU以外の描画経路
+- 見た目の受け入れ（下のUser Visual Gate）
 
-確認してほしい点:
+# User Visual Gate: REQUIRED
 
-1. Shiftが「短く踏み込んで掴みに行く」感じになったか
-2. 約0.10 m（惰性を含めて0.127 m）の突進の距離は合っているか
-3. 最小attempt 4 tick（約67 ms）で、attempt poseが読み取れるか
-4. 実接触で掴む方が、旧0.79 mの範囲より自然か（止まった相手には約0.80 mまで届く）
-5. Tsuppari > Gripは直感的か（命中でGripがrecoveryへ。命中の効果はそのまま）
-6. Push > Gripは直感的か（接触したimpactだけが取り消す。startup / recovery中のPushは掴めない）
-7. Grip > Counterは直感的か（neutral grapple。Counter側にKuzushiは無い）
-8. Grip同士が自然に決まるか（neutral）
-9. 4すくみ `Push > Tsuppari > Grip > Counter > Push` が分かりやすいか
-10. Push / Tsuppariのstartupとrecoveryを掴めないままにしたことは、許容できるか
-11. Counter / Tsuppari / Push / Kuzushiは、引き続き読み取れるか
+主な問い: 今のbondの距離で、redのsuccess poseと反射したblueが向かい合ったとき、「idleの2人が触れている」ではなく「組み合っている / Grip success」に見えるか。
 
-あわせて試してほしいこと（変更していない既存の挙動）:
+見てほしい点:
 
-- Mode 2（Push dummy）は、接触するとPushを出す
-- そのため、CPUにGripを当てるのは以前より難しく感じる可能性がある
+- 頭の位置が組んだ形に見えるか。今は横顔が軸の上で向かい合う（上の所見を参照）
+- 肩・胸のシルエットが、より密に組んでいると感じるか
+- 反射したblueは自然か、red / blueのペアとしてまとまっているか
+- pivot / scaleの切り替えが気にならないか
+- 0.70 mのbondの距離が、このartで見た目として許容できるか
+- Drive中もsuccess artが自然か
+- Morozashiで同じ仮のposeを使うのは許容できるか
+- attempt → successの遷移、release → idleの遷移が分かりやすいか
 
-Technical PASSは、Game Feelの受け入れではない。
+組んで見えない場合の次のTaskの候補（今回は実施しない）:
 
-# Git Delivery
+- pair内のpresentation offset
+- success poseの改良（反射のペアが鏡映対称になる点を含む）
+- 手の跡のVFX
 
-- stageするのはTask-owned fileだけ
-- 手順: commit `feat(gameplay): add grip lunge contest rules` → fetch → fast-forwardできることを確認 → push `origin/develop` → remote SHAを確認 → working treeがcleanか確認
-- `main`、`PROJECT_HANDOFF.md`、`CURRENT_TASK.md`は変更しない
+Technical PASSは、見た目の受け入れを意味しない。
+
+# Git delivery
+
+- Task-ownedのfileだけを明示的にstage → 1 commit（`art(action): add grip success visual gate`）
+- fetch → fast-forwardの安全を確認 → `origin/develop`へpush → remote SHAを確認 → working tree clean
