@@ -1,5 +1,5 @@
 Task-ID: ACTION-11D-GRIP-SUCCESS-ART-VISUAL-GATE
-Status: READY
+Status: REVIEWED
 Task-Type: PRESENTATION ART VISUAL GATE
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -744,3 +744,204 @@ pose === 'grapple' || pose === 'drive'
 Use the existing canonical grapple positions/facing first.
 
 Do not add hand VFX, pair offsets, bond-distance changes or gameplay changes in ACTION-11D.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-23
+Overall Result: TECHNICAL PASS / USER VISUAL GATE NOT YET ACCEPTED
+Accepted Technical Baseline: 5f10b3e2f4eb597ebef9411071de2685f4c447e7
+
+## Reported Implementation vs Design
+
+Accepted as aligned with ACTION-11D.
+
+Confirmed from Current Source / diff:
+
+- exact locally reviewed Grip-success source identity is enforced
+- one authored red success source is used
+- blue is derived offline by local-Y reflection + shared mawashi recolor
+- success art is selected only for visual pose grapple / drive
+- Grip attempt selector remains intact for grip/reach
+- release immediately drops success art
+- neutral and Morozashi use the same provisional success pose
+- no pair offset / head offset / extra rotation / VFX / timer was introduced
+- no src/game/sumo or src/game/input gameplay semantic change was introduced.
+
+## Temporary Grip Success Gate
+
+Current provisional runtime:
+
+```
+public/assets/action/wrestler/grip-success-gate/red.png
+public/assets/action/wrestler/grip-success-gate/blue.png
+```
+
+Metadata:
+
+- red: 160 x 183, pivot (83, 98)
+- blue: 160 x 183, pivot (83, 85)
+- body core: 123.076923 px.
+
+Pixel hashes:
+
+- red:
+  `afab5fbc87e586147ff9c35ae14aedddc0c78e436ef2142bd8cb0e906867ef0b`
+- blue:
+  `2336e895cfb92c625042f2af688d23d11c146bec70d51434849cb72122777a8b`
+
+This remains Visual Gate infrastructure, not permanent Product art.
+
+## Source Identity
+
+Accepted current source identity:
+
+- size: 1283 x 1226 RGBA
+- decoded RGBA SHA-256:
+  `0cedde984646384514e3b1609b69f04450d04c5446888da966de206a183e566e`
+- PNG file SHA-256:
+  `aace9edc143176673aabf78b66120885d54fb722aa2f50a0f3a031cb1f679793`
+
+This is the User-confirmed local source for ACTION-11D.
+
+## Measurement / Normalization
+
+Accepted technical measurement:
+
+- source FRONT: 160.2 degrees
+- root: (662, 639)
+- body core: (481, 139) - (781, 971)
+- runtime body core normalized to 123.076923 px.
+
+Standard shared mask limits were sufficient:
+
+- mask px: 2394
+- missed: 17 <= 60
+- fringe: 47 <= 120.
+
+No Grip-success-specific allowance or global relaxation was introduced.
+
+## Exact Display Semantics
+
+Accepted technical rule:
+
+```
+grip reach
+-> Grip attempt gate art
+
+grapple
+-> Grip success gate art
+
+drive
+-> Grip success gate art
+
+release / grip recovery
+-> existing idle Product art
+```
+
+No flicker back to idle during Drive.
+
+Neutral / Morozashi holder / Morozashi disadvantaged all intentionally use the same temporary success pose.
+
+## Gameplay Preservation
+
+Confirmed no Production diff under:
+
+- src/game/sumo/
+- src/game/input/.
+
+Therefore ACTION-11D does not change:
+
+- Grip 8-tick lunge
+- minimum attempt 4
+- contact-driven Grip success
+- Tsuppari > Grip
+- Push > Grip
+- Grip > Counter
+- Grip / Grip neutral
+- Kuzushi -> Morozashi
+- grapple bond distance
+- Grappled Orientation
+- Drive
+- release behavior.
+
+## Verification Review
+
+Reported and accepted:
+
+- focused success exporter: 18 / 18
+- full wrestler-art suite: 203 / 203
+- focused success selector: 12 / 12
+- Grip attempt selector: 12 / 12
+- other presentation regressions: 71 PASS
+- Grip / Grapple / Drive regression: 128 PASS
+- pnpm test: 29 files / 498 PASS
+- pnpm build: PASS
+- git diff --check: PASS
+- deterministic export / --check: PASS
+- all accepted Product exporter checks: PASS
+- browser/runtime smoke: PASS
+- Product assets unchanged.
+
+This is sufficient for Technical PASS.
+
+## Visual Gate Review from Submitted Screenshots
+
+Observed from the supplied neutral / Drive / Morozashi / release screenshots:
+
+Positive:
+- the pair reads more like an engaged grapple than the previous idle-sprite fallback
+- shoulders / forearms visually close the gap better
+- red and reflected blue form a coherent pair
+- scale / pivot continuity looks stable
+- Drive keeps the success silhouette without texture flicker
+- release returns cleanly to idle.
+
+Still unresolved:
+- the two heads remain almost exactly on the central axis
+- the faces / noses meet nearly head-on
+- the pair does not yet achieve the previously desired "head slips to the opponent's shoulder / heads offset to opposite sides" silhouette.
+
+This is consistent with the current construction:
+- blue is the reflected red
+- both use canonical 0.70 m bond positions
+- no pair-local offset or extra rotation exists.
+
+Therefore ACTION-11D is technically correct, but the Visual Gate should NOT yet be promoted as the final Grip Product baseline merely from this result.
+
+## User Visual Gate
+
+User decision still required.
+
+Primary question:
+
+> Is the current shoulder/arm improvement enough to accept this as the Grip-success baseline even though the heads remain central / nearly nose-to-nose?
+
+If YES:
+- ACTION-11D may be promoted later as Product Grip success art.
+
+If NO:
+- do not modify gameplay
+- next focused visual investigation should compare:
+  1. small pair-local presentation offset
+  2. small presentation-only success rotation / lateral head offset
+  3. revised success pose source
+  4. later hand-marker VFX.
+
+The first follow-up should be the smallest change that creates the desired head/shoulder interlock while preserving canonical Simulation positions.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+- ACTION-11C Grip gameplay
+- current 0.70 m gameplay bond
+- Grip attempt art
+- Push / Tsuppari / Counter / Kuzushi tuning.
+
+## Next Task Constraint
+
+Do not promote Grip success art to permanent Product paths/spec until User Visual Gate acceptance.
+
+If the User wants the heads offset rather than head-on, investigate presentation-only pair offset/rotation before changing gameplay geometry.
