@@ -1,39 +1,81 @@
-// Grip success symbolic forearm + hand VFX Visual Gate (ACTION-11K; replaces the connected-arm limbs of ACTION-11G /
-// 11J). Provisional, presentation-only; not an accepted Product art contract. Pure TypeScript; must not import Phaser.
-// Like the Kuzushi sweat, this is an anime-style symbol, not anatomy: a short, slightly bent forearm ending in a mitten
-// hand, laid over the waist / mawashi of the wrestler it grips and not connected to the gripping wrestler's body.
-// Each wrestler's view draws the one marker that lands on ITS OWN waist (the opponent's grip), so a pair shows exactly
-// two markers. Placement is target-local in units of the body radius R (+forward = FRONT, -forward = BACK / mawashi
-// knot, +lateral = wrestler RIGHT) from the target's displayed body center (canonical + Grip success display offset)
-// and its canonical facing. Both wrestlers use the same local anchor, so a face-to-face pair shows the two markers
-// point-symmetrically on complementary sides. The geometry assumes an aligned pair: shown only while both wrestlers
-// are in the success pose and neither is TURNING (ACTION-11J rule). No timer, no fade, no animation.
+// Grip success hand marker VFX Visual Gate (ACTION-11K symbolic markers; ACTION-11L authored art). Provisional,
+// presentation-only; not an accepted Product art contract. Pure TypeScript; must not import Phaser.
+// Like the Kuzushi sweat, this is a symbol, not anatomy: a User-authored forearm + fist illustration laid over the waist
+// / mawashi of the wrestler being gripped, not connected to the gripping wrestler's body. Each wrestler's view draws the
+// two markers that land on ITS OWN waist (the opponent's two hands), so a READY pair shows exactly four. Placement is
+// target-local in units of the body radius R (+forward = FRONT, -forward = BACK / mawashi knot, +lateral = wrestler
+// RIGHT) from the target's displayed body center (canonical + Grip success display offset) and its canonical facing:
+// the fist (hand anchor) sits on the mawashi and the forearm crosses the waist band at about 37 degrees. The RIGHT
+// marker uses the authored image, the LEFT one its offline top-bottom mirror, so both upper-arm stubs curl toward the
+// front of the target. The geometry assumes an aligned pair: shown only while both wrestlers are in the success pose and
+// neither is TURNING (ACTION-11J rule). No timer, no fade, no animation.
 import { isGripSuccessPose } from './gripSuccessGateArt.ts'
 import type { WrestlerVisualState } from './wrestlerVisualState.ts'
 
-export interface GripSuccessSymbol {
-  readonly elbowForwardR: number // forearm start (rounded elbow end)
-  readonly elbowLateralR: number
-  readonly handForwardR: number // hand center, on the mawashi
+export type GripMarkerSide = 'left' | 'right'
+export type GripMarkerArtId = 'authored' | 'mirrored'
+
+// One runtime texture with its hand (fist center) and elbow anchors in texture px
+// (tools/wrestler_art/export_grip_forearm_hand_gate.py; checked by its Python tests).
+export interface GripMarkerArt {
+  readonly id: GripMarkerArtId
+  readonly textureKey: string
+  readonly assetPath: string
+  readonly width: number
+  readonly height: number
+  readonly hand: { readonly x: number; readonly y: number }
+  readonly elbow: { readonly x: number; readonly y: number }
+}
+
+export const GRIP_MARKER_ART: Readonly<Record<GripMarkerArtId, GripMarkerArt>> = {
+  authored: {
+    id: 'authored',
+    textureKey: 'grip-symbol-authored',
+    assetPath: 'assets/action/wrestler/grip-symbol-authored-gate/forearm_hand.png',
+    width: 94,
+    height: 59,
+    hand: { x: 15.875, y: 42.125 },
+    elbow: { x: 73.1875, y: 30.5625 },
+  },
+  mirrored: {
+    id: 'mirrored',
+    textureKey: 'grip-symbol-authored-mirrored',
+    assetPath: 'assets/action/wrestler/grip-symbol-authored-gate/forearm_hand_mirrored.png',
+    width: 94,
+    height: 59,
+    hand: { x: 15.875, y: 16.875 }, // authored anchors reflected: y -> 59 - y
+    elbow: { x: 73.1875, y: 28.4375 },
+  },
+}
+
+export function allGripMarkerArts(): GripMarkerArt[] {
+  return [GRIP_MARKER_ART.authored, GRIP_MARKER_ART.mirrored]
+}
+
+export interface GripSuccessMarker {
+  readonly side: GripMarkerSide
+  readonly art: GripMarkerArtId
+  readonly handForwardR: number // fist center, on the mawashi
   readonly handLateralR: number
-  readonly widthR: number // forearm thickness
-  readonly handRadiusR: number
-  readonly bend: number // forearm bulge toward the thumb side, as a fraction of the forearm length
+  readonly elbowForwardR: number // forearm end, outside the waist
+  readonly elbowLateralR: number
 }
 
-// On the target's right flank, the hand landing on the back half of the waist (mawashi).
-export const GRIP_SUCCESS_SYMBOL: GripSuccessSymbol = {
-  elbowForwardR: -0.1,
-  elbowLateralR: 0.95,
-  handForwardR: -0.55,
-  handLateralR: 0.6,
-  widthR: 0.2,
-  handRadiusR: 0.18,
-  bend: 0.12,
+// Elbow -> hand = (-0.42, -/+0.56): 0.70 R long, 36.87 degrees off the target's local lateral (waist band) axis.
+export const GRIP_SUCCESS_MARKERS: readonly GripSuccessMarker[] = [
+  { side: 'right', art: 'authored', handForwardR: -0.45, handLateralR: 0.62, elbowForwardR: -0.03, elbowLateralR: 1.18 },
+  { side: 'left', art: 'mirrored', handForwardR: -0.45, handLateralR: -0.62, elbowForwardR: -0.03, elbowLateralR: -1.18 },
+]
+
+export function gripMarkerLengthR(marker: GripSuccessMarker): number {
+  return Math.hypot(marker.handForwardR - marker.elbowForwardR, marker.handLateralR - marker.elbowLateralR)
 }
 
-export function gripSuccessSymbolLengthR(symbol: GripSuccessSymbol): number {
-  return Math.hypot(symbol.handForwardR - symbol.elbowForwardR, symbol.handLateralR - symbol.elbowLateralR)
+// Angle (degrees) between the elbow -> hand direction and the target's local lateral axis (the mawashi band).
+export function gripMarkerWaistAngleDeg(marker: GripSuccessMarker): number {
+  const df = Math.abs(marker.handForwardR - marker.elbowForwardR)
+  const dl = Math.abs(marker.handLateralR - marker.elbowLateralR)
+  return (Math.atan2(df, dl) * 180) / Math.PI
 }
 
 // Pair-level visibility (same answer for both wrestlers): success pose on both sides and neither TURNING.
@@ -41,13 +83,13 @@ export function gripSuccessPairSymbolVisible(self: WrestlerVisualState, opponent
   return isGripSuccessPose(self) && isGripSuccessPose(opponent) && !self.turning && !opponent.turning
 }
 
-export interface GripSuccessSymbolPlacement {
-  readonly elbow: { x: number; y: number } // canvas px (texture origin)
-  readonly hand: { x: number; y: number }
-  readonly angle: number // elbow -> hand, canvas radians
-  readonly lengthPx: number
-  readonly widthPx: number
-  readonly handRadiusPx: number
+export interface GripMarkerPlacement {
+  readonly art: GripMarkerArt
+  readonly hand: { x: number; y: number } // canvas px; the texture origin is the hand anchor
+  readonly elbow: { x: number; y: number }
+  readonly rotation: number // canvas radians applied to the texture
+  readonly scale: number // uniform texture scale
+  readonly lengthPx: number // displayed elbow -> hand distance
 }
 
 function localToCanvas(
@@ -64,21 +106,26 @@ function localToCanvas(
   return { x: center.x + f * c - l * s, y: center.y + f * s + l * c }
 }
 
-// Canvas placement of the marker on a target wrestler from its displayed body center (px) and canonical facing.
-export function gripSuccessSymbolPlacement(
+// Canvas placement of one marker on a target wrestler from its displayed body center (px) and canonical facing:
+// the texture's hand anchor sits on the hand point and its elbow -> hand axis follows the marker direction.
+export function gripMarkerPlacement(
+  marker: GripSuccessMarker,
   targetDisplayCenterPx: { x: number; y: number },
   targetFacing: number,
   bodyRadiusPx: number,
-  symbol: GripSuccessSymbol = GRIP_SUCCESS_SYMBOL,
-): GripSuccessSymbolPlacement {
-  const elbow = localToCanvas(targetDisplayCenterPx, symbol.elbowForwardR, symbol.elbowLateralR, targetFacing, bodyRadiusPx)
-  const hand = localToCanvas(targetDisplayCenterPx, symbol.handForwardR, symbol.handLateralR, targetFacing, bodyRadiusPx)
+): GripMarkerPlacement {
+  const art = GRIP_MARKER_ART[marker.art]
+  const hand = localToCanvas(targetDisplayCenterPx, marker.handForwardR, marker.handLateralR, targetFacing, bodyRadiusPx)
+  const elbow = localToCanvas(targetDisplayCenterPx, marker.elbowForwardR, marker.elbowLateralR, targetFacing, bodyRadiusPx)
+  const lengthPx = Math.hypot(hand.x - elbow.x, hand.y - elbow.y)
+  const texDx = art.hand.x - art.elbow.x
+  const texDy = art.hand.y - art.elbow.y
   return {
-    elbow,
+    art,
     hand,
-    angle: Math.atan2(hand.y - elbow.y, hand.x - elbow.x),
-    lengthPx: Math.hypot(hand.x - elbow.x, hand.y - elbow.y),
-    widthPx: symbol.widthR * bodyRadiusPx,
-    handRadiusPx: symbol.handRadiusR * bodyRadiusPx,
+    elbow,
+    rotation: Math.atan2(hand.y - elbow.y, hand.x - elbow.x) - Math.atan2(texDy, texDx),
+    scale: lengthPx / Math.hypot(texDx, texDy),
+    lengthPx,
   }
 }

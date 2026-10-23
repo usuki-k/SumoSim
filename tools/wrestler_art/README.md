@@ -8,6 +8,7 @@ Offline review and export tools for SumoSim Product wrestler art:
 | `export_counter.py` | ACTION-08C | **current runtime export** of the Product Counter pose (red + derived blue; accepted) ([below](#product-counter-pose-action-08c)) |
 | `export_grip_attempt_gate.py` | ACTION-11A | **temporary Visual Gate** export of the Grip attempt pose (red + derived blue; provisional, not Product art) ([below](#grip-attempt-pose-visual-gate-action-11a-provisional)) |
 | `export_grip_success_gate.py` | ACTION-11D | **temporary Visual Gate** export of the Grip success / grappled pose (red + derived blue; provisional, not Product art) ([below](#grip-success-pose-visual-gate-action-11d-provisional)) |
+| `export_grip_forearm_hand_gate.py` | ACTION-11L | **temporary Visual Gate** export of the User-authored forearm + fist Grip marker (authored + offline mirror; provisional, not Product art) ([below](#grip-forearm--hand-marker-visual-gate-action-11l-provisional)) |
 | `export_runtime_wrestlers.py` | ART-WRESTLER-04B | **current runtime export**: red master + derived blue ([below](#runtime-export-art-wrestler-04b-red-master)) |
 | `preview_idle_mirror_workflow.py` | ART-WRESTLER-04A | mirror / recolor comparison (history; red-master branch promoted) |
 | `preview_dual_rigid_wrestlers.py` | ART-WRESTLER-03A | two separately authored sprites as rigid objects (history / comparison; runtime no longer uses the blue source) ([below](#dual-rigid-sprites-art-wrestler-03a)) |
@@ -424,6 +425,26 @@ PY tools/wrestler_art/export_grip_success_gate.py --check    # verify the commit
 - Runtime: `src/game/presentation/gripSuccessGateArt.ts` mirrors the two sizes / pivots (checked by
   `tests/test_export_grip_success_gate.py`); its `selectWrestlerArt` shows the pose for `grapple` / `drive` and
   otherwise delegates to the Grip attempt selection. No pair offset; canonical position / facing only.
+
+## Grip forearm + hand marker Visual Gate (ACTION-11L, provisional)
+
+A temporary Visual Gate for the Grip success hand markers: one User-authored forearm + fist illustration, laid as a
+detached symbol over each wrestler's mawashi (two per wrestler). Not Product art until the User Visual Gate accepts
+it. No wrestler body texture or recipe is touched.
+
+```bash
+PY tools/wrestler_art/export_grip_forearm_hand_gate.py            # write public/assets/action/wrestler/grip-symbol-authored-gate/
+PY tools/wrestler_art/export_grip_forearm_hand_gate.py --check    # verify the committed two PNGs, write nothing
+```
+
+- Input: `input.local/candidate_grip_forearm_hand_symbol.png` only (never committed; identity = decoded RGBA pixel
+  SHA-256 in `grip_forearm_hand_gate_recipe.json`).
+- Pipeline: alpha > 8 content bbox (checked against the recipe) + 16 px transparent padding, canvas rounded up to the
+  factor, exact premultiplied BOX downscale by 16 (no recolor / tone / sharpen / blur); `forearm_hand_mirrored.png` is
+  the same runtime image flipped top-bottom.
+- Anchors: fist center (290, 752) and elbow (1207, 567) source px, measured once; runtime px = (p - crop origin) / 16
+  (mirrored: y -> H - y). `src/game/presentation/gripSuccessSymbolVfx.ts` mirrors the sizes / anchors (checked by
+  `tests/test_export_grip_forearm_hand_gate.py`).
 
 ## Idle mirror + mawashi recolor (ART-WRESTLER-04A, comparison / history)
 

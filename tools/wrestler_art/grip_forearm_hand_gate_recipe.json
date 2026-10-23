@@ -1,0 +1,27 @@
+{
+  "recipe_schema": 1,
+  "name": "grip-forearm-hand-gate-11l",
+  "status": "Temporary Grip success hand marker Visual Gate (ACTION-11L). One User-authored forearm + fist illustration, shown as a detached symbolic grip marker over the mawashi. Not Product art until the User Visual Gate accepts it.",
+  "note": "Deterministic preparation only: exact source identity, alpha > 8 content crop with transparent padding, exact integer premultiplied BOX downscale, plus one offline top-bottom mirror for the opposite side. No recolor / tone match / redraw / sharpen / blur.",
+  "source": {
+    "file": "candidate_grip_forearm_hand_symbol.png",
+    "size": [1536, 1024],
+    "pixel_sha256": "2f00cba4d6256028fdbd3c545eb5c7923d030d89881a5f3680efe00c67b0dba1",
+    "reviewed_file_sha256": "5f59a0c97e642cbdef3d5ae087ac5abc56e12ebbaff2279d9ca5848373b6543b",
+    "alpha_threshold": 8,
+    "content_bbox_px": [52, 94, 1510, 991],
+    "anchors": {
+      "note": "Measured once from the source (visual, 1 px). hand = center of the fist (middle of its outline extent); elbow = the joint on the forearm axis, midway between the inner elbow crease (1133, 400) and the outer elbow corner (1280, 733).",
+      "hand_source_px": [290, 752],
+      "elbow_source_px": [1207, 567]
+    }
+  },
+  "export": {
+    "padding_px": 16,
+    "downscale": 16,
+    "outputs": {
+      "forearm_hand.png": "authored orientation",
+      "forearm_hand_mirrored.png": "the same runtime image mirrored top-bottom (y -> H - y), derived offline for the opposite waist side"
+    }
+  }
+}

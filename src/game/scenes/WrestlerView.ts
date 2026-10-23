@@ -14,10 +14,10 @@
 // rigid way at the canonical facing (no extra turn); a release returns to the idle sprite.
 // ACTION-11E / 11F Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
 // presentation-only forward + lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
-// ACTION-11K Visual Gate (replaces the ACTION-11G / 11J connected arms): with that success pose, one symbolic
-// forearm + hand marker (gripSuccessSymbolVfx) is laid over this wrestler's own waist / mawashi - the opponent's grip -
-// from the displayed body center and the canonical facing, above both bodies. Shown only while both wrestlers are
-// READY (hidden for both while either is TURNING) and hidden on every other pose (no timer, no fade).
+// ACTION-11K / 11L Visual Gate (replaces the ACTION-11G / 11J connected arms): with that success pose, two
+// User-authored forearm + fist markers (gripSuccessSymbolVfx) are laid over this wrestler's own waist / mawashi - the
+// opponent's two hands - from the displayed body center and the canonical facing, above both bodies. Shown only while
+// both wrestlers are READY (hidden for both while either is TURNING) and hidden on every other pose (no timer, no fade).
 import Phaser from 'phaser'
 import {
   PRODUCT_WRESTLER_ART,
@@ -33,10 +33,11 @@ import {
   selectWrestlerArt,
 } from '../presentation/gripSuccessGateArt.ts'
 import {
-  GRIP_SUCCESS_SYMBOL,
+  GRIP_MARKER_ART,
+  GRIP_SUCCESS_MARKERS,
+  allGripMarkerArts,
+  gripMarkerPlacement,
   gripSuccessPairSymbolVisible,
-  gripSuccessSymbolLengthR,
-  gripSuccessSymbolPlacement,
 } from '../presentation/gripSuccessSymbolVfx.ts'
 import { allProductTsuppariArts } from '../presentation/productTsuppariArt.ts'
 import { KUZUSHI_SWEAT_DROPS, kuzushiSweatOffsetPx, kuzushiSweatVisual } from '../presentation/kuzushiVisualEffect.ts'
@@ -46,7 +47,7 @@ import type { ParticipantState } from '../sumo/BoutTypes.ts'
 export const WRESTLER_SHADOW_DEPTH = 1
 export const WRESTLER_BODY_DEPTH = 2
 export const WRESTLER_EFFECT_DEPTH = 2.5 // above both bodies, below the debug overlays (3) and the HUD / texts (4)
-export const GRIP_SYMBOL_DEPTH = 2.3 // Grip success marker: above both bodies, below the Kuzushi sweat (2.5)
+export const GRIP_SYMBOL_DEPTH = 2.3 // Grip success hand markers: above both bodies, below the Kuzushi sweat (2.5)
 
 // Near-circular soft shadow in units of the body radius R, offset in world space (down-right).
 const SHADOW_SIZE = { x: 2.25, y: 2.0 }
@@ -56,14 +57,6 @@ const SHADOW_OFFSET = { x: 0.07, y: 0.12 }
 const SWEAT_FILL = 0xaee8ff
 const SWEAT_RIM = 0x2a78c0
 const SWEAT_TEXTURE_SCALE = 4
-// Grip success symbol: the mid / shade skin tones of the tone-matched success body (ACTION-11H, skin P50 / P20),
-// a warm highlight, the wrestler outline colour; outline width in R and texture supersampling.
-const GRIP_SYMBOL_SKIN = 0xf5b47d
-const GRIP_SYMBOL_SHADE = 0xd38c56
-const GRIP_SYMBOL_HIGHLIGHT = 0xfde0b8
-const GRIP_SYMBOL_OUTLINE = 0x231612
-const GRIP_SYMBOL_OUTLINE_R = 0.045
-const GRIP_SYMBOL_TEXTURE_SCALE = 4
 
 export function preloadProductWrestlers(scene: Phaser.Scene): void {
   for (const art of [
@@ -72,6 +65,7 @@ export function preloadProductWrestlers(scene: Phaser.Scene): void {
     ...allProductCounterArts(),
     ...allGripAttemptGateArts(),
     ...allGripSuccessGateArts(),
+    ...allGripMarkerArts(),
   ]) {
     scene.load.image(art.textureKey, `${import.meta.env.BASE_URL}${art.assetPath}`)
   }
@@ -114,63 +108,11 @@ function ensureSweatTexture(scene: Phaser.Scene, R: number): string {
   return key
 }
 
-// The symbolic forearm (elbow at the origin, slightly bent toward the thumb side) + mitten hand with a thumb bump,
-// drawn once at GRIP_SYMBOL_TEXTURE_SCALE x along +x: outline, shade, then the lit skin offset toward the thumb side,
-// two finger creases and one highlight (cel-shaded like the wrestler art). Returns the key and the elbow origin.
-function ensureGripSymbolTexture(scene: Phaser.Scene, R: number): { key: string; origin: { x: number; y: number } } {
-  const symbol = GRIP_SUCCESS_SYMBOL
-  const k = GRIP_SYMBOL_TEXTURE_SCALE
-  const length = gripSuccessSymbolLengthR(symbol) * R * k
-  const w = symbol.widthR * R * k
-  const hr = symbol.handRadiusR * R * k
-  const o = Math.max(2, GRIP_SYMBOL_OUTLINE_R * R * k)
-  const tw = Math.ceil(length + hr * 2.6 + 2 * o + w + 8)
-  const th = Math.ceil(Math.max(w, 2 * hr) * 2.2 + 2 * o + 8)
-  const ex = w / 2 + o + 4
-  const ey = th / 2 + hr * 0.15
-  const hx = ex + length
-  const key = `grip-symbol-${Math.round(R)}`
-  if (!scene.textures.exists(key)) {
-    const g = scene.make.graphics({ x: 0, y: 0 }, false)
-    // quadratic curve elbow -> hand bulging toward -y (the thumb side)
-    const curve = (t: number) => ({
-      x: (1 - t) * (1 - t) * ex + 2 * (1 - t) * t * ((ex + hx) / 2) + t * t * hx,
-      y: (1 - t) * (1 - t) * ey + 2 * (1 - t) * t * (ey - symbol.bend * length) + t * t * ey,
-    })
-    const forearm = (r: number, color: number, dy = 0) => {
-      g.fillStyle(color, 1)
-      for (let i = 0; i <= 40; i++) {
-        const p = curve(i / 40)
-        g.fillCircle(p.x, p.y + dy, r)
-      }
-    }
-    const hand = (grow: number, color: number, dy = 0) => {
-      g.fillStyle(color, 1)
-      g.fillEllipse(hx + hr * 0.15, ey + dy, 2.2 * hr + 2 * grow, 2 * hr + 2 * grow)
-      g.fillCircle(hx - hr * 0.15, ey - hr * 0.92 + dy, hr * 0.42 + grow)
-    }
-    forearm(w / 2 + o, GRIP_SYMBOL_OUTLINE)
-    hand(o, GRIP_SYMBOL_OUTLINE)
-    forearm(w / 2, GRIP_SYMBOL_SHADE)
-    hand(0, GRIP_SYMBOL_SHADE)
-    forearm((w / 2) * 0.78, GRIP_SYMBOL_SKIN, -w * 0.12)
-    hand(-hr * 0.16, GRIP_SYMBOL_SKIN, -hr * 0.14)
-    g.lineStyle(Math.max(2, o * 0.7), GRIP_SYMBOL_OUTLINE, 1)
-    for (const k2 of [-0.35, 0.2]) g.lineBetween(hx + hr * 0.55, ey + hr * k2, hx + hr * 1.05, ey + hr * (k2 + 0.05))
-    const mid = curve(0.42)
-    g.fillStyle(GRIP_SYMBOL_HIGHLIGHT, 1)
-    g.fillEllipse(mid.x - w * 0.08, mid.y - w * 0.26, w * 0.4, w * 0.16)
-    g.generateTexture(key, tw, th)
-    g.destroy()
-  }
-  return { key, origin: { x: ex / tw, y: ey / th } }
-}
-
 export class WrestlerView {
   private readonly shadow: Phaser.GameObjects.Image
   private readonly body: Phaser.GameObjects.Image
   private readonly sweat: Phaser.GameObjects.Image[]
-  private readonly gripSymbol: Phaser.GameObjects.Image
+  private readonly gripMarkers: Phaser.GameObjects.Image[]
   private readonly R: number
   private readonly idleArt: ProductWrestlerArt
   private shownTextureKey = ''
@@ -194,13 +136,15 @@ export class WrestlerView {
         .setDepth(WRESTLER_EFFECT_DEPTH)
         .setVisible(false),
     )
-    const symbolTexture = ensureGripSymbolTexture(scene, bodyRadiusPx)
-    this.gripSymbol = scene.add
-      .image(0, 0, symbolTexture.key)
-      .setOrigin(symbolTexture.origin.x, symbolTexture.origin.y)
-      .setScale(1 / GRIP_SYMBOL_TEXTURE_SCALE)
-      .setDepth(GRIP_SYMBOL_DEPTH)
-      .setVisible(false)
+    // origin = the texture's hand anchor, so the fist stays on its mawashi point under any rotation / scale
+    this.gripMarkers = GRIP_SUCCESS_MARKERS.map((marker) => {
+      const art = GRIP_MARKER_ART[marker.art]
+      return scene.add
+        .image(0, 0, art.textureKey)
+        .setOrigin(art.hand.x / art.width, art.hand.y / art.height)
+        .setDepth(GRIP_SYMBOL_DEPTH)
+        .setVisible(false)
+    })
   }
 
   // `positionPx` is the canonical center already converted to canvas pixels; facing is applied exactly.
@@ -222,14 +166,15 @@ export class WrestlerView {
       positionPx.y + display.y + SHADOW_OFFSET.y * this.R,
     )
     this.shadow.setRotation(participant.facing)
-    // The opponent's grip marker on this wrestler's waist: from the displayed (offset) body center and canonical facing.
+    // The opponent's two grip markers on this wrestler's waist: from the displayed (offset) body center and facing.
     const symbolVisible = gripSuccessPairSymbolVisible(state, opponentState)
-    this.gripSymbol.setVisible(symbolVisible)
-    if (symbolVisible) {
-      const center = { x: positionPx.x + display.x, y: positionPx.y + display.y }
-      const placed = gripSuccessSymbolPlacement(center, participant.facing, this.R)
-      this.gripSymbol.setPosition(placed.elbow.x, placed.elbow.y).setRotation(placed.angle)
-    }
+    const center = { x: positionPx.x + display.x, y: positionPx.y + display.y }
+    GRIP_SUCCESS_MARKERS.forEach((marker, i) => {
+      this.gripMarkers[i].setVisible(symbolVisible)
+      if (!symbolVisible) return
+      const placed = gripMarkerPlacement(marker, center, participant.facing, this.R)
+      this.gripMarkers[i].setPosition(placed.hand.x, placed.hand.y).setRotation(placed.rotation).setScale(placed.scale)
+    })
     // Overlay only: placed from the canonical center / facing (not the Counter body turn); drops stay upright.
     const sweat = kuzushiSweatVisual(this.idleArt.id, state)
     sweat.drops.forEach((drop, i) => {
