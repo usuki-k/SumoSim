@@ -14,7 +14,7 @@
 // rigid way at the canonical facing (no extra turn); a release returns to the idle sprite.
 // ACTION-11E / 11F Visual Gate: while that success pose is shown, the body and its shadow are drawn at a small
 // presentation-only forward + lateral offset from the canonical center (gripSuccessDisplayOffsetPx); zero otherwise.
-// ACTION-11K / 11L / 11M Visual Gate (replaces the ACTION-11G / 11J connected arms): with that success pose, two
+// ACTION-11K / 11L / 11M / 11N Visual Gate (replaces the ACTION-11G / 11J connected arms): with that success pose, two
 // User-authored forearm + fist markers (gripSuccessSymbolVfx, the set of this wrestler's art) are laid over this
 // wrestler's own waist / mawashi - the opponent's two hands - from the displayed body center and the canonical facing,
 // above both bodies. Shown only while both wrestlers are READY (hidden for both while either is TURNING) and hidden on
