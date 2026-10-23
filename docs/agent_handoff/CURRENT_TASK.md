@@ -1,69 +1,55 @@
-Task-ID: ACTION-11I-GRIP-SUCCESS-LIMB-VFX-POSITION-TUNE
+Task-ID: ACTION-11J-GRIP-SUCCESS-LIMB-VFX-READY-ONLY
 Status: READY
 Task-Type: PRESENTATION VISUAL TUNE
 Executor: Claude Code / Codex
 Target-Branch: develop
-Source-Baseline: f062164afa668c2329f2203ddb46c1d3b3183788
-Review-Handoff: ACTION-11H technical PASS; User Visual Gate accepted the tone correction as good enough for now. ACTION-11G limb VFX remains visually rejected. ACTION-11F pair compression remains accepted baseline.
+Source-Baseline: f0816e7439b72edcf6c5c5a11d4927208c9e1ff5
+Review-Handoff: ACTION-11I stopped before commit/push because tuned limbs floated badly during Grappled Orientation TURNING. Repository remained unchanged. User selected the minimal fix: adopt the improved settled/READY limb geometry from the 11I WIP, but hide both wrestlers' limb VFX whenever either wrestler is TURNING.
 Handoff-Mode: GITHUB
 
-# ACTION-11I — Grip Success Limb VFX Position Tune
+# ACTION-11J — Grip Success Limb VFX: Settled Geometry + Pair TURNING Hide
 
 ## Purpose
 
-Rework only the position / orientation / layering of the existing Grip-success arm/hand VFX so the pair reads more like two wrestlers actively wrapping and holding each other.
+Finish the rejected ACTION-11I visual tune safely.
 
-User feedback on ACTION-11G:
+User-approved direction:
 
-- the procedural limb VFX is technically functional but visually wrong
-- current arms look like detached horizontal bars laid across the bodies
-- desired hand/arm relationship is closer to the latest User reference:
-  - arms originate from the wrestler body
-  - one arm wraps higher around the opponent's upper torso / shoulder area
-  - another arm reaches lower around the opponent's side / waist / mawashi area
-  - partial occlusion by the opponent body is acceptable and often preferable
-  - it is NOT necessary for the whole hand/forearm to remain visible.
+1. keep the improved arm/hand geometry that looked better once both wrestlers were settled / facing each other;
+2. while either wrestler is still TURNING in a grapple, hide arm/hand VFX for BOTH wrestlers;
+3. once both are READY, show the tuned arm/hand VFX for both again.
 
-This is a Presentation-only visual tune.
+This is Presentation-only.
 
-Do not change gameplay.
+Do not change gameplay, canonical positions, grapple bond, facing, or Grappled Orientation.
+
+---
+
+# Why ACTION-11I Stopped
+
+ACTION-11I correctly hit its Stop Condition.
+
+Observed problem:
+
+- the longer tuned arm geometry looked good in settled neutral / Drive / Morozashi;
+- during TURNING, the limb geometry still followed each wrestler's own facing;
+- because the geometry assumes a face-to-face grip, the turning wrestler's arms projected into empty space, in one case by roughly 2R;
+- the other wrestler's arm could also miss the opponent while the pair was not yet aligned.
+
+This was a presentation-state mismatch, not a gameplay bug.
+
+Do not try to solve it by changing Grappled Orientation.
 
 ---
 
 # Accepted Baselines — Preserve
 
-## ACTION-11H Tone Match
-
-Accepted by User for now.
-
-Do not reopen:
-
-- Grip-success skin tone correction
-- selected Candidate C levels curve
-- Grip-success runtime dimensions / pivot / body core
-- red -> blue derivation.
-
-Current corrected Grip success assets remain as-is.
-
-## ACTION-11F Pair Compression
-
-Accepted by User.
-
-Preserve exactly:
-
-```
-GRIP_SUCCESS_FORWARD_OFFSET_R = +0.14
-GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
-```
-
-Do not retune these in ACTION-11I.
-
 ## ACTION-11C Gameplay
 
-Preserve exactly:
+Preserve:
 
 - Grip lunge / timing
-- contact success
+- contact-driven Grip success
 - Push / Tsuppari / Counter / Grip contest rules
 - canonical 0.70 m grapple bond
 - Grappled Orientation
@@ -78,286 +64,318 @@ src/game/sumo/
 src/game/input/
 ```
 
----
+## ACTION-11F Pair Compression
 
-# Current Rejected Limb VFX Baseline
-
-Current ACTION-11G uses two procedural limbs per wrestler:
+Keep exactly:
 
 ```
-FAR:
-start (0.18, +0.42)
-end   (0.82, +0.25)
-width 0.20 R
-hand  0.15 R
-
-NEAR:
-start (0.22, -0.65)
-end   (1.12, -0.58)
-width 0.22 R
-hand  0.16 R
+GRIP_SUCCESS_FORWARD_OFFSET_R = +0.14
+GRIP_SUCCESS_LATERAL_OFFSET_R = -0.20
 ```
 
-Depths:
+## ACTION-11H Tone Match
 
-```
-far = 1.9
-body = 2.0
-near = 2.2
-```
+Keep the accepted Grip-success tone correction exactly.
 
-These values are NOT visually accepted.
+Do not change:
+- tone curve
+- skin mask
+- runtime hashes by re-exporting
+- source art
+- exporter/recipe.
 
-ACTION-11I may change:
-- limb start/end points
-- limb angle
-- width / hand size if needed
-- far/near assignment
-- fixed depth values
-- whether part of an arm is intentionally hidden by body overlap.
+## ACTION-11G Existing Limb VFX
 
-Do not change the underlying success body placement.
+ACTION-11G was technically valid but visually rejected.
+
+ACTION-11J replaces its visual geometry with the improved settled geometry developed during the stopped 11I work.
 
 ---
 
-# Visual Goal
+# Optional Local WIP Patch
 
-The revised VFX should read like:
+The stopped ACTION-11I work was saved locally as:
 
-> each wrestler has arms wrapped around the opponent rather than bars floating over the pair.
+```
+C:\Users\Kazu\AppData\Local\Temp\claude\e--develop-CrazyGames-SumoSim\db9a9f45-e5aa-49b3-8e5b-2e28cda7a821\scratchpad\action11i_wip.patch
+```
 
-Target relationship:
+If this exact patch still exists on the same machine, it may be inspected or applied as a starting point.
+
+Do NOT rely on it as the sole Source of Truth.
+
+Before applying:
+- inspect the patch;
+- confirm it only contains intended ACTION-11I presentation changes;
+- do not import scratch/debug-only code blindly.
+
+If the patch is missing, reconstruct the settled geometry from this Task / previous report rather than stopping.
+
+---
+
+# Settled / READY Limb Geometry
+
+The ACTION-11I WIP improved the arm model by splitting each visible arm into two segments:
+
+```
+shoulder -> elbow
+elbow -> hand
+```
+
+Visual intent:
+
+- shoulder -> elbow sits behind the body;
+- body overlap hides the root / cut-face;
+- elbow -> hand sits above the bodies;
+- hand visibly lands on the opponent;
+- high arm reaches opponent upper torso / shoulder;
+- low arm wraps farther toward opponent flank / waist / mawashi.
+
+Adopt that improved settled geometry rather than the ACTION-11G horizontal-bar geometry.
+
+Do NOT revert to the old ACTION-11G single straight capsule if the WIP geometry can be recovered/reconstructed safely.
+
+---
+
+# Geometry Requirements
+
+Exact numeric values are not prescribed because the stopped 11I work was never committed as an accepted baseline.
+
+However, preserve the WIP's successful settled-state design principles:
 
 ## High arm
 
-- originates around the wrestler's shoulder / upper side
-- crosses toward the opponent's upper torso / shoulder / upper back region
-- may disappear partially behind the opponent body
-- only the useful visible forearm / hand segment needs to remain visible.
+- shorter than the low arm;
+- originates under/near own upper-side body;
+- elbow wraps around opponent upper-side silhouette;
+- hand lands around opponent upper torso / shoulder / upper flank;
+- root hidden beneath own body;
+- distal portion visible above body where useful.
 
 ## Low arm
 
-- originates lower on the wrestler's side
-- wraps toward the opponent's flank / waist / mawashi region
-- hand should visually land near the opponent torso / waist / mawashi
-- partial overlap/occlusion is desirable if it makes the grip read more naturally.
+- longer wrap;
+- originates under/near own lower-side body;
+- elbow passes around opponent flank;
+- hand reaches opponent waist / mawashi / back-side region;
+- partial occlusion is preferred over showing the entire arm.
 
-The two arms do not need to be perfectly symmetric vertically.
+## Root
 
-It is acceptable for one arm to be visually more prominent than the other.
+Do not expose a circular cut-face / detached cylinder root.
 
----
+Bury the root beneath the owning wrestler body.
 
-# Important Visual Rule
+## Shape
 
-Do NOT optimize for showing the whole arm.
+Two-segment arm is preferred.
 
-Optimize for a believable grip.
-
-If necessary:
-
-- hide the shoulder/root under the wrestler body
-- hide part of forearm under the opponent body
-- show only the distal forearm/hand
-- let one wrestler visually cover the other's limb where the fixed draw order does so naturally.
-
-The User explicitly accepts overlap.
+Do not make the arm perfectly horizontal unless that falls out naturally from the local geometry.
 
 ---
 
-# Preferred Rendering Strategy
+# Pair READY Visibility Rule
 
-Reuse the current procedural limb system.
+The new key rule:
 
-Do not regenerate wrestler images.
+> Limb VFX is visible only when Grip-success pose is active AND both wrestlers are READY / not TURNING.
 
-Do not add external limb image assets.
-
-Prefer updating:
+Conceptually:
 
 ```
-src/game/presentation/gripSuccessLimbVfx.ts
+successPose =
+  self.pose === 'grapple' || self.pose === 'drive'
+
+pairReady =
+  !self.turning && !opponent.turning
+
+limbsVisible =
+  successPose && pairReady
 ```
 
-and, only as needed:
+This rule applies symmetrically to both wrestlers.
+
+If either participant is TURNING:
 
 ```
-src/game/scenes/WrestlerView.ts
+both wrestlers' limb VFX = hidden
 ```
 
-Keep the helper Phaser-free.
+Do not show one wrestler's arms while hiding only the turning wrestler's arms.
 
-Do not introduce a generic animation or limb framework.
+Reason:
+- both arm layouts assume an aligned opponent;
+- showing one side alone can still point to empty space.
 
 ---
 
-# Placement Strategy
+# Ownership / State Flow
 
-Use wrestler-local geometry in R units, anchored to the ACTION-11F displayed body center.
+Do not add a new gameplay state.
 
-Local convention:
+Use existing Simulation-derived presentation data:
 
-- +X = FRONT
-- +Y = wrestler RIGHT
-- -Y = wrestler LEFT.
+- `WrestlerVisualState.turning`
+- opponent's `WrestlerVisualState.turning`.
 
-However, unlike ACTION-11G, do not assume both useful arms should simply extend forward in near-parallel lines.
+Preferred implementation:
 
-Investigate geometry that better crosses toward the opponent.
+- derive a pair-level Presentation boolean in the Scene/View composition layer;
+- pass only the visibility decision / pair-ready context needed by WrestlerView.
 
-Recommended exploration:
+Do NOT:
+- store pairReady in Simulation;
+- duplicate Grappled Orientation state;
+- add a timer.
 
-### Candidate A — upper wrap + low waist grip
+A small pure helper is preferred, e.g.:
 
-High arm:
-- shoulder relatively lateral / upper side
-- hand endpoint nearer opponent shoulder / upper torso
+```
+gripSuccessPairLimbsVisible(selfState, opponentState)
+```
 
-Low arm:
-- shoulder lower / opposite side
-- hand endpoint farther forward and closer to opponent waist / mawashi.
+or equivalent.
 
-### Candidate B — one visible near arm + one mostly hidden far arm
-
-- make the NEAR limb the main readable grip
-- keep FAR limb mostly behind / occluded so it adds depth without looking like another bar.
-
-### Candidate C — asymmetric visible lengths
-
-- shorter visible high arm
-- longer low arm reaching toward mawashi.
-
-Do not mechanically preserve the current ACTION-11G geometry if another small geometry better matches the User reference.
+It must be Phaser-free.
 
 ---
 
-# Reference Image Interpretation
+# WrestlerView / Scene Integration
 
-The latest User reference should guide the geometry:
+Current WrestlerView resolves one wrestler at a time.
 
-- both arms appear to wrap around an opponent
-- hands are not centered on the wrestler's own body
-- arm roots are visually connected to shoulders/sides
-- distal hands sit on the opponent side / waist
-- no obvious circular cut-face / detached tube appearance should dominate.
+ACTION-11J may minimally extend the presentation call path so each wrestler's limb visibility can know whether the opponent is TURNING.
 
-The VFX does NOT need to reproduce full fingers or exact anatomy.
+Preferred constraints:
 
-At gameplay scale:
-- attachment
-- direction
-- grip destination
-matter more than anatomical detail.
+- body art selection remains per-wrestler;
+- ACTION-11F body offset remains per-wrestler;
+- limb geometry remains per-wrestler;
+- only visibility needs pair context.
 
----
+Do not introduce a generic pair renderer unless strictly necessary.
 
-# Root / Cut-Face Problem
-
-The current VFX can expose a rounded/circular shoulder-end that reads like a cut cylinder.
-
-Reduce that visual.
-
-Preferred methods:
-
-1. bury root deeper under the wrestler body
-2. let body occlude the start cap
-3. shorten the visible segment
-4. adjust texture/origin so the cap is hidden beneath body.
-
-Do not solve by editing the wrestler source sprite.
-
-If necessary, the procedural texture may omit the visible shoulder-end cap on the exposed side.
-
-Keep the change small and explicit.
+If current scene code already has both visual states before calling WrestlerView.apply, derive pairReady there.
 
 ---
 
 # Depth / Occlusion
 
-The current simple depth split may be adjusted.
+Keep the simple explicit layer approach.
 
-Goal:
+Preferred:
 
-- at least one arm visually passes behind the bodies
-- at least one forearm / hand appears on top where it indicates holding.
+- shoulder -> elbow / root segment: behind bodies
+- elbow -> hand / distal segment: above bodies.
 
-Allowed:
-- tweak FAR depth
-- tweak NEAR depth
-- use existing stable body creation order
-- assign one wrestler's visible grip arm differently only if needed through existing stable order.
+Use fixed depth values only.
 
-Do NOT add:
-- dynamic per-frame depth sorting
-- generic z-order system.
+Do not add dynamic z sorting.
 
-If convincing overlap requires dynamic sorting, STOP and report.
+Stable overlap is acceptable.
+
+If the WIP patch uses different small explicit depths, preserve them if they meet this intent.
 
 ---
 
-# Visibility Scope
+# Drive / Neutral / Morozashi
 
-Still only:
+When both participants are READY:
 
-```
-state.pose === 'grapple'
-|| state.pose === 'drive'
-```
+- neutral -> limbs visible;
+- Drive -> limbs visible;
+- Morozashi holder -> limbs visible;
+- Morozashi disadvantaged -> limbs visible.
 
-Hidden for:
+Same geometry for all.
 
-- Grip attempt
-- Grip recovery
-- idle
-- move
-- Push
-- Tsuppari
-- Counter
-- Kuzushi
-- after release.
-
-No timer.
+Do not add Morozashi-specific pose yet.
 
 ---
 
-# Neutral / Morozashi / Drive
+# TURNING
 
-Use the same tuned geometry for:
+Required:
 
-- neutral
-- Morozashi holder
-- Morozashi disadvantaged
-- Drive.
+- if either wrestler is TURNING, all Grip limb VFX are hidden;
+- body success art and ACTION-11F pair compression remain visible;
+- turning animation/facing continues normally;
+- no limb flicker while turning remains true;
+- at the first frame where both are READY, both wrestlers' limbs appear together.
 
-Do not add advantage-specific limbs yet.
+Do not fade or interpolate.
 
----
-
-# Turning
-
-Inspect:
-
-1. turning immediately after grapple
-2. turning mid
-3. turning settled.
-
-The VFX must follow current canonical facing.
-
-However, the User's primary target is the settled/front-facing grip.
-
-Do not over-engineer a turning-specific solution.
-
-If the tuned limbs look temporarily less perfect during turning but remain coherent / attached, that is acceptable.
-
-If turning causes severe floating / inversion:
-- STOP and report
-- do not change Grappled Orientation gameplay.
+The sudden appearance at READY is acceptable for this Visual Gate.
 
 ---
 
-# Required Browser Screens
+# Release
 
-Capture the same 8-frame set:
+At release:
+
+- success art ends as currently;
+- pair compression ends as currently;
+- limb VFX remains hidden.
+
+No stale limb after release.
+
+---
+
+# Required Tests
+
+## Pair visibility
+
+V1. both grappled + both READY -> visible.
+
+V2. self TURNING -> both hidden.
+
+V3. opponent TURNING -> both hidden.
+
+V4. both TURNING -> both hidden.
+
+V5. TURNING -> READY transition -> both become visible on same logical presentation frame.
+
+V6. Drive + both READY -> visible.
+
+V7. Morozashi + both READY -> visible.
+
+V8. Grip attempt/recovery/other actions -> hidden.
+
+## Geometry
+
+G1. settled tuned geometry is deterministic.
+
+G2. high arm reaches upper torso / shoulder region.
+
+G3. low arm reaches flank / waist / mawashi region.
+
+G4. shoulder roots are buried / behind body.
+
+G5. distal hands render above body where intended.
+
+G6. geometry remains R-relative.
+
+## Preservation
+
+P1. ACTION-11F constants remain +0.14 / -0.20.
+
+P2. ACTION-11H tone recipe / runtime textures unchanged.
+
+P3. canonical grapple bond remains 0.70 m.
+
+P4. Snapshot unchanged.
+
+P5. no src/game/sumo or src/game/input Production diff.
+
+P6. no public wrestler asset / wrestler-art tool diff.
+
+---
+
+# Browser / Runtime Smoke
+
+Required.
+
+Capture the same 8-frame sequence:
 
 1. neutral immediately after success
 2. neutral settled
@@ -368,53 +386,31 @@ Capture the same 8-frame set:
 7. turning mid
 8. turning settled.
 
-Create a montage/sheet.
+Required visual expectations:
 
-Also create a before/after comparison against ACTION-11G if practical.
+## 1–4 settled/READY
+- tuned arms/hands visible;
+- high arm wraps upper body;
+- low arm reaches waist/mawashi;
+- no detached horizontal bars;
+- no exposed cut-face roots.
 
----
+## 6–7 TURNING
+- NO arm/hand VFX on either wrestler;
+- success body art / pair compression remain;
+- no floating limbs.
 
-# Required Tests
+## 8 settled after TURNING
+- both wrestlers' limb VFX appear again together;
+- tuned settled geometry matches ordinary neutral/Drive look.
 
-## Geometry
+## 5 release
+- no limbs.
 
-G1. tuned limb geometry is deterministic.
-
-G2. limb start is attached sufficiently close to wrestler body region.
-
-G3. hand endpoints are meaningfully in front / across toward the opponent.
-
-G4. one limb is clearly higher / upper-wrap oriented.
-
-G5. one limb is clearly lower / waist-grip oriented.
-
-G6. dimensions remain R-relative.
-
-## Visibility
-
-V1. grapple visible.
-
-V2. Drive visible.
-
-V3. attempt hidden.
-
-V4. release/recovery hidden.
-
-V5. other actions hidden.
-
-## Preservation
-
-P1. ACTION-11F forward/lateral constants unchanged.
-
-P2. ACTION-11H tone-match recipe/curve unchanged.
-
-P3. Grip-success body textures unchanged by this Task.
-
-P4. canonical 0.70 m bond unchanged.
-
-P5. Snapshot unchanged.
-
-P6. no src/game/sumo or src/game/input Production diff.
+Also verify:
+- no new console/runtime errors;
+- R restart;
+- Push/Tsuppari/Counter/Kuzushi unchanged.
 
 ---
 
@@ -422,31 +418,21 @@ P6. no src/game/sumo or src/game/input Production diff.
 
 REQUIRED.
 
-Primary question:
+Primary questions:
 
-> Do the revised arms/hands now look like they belong to each wrestler and wrap around the opponent toward upper torso / waist, rather than floating horizontal bars?
+1. In settled Grip, do the arms now read as wrapping upper torso + waist/mawashi?
+2. Do roots look attached rather than cut off?
+3. Is hiding arms during TURNING visually acceptable?
+4. Does the simultaneous reappearance once both are READY feel acceptable?
+5. Does neutral / Drive / Morozashi remain coherent?
 
-Judge:
+If the settled geometry is still rejected:
+- identify whether the problem is root, elbow path, hand endpoint, width, or procedural shape.
 
-- arm root feels attached
-- high arm reads as upper-body wrap
-- low arm reads as waist/mawashi grip
-- hands look like they land on the opponent
-- partial occlusion looks natural
-- settled neutral is convincing
-- Drive remains coherent
-- turning remains acceptable
-- release removes all limb VFX cleanly.
+If TURNING hide/reappear is rejected:
+- then investigate a dedicated TURNING limb pose in a later Task.
 
-If rejected again:
-- report whether the failure is:
-  - arm root
-  - endpoint / hand position
-  - thickness
-  - depth / occlusion
-  - procedural shape itself.
-
-Do not jump to authored limb sprites unless the User explicitly asks.
+Do not change Gameplay.
 
 ---
 
@@ -454,25 +440,27 @@ Do not jump to authored limb sprites unless the User explicitly asks.
 
 ## In Scope
 
-- existing procedural Grip limb VFX geometry
-- width/hand size if needed
-- fixed depth/layer assignment
-- root occlusion
-- before/after visual evidence
-- tests and browser smoke.
+- adopt/reconstruct ACTION-11I settled limb geometry
+- two-segment limb rendering if needed
+- fixed far/near segment depths
+- pair-level READY visibility
+- minimal presentation plumbing
+- tests / browser smoke / montage.
 
 ## Scope Out
 
 Do NOT:
 
-- change ACTION-11F compression
-- change ACTION-11H tone matching
-- change gameplay
-- change canonical bond
-- modify Grip success / attempt source images
+- change Grip gameplay
+- change Grappled Orientation
+- change canonical positions/bond/facing
+- change ACTION-11F offsets
+- change ACTION-11H tone correction
+- modify wrestler source/runtime assets
 - AI regenerate art
-- add audio/camera/particles
-- add Morozashi-specific pose
+- add TURNING-specific limb pose
+- add dynamic z sort
+- add generic pair renderer/framework
 - modify PROJECT_HANDOFF.md.
 
 ---
@@ -481,11 +469,11 @@ Do NOT:
 
 STOP if:
 
-- position/depth tuning cannot make procedural limbs read naturally
-- an authored external limb asset becomes necessary
-- pair compression must be retuned materially
-- gameplay/facing/bond changes would be required
-- dynamic z-order framework is required
+- pair TURNING visibility requires changing Simulation state
+- settled geometry still requires pair compression/gameplay changes
+- dynamic z sorting is required
+- current presentation flow cannot expose opponent.turning without broad architecture changes
+- external authored limb art becomes necessary
 - unrelated accepted visuals regress.
 
 ---
@@ -498,6 +486,7 @@ Standard Presentation Visual Tune
 Required:
 
 - focused limb geometry tests
+- pair READY visibility tests
 - Grip success presentation tests
 - Grip/Grapple/Drive/Orientation regression
 - Push/Tsuppari/Counter/Kuzushi presentation regression
@@ -506,7 +495,8 @@ Required:
 - `git diff --check`
 - browser/runtime smoke
 - prove ACTION-11F/11H unchanged
-- prove src/game/sumo and src/game/input unchanged.
+- prove src/game/sumo / src/game/input unchanged
+- prove public/assets/action/wrestler / tools/wrestler_art unchanged.
 
 ---
 
@@ -515,17 +505,18 @@ Required:
 Include:
 
 - Result
-- old limb geometry -> new limb geometry
-- final depth values
-- any root-cap/occlusion change
+- whether WIP patch was used or geometry was reconstructed
+- old ACTION-11G geometry -> final settled geometry
+- two-segment/depth model
+- pair READY visibility implementation
 - changed files
-- proof ACTION-11F constants unchanged
-- proof ACTION-11H tone curve unchanged
+- proof ACTION-11F/11H unchanged
 - proof gameplay/canonical bond unchanged
 - focused/full verification
 - 8-frame montage
-- before/after comparison if available
-- turning observation
+- explicit screenshots showing:
+  - TURNING limbs hidden
+  - READY limbs visible
 - Design Deviations
 - Unexpected Scope
 - User Visual Gate: REQUIRED
@@ -554,7 +545,7 @@ Normal successful Task:
 
 Suggested commit:
 
-`feat(presentation): retune grip success limb placement`
+`feat(presentation): hide grip limbs while turning`
 
 Do not modify:
 
@@ -564,11 +555,8 @@ Do not modify:
 
 # Final Instruction
 
-Keep accepted Grip gameplay, ACTION-11F pair compression and ACTION-11H tone matching unchanged.
+Adopt the improved ACTION-11I settled/READY arm geometry, but show Grip-success arm/hand VFX only when BOTH grappled wrestlers are READY.
 
-Retune only the existing procedural Grip-success arm/hand VFX so that:
-- one arm wraps higher toward the opponent's upper torso/shoulder
-- one arm wraps lower toward the opponent's waist/mawashi
-- roots are visually attached/occluded
-- hands visibly land on the opponent
-- the result no longer looks like detached horizontal bars.
+If either wrestler is TURNING, hide limb VFX for BOTH wrestlers.
+
+Do not change Gameplay, Grappled Orientation, ACTION-11F pair compression, ACTION-11H tone matching, wrestler assets, or canonical 0.70 m bond.
