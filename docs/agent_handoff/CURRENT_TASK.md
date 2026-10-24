@@ -1760,10 +1760,44 @@ Unless explicitly requested:
 - ACTION-11N visual baseline;
 - ACTION-12B no-action footwork semantics.
 
+## User Decision D1 — RESOLVED
+
+User selected **D1-B — Unified Grip effect multiplier**.
+
+Accepted Yori prototype movement targets:
+
+- neutral Success = `YORI_DISTANCE = 0.5325 m`
+- neutral Best = `0.5325 * 1.5 = 0.79875 m`
+- Morozashi holder Success = `0.5325 * 1.5 = 0.79875 m`
+- Morozashi holder Best = `0.5325 * 2.25 = 1.198125 m`
+- Morozashi disadvantaged Success = `0.5325 * 0.5 = 0.26625 m`
+- Morozashi disadvantaged Best = `0.5325 * 0.75 = 0.399375 m`
+
+This intentionally prioritizes the common Grip effect multiplier over literal equality with the CURRENT implementation's Kuzushi-Push final displacement.
+
+User balance intent:
+
+- Yori carries meaningful Fall/KO risk because Throw can Best-counter it.
+- Therefore Yori must also have meaningful positional reward.
+- Prototype target feel: roughly 2–3 successful Yori actions should be enough to create a realistic ring-out threat from ordinary bout positions.
+- Do not weaken Yori back toward the current Kuzushi-Push ~1.18x displacement merely to match that implementation artifact.
+
+The exact distances remain User Play Test tuning, but the 1.0 / 1.5 / 2.25 / 0.5 / 0.75 multiplier structure is now the accepted starting baseline.
+
 ## Next Task Constraint
 
-Do NOT register ACTION-13B until User Decision D1 is resolved.
+ACTION-13B may now be registered from the accepted design plus RC-1 / RC-2 and resolved D1-B.
 
-After D1:
-- update this Review Handoff with the selected Yori Best movement interpretation if needed;
-- then create ACTION-13B from the accepted design + RC-1 + RC-2.
+ACTION-13B must treat:
+
+- Yori > Lift > Throw > Yori as the accepted Grip RPS;
+- directional Best timing from RC-1;
+- canonical-facing Throw left/right from RC-2;
+- D1-B unified Yori effect multipliers;
+- normal Throw -> FREE;
+- Throw Best vs Yori -> Fall;
+- Shift Release removed;
+- no Throw RNG;
+- ACTION-12B rotation unchanged on no-action ticks.
+
+Yori movement values are Prototype tuning and require User Play Test, with the specific balance goal that approximately 2–3 successful Yori actions should create a meaningful ring-out path without making single normal Yori trivially decisive.
