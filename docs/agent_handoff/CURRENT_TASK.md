@@ -1,5 +1,5 @@
 Task-ID: ACTION-13A2-GRIP-RPS-TIMING-STATE-INVESTIGATION
-Status: READY
+Status: REVIEWED
 Task-Type: INVESTIGATION / DESIGN
 Executor: Claude Code / Codex
 Target-Branch: develop
@@ -1386,3 +1386,384 @@ Lift win enters a temporary one-sided Lifted state. During Lifted, only WASD ste
 Keep future wrestler-stat formulas undecided.
 
 Return one coherent implementation-ready state machine and recommend whether Yori+Throw should be implemented before Lifted as a separate later task.
+
+
+---
+
+# ChatGPT Review Handoff
+
+Review-Date: 2026-10-24
+Overall Result: PASS WITH USER DECISION REQUIRED
+Accepted Investigation Baseline: dae8bc3fd90e098bca5687decb04ba9ddfc49c85
+
+## Scope / Source Review
+
+Accepted:
+
+- Investigation-only scope was respected.
+- Agent Task diff changes only CURRENT_COMPLETION_REPORT.md.
+- No Production source, tests, assets, or accepted architecture docs were modified.
+- Current Source findings match the report.
+- Focused existing regression run: 11 files / 259 PASS.
+
+No material Current Source/SPEC conflict was found.
+
+## Accepted High-Level Grip RPS
+
+The following is accepted:
+
+```
+Yori > Lift > Throw > Yori
+```
+
+- Yori / Throw / Lift are explicit GRAPPLED actions.
+- RPS result is resolved symmetrically from one tick-local state.
+- Morozashi/effect multipliers never overturn the RPS winner.
+- Shift no longer releases while GRAPPLED.
+- normal Throw is the intentional Grip-break path to FREE.
+- Throw Best vs Yori is deterministic Fall / KO.
+- no Throw RNG / seed / roll system.
+- Lifted is a later explicit pair-level state.
+- ACTION-12B remains the no-action GRAPPLED footwork baseline.
+
+## Accepted Yori Control Model
+
+Model C is accepted for Prototype design:
+
+- ArrowUp press starts one Yori action.
+- Holding ArrowUp repeats discrete Yori actions after execution + recovery.
+- Yori therefore keeps the current "hold to keep pressing" control feel while exposing discrete starts for RPS timing.
+- current timerless Drive is superseded by Yori in the future implementation.
+
+This is a material gameplay change from ACTION-12B Drive and must receive User Play Test after implementation.
+
+## Review Correction RC-1 — Best Timing Is Directional
+
+The report proposed a symmetric Best test based only on the absolute difference between action start ticks.
+
+Correct this.
+
+User wording is consistently:
+- Throw is entered at Best Timing **against Yori**;
+- Lift is **matched to Throw** at Best Timing;
+- Grip Best is analogous to timing a winning response.
+
+Therefore v1 Best must reward the WINNING action being timed to the LOSING action.
+
+Accepted rule:
+
+1. Each Grip action has an explicit startup.
+2. When two different RPS actions overlap, determine the RPS winner first.
+3. Let loserStart be the losing action's accepted start tick.
+4. Let winnerStart be the winning action's accepted start tick.
+5. Tier:
+   - if winnerStart === loserStart: Best
+   - else if winnerStart > loserStart AND winnerStart - loserStart < GRIP_BEST_TICKS: Best
+   - otherwise, while the startups still overlap: Success.
+
+Consequences:
+
+- Yori starts -> Throw is entered within Best window => Throw Best -> Fall.
+- Throw starts -> Lift is entered within Best window => Lift Best.
+- Lift starts -> Yori is entered within Best window => Yori Best.
+- Winning action started first and the losing action arrived later => Success, NOT Best.
+- Same-tick starts count as Best prediction/read.
+
+This is still phase-derived; no Kuzushi posture or extra Best timer is required.
+
+Future tests must explicitly cover both directions for every RPS pair:
+- loser first -> winner responds inside Best;
+- winner first -> loser responds later => Success;
+- same tick => Best;
+- response outside Best but still overlapping => Success.
+
+## Review Correction RC-2 — Own Left/Right Uses Canonical Facing
+
+The report changed Throw left/right from the thrower's canonical facing to the pair-axis perpendicular in order to make simultaneous directions exactly antiparallel.
+
+Do not make that semantic change.
+
+User requirement is "自分から見て左 / 右".
+
+Accepted Throw direction source:
+
+```
+f = (cos(thrower.facing), sin(thrower.facing))
+ownLeft  = ( f.y, -f.x)
+ownRight = (-f.y,  f.x)
+```
+
+Use the thrower's canonical facing at the accepted Throw start tick.
+
+Reason:
+
+- the wrestler sprite/body faces canonical facing;
+- "own left/right" should follow the wrestler's own orientation;
+- READY tolerance may leave up to a small facing error; pair-axis substitution would invisibly rotate the requested direction away from the wrestler's body.
+
+For simultaneous Throw classification:
+- compute each wrestler's own requested world vector independently;
+- classify same/opposite direction using their dot product as ACTION-13A originally proposed;
+- do not require exact bitwise antiparallel vectors.
+
+This remains deterministic and participant-order independent.
+
+## Accepted Grip Best / Morozashi Structure — Pending Yori Distance Decision
+
+General design remains accepted:
+
+- neutral effect baseline = 1.0
+- Morozashi holder effect direction = ~1.5
+- Morozashi disadvantaged effect direction = ~0.5
+- Best effect direction = ~1.5
+- RPS winner is determined before any multiplier
+- Throw Best vs Yori is categorical Fall, not numeric displacement.
+
+However, Yori exposes a real conflict between two User requirements and Current Source behavior. See User Decision D1.
+
+## User Decision D1 — Yori Best Movement Reference
+
+Current Source / Agent scratch result:
+
+- normal contact Push displacement ≈ 0.5325 m
+- current Push against Kuzushi displacement ≈ 0.6293 m
+- current actual ratio ≈ 1.18x
+
+The reason is current Kuzushi follow-up: the 1.5 force multiplier is consumed on the first successful Push-force tick, so final displacement is not 1.5x.
+
+The User previously specified BOTH:
+
+A. "Best Yori should have the same movement amount as current Push against Kuzushi."
+
+B. Grip Best effect should be about 1.5x, and Morozashi holder + Best should be about 2.25x.
+
+These cannot both be literal displacement rules with the current Push implementation.
+
+Choose one before ACTION-13B implementation:
+
+### D1-A — Literal current Push/Kuzushi movement reference
+
+- neutral Yori Success target ≈ 0.5325 m
+- neutral Yori Best target ≈ 0.6293 m
+- Best is therefore ~1.18x in actual displacement for Yori.
+- Morozashi composition needs a Yori-specific interpretation instead of a universal 1.5x distance multiplier.
+
+This follows the explicit "same movement as current Kuzushi Push" instruction most literally.
+
+### D1-B — Unified Grip effect multiplier
+
+- neutral Yori Success = 0.5325 m
+- neutral Yori Best = 0.5325 * 1.5 ≈ 0.79875 m
+- holder Success = 0.5325 * 1.5
+- holder Best = 0.5325 * 2.25 ≈ 1.1981 m
+- disadvantaged Success = 0.5325 * 0.5
+- disadvantaged Best = 0.5325 * 0.75
+
+This follows the common 1.5x / 2.25x Grip-effect model and is the ACTION-13A2 report recommendation, but it is NOT the same movement as the current Kuzushi Push.
+
+No implementation task should be registered until D1 is selected.
+
+## Accepted Yori Geometry Subject to D1
+
+Yori A is accepted structurally:
+
+- successful Yori uses a Simulation-owned pair forward transition;
+- pair translates along actor -> opponent axis;
+- bond and relative facing are preserved;
+- Yori does not reuse Push action/force state;
+- future Yori parameter remains separate from Push parameter;
+- ring-out remains existing canonical ownership.
+
+Only the exact distance/effect composition is pending D1.
+
+## Accepted Yori vs Yori
+
+Prototype direction accepted:
+
+- same-action contest is not RPS.
+- neutral equal effects cancel.
+- Morozashi asymmetry may create a net Yori result.
+- no participant-order winner.
+- future Yori strength can later replace Prototype equal base strength.
+
+Exact Yori displacement still depends on D1.
+
+## Accepted Throw Redesign
+
+Normal Throw:
+
+- deterministic; no RNG;
+- target moves toward thrower's own Left/Right per RC-2;
+- Thrower stays stationary during the Throw path;
+- add a small fixed separation component so FREE does not end at immediate body contact;
+- ring-out is checked during the transition;
+- on successful non-ring-out completion:
+  - engagement -> FREE;
+  - Morozashi is gone;
+  - final positions/facing/velocities are explicit.
+
+Throw Best vs Yori:
+- immediate fall outcome;
+- no random roll;
+- no normal Throw displacement.
+
+Normal Throw is the current planned Grip escape.
+
+The report's provisional post-Throw recovery / thrown-stagger values are accepted only as Prototype tuning for User Play Test, not as permanent rules.
+
+## Accepted Lift / Lifted Design Direction
+
+Accepted for later ACTION-14A:
+
+- Lift may be a standalone action against none.
+- Lift beats Throw; loses to Yori.
+- Lifted should be a new pair-level BoutEngagement variant, not duplicate participant flags.
+- Lifted retains the previous GrappleAdvantage so normal expiry returns to the same neutral/Morozashi relation.
+- During Lifted:
+  - lifter WASD steers world-facing direction;
+  - lifter ArrowUp moves forward;
+  - all other action inputs are dropped;
+  - carried wrestler has no input authority.
+- Lift duration is fixed in v1.
+- Best/Morozashi effect multiplier applies to carry speed only.
+- do not also multiply duration or turn rate.
+- expiry returns to GRAPPLED.
+- ring-out/Tokudawara remain existing owners.
+
+These values remain provisional and require User Play Test.
+
+## Accepted Shift Release Removal
+
+Future implementation:
+
+- FREE Shift = current Grip attempt.
+- GRAPPLED Shift = ignored/dropped, no Release, no recovery, no queue.
+- LIFTED Shift = ignored/dropped.
+- transition input lock drops Shift as normal.
+
+No Grip Break action in current scope.
+
+## Accepted Same-Participant Input Direction
+
+The report's explicit deterministic priority is acceptable as a Prototype proposal:
+
+1. Left+Right Throw together -> both Throw directions dropped as ambiguous.
+2. Yori press > Throw press > Lift press > Yori held.
+3. losing same-participant inputs are dropped, not queued.
+
+This must be User Play Tested because it determines control conflicts, but it is implementation-safe.
+
+## Accepted ACTION-12B Integration
+
+On GRAPPLED ticks with no Grip action startup/contest/transition:
+
+- ACTION-12B WASD rotation remains unchanged.
+
+During Grip-action startup:
+- manual WASD rotation is paused so action direction/timing does not move under the contest.
+
+During recovery:
+- WASD rotation may resume under existing both-READY gate.
+
+Transitions/Lifted own their movement.
+
+No second pair-angle source of truth.
+
+## Accepted State Ownership
+
+The proposed ownership is architecturally acceptable:
+
+- participant action: Grip action startup/recovery and post-Throw thrown state;
+- pair-level gripTransition: Yori / Throw / same-direction pair shift execution;
+- BoutEngagement: FREE / GRAPPLED / later LIFTED;
+- BoutOutcome: ring-out / generic fall with Throw cause.
+
+No global event bus, no duplicated Lift flag, no Phaser gameplay ownership.
+
+## Accepted Implementation Split
+
+Keep the split:
+
+### ACTION-13B
+Grip RPS foundation + Yori + Throw:
+- semantic action inputs
+- directional Best timing per RC-1
+- Shift Release removal
+- replace Drive with Yori
+- Yori transition
+- Throw normal -> FREE
+- Throw Best -> Fall
+- Morozashi effect framework
+- Throw same-action contest
+- ACTION-12B integration
+- Heavy verification
+- User Play Test.
+
+### ACTION-14A
+Lift + Lifted:
+- Lift input
+- complete Yori > Lift > Throw RPS row
+- Lifted engagement state
+- Lifted steering/carry
+- expiry to GRAPPLED
+- ring-out
+- Heavy verification
+- User Play Test.
+
+13B Play Test is for foundation/Yori/Throw mechanics, not complete three-way balance.
+
+## Required Verification Corrections
+
+In addition to the ACTION-13A2 matrix, future tests must cover:
+
+RC1-1 Yori starts first, Throw responds inside Best -> Throw Best/Fall.
+RC1-2 Throw starts first, Yori arrives inside the same numerical window -> Throw Success, NOT Best.
+RC1-3 Throw starts first, Lift responds inside Best -> Lift Best.
+RC1-4 Lift starts first, Throw arrives inside window -> Lift Success, NOT Best.
+RC1-5 Lift starts first, Yori responds inside Best -> Yori Best.
+RC1-6 Yori starts first, Lift arrives inside window -> Yori Success, NOT Best.
+RC1-7 exact same tick for each RPS pair -> winner Best.
+RC1-8 winner response outside Best but overlapping startup -> Success.
+
+RC2-1 cardinal canonical facings map own-left/right exactly.
+RC2-2 arbitrary facing maps own-left/right from facing, not pair axis.
+RC2-3 simultaneous Throw direction classification remains order-independent with small READY facing errors.
+RC2-4 ACTION-12B rotation changes canonical facing; subsequent Throw direction follows the rotated facing.
+
+D1 tests depend on User choice and must be written only after D1 is selected.
+
+## User Play Test Required After Implementation
+
+Still required for:
+
+- hold-repeat Yori feel;
+- startup/recovery rhythm;
+- Best window;
+- Yori movement amount;
+- Throw lateral/release feel;
+- post-Throw recovery/stagger;
+- Morozashi magnitude;
+- same-action contests;
+- ACTION-12B rotation interaction.
+
+## Do Not Reopen
+
+Unless explicitly requested:
+
+- base RPS Yori > Lift > Throw > Yori;
+- no random Throw KO;
+- Throw Best vs Yori = Fall;
+- normal Throw -> FREE;
+- Shift Release removed;
+- Grip Best is not ParticipantPosture.kuzushi;
+- future Grip ability/stat formulas remain undecided;
+- ACTION-11N visual baseline;
+- ACTION-12B no-action footwork semantics.
+
+## Next Task Constraint
+
+Do NOT register ACTION-13B until User Decision D1 is resolved.
+
+After D1:
+- update this Review Handoff with the selected Yori Best movement interpretation if needed;
+- then create ACTION-13B from the accepted design + RC-1 + RC-2.
